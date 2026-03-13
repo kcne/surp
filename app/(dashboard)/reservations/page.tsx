@@ -11,11 +11,12 @@ function isValidDate(date: any): date is Date {
 }
 
 export default function ReservationsPage() {
-  const { fetchRideInstances, rideInstances, selectedDate, setSelectedDate, loading } =
+  const { fetchRides, fetchRideInstances, rideInstances, selectedDate, setSelectedDate, loading } =
     useRidesStore()
 
   // Initialize: fetch GTFS trip instances for the persisted date on mount
   useEffect(() => {
+    fetchRides()
     if (selectedDate && isValidDate(selectedDate)) {
       fetchRideInstances(selectedDate)
     }

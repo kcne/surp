@@ -28,6 +28,11 @@ interface ReservationsState {
   fetchReservations: (rideInstanceId: string) => Promise<void>
   createReservation: (data: ReservationFormData) => Promise<void>
   createReservationsBatch: (data: ReservationFormData[]) => Promise<void>
+  createReservationsForRideInstance: (
+    rideInstance: RideInstance,
+    data: ReservationFormData[],
+    options?: { showSuccessToast?: boolean }
+  ) => Promise<void>
   updateReservation: (id: string, data: Partial<ReservationFormData>) => Promise<void>
   cancelReservation: (id: string) => Promise<void>
   setSelectedSeat: (seat: number | null) => void
@@ -36,6 +41,25 @@ interface ReservationsState {
   clearSelectedSeats: () => void
   setSelectedRideInstance: (rideInstance: RideInstance | null) => void
   clearError: () => void
+}
+
+const getLineStationsForRideInstance = (rideInstance: RideInstance) => {
+  const lineStations = rideInstance.ride.line.intermediateStations.map((s) => ({
+    stationId: s.stationId,
+    order: s.order,
+  }))
+
+  return [
+    {
+      stationId: rideInstance.ride.line.departureStation.id,
+      order: 0,
+    },
+    ...lineStations,
+    {
+      stationId: rideInstance.ride.line.arrivalStation.id,
+      order: lineStations.length + 1,
+    },
+  ]
 }
 
 export const useReservationsStore = create<ReservationsState>()(
@@ -324,6 +348,170 @@ export const useReservationsStore = create<ReservationsState>()(
       }
 
       toast.success("Rezervacije su uspešno kreirane")
+    } catch (error: any) {
+      set({
+        loading: false,
+        error: error?.message || "Greška pri kreiranju rezervacija",
+      })
+      toast.error(error?.message || "Greška pri kreiranju rezervacija")
+      throw error
+    }
+  },
+
+  createReservationsForRideInstance: async (
+    rideInstance: RideInstance,
+    data: ReservationFormData[],
+    options?: { showSuccessToast?: boolean }
+  ) => {
+    set({ loading: true, error: null })
+    try {
+      if (data.length === 0) {
+        throw new Error("Nema izabranih sedišta")
+      }
+
+      const allReservations = get().allReservations
+      const existingReservations = allReservations[rideInstance.id] || []
+      const allStations = getLineStationsForRideInstance(rideInstance)
+
+      const seatNumbers = new Set<number>()
+      const pendingReservations: Reservation[] = []
+
+      for (const reservationData of data) {
+        if (seatNumbers.has(reservationData.seatNumber)) {
+          throw new Error("Sedišta moraju biti jedinstvena")
+        }
+        seatNumbers.add(reservationData.seatNumber)
+
+        const hasConflict = checkSeatConflict(
+          [...existingReservations, ...pendingReservations],
+          reservationData.seatNumber,
+          reservationData.departureStationId,
+          reservationData.arrivalStationId,
+          allStations
+        )
+
+        if (hasConflict) {
+          throw new Error(
+            `Sedište ${reservationData.seatNumber} je već rezervisano za ovaj segment rute.`
+          )
+        }
+
+        pendingReservations.push({
+          id: `pending-${reservationData.seatNumber}`,
+          rideInstanceId: rideInstance.id,
+          rideInstance,
+          passengerId: reservationData.passengerId,
+          passenger: {
+            id: "",
+            firstName: "",
+            lastName: "",
+            phone: "",
+            passengerType: "odrasli",
+          },
+          seatNumber: reservationData.seatNumber,
+          departureStationId: reservationData.departureStationId,
+          departureStation: { id: "", name: "", address: "" },
+          arrivalStationId: reservationData.arrivalStationId,
+          arrivalStation: { id: "", name: "", address: "" },
+          status: "active",
+        })
+      }
+
+      const passengers = usePassengersStore.getState().passengers
+
+      const newReservations: Reservation[] = data.map((reservationData) => {
+        const passenger = passengers.find((p) => p.id === reservationData.passengerId)
+        if (!passenger) {
+          throw new Error("Putnik nije pronađen")
+        }
+
+        const departureIsStart =
+          reservationData.departureStationId === rideInstance.ride.line.departureStation.id
+        const departureIsEnd =
+          reservationData.departureStationId === rideInstance.ride.line.arrivalStation.id
+        const departureIntermediate = rideInstance.ride.line.intermediateStations.find(
+          (s) => s.stationId === reservationData.departureStationId
+        )
+
+        const arrivalIsStart =
+          reservationData.arrivalStationId === rideInstance.ride.line.departureStation.id
+        const arrivalIsEnd =
+          reservationData.arrivalStationId === rideInstance.ride.line.arrivalStation.id
+        const arrivalIntermediate = rideInstance.ride.line.intermediateStations.find(
+          (s) => s.stationId === reservationData.arrivalStationId
+        )
+
+        const departureStation = departureIsStart
+          ? rideInstance.ride.line.departureStation
+          : departureIsEnd
+          ? rideInstance.ride.line.arrivalStation
+          : departureIntermediate
+          ? {
+              id: departureIntermediate.stationId,
+              name: departureIntermediate.stationName,
+              address: "",
+            }
+          : null
+
+        const arrivalStation = arrivalIsStart
+          ? rideInstance.ride.line.departureStation
+          : arrivalIsEnd
+          ? rideInstance.ride.line.arrivalStation
+          : arrivalIntermediate
+          ? {
+              id: arrivalIntermediate.stationId,
+              name: arrivalIntermediate.stationName,
+              address: "",
+            }
+          : null
+
+        if (!departureStation) {
+          throw new Error("Polazna stanica nije pronađena")
+        }
+
+        if (!arrivalStation) {
+          throw new Error("Dolazna stanica nije pronađena")
+        }
+
+        return {
+          id: `${Date.now()}-${reservationData.seatNumber}-${Math.random().toString(36).slice(2, 7)}`,
+          ...reservationData,
+          rideInstanceId: rideInstance.id,
+          rideInstance,
+          passenger,
+          departureStation,
+          arrivalStation,
+          status: "active",
+          createdAt: new Date().toISOString(),
+        }
+      })
+
+      const updatedReservations = [...existingReservations, ...newReservations]
+      const selectedRideInstance = get().selectedRideInstance
+      const currentCapacity = selectedRideInstance?.ride.busCapacity || rideInstance.ride.busCapacity
+
+      set((state) => ({
+        allReservations: {
+          ...state.allReservations,
+          [rideInstance.id]: updatedReservations,
+        },
+        reservations:
+          selectedRideInstance?.id === rideInstance.id ? updatedReservations : state.reservations,
+        seatMap:
+          selectedRideInstance?.id === rideInstance.id
+            ? buildSeatMap(updatedReservations, currentCapacity, get().selectedSeats)
+            : state.seatMap,
+        loading: false,
+      }))
+
+      const selectedDate = useRidesStore.getState().selectedDate
+      if (selectedDate) {
+        useRidesStore.getState().fetchRideInstances(selectedDate)
+      }
+
+      if (options?.showSuccessToast !== false) {
+        toast.success("Rezervacije su uspešno kreirane")
+      }
     } catch (error: any) {
       set({
         loading: false,

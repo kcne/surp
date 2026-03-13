@@ -1,12 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { format } from "date-fns"
+import { srLatn } from "date-fns/locale"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { reservationSchema } from "@/utils/validators"
-import type { ReservationFormData, Reservation, Passenger } from "@/types"
+import type { ReservationFormData, Reservation, Passenger, RideInstance } from "@/types"
 import { useReservationsStore } from "@/stores/reservationsStore"
 import { usePassengersStore } from "@/stores/passengersStore"
+import { useRidesStore } from "@/stores/ridesStore"
 import {
   Dialog,
   DialogContent,
@@ -23,6 +26,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Form,
   FormControl,
@@ -34,7 +40,8 @@ import {
 import { PassengerSearch } from "./PassengerSearch"
 import { PassengerForm } from "../passengers/PassengerForm"
 import { formatDateDisplay, formatTimeDisplay } from "@/utils/dateHelpers"
-import { AlertTriangle, Armchair, Ban, Bus, Calendar, Check, Clock, Save, UserPlus, X } from "lucide-react"
+import { checkSeatConflict } from "@/utils/seatHelpers"
+import { AlertTriangle, Armchair, Ban, Bus, Calendar as CalendarIcon, CalendarDays, Check, Clock, Save, UserPlus, X } from "lucide-react"
 import { toast } from "sonner"
 
 interface ReservationModalProps {
@@ -60,18 +67,26 @@ export function ReservationModal({
   const {
     createReservation,
     createReservationsBatch,
+    createReservationsForRideInstance,
     updateReservation,
     cancelReservation,
     selectedRideInstance,
+    allReservations,
     loading,
     clearSelectedSeats,
   } = useReservationsStore()
+  const { rides, generateRideInstances } = useRidesStore()
   const { createPassenger } = usePassengersStore()
   const [selectedPassenger, setSelectedPassenger] = useState<Passenger | null>(null)
   const [showPassengerForm, setShowPassengerForm] = useState(false)
   const [newPassenger, setNewPassenger] = useState<Passenger | null>(null)
   const [assignmentMode, setAssignmentMode] = useState<"single" | "perSeat">("single")
   const [perSeatPassengers, setPerSeatPassengers] = useState<Record<number, Passenger | null>>({})
+  const [isReturnTicket, setIsReturnTicket] = useState(false)
+  const [returnDatePickerOpen, setReturnDatePickerOpen] = useState(false)
+  const [selectedReturnDate, setSelectedReturnDate] = useState<Date | undefined>(undefined)
+  const [selectedReturnRideInstanceId, setSelectedReturnRideInstanceId] = useState("")
+  const [existingReturnReservation, setExistingReturnReservation] = useState<Reservation | null>(null)
   const fallbackSeatNumber = selectedSeats[0] || seatNumber || 1
   const defaultDepartureStationId = selectedRideInstance?.ride.line.departureStation.id || ""
   const defaultArrivalStationId = selectedRideInstance?.ride.line.arrivalStation.id || ""
@@ -116,6 +131,10 @@ export function ReservationModal({
         })
         setSelectedPassenger(reservation.passenger)
         setShowPassengerForm(false)
+        setIsReturnTicket(false)
+        setSelectedReturnDate(undefined)
+        setSelectedReturnRideInstanceId("")
+        setExistingReturnReservation(null)
       } else {
         form.reset({
           rideInstanceId: selectedRideInstance?.id || "",
@@ -129,6 +148,10 @@ export function ReservationModal({
         setShowPassengerForm(false)
         setAssignmentMode("single")
         setPerSeatPassengers({})
+        setIsReturnTicket(false)
+        setSelectedReturnDate(undefined)
+        setSelectedReturnRideInstanceId("")
+        setExistingReturnReservation(null)
       }
     } else if (!open) {
       // Modal was closed - reset the flag
@@ -175,17 +198,28 @@ export function ReservationModal({
     try {
       if (isEdit && reservation) {
         await updateReservation(reservation.id, data)
+        if (isReturnTicket) {
+          if (!selectedReturnRideInstance) {
+            throw new Error("Izaberite datum i vreme povratne vožnje.")
+          }
+
+          const returnRequests = buildReturnRequests([data], selectedReturnRideInstance)
+          await createReservationsForRideInstance(selectedReturnRideInstance, returnRequests, {
+            showSuccessToast: false,
+          })
+          toast.success("Povratna karta je uspešno rezervisana")
+        }
       } else if (isMultiReservation) {
-        const request = selectedSeats.map((seat) => ({
+        const requests = selectedSeats.map((seat) => ({
           ...data,
           seatNumber: seat,
         }))
-        await createReservationsBatch(request)
+        await createWithOptionalReturn(requests)
         clearSelectedSeats()
         onComplete?.()
         return
       } else {
-        await createReservation(data)
+        await createWithOptionalReturn([data])
       }
       onOpenChange(false)
       form.reset()
@@ -193,7 +227,9 @@ export function ReservationModal({
       setNewPassenger(null)
       setShowPassengerForm(false)
     } catch (error) {
-      // Error is handled in store
+      if (error instanceof Error) {
+        toast.error(error.message)
+      }
     }
   }
 
@@ -222,7 +258,7 @@ export function ReservationModal({
         }
       })
 
-      await createReservationsBatch(perSeatRequests)
+      await createWithOptionalReturn(perSeatRequests)
       clearSelectedSeats()
       onComplete?.()
     } catch (error) {
@@ -257,24 +293,234 @@ export function ReservationModal({
     }
   }
 
-  if (!selectedRideInstance) {
-    return null
+  const getOrderedStations = (instance: RideInstance) => {
+    const orderedIntermediate = [...instance.ride.line.intermediateStations].sort(
+      (left, right) => left.order - right.order
+    )
+
+    return [
+      { stationId: instance.ride.line.departureStation.id, order: 0 },
+      ...orderedIntermediate.map((station, index) => ({
+        stationId: station.stationId,
+        order: index + 1,
+      })),
+      {
+        stationId: instance.ride.line.arrivalStation.id,
+        order: orderedIntermediate.length + 1,
+      },
+    ]
   }
 
-  const allStations = [
-    {
-      id: selectedRideInstance.ride.line.departureStation.id,
-      name: selectedRideInstance.ride.line.departureStation.name,
-    },
-    ...selectedRideInstance.ride.line.intermediateStations.map((stop) => ({
-      id: stop.stationId,
-      name: stop.stationName,
-    })),
-    {
-      id: selectedRideInstance.ride.line.arrivalStation.id,
-      name: selectedRideInstance.ride.line.arrivalStation.name,
-    },
-  ]
+  const returnRideInstances = useMemo(() => {
+    if (!selectedRideInstance) {
+      return []
+    }
+
+    const currentLine = selectedRideInstance.ride.line
+    if (!currentLine.pairKey) {
+      return []
+    }
+
+    return rides
+      .filter(
+        (ride) =>
+          ride.status !== "cancelled" &&
+          ride.line.pairKey === currentLine.pairKey &&
+          ride.line.id !== currentLine.id &&
+          ride.line.departureStation.id === currentLine.arrivalStation.id &&
+          ride.line.arrivalStation.id === currentLine.departureStation.id
+      )
+      .flatMap((ride) => generateRideInstances(ride))
+      .filter((instance) => instance.date >= selectedRideInstance.date)
+      .sort((left, right) => {
+        const leftDateTime = `${left.date}T${left.departureTime}`
+        const rightDateTime = `${right.date}T${right.departureTime}`
+        return leftDateTime.localeCompare(rightDateTime)
+      })
+  }, [generateRideInstances, rides, selectedRideInstance])
+
+  const availableReturnDateKeys = useMemo(
+    () => new Set(returnRideInstances.map((instance) => instance.date)),
+    [returnRideInstances]
+  )
+
+  const selectedReturnDateKey = selectedReturnDate
+    ? format(selectedReturnDate, "yyyy-MM-dd")
+    : ""
+
+  const returnInstancesForSelectedDate = useMemo(
+    () =>
+      returnRideInstances.filter((instance) =>
+        selectedReturnDateKey ? instance.date === selectedReturnDateKey : true
+      ),
+    [returnRideInstances, selectedReturnDateKey]
+  )
+
+  const selectedReturnRideInstance = returnRideInstances.find(
+    (instance) => instance.id === selectedReturnRideInstanceId
+  )
+
+  const outboundSeatNumbers = useMemo(() => {
+    if (isMultiReservation) {
+      return selectedSeats.slice().sort((left, right) => left - right)
+    }
+
+    if (reservation?.seatNumber) {
+      return [reservation.seatNumber]
+    }
+
+    if (seatNumber) {
+      return [seatNumber]
+    }
+
+    const formSeat = form.getValues("seatNumber")
+    return formSeat ? [formSeat] : []
+  }, [form, isMultiReservation, reservation?.seatNumber, seatNumber, selectedSeats])
+
+  const returnSeatPreviewNumbers = useMemo(() => {
+    if (
+      existingReturnReservation &&
+      selectedReturnRideInstanceId &&
+      existingReturnReservation.rideInstanceId === selectedReturnRideInstanceId
+    ) {
+      return [existingReturnReservation.seatNumber]
+    }
+
+    return outboundSeatNumbers
+  }, [existingReturnReservation, outboundSeatNumbers, selectedReturnRideInstanceId])
+
+  const buildReturnRequests = (
+    outboundRequests: ReservationFormData[],
+    returnInstance: RideInstance
+  ) => {
+    const returnDepartureStationId = form.getValues("arrivalStationId")
+    const returnArrivalStationId = form.getValues("departureStationId")
+    const returnStations = getOrderedStations(returnInstance)
+
+    const returnDepOrder = returnStations.find((s) => s.stationId === returnDepartureStationId)?.order
+    const returnArrOrder = returnStations.find((s) => s.stationId === returnArrivalStationId)?.order
+
+    if (returnDepOrder == null || returnArrOrder == null || returnArrOrder <= returnDepOrder) {
+      throw new Error("Povratna vožnja ne podržava izabrane stanice.")
+    }
+
+    const existingReturnReservations = (allReservations[returnInstance.id] || []).filter(
+      (reservation) => reservation.status === "active"
+    )
+    const workingReservations = [...existingReturnReservations]
+
+    return outboundRequests.map((outboundRequest) => {
+      const preferredSeat = outboundRequest.seatNumber
+      const hasPreferredSeatConflict = checkSeatConflict(
+        workingReservations,
+        preferredSeat,
+        returnDepartureStationId,
+        returnArrivalStationId,
+        returnStations
+      )
+
+      let assignedSeat = preferredSeat
+      if (hasPreferredSeatConflict) {
+        const firstAvailableSeat = Array.from(
+          { length: returnInstance.ride.busCapacity },
+          (_, index) => index + 1
+        ).find(
+          (seatNumber) =>
+            !checkSeatConflict(
+              workingReservations,
+              seatNumber,
+              returnDepartureStationId,
+              returnArrivalStationId,
+              returnStations
+            )
+        )
+
+        if (!firstAvailableSeat) {
+          throw new Error("Nema slobodnih sedišta za povratnu vožnju.")
+        }
+
+        assignedSeat = firstAvailableSeat
+      }
+
+      workingReservations.push({
+        id: `planned-${outboundRequest.passengerId}-${assignedSeat}`,
+        rideInstanceId: returnInstance.id,
+        rideInstance: returnInstance,
+        passengerId: outboundRequest.passengerId,
+        passenger: {
+          id: "",
+          firstName: "",
+          lastName: "",
+          phone: "",
+          passengerType: "odrasli",
+        },
+        seatNumber: assignedSeat,
+        departureStationId: returnDepartureStationId,
+        departureStation: { id: "", name: "", address: "" },
+        arrivalStationId: returnArrivalStationId,
+        arrivalStation: { id: "", name: "", address: "" },
+        status: "active",
+      })
+
+      return {
+        ...outboundRequest,
+        rideInstanceId: returnInstance.id,
+        departureStationId: returnDepartureStationId,
+        arrivalStationId: returnArrivalStationId,
+        seatNumber: assignedSeat,
+      }
+    })
+  }
+
+  const createWithOptionalReturn = async (outboundRequests: ReservationFormData[]) => {
+    let returnRequests: ReservationFormData[] = []
+
+    if (isReturnTicket) {
+      if (!selectedReturnRideInstance) {
+        throw new Error("Izaberite datum i vreme povratne vožnje.")
+      }
+
+      returnRequests = buildReturnRequests(outboundRequests, selectedReturnRideInstance)
+    }
+
+    if (outboundRequests.length === 1 && !isMultiReservation) {
+      await createReservation(outboundRequests[0])
+    } else {
+      await createReservationsBatch(outboundRequests)
+    }
+
+    if (returnRequests.length > 0 && selectedReturnRideInstance) {
+      await createReservationsForRideInstance(selectedReturnRideInstance, returnRequests, {
+        showSuccessToast: false,
+      })
+      toast.success("Povratna karta je uspešno rezervisana")
+    }
+  }
+
+  const allStations = selectedRideInstance
+    ? [
+        {
+          id: selectedRideInstance.ride.line.departureStation.id,
+          name: selectedRideInstance.ride.line.departureStation.name,
+        },
+        ...selectedRideInstance.ride.line.intermediateStations.map((stop) => ({
+          id: stop.stationId,
+          name: stop.stationName,
+        })),
+        {
+          id: selectedRideInstance.ride.line.arrivalStation.id,
+          name: selectedRideInstance.ride.line.arrivalStation.name,
+        },
+      ]
+    : []
+
+  const selectedDepartureStationName =
+    allStations.find((station) => station.id === form.watch("departureStationId"))?.name ||
+    (selectedRideInstance ? selectedRideInstance.ride.line.departureStation.name : "")
+
+  const selectedArrivalStationName =
+    allStations.find((station) => station.id === form.watch("arrivalStationId"))?.name ||
+    (selectedRideInstance ? selectedRideInstance.ride.line.arrivalStation.name : "")
 
   const handleDialogOpenChange = (isOpen: boolean) => {
     // Only allow closing if passenger form is not open
@@ -292,8 +538,109 @@ export function ReservationModal({
       setWasJustOpened(false) // Reset the flag when modal closes
       setAssignmentMode("single")
       setPerSeatPassengers({})
+      setIsReturnTicket(false)
+      setSelectedReturnDate(undefined)
+      setSelectedReturnRideInstanceId("")
+      setExistingReturnReservation(null)
     }
     onOpenChange(isOpen)
+  }
+
+  useEffect(() => {
+    if (!open || !reservation || returnRideInstances.length === 0) {
+      return
+    }
+
+    const returnInstanceById = new Map(
+      returnRideInstances.map((instance) => [instance.id, instance])
+    )
+
+    const candidates = Object.entries(allReservations)
+      .flatMap(([instanceId, reservationsForInstance]) => {
+        if (!returnInstanceById.has(instanceId)) {
+          return []
+        }
+        return reservationsForInstance
+      })
+      .filter((candidate) => {
+        if (candidate.status !== "active") return false
+        if (candidate.passengerId !== reservation.passengerId) return false
+        if (candidate.departureStationId !== reservation.arrivalStationId) return false
+        if (candidate.arrivalStationId !== reservation.departureStationId) return false
+        return true
+      })
+      .sort((left, right) => {
+        const leftSeatScore = left.seatNumber === reservation.seatNumber ? 0 : 1
+        const rightSeatScore = right.seatNumber === reservation.seatNumber ? 0 : 1
+        if (leftSeatScore !== rightSeatScore) {
+          return leftSeatScore - rightSeatScore
+        }
+
+        const leftInstance = returnInstanceById.get(left.rideInstanceId)
+        const rightInstance = returnInstanceById.get(right.rideInstanceId)
+
+        const leftDateTime = leftInstance
+          ? `${leftInstance.date}T${leftInstance.departureTime}`
+          : ""
+        const rightDateTime = rightInstance
+          ? `${rightInstance.date}T${rightInstance.departureTime}`
+          : ""
+
+        return leftDateTime.localeCompare(rightDateTime)
+      })
+
+    const matched = candidates[0]
+
+    if (!matched) {
+      setExistingReturnReservation(null)
+      return
+    }
+
+    const matchedInstance = returnInstanceById.get(matched.rideInstanceId)
+    if (!matchedInstance) {
+      setExistingReturnReservation(null)
+      return
+    }
+
+    setExistingReturnReservation(matched)
+    setIsReturnTicket(true)
+    setSelectedReturnRideInstanceId(matchedInstance.id)
+    setSelectedReturnDate(new Date(`${matchedInstance.date}T00:00:00`))
+  }, [open, reservation, returnRideInstances, allReservations])
+
+  useEffect(() => {
+    if (!isReturnTicket) {
+      setSelectedReturnDate(undefined)
+      setSelectedReturnRideInstanceId("")
+      return
+    }
+
+    if (!selectedReturnDate && returnRideInstances.length > 0) {
+      const first = returnRideInstances[0]
+      setSelectedReturnDate(new Date(`${first.date}T00:00:00`))
+      setSelectedReturnRideInstanceId(first.id)
+    }
+  }, [isReturnTicket, returnRideInstances, selectedReturnDate])
+
+  useEffect(() => {
+    if (!isReturnTicket || !selectedReturnDateKey) return
+
+    const selectedStillExists = returnInstancesForSelectedDate.some(
+      (instance) => instance.id === selectedReturnRideInstanceId
+    )
+
+    if (!selectedStillExists) {
+      setSelectedReturnRideInstanceId(returnInstancesForSelectedDate[0]?.id || "")
+    }
+  }, [
+    isReturnTicket,
+    selectedReturnDateKey,
+    selectedReturnRideInstanceId,
+    returnInstancesForSelectedDate,
+  ])
+
+  if (!selectedRideInstance) {
+    return null
   }
 
   return (
@@ -326,7 +673,7 @@ export function ReservationModal({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
             <p>
               <span className="font-semibold">Datum:</span>{" "}
               {formatDateDisplay(new Date(selectedRideInstance.date))}
@@ -550,6 +897,106 @@ export function ReservationModal({
                 )}
               />
             </div>
+
+            <div className="space-y-3 rounded-lg border p-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="return-ticket"
+                    checked={isReturnTicket}
+                    onCheckedChange={(checked) => setIsReturnTicket(checked === true)}
+                    disabled={returnRideInstances.length === 0}
+                  />
+                  <label htmlFor="return-ticket" className="text-sm font-medium leading-none">
+                    Povratna karta
+                  </label>
+                </div>
+
+                {returnRideInstances.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Nema dostupnih vožnji u suprotnom smeru za povratnu kartu.
+                  </p>
+                ) : null}
+
+                {isReturnTicket && returnRideInstances.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Popover open={returnDatePickerOpen} onOpenChange={setReturnDatePickerOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            <CalendarDays className="mr-2 h-4 w-4" />
+                            {selectedReturnDate
+                              ? format(selectedReturnDate, "d. MMMM yyyy", { locale: srLatn })
+                              : "Datum povratka"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-2" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={selectedReturnDate}
+                            onSelect={(date) => {
+                              setSelectedReturnDate(date)
+                              setReturnDatePickerOpen(false)
+                            }}
+                            locale={srLatn}
+                            disabled={(date) => {
+                              const dateKey = format(date, "yyyy-MM-dd")
+                              return !availableReturnDateKeys.has(dateKey)
+                            }}
+                            className="rounded-md border"
+                          />
+                        </PopoverContent>
+                      </Popover>
+
+                      <Select
+                        value={selectedReturnRideInstanceId}
+                        onValueChange={setSelectedReturnRideInstanceId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Vreme povratka" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {returnInstancesForSelectedDate.map((instance) => (
+                            <SelectItem key={instance.id} value={instance.id}>
+                              {formatTimeDisplay(instance.departureTime)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {selectedReturnRideInstance ? (
+                      <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+                        <p>
+                          <span className="font-semibold text-foreground">Preselektovano:</span>{" "}
+                          {formatDateDisplay(new Date(selectedReturnRideInstance.date))} •{" "}
+                          {formatTimeDisplay(selectedReturnRideInstance.departureTime)} - {formatTimeDisplay(selectedReturnRideInstance.arrivalTime)}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-foreground">Ruta:</span>{" "}
+                          {selectedArrivalStationName} → {selectedDepartureStationName}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-foreground">Sedišta:</span>{" "}
+                          {returnSeatPreviewNumbers.length > 0
+                            ? returnSeatPreviewNumbers.join(", ")
+                            : "Biće dodeljena pri potvrdi"}
+                          {" "}(isti broj ako je slobodan, inače prvo slobodno)
+                        </p>
+                        {existingReturnReservation &&
+                        existingReturnReservation.rideInstanceId === selectedReturnRideInstanceId ? (
+                          <p>
+                            <span className="font-semibold text-foreground">Status:</span> Učitani postojeći podaci povratne karte
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
 
             <DialogFooter className="flex items-center justify-between">
               <div>

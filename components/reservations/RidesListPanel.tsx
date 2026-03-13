@@ -14,10 +14,18 @@ import {
   type FilterFn,
 } from "@tanstack/react-table"
 import { formatDateDisplay, formatTimeDisplay } from "@/utils/dateHelpers"
-import type { RideInstance, RideStatus } from "@/types"
+import type { Ride, RideInstance, RideStatus } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -40,9 +48,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { LineRoute } from "@/components/lines/LineRoute"
+import { cn } from "@/lib/utils"
 import { useRidesStore } from "@/stores/ridesStore"
 import { useReservationsStore } from "@/stores/reservationsStore"
-import { Armchair, CalendarDays, Clock3, Filter, Info, Route, Search, Ticket, X } from "lucide-react"
+import { Armchair, CalendarDays, Check, ChevronsUpDown, Clock3, Filter, Info, Route, Search, Ticket, X } from "lucide-react"
 
 interface RidesListPanelProps {
   selectedDate: Date | undefined
@@ -65,11 +74,14 @@ const globalRideFilter: FilterFn<RideInstance> = (row, _columnId, filterValue) =
   const lineName = row.original.ride.line.name.toLowerCase()
   const departureStation = row.original.ride.line.departureStation.name.toLowerCase()
   const arrivalStation = row.original.ride.line.arrivalStation.name.toLowerCase()
+  const intermediateStations = row.original.ride.line.intermediateStations
+    .map((station) => station.stationName.toLowerCase())
   return (
     rideName.includes(term) ||
     lineName.includes(term) ||
     departureStation.includes(term) ||
-    arrivalStation.includes(term)
+    arrivalStation.includes(term) ||
+    intermediateStations.some((stationName) => stationName.includes(term))
   )
 }
 
@@ -79,18 +91,64 @@ const statusFilterFn: FilterFn<RideInstance> = (row, _columnId, value) => {
   return selected.includes(row.original.status)
 }
 
+const getOrderedLineStations = (line: Ride["line"]) => {
+  const intermediateStations = [...line.intermediateStations].sort(
+    (left, right) => left.order - right.order
+  )
+
+  return [
+    {
+      id: line.departureStation.id,
+      name: line.departureStation.name,
+    },
+    ...intermediateStations.map((station) => ({
+      id: station.stationId,
+      name: station.stationName,
+    })),
+    {
+      id: line.arrivalStation.id,
+      name: line.arrivalStation.name,
+    },
+  ]
+}
+
+const matchesStationPair = (
+  line: Ride["line"],
+  departureStationId: string,
+  arrivalStationId: string
+) => {
+  const stationIds = getOrderedLineStations(line).map((station) => station.id)
+
+  const departureIndex = departureStationId
+    ? stationIds.findIndex((id) => id === departureStationId)
+    : -1
+  const arrivalIndex = arrivalStationId
+    ? stationIds.findIndex((id) => id === arrivalStationId)
+    : -1
+
+  if (departureStationId && departureIndex === -1) return false
+  if (arrivalStationId && arrivalIndex === -1) return false
+  if (departureStationId && arrivalStationId && arrivalIndex <= departureIndex) return false
+
+  return true
+}
+
 export function RidesListPanel({
   selectedDate,
   rideInstances,
   loading,
 }: RidesListPanelProps) {
   const router = useRouter()
-  const { fetchRideInstances, setSelectedDate } = useRidesStore()
+  const { rides, fetchRideInstances, setSelectedDate } = useRidesStore()
   const allReservations = useReservationsStore((state) => state.allReservations)
   const [infoModalOpen, setInfoModalOpen] = useState(false)
   const [selectedInstance, setSelectedInstance] = useState<RideInstance | null>(null)
   const [searchValue, setSearchValue] = useState("")
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [selectedDepartureStationId, setSelectedDepartureStationId] = useState("")
+  const [selectedArrivalStationId, setSelectedArrivalStationId] = useState("")
+  const [departurePopoverOpen, setDeparturePopoverOpen] = useState(false)
+  const [arrivalPopoverOpen, setArrivalPopoverOpen] = useState(false)
 
   const selectedInstanceReservations = useMemo(() => {
     if (!selectedInstance) return []
@@ -138,8 +196,16 @@ export function RidesListPanel({
     []
   )
 
+  const filteredRideInstances = useMemo(
+    () =>
+      rideInstances.filter((instance) =>
+        matchesStationPair(instance.ride.line, selectedDepartureStationId, selectedArrivalStationId)
+      ),
+    [rideInstances, selectedDepartureStationId, selectedArrivalStationId]
+  )
+
   const table = useReactTable({
-    data: rideInstances,
+    data: filteredRideInstances,
     columns,
     state: {
       globalFilter: searchValue,
@@ -155,6 +221,46 @@ export function RidesListPanel({
   const selectedStatuses =
     (columnFilters.find((filter) => filter.id === "status")?.value as RideStatus[]) || []
 
+  const allStationOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          rides.flatMap((ride) =>
+            getOrderedLineStations(ride.line).map((station) => [station.id, station])
+          )
+        ).values()
+      ).sort((left, right) => left.name.localeCompare(right.name, "sr")),
+    [rides]
+  )
+
+  const departureStationOptions = useMemo(
+    () =>
+      allStationOptions.filter((candidate) =>
+        rides.some((ride) => {
+          return matchesStationPair(ride.line, candidate.id, selectedArrivalStationId)
+        })
+      ),
+    [allStationOptions, rides, selectedArrivalStationId]
+  )
+
+  const arrivalStationOptions = useMemo(
+    () =>
+      allStationOptions.filter((candidate) =>
+        rides.some((ride) => {
+          return matchesStationPair(ride.line, selectedDepartureStationId, candidate.id)
+        })
+      ),
+    [allStationOptions, rides, selectedDepartureStationId]
+  )
+
+  const selectedDepartureStation = departureStationOptions.find(
+    (station) => station.id === selectedDepartureStationId
+  )
+
+  const selectedArrivalStation = arrivalStationOptions.find(
+    (station) => station.id === selectedArrivalStationId
+  )
+
   const toggleStatus = (status: RideStatus) => {
     const next = selectedStatuses.includes(status)
       ? selectedStatuses.filter((value) => value !== status)
@@ -166,9 +272,23 @@ export function RidesListPanel({
     })
   }
 
+  const setStationFilter = (
+    filterId: "departureStationId" | "arrivalStationId",
+    value: string
+  ) => {
+    if (filterId === "departureStationId") {
+      setSelectedDepartureStationId(value)
+      return
+    }
+
+    setSelectedArrivalStationId(value)
+  }
+
   const clearFilters = () => {
     setSearchValue("")
     setColumnFilters([])
+    setSelectedDepartureStationId("")
+    setSelectedArrivalStationId("")
   }
 
   const formatDuration = (durationInMinutes?: number) => {
@@ -191,7 +311,7 @@ export function RidesListPanel({
   return (
     <div className="space-y-4">
       <div className="rounded-xl border bg-card/70 p-4 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-[1.2fr_0.9fr_auto] md:items-center">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr_0.9fr_auto] xl:items-center">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -201,6 +321,97 @@ export function RidesListPanel({
               className="pl-9"
             />
           </div>
+
+          <Popover open={departurePopoverOpen} onOpenChange={setDeparturePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={departurePopoverOpen}
+                className="w-full justify-between"
+              >
+                {selectedDepartureStation?.name || "Polazna stanica"}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[320px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Pretraži polaznu stanicu..." />
+                <CommandList>
+                  <CommandEmpty>Nema pronađenih stanica.</CommandEmpty>
+                  <CommandGroup>
+                    {departureStationOptions.map((station) => (
+                      <CommandItem
+                        key={station.id}
+                        value={station.name}
+                        onSelect={() => {
+                          setStationFilter(
+                            "departureStationId",
+                            station.id === selectedDepartureStationId ? "" : station.id
+                          )
+                          setDeparturePopoverOpen(false)
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedDepartureStationId === station.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {station.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+
+          <Popover open={arrivalPopoverOpen} onOpenChange={setArrivalPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={arrivalPopoverOpen}
+                className="w-full justify-between"
+              >
+                {selectedArrivalStation?.name || "Dolazna stanica"}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[320px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Pretraži dolaznu stanicu..." />
+                <CommandList>
+                  <CommandEmpty>Nema pronađenih stanica.</CommandEmpty>
+                  <CommandGroup>
+                    {arrivalStationOptions.map((station) => (
+                      <CommandItem
+                        key={station.id}
+                        value={station.name}
+                        onSelect={() => {
+                          setStationFilter(
+                            "arrivalStationId",
+                            station.id === selectedArrivalStationId ? "" : station.id
+                          )
+                          setArrivalPopoverOpen(false)
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedArrivalStationId === station.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {station.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-start text-muted-foreground">
@@ -258,7 +469,7 @@ export function RidesListPanel({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            {(searchValue || columnFilters.length > 0) && (
+            {(searchValue || columnFilters.length > 0 || selectedDepartureStationId || selectedArrivalStationId) && (
               <Button variant="ghost" size="sm" onClick={clearFilters}>
                 <X className="mr-2 h-4 w-4" />
                 Reset
