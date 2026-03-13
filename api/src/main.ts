@@ -20,7 +20,7 @@ async function bootstrap(): Promise<void> {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Airtable Demo API')
-    .setDescription('Slice 0 baseline API with health checks and PostgreSQL readiness.')
+    .setDescription('Slice 1 baseline API with Prisma lifecycle wiring and database health checks.')
     .setVersion('0.1.0')
     .build();
 

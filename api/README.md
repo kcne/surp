@@ -2,7 +2,7 @@
 
 NestJS backend for Airtable Demo.
 
-Current status: Slice 0 (project skeleton, PostgreSQL connectivity, liveness/readiness checks).
+Current status: Slice 1 (Prisma lifecycle integration, seed scaffolding, and baseline data-access helpers).
 
 ## Tech Stack
 
@@ -96,25 +96,30 @@ The API container runs database migrations on startup.
 | prisma:migrate:deploy | pnpm prisma:migrate:deploy | Apply migrations in deployment |
 | prisma:seed | pnpm prisma:seed | Seed baseline data |
 
-## Validation Checklist (Slice 0)
+## Validation Checklist (Slice 1)
 
 Run these before merging:
 
 ```bash
 pnpm lint
 pnpm build
+pnpm test
 pnpm test:e2e
+pnpm prisma:seed
 ```
 
 Manual checks:
 
 - GET /health returns 200 when DB is reachable
 - GET /health/readiness returns 503 when DB is unavailable
+- API startup log includes "Connected to PostgreSQL via Prisma"
+- Running seed command inserts or confirms baseline record
 
 ## API Docs and Postman
 
-- OpenAPI UI: http://localhost:3001/docs
-- Postman collection: postman/slice-0-health.postman_collection.json
+- OpenAPI UI: <http://localhost:3001/docs>
+- Postman collection (Slice 0): postman/slice-0-health.postman_collection.json
+- Postman collection (Slice 1): postman/slice-1-prisma-baseline.postman_collection.json
 
 ## Project Layout
 

@@ -1,10 +1,13 @@
-import { INestApplication, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { INestApplication, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(PrismaService.name);
+
   async onModuleInit(): Promise<void> {
     await this.$connect();
+    this.logger.log('Connected to PostgreSQL via Prisma');
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -17,9 +20,13 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     });
   }
 
+  async smokeQuery(): Promise<void> {
+    await this.$queryRaw`SELECT 1`;
+  }
+
   async isHealthy(): Promise<boolean> {
     try {
-      await this.$queryRaw`SELECT 1`;
+      await this.smokeQuery();
       return true;
     } catch {
       return false;

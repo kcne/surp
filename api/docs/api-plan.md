@@ -32,7 +32,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 3. Migration command can run without error.
 5. Exit criteria: Team can start and test backend locally in one command.
 
-**Slice 1 - Prisma Integration and Baseline Data Access**
+**Slice 1 - Prisma Integration and Baseline Data Access** - DONE
 1. Goal: Connect NestJS to Prisma with clean lifecycle handling.
 2. Scope:
 1. Prisma module and service with graceful shutdown.
