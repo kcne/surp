@@ -111,7 +111,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Security negative tests pass.
 5. Exit criteria: Access control enforced across modules.
 
-**Slice 6 - Users Module (Tenant-Scoped User Management)**
+**Slice 6 - Users Module (Tenant-Scoped User Management)** - DONE
 1. Goal: Manage users and roles safely.
 2. Scope:
 1. Create, list, update users in tenant.
@@ -127,7 +127,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Manager and staff permission restrictions respected.
 5. Exit criteria: Role hierarchy can be administered per tenant.
 
-**Slice 7 - Audit Field Automation (createdBy and updatedBy)**
+**Slice 7 - Audit Field Automation (createdBy and updatedBy)** - DONE
 1. Goal: Guarantee audit integrity for all writes.
 2. Scope:
 1. Shared write helper or interceptor to inject actor IDs.

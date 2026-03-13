@@ -19,10 +19,9 @@ async function main() {
       }
     });
     console.log('Inserted baseline seed record.');
-    return;
+  } else {
+    console.log('Baseline seed record already exists.');
   }
-
-  console.log('Baseline seed record already exists.');
 
   const tenantSlug = 'demo-tenant';
   const adminUsername = 'demo-admin';
@@ -45,7 +44,7 @@ async function main() {
   const adminPasswordHash = await hash(adminPassword, 10);
   const inactivePasswordHash = await hash('demo-inactive-pass', 10);
 
-  await prisma.user.upsert({
+  const adminUser = await prisma.user.upsert({
     where: {
       tenantId_username: {
         tenantId: tenant.id,
@@ -91,7 +90,91 @@ async function main() {
     }
   });
 
-  console.log('Seeded tenant and users for Slice 3 login scenarios.');
+  await prisma.station.upsert({
+    where: {
+      id: 'seed-station-main'
+    },
+    update: {
+      tenantId: tenant.id,
+      name: 'Seed Main Station',
+      address: '100 Seed Avenue, Demo City',
+      category: 'BUS_STATION',
+      isActive: true,
+      createdById: adminUser.id,
+      updatedById: adminUser.id
+    },
+    create: {
+      id: 'seed-station-main',
+      tenantId: tenant.id,
+      name: 'Seed Main Station',
+      address: '100 Seed Avenue, Demo City',
+      category: 'BUS_STATION',
+      isActive: true,
+      createdById: adminUser.id,
+      updatedById: adminUser.id
+    }
+  });
+
+  await prisma.station.upsert({
+    where: {
+      id: 'seed-station-referenced'
+    },
+    update: {
+      tenantId: tenant.id,
+      name: 'Seed Referenced Station',
+      address: '200 Seed Avenue, Demo City',
+      category: 'BUS_STOP',
+      isActive: true,
+      createdById: adminUser.id,
+      updatedById: adminUser.id
+    },
+    create: {
+      id: 'seed-station-referenced',
+      tenantId: tenant.id,
+      name: 'Seed Referenced Station',
+      address: '200 Seed Avenue, Demo City',
+      category: 'BUS_STOP',
+      isActive: true,
+      createdById: adminUser.id,
+      updatedById: adminUser.id
+    }
+  });
+
+  await prisma.line.upsert({
+    where: {
+      id: 'seed-line-referencing-station'
+    },
+    update: {
+      tenantId: tenant.id,
+      departureStationId: 'seed-station-referenced',
+      arrivalStationId: 'seed-station-main'
+    },
+    create: {
+      id: 'seed-line-referencing-station',
+      tenantId: tenant.id,
+      departureStationId: 'seed-station-referenced',
+      arrivalStationId: 'seed-station-main'
+    }
+  });
+
+  await prisma.reservation.upsert({
+    where: {
+      id: 'seed-reservation-referencing-station'
+    },
+    update: {
+      tenantId: tenant.id,
+      departureStationId: 'seed-station-referenced',
+      arrivalStationId: 'seed-station-main'
+    },
+    create: {
+      id: 'seed-reservation-referencing-station',
+      tenantId: tenant.id,
+      departureStationId: 'seed-station-referenced',
+      arrivalStationId: 'seed-station-main'
+    }
+  });
+
+  console.log('Seeded tenant, users, and stations fixtures for Slice 8 scenarios.');
 }
 
 main()

@@ -13,6 +13,11 @@ enum UserRole {
   STAFF
 }
 
+enum StationCategory {
+  BUS_STATION
+  BUS_STOP
+}
+
 model HealthCheckLog {
   id        String   @id @default(cuid())
   message   String
@@ -28,6 +33,9 @@ model Tenant {
   updatedAt       DateTime         @updatedAt
   users           User[]
   refreshSessions RefreshSession[]
+  stations        Station[]
+  lines           Line[]
+  reservations    Reservation[]
 }
 
 model User {
@@ -67,4 +75,60 @@ model RefreshSession {
 
   @@index([tenantId, userId])
   @@index([updatedById])
+}
+
+model Station {
+  id           String           @id @default(cuid())
+  tenantId     String
+  createdById  String?
+  updatedById  String?
+  name         String
+  address      String
+  category     StationCategory?
+  contactPhone String?
+  notes        String?
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  departureFor Line[]           @relation("LineDepartureStation")
+  arrivalFor   Line[]           @relation("LineArrivalStation")
+  departureForReservation Reservation[] @relation("ReservationDepartureStation")
+  arrivalForReservation   Reservation[] @relation("ReservationArrivalStation")
+
+  @@index([tenantId])
+  @@index([tenantId, name])
+  @@index([updatedById])
+}
+
+model Line {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  departureStationId String
+  arrivalStationId   String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  departureStation   Station  @relation("LineDepartureStation", fields: [departureStationId], references: [id], onDelete: Restrict)
+  arrivalStation     Station  @relation("LineArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([departureStationId])
+  @@index([arrivalStationId])
+}
+
+model Reservation {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  departureStationId String
+  arrivalStationId   String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  departureStation   Station  @relation("ReservationDepartureStation", fields: [departureStationId], references: [id], onDelete: Restrict)
+  arrivalStation     Station  @relation("ReservationArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([departureStationId])
+  @@index([arrivalStationId])
 }
