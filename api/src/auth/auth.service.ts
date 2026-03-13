@@ -12,6 +12,7 @@ import { compare } from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { AccessTokenPayload } from './auth.types';
 import { LoginDto } from './dto/login.dto';
+import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type AuthLoginResult = {
@@ -104,9 +105,13 @@ export class AuthService {
             gt: nowTx
           }
         },
-        data: {
-          revokedAt: nowTx
-        }
+        data: withUpdateAudit(
+          {
+            revokedAt: nowTx
+          },
+          existingSession.user.id,
+          nowTx
+        )
       });
 
       if (revokeResult.count !== 1) {
@@ -130,15 +135,28 @@ export class AuthService {
     const normalizedRefreshToken = this.normalizeRefreshTokenOrThrow(refreshToken);
     const refreshTokenHash = createHash('sha256').update(normalizedRefreshToken).digest('hex');
 
+    const existingSession = await this.prisma.refreshSession.findUnique({
+      where: {
+        refreshTokenHash
+      }
+    });
+
+    if (!existingSession || existingSession.tenantId !== tenant.id) {
+      throw new UnauthorizedException('Refresh token is invalid');
+    }
+
     const revokeResult = await this.prisma.refreshSession.updateMany({
       where: {
         tenantId: tenant.id,
         refreshTokenHash,
         revokedAt: null
       },
-      data: {
-        revokedAt: new Date()
-      }
+      data: withUpdateAudit(
+        {
+          revokedAt: new Date()
+        },
+        existingSession.userId
+      )
     });
 
     if (revokeResult.count !== 1) {
@@ -261,12 +279,15 @@ export class AuthService {
     const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
 
     await prismaClient.refreshSession.create({
-      data: {
-        tenantId,
-        userId,
-        refreshTokenHash,
-        expiresAt: new Date(Date.now() + this.refreshTokenTtlSeconds * 1000)
-      }
+      data: withCreateAudit(
+        {
+          tenantId,
+          userId,
+          refreshTokenHash,
+          expiresAt: new Date(Date.now() + this.refreshTokenTtlSeconds * 1000)
+        },
+        userId
+      )
     });
 
     return refreshToken;

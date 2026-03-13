@@ -64,6 +64,8 @@ describe('UsersService', () => {
         {
           id: 'user-2',
           tenantId: 'tenant-1',
+          createdById: 'admin-1',
+          updatedById: 'admin-1',
           username: 'manager-a',
           email: 'manager-a@demo.local',
           role: UserRole.MANAGER,
@@ -100,6 +102,8 @@ describe('UsersService', () => {
     prismaMock.user.update.mockResolvedValue({
       id: 'user-2',
       tenantId: 'tenant-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
       username: 'manager-a',
       email: 'manager-a@demo.local',
       role: UserRole.MANAGER,
@@ -111,6 +115,70 @@ describe('UsersService', () => {
     const result = await service.softDelete(auth, 'user-2');
 
     expect(result.isActive).toBe(false);
+  });
+
+  it('injects createdById and updatedById from auth actor on create', async () => {
+    prismaMock.user.create.mockResolvedValue({
+      id: 'user-2',
+      tenantId: 'tenant-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      username: 'manager-a',
+      email: 'manager-a@demo.local',
+      role: UserRole.MANAGER,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await service.create(auth, {
+      username: 'manager-a',
+      email: 'manager-a@demo.local',
+      password: 'strong-password-123',
+      role: UserRole.MANAGER
+    });
+
+    expect(prismaMock.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          createdById: auth.sub,
+          updatedById: auth.sub
+        })
+      })
+    );
+  });
+
+  it('updates updatedById and updatedAt without modifying createdById on update', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'user-2' });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'user-2',
+      tenantId: 'tenant-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      username: 'manager-a',
+      email: 'manager-a@demo.local',
+      role: UserRole.STAFF,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await service.update(auth, 'user-2', {
+      role: UserRole.STAFF
+    });
+
+    const updateCall = prismaMock.user.update.mock.calls[0][0] as {
+      data: Record<string, unknown>;
+    };
+
+    expect(updateCall.data).toEqual(
+      expect.objectContaining({
+        role: UserRole.STAFF,
+        updatedById: auth.sub
+      })
+    );
+    expect(updateCall.data).toHaveProperty('updatedAt');
+    expect(updateCall.data).not.toHaveProperty('createdById');
   });
 
   it('rejects self soft delete', async () => {

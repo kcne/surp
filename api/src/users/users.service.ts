@@ -8,6 +8,7 @@ import { UserRole } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { AccessTokenPayload } from '../auth/auth.types';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
+import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersQueryDto } from './dto/list-users.query.dto';
@@ -17,6 +18,8 @@ import { UpdateUserDto } from './dto/update-user.dto';
 type SafeUserSelect = {
   id: true;
   tenantId: true;
+  createdById: true;
+  updatedById: true;
   username: true;
   email: true;
   role: true;
@@ -30,6 +33,8 @@ export class UsersService {
   private readonly safeUserSelect: SafeUserSelect = {
     id: true,
     tenantId: true,
+    createdById: true,
+    updatedById: true,
     username: true,
     email: true,
     role: true,
@@ -48,14 +53,17 @@ export class UsersService {
 
     try {
       return await this.prisma.user.create({
-        data: {
+        data: withCreateAudit(
+          {
           tenantId: auth.tenantId,
           username: normalizedUsername,
           email: normalizedEmail,
           passwordHash: await hash(dto.password, 10),
           role: dto.role,
           isActive: true
-        },
+          },
+          auth.sub
+        ),
         select: this.safeUserSelect
       });
     } catch (error) {
@@ -146,7 +154,7 @@ export class UsersService {
         where: {
           id
         },
-        data,
+        data: withUpdateAudit(data, auth.sub),
         select: this.safeUserSelect
       });
     } catch (error) {
@@ -178,9 +186,7 @@ export class UsersService {
       where: {
         id
       },
-      data: {
-        isActive: false
-      },
+      data: withUpdateAudit({ isActive: false }, auth.sub),
       select: this.safeUserSelect
     });
   }

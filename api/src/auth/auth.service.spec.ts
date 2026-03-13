@@ -137,6 +137,14 @@ describe('AuthService', () => {
     expect(result.refreshToken).toBeTruthy();
     expect(result.user.username).toBe('demo-admin');
     expect(prismaMock.refreshSession.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.refreshSession.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          createdById: 'user-1',
+          updatedById: 'user-1'
+        })
+      })
+    );
     expect(jwtServiceMock.sign).toHaveBeenCalledTimes(1);
   });
 
@@ -192,6 +200,15 @@ describe('AuthService', () => {
     expect(result.accessToken).toBe('new-access-token');
     expect(result.refreshToken).toBeTruthy();
     expect(prismaMock.refreshSession.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.refreshSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          revokedAt: expect.any(Date),
+          updatedById: 'user-1',
+          updatedAt: expect.any(Date)
+        })
+      })
+    );
     expect(prismaMock.refreshSession.create).toHaveBeenCalledTimes(1);
   });
 
@@ -246,12 +263,26 @@ describe('AuthService', () => {
 
   it('revokes refresh session on logout', async () => {
     prismaMock.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', isActive: true, slug: 'demo-tenant' });
+    prismaMock.refreshSession.findUnique.mockResolvedValue({
+      id: 'session-1',
+      tenantId: 'tenant-1',
+      userId: 'user-1'
+    });
     prismaMock.refreshSession.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await service.logout('valid-refresh-token', 'demo-tenant');
 
     expect(result).toEqual({ success: true });
     expect(prismaMock.refreshSession.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.refreshSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          revokedAt: expect.any(Date),
+          updatedById: 'user-1',
+          updatedAt: expect.any(Date)
+        })
+      })
+    );
   });
 
   it('returns the current authenticated user profile', async () => {

@@ -8,6 +8,12 @@ export class UserResponseDto {
   @ApiProperty()
   tenantId!: string;
 
+  @ApiProperty({ nullable: true })
+  createdById!: string | null;
+
+  @ApiProperty({ nullable: true })
+  updatedById!: string | null;
+
   @ApiProperty()
   username!: string;
 

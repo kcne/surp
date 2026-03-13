@@ -33,6 +33,8 @@ model Tenant {
 model User {
   id              String           @id @default(cuid())
   tenantId        String
+  createdById     String?
+  updatedById     String?
   username        String
   email           String
   passwordHash    String
@@ -46,12 +48,15 @@ model User {
   @@unique([tenantId, username])
   @@unique([tenantId, email])
   @@index([tenantId, isActive])
+  @@index([updatedById])
 }
 
 model RefreshSession {
   id               String   @id @default(cuid())
   tenantId         String
   userId           String
+  createdById      String?
+  updatedById      String?
   refreshTokenHash String   @unique
   expiresAt        DateTime
   revokedAt        DateTime?
@@ -61,4 +66,5 @@ model RefreshSession {
   user             User     @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, userId])
+  @@index([updatedById])
 }

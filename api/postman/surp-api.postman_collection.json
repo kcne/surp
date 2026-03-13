@@ -100,6 +100,9 @@
                   "}",
                   "if (body.refreshToken) {",
                   "  pm.environment.set('refreshToken', body.refreshToken);",
+                  "}",
+                  "if (body.user && body.user.id) {",
+                  "  pm.environment.set('currentUserId', body.user.id);",
                   "}"
                 ]
               }
@@ -467,7 +470,31 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Create sets audit ids to actor', function () {",
+                  "  const actorId = pm.environment.get('currentUserId');",
+                  "  pm.expect(body.createdById).to.eql(actorId);",
+                  "  pm.expect(body.updatedById).to.eql(actorId);",
+                  "});",
+                  "",
+                  "if (body.id) {",
+                  "  pm.environment.set('managedUserId', body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "List Users - Tenant Scoped",
@@ -538,7 +565,74 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Update keeps audit fields consistent', function () {",
+                  "  const actorId = pm.environment.get('currentUserId');",
+                  "  pm.expect(body.createdById).to.be.a('string');",
+                  "  pm.expect(body.updatedById).to.eql(actorId);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create User - Audit Spoof Fails",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{newManagerUsername}}-spoof\",\n  \"email\": \"spoof.{{duplicateEmail}}\",\n  \"password\": \"{{newUserPassword}}\",\n  \"role\": \"MANAGER\",\n  \"createdById\": \"spoofed-user\",\n  \"updatedById\": \"spoofed-user\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Update User - Put",

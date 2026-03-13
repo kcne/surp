@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserRole } from '@prisma/client';
@@ -92,12 +92,23 @@ describe('UsersController (e2e)', () => {
         };
       }
 
+      if (token === 'access-token-admin-2') {
+        return {
+          sub: 'admin-9',
+          tenantId: 'tenant-1',
+          role: UserRole.ADMIN,
+          username: 'demo-admin-2'
+        };
+      }
+
       throw new Error('invalid token');
     });
 
     prismaMock.user.create.mockResolvedValue({
       id: 'user-2',
       tenantId: 'tenant-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
       username: 'ops-manager',
       email: 'ops.manager@demo.local',
       role: UserRole.MANAGER,
@@ -111,6 +122,8 @@ describe('UsersController (e2e)', () => {
         {
           id: 'admin-1',
           tenantId: 'tenant-1',
+          createdById: null,
+          updatedById: null,
           username: 'demo-admin',
           email: 'admin@demo.local',
           role: UserRole.ADMIN,
@@ -126,6 +139,8 @@ describe('UsersController (e2e)', () => {
     prismaMock.user.update.mockResolvedValue({
       id: 'user-2',
       tenantId: 'tenant-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
       username: 'ops-manager',
       email: 'ops.manager@demo.local',
       role: UserRole.STAFF,
@@ -144,6 +159,13 @@ describe('UsersController (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        transform: true,
+        forbidNonWhitelisted: true
+      })
+    );
     await app.init();
   });
 
@@ -167,10 +189,14 @@ describe('UsersController (e2e)', () => {
       .expect(201);
 
     expect(managerResponse.body.role).toBe(UserRole.MANAGER);
+    expect(managerResponse.body.createdById).toBe('admin-1');
+    expect(managerResponse.body.updatedById).toBe('admin-1');
 
     prismaMock.user.create.mockResolvedValueOnce({
       id: 'user-3',
       tenantId: 'tenant-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
       username: 'ops-staff',
       email: 'ops.staff@demo.local',
       role: UserRole.STAFF,
@@ -262,6 +288,77 @@ describe('UsersController (e2e)', () => {
       .expect(200);
 
     expect(updateResponse.body).not.toHaveProperty('passwordHash');
+  });
+
+  it('rejects body-injected audit ids as non-whitelisted fields', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/users')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        username: 'ops-manager-2',
+        email: 'ops.manager.2@demo.local',
+        password: 'strong-password-123',
+        role: UserRole.MANAGER,
+        createdById: 'spoofed',
+        updatedById: 'spoofed'
+      })
+      .expect(400);
+
+    expect(response.body.message).toEqual(
+      expect.arrayContaining([
+        'property createdById should not exist',
+        'property updatedById should not exist'
+      ])
+    );
+  });
+
+  it('tracks latest editor in updatedById while preserving createdById', async () => {
+    prismaMock.user.update
+      .mockResolvedValueOnce({
+        id: 'user-2',
+        tenantId: 'tenant-1',
+        createdById: 'admin-1',
+        updatedById: 'admin-1',
+        username: 'ops-manager',
+        email: 'ops.manager@demo.local',
+        role: UserRole.STAFF,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .mockResolvedValueOnce({
+        id: 'user-2',
+        tenantId: 'tenant-1',
+        createdById: 'admin-1',
+        updatedById: 'admin-9',
+        username: 'ops-manager',
+        email: 'ops.manager@demo.local',
+        role: UserRole.MANAGER,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+    const firstEdit = await request(app.getHttpServer())
+      .patch('/users/user-2')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({ role: UserRole.STAFF, isActive: true })
+      .expect(200);
+
+    expect(firstEdit.body.createdById).toBe('admin-1');
+    expect(firstEdit.body.updatedById).toBe('admin-1');
+
+    const secondEdit = await request(app.getHttpServer())
+      .patch('/users/user-2')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin-2')
+      .send({ role: UserRole.MANAGER, isActive: true })
+      .expect(200);
+
+    expect(secondEdit.body.createdById).toBe('admin-1');
+    expect(secondEdit.body.updatedById).toBe('admin-9');
   });
 
   it('supports full user update via put endpoint', async () => {
