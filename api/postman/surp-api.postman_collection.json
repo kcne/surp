@@ -106,6 +106,197 @@
             }
           ]
         },
+          {
+            "name": "Refresh - Rotate Token",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "X-Tenant-Slug",
+                  "value": "{{tenantSlug}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/refresh",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "auth",
+                  "refresh"
+                ]
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 200', function () {",
+                    "  pm.response.to.have.status(200);",
+                    "});",
+                    "",
+                    "const body = pm.response.json();",
+                    "pm.test('Refresh returns rotated token pair', function () {",
+                    "  pm.expect(body).to.have.property('accessToken');",
+                    "  pm.expect(body).to.have.property('refreshToken');",
+                    "  pm.expect(body.refreshToken).to.not.eql(pm.environment.get('refreshToken'));",
+                    "});",
+                    "",
+                    "pm.environment.set('oldRefreshToken', pm.environment.get('refreshToken'));",
+                    "pm.environment.set('refreshToken', body.refreshToken);"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "Refresh - Replay Old Token Fails",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "X-Tenant-Slug",
+                  "value": "{{tenantSlug}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"refreshToken\": \"{{oldRefreshToken}}\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/refresh",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "auth",
+                  "refresh"
+                ]
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 401 for replay', function () {",
+                    "  pm.response.to.have.status(401);",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "Logout - Revoke Session",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "X-Tenant-Slug",
+                  "value": "{{tenantSlug}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/logout",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "auth",
+                  "logout"
+                ]
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 200', function () {",
+                    "  pm.response.to.have.status(200);",
+                    "});",
+                    "",
+                    "const body = pm.response.json();",
+                    "pm.test('Logout revokes session', function () {",
+                    "  pm.expect(body).to.have.property('success', true);",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "Refresh - Revoked Token Fails",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "X-Tenant-Slug",
+                  "value": "{{tenantSlug}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/refresh",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "auth",
+                  "refresh"
+                ]
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 401 for revoked token', function () {",
+                    "  pm.response.to.have.status(401);",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
         {
           "name": "Login - Invalid Password",
           "request": {
@@ -209,6 +400,14 @@
     {
       "key": "password",
       "value": "demo-admin-pass"
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "oldRefreshToken",
+      "value": ""
     }
   ]
 }

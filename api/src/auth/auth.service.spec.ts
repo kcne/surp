@@ -5,7 +5,18 @@ import { hash } from 'bcryptjs';
 import { AuthService } from './auth.service';
 
 describe('AuthService', () => {
+  const userRecord = {
+    id: 'user-1',
+    tenantId: 'tenant-1',
+    username: 'demo-admin',
+    email: 'admin@demo.local',
+    passwordHash: '',
+    role: 'ADMIN',
+    isActive: true
+  };
+
   const prismaMock = {
+    $transaction: jest.fn(),
     tenant: {
       findUnique: jest.fn()
     },
@@ -13,7 +24,9 @@ describe('AuthService', () => {
       findUnique: jest.fn()
     },
     refreshSession: {
-      create: jest.fn()
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      updateMany: jest.fn()
     }
   };
 
@@ -40,6 +53,9 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => unknown) =>
+      callback(prismaMock)
+    );
     service = new AuthService(
       prismaMock as never,
       jwtServiceMock as unknown as JwtService,
@@ -122,5 +138,86 @@ describe('AuthService', () => {
     expect(result.user.username).toBe('demo-admin');
     expect(prismaMock.refreshSession.create).toHaveBeenCalledTimes(1);
     expect(jwtServiceMock.sign).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes tokens and revokes old refresh session', async () => {
+    prismaMock.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', isActive: true, slug: 'demo-tenant' });
+    prismaMock.refreshSession.findUnique.mockResolvedValue({
+      id: 'session-1',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      user: userRecord
+    });
+    prismaMock.refreshSession.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.refreshSession.create.mockResolvedValue({ id: 'session-2' });
+    jwtServiceMock.sign.mockReturnValue('new-access-token');
+
+    const result = await service.refresh('valid-refresh-token', 'demo-tenant');
+
+    expect(result.accessToken).toBe('new-access-token');
+    expect(result.refreshToken).toBeTruthy();
+    expect(prismaMock.refreshSession.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.refreshSession.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails refresh when token is reused after revocation', async () => {
+    prismaMock.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', isActive: true, slug: 'demo-tenant' });
+    prismaMock.refreshSession.findUnique.mockResolvedValue({
+      id: 'session-1',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      user: userRecord
+    });
+    prismaMock.refreshSession.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.refresh('reused-token', 'demo-tenant')).rejects.toBeInstanceOf(
+      UnauthorizedException
+    );
+  });
+
+  it('fails refresh when token is already revoked', async () => {
+    prismaMock.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', isActive: true, slug: 'demo-tenant' });
+    prismaMock.refreshSession.findUnique.mockResolvedValue({
+      id: 'session-1',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: new Date(),
+      user: userRecord
+    });
+
+    await expect(service.refresh('revoked-token', 'demo-tenant')).rejects.toBeInstanceOf(
+      UnauthorizedException
+    );
+  });
+
+  it('fails refresh when token is expired', async () => {
+    prismaMock.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', isActive: true, slug: 'demo-tenant' });
+    prismaMock.refreshSession.findUnique.mockResolvedValue({
+      id: 'session-1',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() - 60_000),
+      revokedAt: null,
+      user: userRecord
+    });
+
+    await expect(service.refresh('expired-token', 'demo-tenant')).rejects.toBeInstanceOf(
+      UnauthorizedException
+    );
+  });
+
+  it('revokes refresh session on logout', async () => {
+    prismaMock.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', isActive: true, slug: 'demo-tenant' });
+    prismaMock.refreshSession.updateMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.logout('valid-refresh-token', 'demo-tenant');
+
+    expect(result).toEqual({ success: true });
+    expect(prismaMock.refreshSession.updateMany).toHaveBeenCalledTimes(1);
   });
 });

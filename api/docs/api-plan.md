@@ -79,7 +79,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Refresh session appears in DB.
 5. Exit criteria: Secure login works for tenant-scoped users.
 
-**Slice 4 - Token Refresh Rotation and Logout**
+**Slice 4 - Token Refresh Rotation and Logout** - DONE
 1. Goal: Implement robust session lifecycle.
 2. Scope:
 1. Refresh endpoint with token rotation.

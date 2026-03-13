@@ -51,19 +51,92 @@ export class AuthService {
     const accessToken = this.issueAccessToken(user, tenant.id);
     const refreshToken = await this.createRefreshSession(tenant.id, user.id);
 
-    return {
-      user: {
-        id: user.id,
-        tenantId: tenant.id,
-        username: user.username,
-        email: user.email,
-        role: user.role
+    return this.buildAuthResult(user, tenant.id, accessToken, refreshToken);
+  }
+
+  async refresh(refreshToken: string, tenantSlug: string | undefined): Promise<AuthLoginResult> {
+    const tenant = await this.resolveTenantOrThrow(tenantSlug);
+    const normalizedRefreshToken = this.normalizeRefreshTokenOrThrow(refreshToken);
+    const refreshTokenHash = createHash('sha256').update(normalizedRefreshToken).digest('hex');
+    const now = new Date();
+
+    const existingSession = await this.prisma.refreshSession.findUnique({
+      where: {
+        refreshTokenHash
       },
-      accessToken,
-      refreshToken,
-      tokenType: 'Bearer',
-      expiresIn: this.accessTokenTtlSeconds
-    };
+      include: {
+        user: true
+      }
+    });
+
+    if (!existingSession || existingSession.tenantId !== tenant.id) {
+      throw new UnauthorizedException('Refresh token is invalid');
+    }
+
+    if (existingSession.revokedAt) {
+      throw new UnauthorizedException('Refresh token is revoked');
+    }
+
+    if (existingSession.expiresAt <= now) {
+      throw new UnauthorizedException('Refresh token is expired');
+    }
+
+    if (!existingSession.user.isActive) {
+      throw new ForbiddenException('User is inactive');
+    }
+
+    const { accessToken, nextRefreshToken } = await this.prisma.$transaction(async (tx) => {
+      const nowTx = new Date();
+      const revokeResult = await tx.refreshSession.updateMany({
+        where: {
+          id: existingSession.id,
+          revokedAt: null,
+          expiresAt: {
+            gt: nowTx
+          }
+        },
+        data: {
+          revokedAt: nowTx
+        }
+      });
+
+      if (revokeResult.count !== 1) {
+        throw new UnauthorizedException('Refresh token is invalid');
+      }
+
+      const accessToken = this.issueAccessToken(existingSession.user, tenant.id);
+      const nextRefreshToken = await this.createRefreshSession(tenant.id, existingSession.user.id, tx);
+
+      return {
+        accessToken,
+        nextRefreshToken
+      };
+    });
+
+    return this.buildAuthResult(existingSession.user, tenant.id, accessToken, nextRefreshToken);
+  }
+
+  async logout(refreshToken: string, tenantSlug: string | undefined): Promise<{ success: true }> {
+    const tenant = await this.resolveTenantOrThrow(tenantSlug);
+    const normalizedRefreshToken = this.normalizeRefreshTokenOrThrow(refreshToken);
+    const refreshTokenHash = createHash('sha256').update(normalizedRefreshToken).digest('hex');
+
+    const revokeResult = await this.prisma.refreshSession.updateMany({
+      where: {
+        tenantId: tenant.id,
+        refreshTokenHash,
+        revokedAt: null
+      },
+      data: {
+        revokedAt: new Date()
+      }
+    });
+
+    if (revokeResult.count !== 1) {
+      throw new UnauthorizedException('Refresh token is invalid');
+    }
+
+    return { success: true };
   }
 
   private async resolveTenantOrThrow(tenantSlug: string | undefined): Promise<Tenant> {
@@ -134,11 +207,15 @@ export class AuthService {
     );
   }
 
-  private async createRefreshSession(tenantId: string, userId: string): Promise<string> {
+  private async createRefreshSession(
+    tenantId: string,
+    userId: string,
+    prismaClient: Pick<PrismaService, 'refreshSession'> = this.prisma
+  ): Promise<string> {
     const refreshToken = randomBytes(48).toString('base64url');
     const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
 
-    await this.prisma.refreshSession.create({
+    await prismaClient.refreshSession.create({
       data: {
         tenantId,
         userId,
@@ -148,5 +225,35 @@ export class AuthService {
     });
 
     return refreshToken;
+  }
+
+  private normalizeRefreshTokenOrThrow(refreshToken: string): string {
+    const normalizedRefreshToken = refreshToken?.trim();
+    if (!normalizedRefreshToken) {
+      throw new BadRequestException('refreshToken is required');
+    }
+
+    return normalizedRefreshToken;
+  }
+
+  private buildAuthResult(
+    user: Pick<User, 'id' | 'username' | 'email' | 'role'>,
+    tenantId: string,
+    accessToken: string,
+    refreshToken: string
+  ): AuthLoginResult {
+    return {
+      user: {
+        id: user.id,
+        tenantId,
+        username: user.username,
+        email: user.email,
+        role: user.role
+      },
+      accessToken,
+      refreshToken,
+      tokenType: 'Bearer',
+      expiresIn: this.accessTokenTtlSeconds
+    };
   }
 }

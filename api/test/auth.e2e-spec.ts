@@ -10,8 +10,10 @@ describe('AuthController (e2e)', () => {
   let app: INestApplication;
   let activeUserPasswordHash: string;
   let inactiveUserPasswordHash: string;
+  let refreshReplayConsumed = false;
 
   const prismaMock = {
+    $transaction: jest.fn(),
     onModuleInit: jest.fn(),
     onModuleDestroy: jest.fn(),
     enableShutdownHooks: jest.fn(),
@@ -23,7 +25,9 @@ describe('AuthController (e2e)', () => {
       findUnique: jest.fn()
     },
     refreshSession: {
-      create: jest.fn()
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      updateMany: jest.fn()
     }
   };
 
@@ -38,6 +42,11 @@ describe('AuthController (e2e)', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    refreshReplayConsumed = false;
+
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => unknown) =>
+      callback(prismaMock)
+    );
 
     prismaMock.tenant.findUnique.mockResolvedValue({
       id: 'tenant-1',
@@ -56,6 +65,23 @@ describe('AuthController (e2e)', () => {
     });
 
     prismaMock.refreshSession.create.mockResolvedValue({ id: 'session-1' });
+    prismaMock.refreshSession.findUnique.mockResolvedValue({
+      id: 'session-1',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      user: {
+        id: 'user-1',
+        tenantId: 'tenant-1',
+        username: 'demo-admin',
+        email: 'admin@demo.local',
+        passwordHash: activeUserPasswordHash,
+        role: 'ADMIN',
+        isActive: true
+      }
+    });
+    prismaMock.refreshSession.updateMany.mockResolvedValue({ count: 1 });
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule]
@@ -134,5 +160,152 @@ describe('AuthController (e2e)', () => {
       .expect(400);
 
     expect(response.body.message).toBe('X-Tenant-Slug header is required');
+  });
+
+  it('refreshes tokens and rotates refresh session', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ refreshToken: 'refresh-token-1' })
+      .expect(200);
+
+    expect(response.body.accessToken).toBe('access-token');
+    expect(response.body.refreshToken).toBeTruthy();
+    expect(prismaMock.refreshSession.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.refreshSession.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects replay when old refresh token is reused', async () => {
+    prismaMock.refreshSession.updateMany.mockImplementation(async () => {
+      if (refreshReplayConsumed) {
+        return { count: 0 };
+      }
+
+      refreshReplayConsumed = true;
+      return { count: 1 };
+    });
+
+    await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ refreshToken: 'refresh-token-1' })
+      .expect(200);
+
+    const replayResponse = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ refreshToken: 'refresh-token-1' })
+      .expect(401);
+
+    expect(replayResponse.body.message).toBe('Refresh token is invalid');
+  });
+
+  it('rejects revoked refresh token', async () => {
+    prismaMock.refreshSession.findUnique.mockResolvedValue({
+      id: 'session-1',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: new Date(),
+      user: {
+        id: 'user-1',
+        tenantId: 'tenant-1',
+        username: 'demo-admin',
+        email: 'admin@demo.local',
+        passwordHash: activeUserPasswordHash,
+        role: 'ADMIN',
+        isActive: true
+      }
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ refreshToken: 'refresh-token-1' })
+      .expect(401);
+
+    expect(response.body.message).toBe('Refresh token is revoked');
+  });
+
+  it('rejects expired refresh token', async () => {
+    prismaMock.refreshSession.findUnique.mockResolvedValue({
+      id: 'session-1',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() - 60_000),
+      revokedAt: null,
+      user: {
+        id: 'user-1',
+        tenantId: 'tenant-1',
+        username: 'demo-admin',
+        email: 'admin@demo.local',
+        passwordHash: activeUserPasswordHash,
+        role: 'ADMIN',
+        isActive: true
+      }
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ refreshToken: 'refresh-token-1' })
+      .expect(401);
+
+    expect(response.body.message).toBe('Refresh token is expired');
+  });
+
+  it('logs out by revoking the current refresh session', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/auth/logout')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ refreshToken: 'refresh-token-1' })
+      .expect(200);
+
+    expect(response.body).toEqual({ success: true });
+    expect(prismaMock.refreshSession.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects refresh after logout revokes the same token', async () => {
+    let tokenRevoked = false;
+
+    prismaMock.refreshSession.findUnique.mockImplementation(async () => ({
+      id: 'session-1',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: tokenRevoked ? new Date() : null,
+      user: {
+        id: 'user-1',
+        tenantId: 'tenant-1',
+        username: 'demo-admin',
+        email: 'admin@demo.local',
+        passwordHash: activeUserPasswordHash,
+        role: 'ADMIN',
+        isActive: true
+      }
+    }));
+
+    prismaMock.refreshSession.updateMany.mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
+      if ('tenantId' in where) {
+        tokenRevoked = true;
+        return { count: 1 };
+      }
+
+      return { count: tokenRevoked ? 0 : 1 };
+    });
+
+    await request(app.getHttpServer())
+      .post('/auth/logout')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ refreshToken: 'refresh-token-1' })
+      .expect(200);
+
+    const response = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ refreshToken: 'refresh-token-1' })
+      .expect(401);
+
+    expect(response.body.message).toBe('Refresh token is revoked');
   });
 });
