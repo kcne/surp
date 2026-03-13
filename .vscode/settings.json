@@ -1,3 +1,5 @@
 {
-    "WillLuke.nextjs.hasPrompted": true
+    "WillLuke.nextjs.hasPrompted": true,
+    "typescript.tsdk": "api/node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true
 }
