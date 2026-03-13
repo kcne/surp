@@ -94,4 +94,26 @@ describe('UsersService', () => {
       ForbiddenException
     );
   });
+
+  it('soft deletes a tenant user by setting isActive false', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'user-2' });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'user-2',
+      tenantId: 'tenant-1',
+      username: 'manager-a',
+      email: 'manager-a@demo.local',
+      role: UserRole.MANAGER,
+      isActive: false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const result = await service.softDelete(auth, 'user-2');
+
+    expect(result.isActive).toBe(false);
+  });
+
+  it('rejects self soft delete', async () => {
+    await expect(service.softDelete(auth, auth.sub)).rejects.toBeInstanceOf(ForbiddenException);
+  });
 });

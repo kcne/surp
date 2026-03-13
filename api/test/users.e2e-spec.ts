@@ -264,6 +264,43 @@ describe('UsersController (e2e)', () => {
     expect(updateResponse.body).not.toHaveProperty('passwordHash');
   });
 
+  it('supports full user update via put endpoint', async () => {
+    const response = await request(app.getHttpServer())
+      .put('/users/user-2')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        username: 'ops-manager-updated',
+        email: 'ops.manager.updated@demo.local',
+        role: UserRole.STAFF,
+        isActive: false
+      })
+      .expect(200);
+
+    expect(response.body).not.toHaveProperty('passwordHash');
+    expect(response.body.id).toBe('user-2');
+  });
+
+  it('soft deletes user via delete endpoint', async () => {
+    const response = await request(app.getHttpServer())
+      .delete('/users/user-2')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .expect(200);
+
+    expect(response.body.id).toBe('user-2');
+    expect(response.body.isActive).toBe(false);
+    expect(response.body).not.toHaveProperty('passwordHash');
+  });
+
+  it('blocks self soft delete for current admin', async () => {
+    await request(app.getHttpServer())
+      .delete('/users/admin-1')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .expect(403);
+  });
+
   it('restricts manager and staff permissions as expected', async () => {
     await request(app.getHttpServer())
       .post('/users')

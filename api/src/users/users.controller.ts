@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -75,5 +75,36 @@ export class UsersController {
     @Body() dto: UpdateUserDto
   ): Promise<UserResponseDto> {
     return this.usersService.update(request.auth!, id, dto);
+  }
+
+  @Put(':id')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Replace user role, status, and profile fields in current tenant.' })
+  @ApiOkResponse({ type: UserResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failure.' })
+  @ApiNotFoundResponse({ description: 'User not found in current tenant.' })
+  @ApiConflictResponse({ description: 'Username or email already exists in tenant.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  replace(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: UpdateUserDto
+  ): Promise<UserResponseDto> {
+    return this.usersService.update(request.auth!, id, dto);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Soft delete a user in current tenant by deactivating the account.' })
+  @ApiOkResponse({ type: UserResponseDto })
+  @ApiNotFoundResponse({ description: 'User not found in current tenant.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  remove(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string
+  ): Promise<UserResponseDto> {
+    return this.usersService.softDelete(request.auth!, id);
   }
 }

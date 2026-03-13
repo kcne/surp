@@ -155,6 +155,36 @@ export class UsersService {
     }
   }
 
+  async softDelete(auth: AccessTokenPayload, id: string): Promise<UserResponseDto> {
+    if (id === auth.sub) {
+      throw new ForbiddenException('You cannot deactivate your own account');
+    }
+
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        id,
+        tenantId: auth.tenantId
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    return this.prisma.user.update({
+      where: {
+        id
+      },
+      data: {
+        isActive: false
+      },
+      select: this.safeUserSelect
+    });
+  }
+
   private assertCreateRoleAllowed(role: UserRole): void {
     if (role === UserRole.ADMIN) {
       throw new ForbiddenException('Assigning ADMIN role is not allowed in this endpoint');
