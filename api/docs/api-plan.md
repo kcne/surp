@@ -62,7 +62,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Requests without valid tenant are blocked globally.
 5. Exit criteria: Tenant context is mandatory and stable.
 
-**Slice 3 - Authentication Login and Session Creation**
+**Slice 3 - Authentication Login and Session Creation** - DONE
 1. Goal: Implement login with JWT access token and DB refresh session.
 2. Scope:
 1. Auth login endpoint.

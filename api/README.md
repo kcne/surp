@@ -1,8 +1,8 @@
-# Airtable Demo API
+# SURP API
 
-NestJS backend for Airtable Demo.
+NestJS backend for SURP.
 
-Current status: Slice 1 (Prisma lifecycle integration, seed scaffolding, and baseline data-access helpers).
+Current status: Slice 3 (tenant-scoped authentication login with JWT access token and refresh session persistence).
 
 ## Tech Stack
 
@@ -34,6 +34,9 @@ Required variables:
 | NODE_ENV | No | development | Runtime mode |
 | PORT | No | 3001 | API port |
 | DATABASE_URL | Yes | postgresql://postgres:postgres@localhost:5433/airtable_demo?schema=public | PostgreSQL connection string |
+| JWT_ACCESS_TOKEN_SECRET | Yes | n/a | HMAC secret used to sign access tokens |
+| JWT_ACCESS_TOKEN_TTL_SECONDS | No | 900 | Access token lifetime in seconds |
+| JWT_REFRESH_TOKEN_TTL_SECONDS | No | 1209600 | Refresh session lifetime in seconds |
 
 ## Quick Start (Local)
 
@@ -49,11 +52,12 @@ pnpm install
 docker compose up -d postgres
 ```
 
-3. Generate Prisma client and create initial migration:
+3. Generate Prisma client and apply migrations:
 
 ```bash
 pnpm prisma:generate
-pnpm prisma:migrate:dev --name init
+pnpm prisma:migrate:dev
+pnpm prisma:seed
 ```
 
 4. Start the API in watch mode:
@@ -96,7 +100,7 @@ The API container runs database migrations on startup.
 | prisma:migrate:deploy | pnpm prisma:migrate:deploy | Apply migrations in deployment |
 | prisma:seed | pnpm prisma:seed | Seed baseline data |
 
-## Validation Checklist (Slice 1)
+## Validation Checklist (Slice 3)
 
 Run these before merging:
 
@@ -112,14 +116,14 @@ Manual checks:
 
 - GET /health returns 200 when DB is reachable
 - GET /health/readiness returns 503 when DB is unavailable
-- API startup log includes "Connected to PostgreSQL via Prisma"
-- Running seed command inserts or confirms baseline record
+- POST /auth/login with `X-Tenant-Slug: demo-tenant` and seeded credentials returns access and refresh tokens
+- Login with invalid password returns 401
+- Login with inactive user returns 403
 
 ## API Docs and Postman
 
 - OpenAPI UI: <http://localhost:3001/docs>
-- Postman collection (Slice 0): postman/slice-0-health.postman_collection.json
-- Postman collection (Slice 1): postman/slice-1-prisma-baseline.postman_collection.json
+- Postman collection: postman/surp-api.postman_collection.json
 
 ## Project Layout
 

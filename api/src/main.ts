@@ -19,8 +19,10 @@ async function bootstrap(): Promise<void> {
   );
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Airtable Demo API')
-    .setDescription('Slice 1 baseline API with Prisma lifecycle wiring and database health checks.')
+    .setTitle('SURP API')
+    .setDescription(
+      'Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows.'
+    )
     .setVersion('0.1.0')
     .build();
 
