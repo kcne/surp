@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Tenant, User } from '@prisma/client';
 import { compare } from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
+import { AccessTokenPayload } from './auth.types';
 import { LoginDto } from './dto/login.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -25,6 +26,14 @@ export type AuthLoginResult = {
   refreshToken: string;
   tokenType: 'Bearer';
   expiresIn: number;
+};
+
+export type AuthCurrentUserResult = {
+  id: string;
+  tenantId: string;
+  username: string;
+  email: string;
+  role: User['role'];
 };
 
 @Injectable()
@@ -137,6 +146,35 @@ export class AuthService {
     }
 
     return { success: true };
+  }
+
+  async me(auth: AccessTokenPayload | undefined): Promise<AuthCurrentUserResult> {
+    if (!auth?.sub || !auth.tenantId) {
+      throw new UnauthorizedException('Access token is invalid');
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id: auth.sub,
+        tenantId: auth.tenantId
+      }
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Access token is invalid');
+    }
+
+    if (!user.isActive) {
+      throw new ForbiddenException('User is inactive');
+    }
+
+    return {
+      id: user.id,
+      tenantId: user.tenantId,
+      username: user.username,
+      email: user.email,
+      role: user.role
+    };
   }
 
   private async resolveTenantOrThrow(tenantSlug: string | undefined): Promise<Tenant> {

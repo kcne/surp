@@ -21,7 +21,8 @@ describe('AuthService', () => {
       findUnique: jest.fn()
     },
     user: {
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
+      findFirst: jest.fn()
     },
     refreshSession: {
       create: jest.fn(),
@@ -219,5 +220,44 @@ describe('AuthService', () => {
 
     expect(result).toEqual({ success: true });
     expect(prismaMock.refreshSession.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the current authenticated user profile', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({
+      ...userRecord,
+      passwordHash: 'redacted'
+    });
+
+    const result = await service.me({
+      sub: 'user-1',
+      tenantId: 'tenant-1',
+      role: 'ADMIN',
+      username: 'demo-admin'
+    });
+
+    expect(result).toEqual({
+      id: 'user-1',
+      tenantId: 'tenant-1',
+      username: 'demo-admin',
+      email: 'admin@demo.local',
+      role: 'ADMIN'
+    });
+  });
+
+  it('rejects me when user is inactive', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({
+      ...userRecord,
+      isActive: false,
+      passwordHash: 'redacted'
+    });
+
+    await expect(
+      service.me({
+        sub: 'user-1',
+        tenantId: 'tenant-1',
+        role: 'ADMIN',
+        username: 'demo-admin'
+      })
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

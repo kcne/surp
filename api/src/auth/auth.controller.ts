@@ -1,12 +1,15 @@
 import {
   Body,
   Controller,
+  Get,
   Headers,
   HttpCode,
   HttpStatus,
-  Post
+  Post,
+  Req
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBadRequestResponse,
   ApiForbiddenResponse,
   ApiHeader,
@@ -20,8 +23,11 @@ import { AuthLoginResult, AuthService } from './auth.service';
 import { LogoutDto } from './dto/logout.dto';
 import { LogoutResponseDto } from './dto/logout.response.dto';
 import { LoginDto } from './dto/login.dto';
+import { LoginUserDto } from './dto/login.response.dto';
 import { LoginResponseDto } from './dto/login.response.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RequestWithAuth } from './auth.types';
+import { Public } from './public.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -29,6 +35,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
+  @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with username/password in a tenant context.' })
   @ApiHeader({
@@ -49,6 +56,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate refresh token and issue a new token pair.' })
   @ApiHeader({
@@ -69,6 +77,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Revoke the current refresh session.' })
   @ApiHeader({
@@ -86,5 +95,21 @@ export class AuthController {
     @Body() dto: LogoutDto
   ): Promise<{ success: true }> {
     return this.authService.logout(dto.refreshToken, tenantSlug);
+  }
+
+  @Get('me')
+  @ApiOperation({ summary: 'Get the current authenticated user profile.' })
+  @ApiBearerAuth('access-token')
+  @ApiHeader({
+    name: 'X-Tenant-Slug',
+    required: true,
+    description: 'Tenant slug that must match the authenticated access token tenant.'
+  })
+  @ApiOkResponse({ type: LoginUserDto })
+  @ApiBadRequestResponse({ description: 'X-Tenant-Slug header is required.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Tenant mismatch or inactive user.' })
+  me(@Req() request: RequestWithAuth): Promise<LoginUserDto> {
+    return this.authService.me(request.auth);
   }
 }

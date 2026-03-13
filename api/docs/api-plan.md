@@ -46,7 +46,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Seed command inserts baseline records.
 5. Exit criteria: App can query database reliably in tests and local runtime.
 
-**Slice 2 - Tenant Resolution and Request Context**
+**Slice 2 - Tenant Resolution and Request Context** - DONE
 1. Goal: Resolve tenant per request and block unknown tenants.
 2. Scope:
 1. Tenant model CRUD minimal endpoints.
@@ -96,7 +96,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Replay attempts are blocked.
 5. Exit criteria: Session security baseline complete.
 
-**Slice 5 - Auth Guard, Tenant Guard, Role Guard**
+**Slice 5 - Auth Guard, Tenant Guard, Role Guard** - DONE
 1. Goal: Protect private routes.
 2. Scope:
 1. JWT auth guard.

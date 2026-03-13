@@ -22,7 +22,8 @@ describe('AuthController (e2e)', () => {
       findUnique: jest.fn()
     },
     user: {
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
+      findFirst: jest.fn()
     },
     refreshSession: {
       create: jest.fn(),
@@ -32,7 +33,8 @@ describe('AuthController (e2e)', () => {
   };
 
   const jwtServiceMock = {
-    sign: jest.fn(() => 'access-token')
+    sign: jest.fn(() => 'access-token'),
+    verify: jest.fn()
   };
 
   beforeAll(async () => {
@@ -54,7 +56,57 @@ describe('AuthController (e2e)', () => {
       isActive: true
     });
 
+    jwtServiceMock.verify.mockImplementation((token: string) => {
+      if (token === 'access-token-admin') {
+        return {
+          sub: 'user-1',
+          tenantId: 'tenant-1',
+          role: 'ADMIN',
+          username: 'demo-admin'
+        };
+      }
+
+      if (token === 'access-token-manager') {
+        return {
+          sub: 'user-2',
+          tenantId: 'tenant-1',
+          role: 'MANAGER',
+          username: 'demo-manager'
+        };
+      }
+
+      if (token === 'access-token-staff') {
+        return {
+          sub: 'user-3',
+          tenantId: 'tenant-1',
+          role: 'STAFF',
+          username: 'demo-staff'
+        };
+      }
+
+      if (token === 'access-token-other-tenant') {
+        return {
+          sub: 'user-4',
+          tenantId: 'tenant-2',
+          role: 'ADMIN',
+          username: 'foreign-admin'
+        };
+      }
+
+      throw new Error('invalid token');
+    });
+
     prismaMock.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      tenantId: 'tenant-1',
+      username: 'demo-admin',
+      email: 'admin@demo.local',
+      passwordHash: activeUserPasswordHash,
+      role: 'ADMIN',
+      isActive: true
+    });
+
+    prismaMock.user.findFirst.mockResolvedValue({
       id: 'user-1',
       tenantId: 'tenant-1',
       username: 'demo-admin',
@@ -307,5 +359,37 @@ describe('AuthController (e2e)', () => {
       .expect(401);
 
     expect(response.body.message).toBe('Refresh token is revoked');
+  });
+
+  it('returns current user profile for a valid access token', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .expect(200);
+
+    expect(response.body.id).toBe('user-1');
+    expect(response.body.username).toBe('demo-admin');
+    expect(response.body.tenantId).toBe('tenant-1');
+    expect(response.body.role).toBe('ADMIN');
+  });
+
+  it('rejects me route when token is missing', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .expect(401);
+
+    expect(response.body.message).toBe('Authorization header is required');
+  });
+
+  it('rejects me route when token tenant does not match request tenant', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-other-tenant')
+      .expect(403);
+
+    expect(response.body.message).toBe('Tenant mismatch between token and request context');
   });
 });
