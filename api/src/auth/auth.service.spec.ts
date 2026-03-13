@@ -21,7 +21,6 @@ describe('AuthService', () => {
       findUnique: jest.fn()
     },
     user: {
-      findUnique: jest.fn(),
       findFirst: jest.fn()
     },
     refreshSession: {
@@ -76,7 +75,7 @@ describe('AuthService', () => {
     const passwordHash = await hash('different-password', 10);
 
     prismaMock.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', isActive: true, slug: 'demo-tenant' });
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findFirst.mockResolvedValue({
       id: 'user-1',
       tenantId: 'tenant-1',
       username: 'demo-admin',
@@ -95,7 +94,7 @@ describe('AuthService', () => {
     const passwordHash = await hash('demo-admin-pass', 10);
 
     prismaMock.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', isActive: true, slug: 'demo-tenant' });
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findFirst.mockResolvedValue({
       id: 'user-1',
       tenantId: 'tenant-1',
       username: 'demo-admin',
@@ -114,7 +113,7 @@ describe('AuthService', () => {
     const passwordHash = await hash('demo-admin-pass', 10);
 
     prismaMock.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', isActive: true, slug: 'demo-tenant' });
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findFirst.mockResolvedValue({
       id: 'user-1',
       tenantId: 'tenant-1',
       username: 'demo-admin',
@@ -139,6 +138,39 @@ describe('AuthService', () => {
     expect(result.user.username).toBe('demo-admin');
     expect(prismaMock.refreshSession.create).toHaveBeenCalledTimes(1);
     expect(jwtServiceMock.sign).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows login by email identifier', async () => {
+    const passwordHash = await hash('demo-admin-pass', 10);
+
+    prismaMock.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', isActive: true, slug: 'demo-tenant' });
+    prismaMock.user.findFirst.mockResolvedValue({
+      id: 'user-1',
+      tenantId: 'tenant-1',
+      username: 'demo-admin',
+      email: 'admin@demo.local',
+      passwordHash,
+      role: 'ADMIN',
+      isActive: true
+    });
+    prismaMock.refreshSession.create.mockResolvedValue({ id: 'session-1' });
+    jwtServiceMock.sign.mockReturnValue('access-token');
+
+    const result = await service.login(
+      {
+        username: 'admin@demo.local',
+        password: 'demo-admin-pass'
+      },
+      'demo-tenant'
+    );
+
+    expect(result.accessToken).toBe('access-token');
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-1',
+        email: 'admin@demo.local'
+      }
+    });
   });
 
   it('refreshes tokens and revokes old refresh session', async () => {

@@ -54,8 +54,8 @@ export class AuthService {
 
   async login(dto: LoginDto, tenantSlug: string | undefined): Promise<AuthLoginResult> {
     const tenant = await this.resolveTenantOrThrow(tenantSlug);
-    const username = dto.username.trim();
-    const user = await this.validateCredentialsOrThrow(tenant.id, username, dto.password);
+    const identifier = dto.username.trim();
+    const user = await this.validateCredentialsOrThrow(tenant.id, identifier, dto.password);
 
     const accessToken = this.issueAccessToken(user, tenant.id);
     const refreshToken = await this.createRefreshSession(tenant.id, user.id);
@@ -202,15 +202,22 @@ export class AuthService {
 
   private async validateCredentialsOrThrow(
     tenantId: string,
-    username: string,
+    identifier: string,
     password: string
   ): Promise<User> {
-    const user = await this.prisma.user.findUnique({
+    const normalizedIdentifier = identifier.trim();
+    const isEmailIdentifier = normalizedIdentifier.includes('@');
+
+    const user = await this.prisma.user.findFirst({
       where: {
-        tenantId_username: {
-          tenantId,
-          username
-        }
+        tenantId,
+        ...(isEmailIdentifier
+          ? {
+              email: normalizedIdentifier.toLowerCase()
+            }
+          : {
+              username: normalizedIdentifier
+            })
       }
     });
 

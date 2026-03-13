@@ -22,7 +22,6 @@ describe('AuthController (e2e)', () => {
       findUnique: jest.fn()
     },
     user: {
-      findUnique: jest.fn(),
       findFirst: jest.fn()
     },
     refreshSession: {
@@ -96,16 +95,6 @@ describe('AuthController (e2e)', () => {
       throw new Error('invalid token');
     });
 
-    prismaMock.user.findUnique.mockResolvedValue({
-      id: 'user-1',
-      tenantId: 'tenant-1',
-      username: 'demo-admin',
-      email: 'admin@demo.local',
-      passwordHash: activeUserPasswordHash,
-      role: 'ADMIN',
-      isActive: true
-    });
-
     prismaMock.user.findFirst.mockResolvedValue({
       id: 'user-1',
       tenantId: 'tenant-1',
@@ -176,7 +165,7 @@ describe('AuthController (e2e)', () => {
   });
 
   it('rejects inactive user login', async () => {
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findFirst.mockResolvedValue({
       id: 'user-2',
       tenantId: 'tenant-1',
       username: 'demo-inactive',
@@ -196,7 +185,7 @@ describe('AuthController (e2e)', () => {
   });
 
   it('rejects tenant mismatch', async () => {
-    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.findFirst.mockResolvedValue(null);
 
     await request(app.getHttpServer())
       .post('/auth/login')
@@ -212,6 +201,16 @@ describe('AuthController (e2e)', () => {
       .expect(400);
 
     expect(response.body.message).toBe('X-Tenant-Slug header is required');
+  });
+
+  it('logs in successfully with email as identifier', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/auth/login')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ username: 'admin@demo.local', password: 'demo-admin-pass' })
+      .expect(200);
+
+    expect(response.body.user.username).toBe('demo-admin');
   });
 
   it('refreshes tokens and rotates refresh session', async () => {
