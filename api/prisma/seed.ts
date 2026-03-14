@@ -188,7 +188,69 @@ async function main() {
     }
   });
 
-  console.log('Seeded tenant, users, and stations fixtures for Slice 8 scenarios.');
+  await prisma.passenger.upsert({
+    where: {
+      id: 'seed-passenger-active'
+    },
+    update: {
+      tenantId: tenant.id,
+      firstName: 'Mila',
+      lastName: 'Markovic',
+      phone: '+381640000111',
+      email: 'mila.markovic@demo.local',
+      passengerType: 'ADULT',
+      isActive: true,
+      notes: 'Seed active passenger',
+      createdById: adminUser.id,
+      updatedById: adminUser.id
+    },
+    create: {
+      id: 'seed-passenger-active',
+      tenantId: tenant.id,
+      firstName: 'Mila',
+      lastName: 'Markovic',
+      phone: '+381640000111',
+      email: 'mila.markovic@demo.local',
+      passengerType: 'ADULT',
+      isActive: true,
+      notes: 'Seed active passenger',
+      createdById: adminUser.id,
+      updatedById: adminUser.id
+    }
+  });
+
+  await prisma.passenger.upsert({
+    where: {
+      id: 'seed-passenger-inactive'
+    },
+    update: {
+      tenantId: tenant.id,
+      firstName: 'Nikola',
+      lastName: 'Ilic',
+      phone: '+381640000222',
+      email: 'nikola.ilic@demo.local',
+      passengerType: 'STUDENT',
+      isActive: false,
+      notes: 'Seed inactive passenger',
+      createdById: adminUser.id,
+      updatedById: adminUser.id
+    },
+    create: {
+      id: 'seed-passenger-inactive',
+      tenantId: tenant.id,
+      firstName: 'Nikola',
+      lastName: 'Ilic',
+      phone: '+381640000222',
+      email: 'nikola.ilic@demo.local',
+      passengerType: 'STUDENT',
+      isActive: false,
+      notes: 'Seed inactive passenger',
+      createdById: adminUser.id,
+      updatedById: adminUser.id
+    }
+  });
+
+  console.log('Seeded tenant, users, stations, lines, and passengers fixtures.');
 }
 
 main()

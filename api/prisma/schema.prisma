@@ -28,6 +28,13 @@ enum LineDirection {
   RETURN
 }
 
+enum PassengerType {
+  ADULT
+  CHILD
+  STUDENT
+  SENIOR
+}
+
 model HealthCheckLog {
   id        String   @id @default(cuid())
   message   String
@@ -46,6 +53,7 @@ model Tenant {
   stations        Station[]
   lines           Line[]
   lineStops       LineStop[]
+  passengers      Passenger[]
   reservations    Reservation[]
 }
 
@@ -176,4 +184,29 @@ model Reservation {
   @@index([tenantId])
   @@index([departureStationId])
   @@index([arrivalStationId])
+}
+
+model Passenger {
+  id            String        @id @default(cuid())
+  tenantId      String
+  createdById   String?
+  updatedById   String?
+  firstName     String
+  lastName      String
+  phone         String
+  email         String?
+  passengerType PassengerType @default(ADULT)
+  isActive      Boolean       @default(true)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([tenantId, firstName])
+  @@index([tenantId, lastName])
+  @@index([tenantId, phone])
+  @@index([tenantId, email])
+  @@index([updatedById])
 }

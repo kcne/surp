@@ -1643,6 +1643,418 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Passengers",
+      "item": [
+        {
+          "name": "Create Passenger - Active Success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Slice11\",\n  \"lastName\": \"Passenger {{$timestamp}}\",\n  \"phone\": \"+38164{{$timestamp}}11\",\n  \"email\": \"slice11.active.{{$timestamp}}@demo.local\",\n  \"passengerType\": \"ADULT\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/passengers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "passengers"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201 for active passenger create', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Passenger create response includes id', function () {",
+                  "  pm.expect(body).to.have.property('id');",
+                  "});",
+                  "",
+                  "if (body.id) {",
+                  "  pm.environment.set('passengerId', body.id);",
+                  "}",
+                  "if (body.lastName) {",
+                  "  pm.environment.set('passengerSearchTerm', body.lastName.substring(0, 6));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Passenger - Inactive Success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Slice11\",\n  \"lastName\": \"Inactive {{$timestamp}}\",\n  \"phone\": \"+38164{{$timestamp}}22\",\n  \"email\": \"slice11.inactive.{{$timestamp}}@demo.local\",\n  \"passengerType\": \"STUDENT\",\n  \"isActive\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/passengers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "passengers"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201 for inactive passenger create', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "if (body.id) {",
+                  "  pm.environment.set('inactivePassengerId', body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Passengers - Success",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/passengers?page=1&pageSize=25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "passengers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "25"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Passengers - Partial Match Success",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/passengers/search?search={{passengerSearchTerm}}&page=1&pageSize=25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "passengers",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "{{passengerSearchTerm}}"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "25"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 for passenger search', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Search returns at least one item', function () {",
+                  "  pm.expect(body.total).to.be.greaterThan(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Passengers - Inactive Filter Success",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/passengers?isActive=false&page=1&pageSize=25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "passengers"
+              ],
+              "query": [
+                {
+                  "key": "isActive",
+                  "value": "false"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "25"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 for inactive filter', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Inactive filter includes the created inactive passenger', function () {",
+                  "  const targetId = pm.environment.get('inactivePassengerId');",
+                  "  const ids = (body.items || []).map((x) => x.id);",
+                  "  pm.expect(ids).to.include(targetId);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Passenger - Success",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"slice11-updated\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/passengers/{{passengerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "passengers",
+                "{{passengerId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 for passenger update', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Passenger Active - Cleanup",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/passengers/{{passengerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "passengers",
+                "{{passengerId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 or 404 for active passenger cleanup', function () {",
+                  "  pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Passenger Inactive - Cleanup",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/passengers/{{inactivePassengerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "passengers",
+                "{{inactivePassengerId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 or 404 for inactive passenger cleanup', function () {",
+                  "  pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -1721,6 +2133,18 @@
     {
       "key": "intermediateStationId2",
       "value": ""
+    },
+    {
+      "key": "passengerId",
+      "value": ""
+    },
+    {
+      "key": "inactivePassengerId",
+      "value": ""
+    },
+    {
+      "key": "passengerSearchTerm",
+      "value": "Slice11"
     }
   ]
 }

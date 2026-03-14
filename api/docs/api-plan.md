@@ -187,7 +187,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Reverse line workflow is stable.
 5. Exit criteria: Route modeling complete.
 
-**Slice 11 - Passengers Module with Search**
+**Slice 11 - Passengers Module with Search** - DONE
 1. Goal: Passenger CRUD and lookup performance.
 2. Scope:
 1. Passenger create, list, update, delete.
@@ -262,7 +262,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Batch booking workflow works from frontend.
 5. Exit criteria: Reservation engine safe under load.
 
-**Slice 16 - Payment and Pricing Rules in Reservation Domain**
+**Slice 16 - Payment and Pricing Rules in Reservation Domain** - SKIP
 1. Goal: Stabilize financial fields and status transitions.
 2. Scope:
 1. Base price, discount, final price validation.

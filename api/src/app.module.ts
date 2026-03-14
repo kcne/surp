@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { envValidationSchema } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { LinesModule } from './lines/lines.module';
+import { PassengersModule } from './passengers/passengers.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { StationsModule } from './stations/stations.module';
 import { UsersModule } from './users/users.module';
@@ -19,7 +20,8 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     UsersModule,
     StationsModule,
-    LinesModule
+    LinesModule,
+    PassengersModule
   ]
 })
 export class AppModule {}
