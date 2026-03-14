@@ -15,6 +15,7 @@ import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
 import { CreateLineDto } from './dto/create-line.dto';
 import { LineResponseDto, PaginatedLinesResponseDto } from './dto/line.response.dto';
+import { ReplaceLineStopsDto } from './dto/line-stop.dto';
 import { ListLinesQueryDto } from './dto/list-lines.query.dto';
 import { UpdateLineDto } from './dto/update-line.dto';
 import { LinesService } from './lines.service';
@@ -96,6 +97,34 @@ export class LinesController {
     @Body() dto: UpdateLineDto
   ): Promise<LineResponseDto> {
     return this.linesService.update(request.auth!, id, dto);
+  }
+
+  @Put(':id/stops')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Replace ordered intermediate stops for a line in the current tenant.' })
+  @ApiOkResponse({ type: LineResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failure or route integrity violation.' })
+  @ApiNotFoundResponse({ description: 'Line not found in current tenant.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  replaceStops(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: ReplaceLineStopsDto
+  ): Promise<LineResponseDto> {
+    return this.linesService.replaceStops(request.auth!, id, dto.intermediateStops);
+  }
+
+  @Post(':id/reverse')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Create a reverse line from an existing line route in the current tenant.' })
+  @ApiOkResponse({ type: LineResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failure or route integrity violation.' })
+  @ApiNotFoundResponse({ description: 'Line not found in current tenant.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  createReverse(@Req() request: RequestWithAuth, @Param('id') id: string): Promise<LineResponseDto> {
+    return this.linesService.createReverse(request.auth!, id);
   }
 
   @Delete(':id')

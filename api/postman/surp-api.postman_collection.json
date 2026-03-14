@@ -1034,6 +1034,58 @@
       "name": "Lines",
       "item": [
         {
+          "name": "Setup Referenced Station - Success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Slice10 Route Ref {{$timestamp}}\",\n  \"address\": \"Slice10 Ref Address {{$timestamp}}\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/stations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stations"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201 for setup station', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "if (body.id) {",
+                  "  pm.environment.set('referencedStationId', body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Create Line - Success",
           "request": {
             "method": "POST",
@@ -1299,6 +1351,231 @@
           "response": []
         },
         {
+          "name": "Replace Line Stops - Duplicate Order Fails",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intermediateStops\": [\n    { \"stationId\": \"{{intermediateStationId1}}\", \"orderIndex\": 1 },\n    { \"stationId\": \"{{intermediateStationId2}}\", \"orderIndex\": 1 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lines/{{lineId}}/stops",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines",
+                "{{lineId}}",
+                "stops"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400 for duplicate stop order', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replace Line Stops - Duplicate Station Fails",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intermediateStops\": [\n    { \"stationId\": \"{{intermediateStationId1}}\", \"orderIndex\": 1 },\n    { \"stationId\": \"{{intermediateStationId1}}\", \"orderIndex\": 2 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lines/{{lineId}}/stops",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines",
+                "{{lineId}}",
+                "stops"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400 for duplicate stop station', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Reverse Line - Success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/lines/{{lineId}}/reverse",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines",
+                "{{lineId}}",
+                "reverse"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201 for reverse line create', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "if (body.id) {",
+                  "  pm.environment.set('reverseLineId', body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Reverse Line - Duplicate Prevention Fails",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/lines/{{lineId}}/reverse",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines",
+                "{{lineId}}",
+                "reverse"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409 for duplicate reverse line', function () {",
+                  "  pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Reverse Line - Cleanup",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/lines/{{reverseLineId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines",
+                "{{reverseLineId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 or 404 for reverse cleanup', function () {",
+                  "  pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Delete Line - Success",
           "request": {
             "method": "DELETE",
@@ -1320,6 +1597,46 @@
               "path": [
                 "lines",
                 "{{lineId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 or 404 for line cleanup', function () {",
+                  "  pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Setup Referenced Station - Cleanup",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stations/{{referencedStationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stations",
+                "{{referencedStationId}}"
               ]
             }
           },
@@ -1391,6 +1708,18 @@
     },
     {
       "key": "lineId",
+      "value": ""
+    },
+    {
+      "key": "reverseLineId",
+      "value": ""
+    },
+    {
+      "key": "intermediateStationId1",
+      "value": ""
+    },
+    {
+      "key": "intermediateStationId2",
       "value": ""
     }
   ]

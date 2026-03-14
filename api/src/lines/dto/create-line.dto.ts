@@ -4,10 +4,14 @@ import {
   IsBoolean,
   IsEnum,
   IsNotEmpty,
+  IsArray,
   IsOptional,
   IsString,
-  MaxLength
+  MaxLength,
+  ValidateNested
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { LineStopInputDto } from './line-stop.dto';
 
 export class CreateLineDto {
   @ApiPropertyOptional({ example: 'Central - North' })
@@ -46,4 +50,11 @@ export class CreateLineDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ type: [LineStopInputDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LineStopInputDto)
+  intermediateStops?: LineStopInputDto[];
 }

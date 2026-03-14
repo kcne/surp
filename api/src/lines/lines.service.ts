@@ -1,84 +1,87 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { LineDirection, LineDirectionMode } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException
+} from '@nestjs/common';
+import { LineDirection, LineDirectionMode, Prisma } from '@prisma/client';
 import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLineDto } from './dto/create-line.dto';
 import { LineResponseDto, PaginatedLinesResponseDto } from './dto/line.response.dto';
+import { LineStopInputDto } from './dto/line-stop.dto';
 import { ListLinesQueryDto } from './dto/list-lines.query.dto';
 import { UpdateLineDto } from './dto/update-line.dto';
 
-type SafeLineSelect = {
-  id: true;
-  tenantId: true;
-  createdById: true;
-  updatedById: true;
-  name: true;
-  departureStationId: true;
-  arrivalStationId: true;
-  directionMode: true;
-  direction: true;
-  pairKey: true;
-  isActive: true;
-  createdAt: true;
-  updatedAt: true;
+const SAFE_LINE_SELECT = {
+  id: true,
+  tenantId: true,
+  createdById: true,
+  updatedById: true,
+  name: true,
+  departureStationId: true,
+  arrivalStationId: true,
+  directionMode: true,
+  direction: true,
+  pairKey: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
   departureStation: {
     select: {
-      id: true;
-      name: true;
-      address: true;
-      category: true;
-      isActive: true;
-    };
-  };
+      id: true,
+      name: true,
+      address: true,
+      category: true,
+      isActive: true
+    }
+  },
   arrivalStation: {
     select: {
-      id: true;
-      name: true;
-      address: true;
-      category: true;
-      isActive: true;
-    };
-  };
+      id: true,
+      name: true,
+      address: true,
+      category: true,
+      isActive: true
+    }
+  },
+  intermediateStops: {
+    select: {
+      stationId: true,
+      orderIndex: true,
+      station: {
+        select: {
+          name: true
+        }
+      }
+    },
+    orderBy: {
+      orderIndex: 'asc' as const
+    }
+  }
+} as const;
+
+type SelectedLine = Prisma.LineGetPayload<{ select: typeof SAFE_LINE_SELECT }>;
+
+type LineWithStops = {
+  id: string;
+  name: string;
+  departureStationId: string;
+  arrivalStationId: string;
+  directionMode: LineDirectionMode;
+  direction: LineDirection;
+  pairKey: string | null;
+  isActive: boolean;
+  intermediateStops: Array<{
+    stationId: string;
+    orderIndex: number;
+  }>;
 };
 
 @Injectable()
 export class LinesService {
-  private readonly safeLineSelect: SafeLineSelect = {
-    id: true,
-    tenantId: true,
-    createdById: true,
-    updatedById: true,
-    name: true,
-    departureStationId: true,
-    arrivalStationId: true,
-    directionMode: true,
-    direction: true,
-    pairKey: true,
-    isActive: true,
-    createdAt: true,
-    updatedAt: true,
-    departureStation: {
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        category: true,
-        isActive: true
-      }
-    },
-    arrivalStation: {
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        category: true,
-        isActive: true
-      }
-    }
-  };
-
   constructor(private readonly prisma: PrismaService) {}
 
   async create(auth: AccessTokenPayload, dto: CreateLineDto): Promise<LineResponseDto> {
@@ -88,28 +91,67 @@ export class LinesService {
       dto.arrivalStationId
     );
 
+    const intermediateStops = await this.resolveIntermediateStops(
+      auth.tenantId,
+      dto.departureStationId,
+      dto.arrivalStationId,
+      dto.intermediateStops ?? []
+    );
+
     const directionMode = dto.directionMode ?? LineDirectionMode.BOTH;
     const direction = dto.direction ?? LineDirection.OUTBOUND;
     const pairKey = this.normalizePairKey(dto.pairKey);
 
     this.validateDirectionMetadata(directionMode, direction, pairKey);
 
-    return this.prisma.line.create({
-      data: withCreateAudit(
-        {
-          tenantId: auth.tenantId,
-          name: dto.name?.trim() || `${stations.departure.name} - ${stations.arrival.name}`,
-          departureStationId: dto.departureStationId,
-          arrivalStationId: dto.arrivalStationId,
-          directionMode,
-          direction,
-          pairKey,
-          isActive: dto.isActive ?? true
-        },
-        auth.sub
-      ),
-      select: this.safeLineSelect
-    });
+    try {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const createdLine = await tx.line.create({
+          data: withCreateAudit(
+            {
+              tenantId: auth.tenantId,
+              name: dto.name?.trim() || `${stations.departure.name} - ${stations.arrival.name}`,
+              departureStationId: dto.departureStationId,
+              arrivalStationId: dto.arrivalStationId,
+              directionMode,
+              direction,
+              pairKey,
+              isActive: dto.isActive ?? true
+            },
+            auth.sub
+          ),
+          select: {
+            id: true
+          }
+        });
+
+        await this.replaceLineStopsTx(
+          tx,
+          auth.tenantId,
+          createdLine.id,
+          auth.sub,
+          intermediateStops,
+          false
+        );
+
+        return tx.line.findFirst({
+          where: {
+            id: createdLine.id,
+            tenantId: auth.tenantId
+          },
+          select: SAFE_LINE_SELECT
+        });
+      });
+
+      if (!created) {
+        throw new NotFoundException('Line not found');
+      }
+
+      return this.toLineResponse(created);
+    } catch (error) {
+      this.throwIfLineStopUniqueConstraint(error);
+      throw error;
+    }
   }
 
   async list(auth: AccessTokenPayload, query: ListLinesQueryDto): Promise<PaginatedLinesResponseDto> {
@@ -138,13 +180,13 @@ export class LinesService {
         skip: pagination.skip,
         take: pagination.take,
         orderBy: [{ createdAt: 'desc' }],
-        select: this.safeLineSelect
+        select: SAFE_LINE_SELECT
       }),
       this.prisma.line.count({ where })
     ]);
 
     return {
-      items,
+      items: items.map((item) => this.toLineResponse(item)),
       total,
       page: pagination.page ?? DEFAULT_PAGE,
       pageSize: pagination.pageSize ?? DEFAULT_PAGE_SIZE
@@ -152,19 +194,8 @@ export class LinesService {
   }
 
   async getById(auth: AccessTokenPayload, id: string): Promise<LineResponseDto> {
-    const line = await this.prisma.line.findFirst({
-      where: {
-        id,
-        tenantId: auth.tenantId
-      },
-      select: this.safeLineSelect
-    });
-
-    if (!line) {
-      throw new NotFoundException('Line not found');
-    }
-
-    return line;
+    const line = await this.getLineOrThrow(auth.tenantId, id);
+    return this.toLineResponse(line as SelectedLine);
   }
 
   async update(auth: AccessTokenPayload, id: string, dto: UpdateLineDto): Promise<LineResponseDto> {
@@ -179,6 +210,18 @@ export class LinesService {
       arrivalStationId
     );
 
+    const nextStops =
+      dto.intermediateStops !== undefined
+        ? await this.resolveIntermediateStops(
+            auth.tenantId,
+            departureStationId,
+            arrivalStationId,
+            dto.intermediateStops
+          )
+        : existing.intermediateStops;
+
+    this.ensureStopsDoNotUseRouteEndpoints(departureStationId, arrivalStationId, nextStops);
+
     const directionMode = dto.directionMode ?? existing.directionMode;
     const direction = dto.direction ?? existing.direction;
     const pairKey =
@@ -186,70 +229,157 @@ export class LinesService {
 
     this.validateDirectionMetadata(directionMode, direction, pairKey);
 
-    return this.prisma.line.update({
+    try {
+      const updated = await this.prisma.$transaction(async (tx) => {
+        await tx.line.update({
+          where: {
+            id
+          },
+          data: withUpdateAudit(
+            {
+              ...(typeof dto.name === 'string' ? { name: dto.name.trim() || existing.name } : {}),
+              ...(dto.departureStationId ? { departureStationId: dto.departureStationId } : {}),
+              ...(dto.arrivalStationId ? { arrivalStationId: dto.arrivalStationId } : {}),
+              ...(dto.directionMode ? { directionMode: dto.directionMode } : {}),
+              ...(dto.direction ? { direction: dto.direction } : {}),
+              ...(dto.pairKey !== undefined ? { pairKey } : {}),
+              ...(typeof dto.isActive === 'boolean' ? { isActive: dto.isActive } : {}),
+              ...(dto.name === undefined && (dto.departureStationId || dto.arrivalStationId)
+                ? { name: `${stations.departure.name} - ${stations.arrival.name}` }
+                : {})
+            },
+            auth.sub
+          )
+        });
+
+        if (dto.intermediateStops !== undefined) {
+          await this.replaceLineStopsTx(tx, auth.tenantId, id, auth.sub, nextStops, true);
+        }
+
+        return tx.line.findFirst({
+          where: {
+            id,
+            tenantId: auth.tenantId
+          },
+          select: SAFE_LINE_SELECT
+        });
+      });
+
+      if (!updated) {
+        throw new NotFoundException('Line not found');
+      }
+
+      return this.toLineResponse(updated);
+    } catch (error) {
+      this.throwIfLineStopUniqueConstraint(error);
+      throw error;
+    }
+  }
+
+  async replaceStops(
+    auth: AccessTokenPayload,
+    id: string,
+    intermediateStops: LineStopInputDto[]
+  ): Promise<LineResponseDto> {
+    return this.update(auth, id, { intermediateStops });
+  }
+
+  async createReverse(auth: AccessTokenPayload, id: string): Promise<LineResponseDto> {
+    const source = await this.getLineOrThrow(auth.tenantId, id);
+
+    const reversedStops: LineStopInputDto[] = [...source.intermediateStops]
+      .sort((a, b) => b.orderIndex - a.orderIndex)
+      .map((stop, index) => ({
+        stationId: stop.stationId,
+        orderIndex: index + 1
+      }));
+
+    const targetStopSequence = reversedStops.map((stop) => stop.stationId);
+
+    const candidates = await this.prisma.line.findMany({
       where: {
-        id
+        tenantId: auth.tenantId,
+        departureStationId: source.arrivalStationId,
+        arrivalStationId: source.departureStationId
       },
-      data: withUpdateAudit(
-        {
-          ...(typeof dto.name === 'string' ? { name: dto.name.trim() || existing.name } : {}),
-          ...(dto.departureStationId ? { departureStationId: dto.departureStationId } : {}),
-          ...(dto.arrivalStationId ? { arrivalStationId: dto.arrivalStationId } : {}),
-          ...(dto.directionMode ? { directionMode: dto.directionMode } : {}),
-          ...(dto.direction ? { direction: dto.direction } : {}),
-          ...(dto.pairKey !== undefined ? { pairKey } : {}),
-          ...(typeof dto.isActive === 'boolean' ? { isActive: dto.isActive } : {}),
-          ...(dto.name === undefined && (dto.departureStationId || dto.arrivalStationId)
-            ? { name: `${stations.departure.name} - ${stations.arrival.name}` }
-            : {})
-        },
-        auth.sub
-      ),
-      select: this.safeLineSelect
+      select: {
+        id: true,
+        intermediateStops: {
+          select: {
+            stationId: true,
+            orderIndex: true
+          },
+          orderBy: {
+            orderIndex: 'asc'
+          }
+        }
+      }
+    });
+
+    const reverseAlreadyExists = candidates.some((candidate) => {
+      const candidateSequence = candidate.intermediateStops.map((stop) => stop.stationId);
+      if (candidateSequence.length !== targetStopSequence.length) {
+        return false;
+      }
+
+      return candidateSequence.every((stationId, index) => stationId === targetStopSequence[index]);
+    });
+
+    if (reverseAlreadyExists) {
+      throw new ConflictException('Reverse line already exists for this route');
+    }
+
+    const reverseDirectionMode =
+      source.directionMode === LineDirectionMode.BOTH ? LineDirectionMode.BOTH : LineDirectionMode.SINGLE;
+    const reverseDirection =
+      source.directionMode === LineDirectionMode.BOTH
+        ? source.direction === LineDirection.OUTBOUND
+          ? LineDirection.RETURN
+          : LineDirection.OUTBOUND
+        : LineDirection.OUTBOUND;
+    const reversePairKey =
+      source.directionMode === LineDirectionMode.BOTH
+        ? source.pairKey ?? `pair-${source.id}`
+        : undefined;
+
+    return this.create(auth, {
+      departureStationId: source.arrivalStationId,
+      arrivalStationId: source.departureStationId,
+      directionMode: reverseDirectionMode,
+      direction: reverseDirection,
+      pairKey: reversePairKey,
+      isActive: source.isActive,
+      intermediateStops: reversedStops
     });
   }
 
   async remove(auth: AccessTokenPayload, id: string): Promise<LineResponseDto> {
     await this.getLineOrThrow(auth.tenantId, id);
 
-    return this.prisma.line.delete({
+    const deleted = await this.prisma.line.delete({
       where: {
         id
       },
-      select: this.safeLineSelect
+      select: SAFE_LINE_SELECT
     });
+
+    return this.toLineResponse(deleted);
   }
 
-  private async getLineOrThrow(tenantId: string, id: string): Promise<{
-    id: string;
-    name: string;
-    departureStationId: string;
-    arrivalStationId: string;
-    directionMode: LineDirectionMode;
-    direction: LineDirection;
-    pairKey: string | null;
-  }> {
+  private async getLineOrThrow(tenantId: string, id: string): Promise<LineWithStops & SelectedLine> {
     const line = await this.prisma.line.findFirst({
       where: {
         id,
         tenantId
       },
-      select: {
-        id: true,
-        name: true,
-        departureStationId: true,
-        arrivalStationId: true,
-        directionMode: true,
-        direction: true,
-        pairKey: true
-      }
+      select: SAFE_LINE_SELECT
     });
 
     if (!line) {
       throw new NotFoundException('Line not found');
     }
 
-    return line;
+    return line as LineWithStops & SelectedLine;
   }
 
   private async ensureRouteStationsInTenant(
@@ -288,6 +418,106 @@ export class LinesService {
     };
   }
 
+  private async resolveIntermediateStops(
+    tenantId: string,
+    departureStationId: string,
+    arrivalStationId: string,
+    stops: LineStopInputDto[]
+  ): Promise<LineStopInputDto[]> {
+    if (!stops.length) {
+      return [];
+    }
+
+    const orderSet = new Set<number>();
+    const stationSet = new Set<string>();
+
+    for (const stop of stops) {
+      if (orderSet.has(stop.orderIndex)) {
+        throw new BadRequestException('Duplicate order index in intermediate stops is not allowed');
+      }
+
+      if (stationSet.has(stop.stationId)) {
+        throw new BadRequestException('Duplicate station in intermediate stops is not allowed');
+      }
+
+      orderSet.add(stop.orderIndex);
+      stationSet.add(stop.stationId);
+    }
+
+    this.ensureStopsDoNotUseRouteEndpoints(departureStationId, arrivalStationId, stops);
+
+    const stationIds = [...stationSet];
+    const stations = await this.prisma.station.findMany({
+      where: {
+        tenantId,
+        id: {
+          in: stationIds
+        }
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (stations.length !== stationIds.length) {
+      throw new BadRequestException('Intermediate stops must exist in the current tenant');
+    }
+
+    return [...stops].sort((a, b) => a.orderIndex - b.orderIndex);
+  }
+
+  private ensureStopsDoNotUseRouteEndpoints(
+    departureStationId: string,
+    arrivalStationId: string,
+    stops: Array<{ stationId: string }>
+  ): void {
+    const invalidStop = stops.find(
+      (stop) => stop.stationId === departureStationId || stop.stationId === arrivalStationId
+    );
+
+    if (invalidStop) {
+      throw new BadRequestException(
+        'Intermediate stops cannot reuse departure or arrival station for the same line'
+      );
+    }
+  }
+
+  private async replaceLineStopsTx(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    lineId: string,
+    actorId: string,
+    stops: LineStopInputDto[],
+    deleteExisting: boolean
+  ): Promise<void> {
+    if (deleteExisting) {
+      await tx.lineStop.deleteMany({
+        where: {
+          lineId,
+          tenantId
+        }
+      });
+    }
+
+    if (!stops.length) {
+      return;
+    }
+
+    await tx.lineStop.createMany({
+      data: stops.map((stop) =>
+        withCreateAudit(
+          {
+            tenantId,
+            lineId,
+            stationId: stop.stationId,
+            orderIndex: stop.orderIndex
+          },
+          actorId
+        )
+      )
+    });
+  }
+
   private validateDirectionMetadata(
     directionMode: LineDirectionMode,
     direction: LineDirection,
@@ -317,5 +547,40 @@ export class LinesService {
 
     const trimmed = pairKey.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private toLineResponse(line: SelectedLine): LineResponseDto {
+    return {
+      ...line,
+      intermediateStops: line.intermediateStops.map((stop) => ({
+        stationId: stop.stationId,
+        stationName: stop.station.name,
+        orderIndex: stop.orderIndex
+      }))
+    };
+  }
+
+  private throwIfLineStopUniqueConstraint(error: unknown): void {
+    const prismaError = error as {
+      code?: string;
+      meta?: {
+        target?: string[];
+      };
+    };
+
+    if (prismaError?.code !== 'P2002') {
+      return;
+    }
+
+    const targets = prismaError.meta?.target ?? [];
+    if (targets.includes('lineId_orderIndex') || targets.includes('LineStop_lineId_orderIndex_key')) {
+      throw new ConflictException('Duplicate order index in intermediate stops is not allowed');
+    }
+
+    if (targets.includes('lineId_stationId') || targets.includes('LineStop_lineId_stationId_key')) {
+      throw new ConflictException('Duplicate station in intermediate stops is not allowed');
+    }
+
+    throw new ConflictException('Line stop unique constraint violated');
   }
 }

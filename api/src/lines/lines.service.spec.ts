@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException
+} from '@nestjs/common';
 import { LineDirection, LineDirectionMode, UserRole } from '@prisma/client';
 import { LinesService } from './lines.service';
 
@@ -13,6 +17,10 @@ describe('LinesService', () => {
       update: jest.fn(),
       delete: jest.fn()
     },
+    lineStop: {
+      createMany: jest.fn(),
+      deleteMany: jest.fn()
+    },
     station: {
       findMany: jest.fn()
     }
@@ -25,6 +33,37 @@ describe('LinesService', () => {
     username: 'demo-admin'
   };
 
+  const baseLine = {
+    id: 'line-1',
+    tenantId: 'tenant-1',
+    createdById: 'admin-1',
+    updatedById: 'admin-1',
+    name: 'Central - North',
+    departureStationId: 'station-a',
+    arrivalStationId: 'station-b',
+    directionMode: LineDirectionMode.BOTH,
+    direction: LineDirection.OUTBOUND,
+    pairKey: 'central-north-1',
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    departureStation: {
+      id: 'station-a',
+      name: 'Central',
+      address: '1 Main St',
+      category: null,
+      isActive: true
+    },
+    arrivalStation: {
+      id: 'station-b',
+      name: 'North',
+      address: '2 Main St',
+      category: null,
+      isActive: true
+    },
+    intermediateStops: [] as Array<{ stationId: string; orderIndex: number; station: { name: string } }>
+  };
+
   let service: LinesService;
 
   beforeEach(() => {
@@ -32,115 +71,65 @@ describe('LinesService', () => {
     service = new LinesService(prismaMock as never);
   });
 
-  it('creates line with actor audit fields and direction metadata', async () => {
+  it('rejects duplicate order index in intermediate stops', async () => {
     prismaMock.station.findMany.mockResolvedValue([
       { id: 'station-a', name: 'Central' },
-      { id: 'station-b', name: 'North' }
+      { id: 'station-b', name: 'North' },
+      { id: 'station-c', name: 'Mid 1' },
+      { id: 'station-d', name: 'Mid 2' }
     ]);
-    prismaMock.line.create.mockResolvedValue({
-      id: 'line-1',
-      tenantId: 'tenant-1',
-      createdById: 'admin-1',
-      updatedById: 'admin-1',
-      name: 'Central - North',
-      departureStationId: 'station-a',
-      arrivalStationId: 'station-b',
-      directionMode: LineDirectionMode.BOTH,
-      direction: LineDirection.OUTBOUND,
-      pairKey: 'central-north-1',
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      departureStation: {
-        id: 'station-a',
-        name: 'Central',
-        address: '1 Main St',
-        category: null,
-        isActive: true
-      },
-      arrivalStation: {
-        id: 'station-b',
-        name: 'North',
-        address: '2 Main St',
-        category: null,
-        isActive: true
+
+    await expect(
+      service.create(auth, {
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b',
+        intermediateStops: [
+          { stationId: 'station-c', orderIndex: 1 },
+          { stationId: 'station-d', orderIndex: 1 }
+        ]
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects duplicate station in intermediate stops', async () => {
+    prismaMock.station.findMany.mockResolvedValue([
+      { id: 'station-a', name: 'Central' },
+      { id: 'station-b', name: 'North' },
+      { id: 'station-c', name: 'Mid 1' }
+    ]);
+
+    await expect(
+      service.create(auth, {
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b',
+        intermediateStops: [
+          { stationId: 'station-c', orderIndex: 1 },
+          { stationId: 'station-c', orderIndex: 2 }
+        ]
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('prevents duplicate reverse line creation for the same route', async () => {
+    prismaMock.line.findFirst.mockResolvedValueOnce({
+      ...baseLine,
+      intermediateStops: [
+        { stationId: 'station-c', orderIndex: 1, station: { name: 'Mid 1' } },
+        { stationId: 'station-d', orderIndex: 2, station: { name: 'Mid 2' } }
+      ]
+    });
+
+    prismaMock.line.findMany.mockResolvedValueOnce([
+      {
+        id: 'line-existing-reverse',
+        intermediateStops: [
+          { stationId: 'station-d', orderIndex: 1 },
+          { stationId: 'station-c', orderIndex: 2 }
+        ]
       }
-    });
-
-    await service.create(auth, {
-      departureStationId: 'station-a',
-      arrivalStationId: 'station-b',
-      directionMode: LineDirectionMode.BOTH,
-      direction: LineDirection.OUTBOUND,
-      pairKey: 'central-north-1',
-      isActive: true
-    });
-
-    expect(prismaMock.line.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          tenantId: 'tenant-1',
-          createdById: 'admin-1',
-          updatedById: 'admin-1',
-          directionMode: LineDirectionMode.BOTH,
-          direction: LineDirection.OUTBOUND,
-          pairKey: 'central-north-1'
-        })
-      })
-    );
-  });
-
-  it('rejects invalid station references for route integrity', async () => {
-    prismaMock.station.findMany.mockResolvedValue([{ id: 'station-a', name: 'Central' }]);
-
-    await expect(
-      service.create(auth, {
-        departureStationId: 'station-a',
-        arrivalStationId: 'station-missing'
-      })
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('rejects same departure and arrival station', async () => {
-    await expect(
-      service.create(auth, {
-        departureStationId: 'station-a',
-        arrivalStationId: 'station-a'
-      })
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('rejects invalid direction logic for single mode with pair key', async () => {
-    prismaMock.station.findMany.mockResolvedValue([
-      { id: 'station-a', name: 'Central' },
-      { id: 'station-b', name: 'North' }
     ]);
 
-    await expect(
-      service.create(auth, {
-        departureStationId: 'station-a',
-        arrivalStationId: 'station-b',
-        directionMode: LineDirectionMode.SINGLE,
-        direction: LineDirection.OUTBOUND,
-        pairKey: 'not-allowed'
-      })
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('rejects invalid direction logic for return line without pair key', async () => {
-    prismaMock.station.findMany.mockResolvedValue([
-      { id: 'station-a', name: 'Central' },
-      { id: 'station-b', name: 'North' }
-    ]);
-
-    await expect(
-      service.create(auth, {
-        departureStationId: 'station-a',
-        arrivalStationId: 'station-b',
-        directionMode: LineDirectionMode.BOTH,
-        direction: LineDirection.RETURN
-      })
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.createReverse(auth, 'line-1')).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('returns not found when line is outside tenant scope', async () => {

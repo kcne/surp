@@ -18,6 +18,17 @@ export class LineStationSummaryDto {
   isActive!: boolean;
 }
 
+export class LineIntermediateStopDto {
+  @ApiProperty()
+  stationId!: string;
+
+  @ApiProperty()
+  stationName!: string;
+
+  @ApiProperty({ example: 1 })
+  orderIndex!: number;
+}
+
 export class LineResponseDto {
   @ApiProperty()
   id!: string;
@@ -57,6 +68,9 @@ export class LineResponseDto {
 
   @ApiProperty({ type: LineStationSummaryDto })
   arrivalStation!: LineStationSummaryDto;
+
+  @ApiProperty({ type: [LineIntermediateStopDto] })
+  intermediateStops!: LineIntermediateStopDto[];
 
   @ApiProperty()
   createdAt!: Date;

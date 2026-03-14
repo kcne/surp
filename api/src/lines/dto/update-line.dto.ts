@@ -1,12 +1,16 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { LineDirection, LineDirectionMode } from '@prisma/client';
 import {
+  IsArray,
   IsBoolean,
   IsEnum,
   IsOptional,
   IsString,
-  MaxLength
+  MaxLength,
+  ValidateNested
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { LineStopInputDto } from './line-stop.dto';
 
 export class UpdateLineDto {
   @ApiPropertyOptional({ example: 'Central - North Updated' })
@@ -45,4 +49,11 @@ export class UpdateLineDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ type: [LineStopInputDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LineStopInputDto)
+  intermediateStops?: LineStopInputDto[];
 }

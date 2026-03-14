@@ -157,7 +157,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Postman folder for stations passes.
 5. Exit criteria: Station management production-ready.
 
-**Slice 9 - Lines Core Module**
+**Slice 9 - Lines Core Module** - DONE
 1. Goal: Implement line CRUD and route integrity.
 2. Scope:
 1. Create and update lines with departure and arrival stations.
@@ -172,7 +172,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Frontend lines list and edit flows pass.
 5. Exit criteria: Lines can be managed safely.
 
-**Slice 10 - Line Stops and Reverse Line Operations**
+**Slice 10 - Line Stops and Reverse Line Operations** - DONE
 1. Goal: Complete line routing behavior.
 2. Scope:
 1. Manage intermediate stops order.

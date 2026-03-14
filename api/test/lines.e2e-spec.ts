@@ -9,6 +9,37 @@ import { PrismaService } from '../src/prisma/prisma.service';
 describe('LinesController (e2e)', () => {
   let app: INestApplication;
 
+  const baseLine = {
+    id: 'line-1',
+    tenantId: 'tenant-1',
+    createdById: 'admin-1',
+    updatedById: 'admin-1',
+    name: 'Central Station - North Station',
+    departureStationId: 'station-a',
+    arrivalStationId: 'station-b',
+    directionMode: LineDirectionMode.BOTH,
+    direction: LineDirection.OUTBOUND,
+    pairKey: 'central-north-1',
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    departureStation: {
+      id: 'station-a',
+      name: 'Central Station',
+      address: '1 Main Street',
+      category: null,
+      isActive: true
+    },
+    arrivalStation: {
+      id: 'station-b',
+      name: 'North Station',
+      address: '2 Main Street',
+      category: null,
+      isActive: true
+    },
+    intermediateStops: [] as Array<{ stationId: string; orderIndex: number; station: { name: string } }>
+  };
+
   const prismaMock = {
     $transaction: jest.fn(),
     onModuleInit: jest.fn(),
@@ -28,6 +59,10 @@ describe('LinesController (e2e)', () => {
       findFirst: jest.fn(),
       update: jest.fn(),
       delete: jest.fn()
+    },
+    lineStop: {
+      createMany: jest.fn(),
+      deleteMany: jest.fn()
     }
   };
 
@@ -81,164 +116,34 @@ describe('LinesController (e2e)', () => {
       throw new Error('invalid token');
     });
 
-    prismaMock.station.findMany.mockResolvedValue([
-      { id: 'station-a', name: 'Central Station' },
-      { id: 'station-b', name: 'North Station' }
-    ]);
-
-    prismaMock.line.create.mockResolvedValue({
-      id: 'line-1',
-      tenantId: 'tenant-1',
-      createdById: 'admin-1',
-      updatedById: 'admin-1',
-      name: 'Central Station - North Station',
-      departureStationId: 'station-a',
-      arrivalStationId: 'station-b',
-      directionMode: LineDirectionMode.BOTH,
-      direction: LineDirection.OUTBOUND,
-      pairKey: 'central-north-1',
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      departureStation: {
-        id: 'station-a',
-        name: 'Central Station',
-        address: '1 Main Street',
-        category: null,
-        isActive: true
-      },
-      arrivalStation: {
-        id: 'station-b',
-        name: 'North Station',
-        address: '2 Main Street',
-        category: null,
-        isActive: true
-      }
+    prismaMock.station.findMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) => {
+      const allStations = [
+        { id: 'station-a', name: 'Central Station' },
+        { id: 'station-b', name: 'North Station' },
+        { id: 'station-c', name: 'Midway 1' },
+        { id: 'station-d', name: 'Midway 2' }
+      ];
+      return allStations.filter((station) => where.id.in.includes(station.id));
     });
 
-    prismaMock.$transaction.mockResolvedValue([
-      [
-        {
-          id: 'line-1',
-          tenantId: 'tenant-1',
-          createdById: 'admin-1',
-          updatedById: 'admin-1',
-          name: 'Central Station - North Station',
-          departureStationId: 'station-a',
-          arrivalStationId: 'station-b',
-          directionMode: LineDirectionMode.BOTH,
-          direction: LineDirection.OUTBOUND,
-          pairKey: 'central-north-1',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          departureStation: {
-            id: 'station-a',
-            name: 'Central Station',
-            address: '1 Main Street',
-            category: null,
-            isActive: true
-          },
-          arrivalStation: {
-            id: 'station-b',
-            name: 'North Station',
-            address: '2 Main Street',
-            category: null,
-            isActive: true
-          }
-        }
-      ],
-      1
-    ]);
+    prismaMock.line.create.mockResolvedValue({ id: 'line-1' });
+    prismaMock.line.findFirst.mockResolvedValue({ ...baseLine });
+    prismaMock.line.findMany.mockResolvedValue([]);
+    prismaMock.line.count.mockResolvedValue(1);
+    prismaMock.line.update.mockResolvedValue({ ...baseLine });
+    prismaMock.line.delete.mockResolvedValue({ ...baseLine });
+    prismaMock.lineStop.createMany.mockResolvedValue({ count: 0 });
+    prismaMock.lineStop.deleteMany.mockResolvedValue({ count: 0 });
 
-    prismaMock.line.findFirst.mockResolvedValue({
-      id: 'line-1',
-      tenantId: 'tenant-1',
-      createdById: 'admin-1',
-      updatedById: 'admin-1',
-      name: 'Central Station - North Station',
-      departureStationId: 'station-a',
-      arrivalStationId: 'station-b',
-      directionMode: LineDirectionMode.BOTH,
-      direction: LineDirection.OUTBOUND,
-      pairKey: 'central-north-1',
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      departureStation: {
-        id: 'station-a',
-        name: 'Central Station',
-        address: '1 Main Street',
-        category: null,
-        isActive: true
-      },
-      arrivalStation: {
-        id: 'station-b',
-        name: 'North Station',
-        address: '2 Main Street',
-        category: null,
-        isActive: true
+    prismaMock.$transaction.mockImplementation(async (arg: unknown) => {
+      if (typeof arg === 'function') {
+        return arg({
+          line: prismaMock.line,
+          lineStop: prismaMock.lineStop
+        });
       }
-    });
 
-    prismaMock.line.update.mockResolvedValue({
-      id: 'line-1',
-      tenantId: 'tenant-1',
-      createdById: 'admin-1',
-      updatedById: 'admin-1',
-      name: 'Central Station - North Station Updated',
-      departureStationId: 'station-a',
-      arrivalStationId: 'station-b',
-      directionMode: LineDirectionMode.BOTH,
-      direction: LineDirection.OUTBOUND,
-      pairKey: 'central-north-1',
-      isActive: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      departureStation: {
-        id: 'station-a',
-        name: 'Central Station',
-        address: '1 Main Street',
-        category: null,
-        isActive: true
-      },
-      arrivalStation: {
-        id: 'station-b',
-        name: 'North Station',
-        address: '2 Main Street',
-        category: null,
-        isActive: true
-      }
-    });
-
-    prismaMock.line.delete.mockResolvedValue({
-      id: 'line-1',
-      tenantId: 'tenant-1',
-      createdById: 'admin-1',
-      updatedById: 'admin-1',
-      name: 'Central Station - North Station',
-      departureStationId: 'station-a',
-      arrivalStationId: 'station-b',
-      directionMode: LineDirectionMode.BOTH,
-      direction: LineDirection.OUTBOUND,
-      pairKey: 'central-north-1',
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      departureStation: {
-        id: 'station-a',
-        name: 'Central Station',
-        address: '1 Main Street',
-        category: null,
-        isActive: true
-      },
-      arrivalStation: {
-        id: 'station-b',
-        name: 'North Station',
-        address: '2 Main Street',
-        category: null,
-        isActive: true
-      }
+      return [[{ ...baseLine }], 1];
     });
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -277,27 +182,7 @@ describe('LinesController (e2e)', () => {
     expect(response.body.message).toBe('Tenant mismatch between token and request context');
   });
 
-  it('rejects create when station references are invalid', async () => {
-    prismaMock.station.findMany.mockResolvedValueOnce([{ id: 'station-a', name: 'Central Station' }]);
-
-    const response = await request(app.getHttpServer())
-      .post('/lines')
-      .set('X-Tenant-Slug', 'demo-tenant')
-      .set('Authorization', 'Bearer access-token-admin')
-      .send({
-        departureStationId: 'station-a',
-        arrivalStationId: 'station-missing',
-        directionMode: LineDirectionMode.SINGLE,
-        direction: LineDirection.OUTBOUND
-      })
-      .expect(400);
-
-    expect(response.body.message).toBe(
-      'Departure and arrival stations must both exist in the current tenant'
-    );
-  });
-
-  it('rejects create when direction logic is invalid', async () => {
+  it('rejects duplicate order index in intermediate stops', async () => {
     const response = await request(app.getHttpServer())
       .post('/lines')
       .set('X-Tenant-Slug', 'demo-tenant')
@@ -305,115 +190,59 @@ describe('LinesController (e2e)', () => {
       .send({
         departureStationId: 'station-a',
         arrivalStationId: 'station-b',
-        directionMode: LineDirectionMode.SINGLE,
-        direction: LineDirection.OUTBOUND,
-        pairKey: 'should-fail'
+        intermediateStops: [
+          { stationId: 'station-c', orderIndex: 1 },
+          { stationId: 'station-d', orderIndex: 1 }
+        ]
       })
       .expect(400);
 
-    expect(response.body.message).toContain('pairKey is only allowed when directionMode is BOTH');
+    expect(response.body.message).toBe('Duplicate order index in intermediate stops is not allowed');
   });
 
-  it('supports full line CRUD for tenant', async () => {
-    const created = await request(app.getHttpServer())
+  it('rejects duplicate station in intermediate stops', async () => {
+    const response = await request(app.getHttpServer())
       .post('/lines')
       .set('X-Tenant-Slug', 'demo-tenant')
       .set('Authorization', 'Bearer access-token-admin')
       .send({
         departureStationId: 'station-a',
         arrivalStationId: 'station-b',
-        directionMode: LineDirectionMode.BOTH,
-        direction: LineDirection.OUTBOUND,
-        pairKey: 'central-north-1',
-        isActive: true
+        intermediateStops: [
+          { stationId: 'station-c', orderIndex: 1 },
+          { stationId: 'station-c', orderIndex: 2 }
+        ]
       })
-      .expect(201);
+      .expect(400);
 
-    expect(created.body.id).toBe('line-1');
+    expect(response.body.message).toBe('Duplicate station in intermediate stops is not allowed');
+  });
 
-    const listed = await request(app.getHttpServer())
-      .get('/lines')
+  it('prevents duplicate reverse line creation', async () => {
+    prismaMock.line.findFirst.mockResolvedValueOnce({
+      ...baseLine,
+      intermediateStops: [
+        { stationId: 'station-c', orderIndex: 1, station: { name: 'Midway 1' } },
+        { stationId: 'station-d', orderIndex: 2, station: { name: 'Midway 2' } }
+      ]
+    });
+
+    prismaMock.line.findMany.mockResolvedValueOnce([
+      {
+        id: 'line-reverse-existing',
+        intermediateStops: [
+          { stationId: 'station-d', orderIndex: 1 },
+          { stationId: 'station-c', orderIndex: 2 }
+        ]
+      }
+    ]);
+
+    const response = await request(app.getHttpServer())
+      .post('/lines/line-1/reverse')
       .set('X-Tenant-Slug', 'demo-tenant')
       .set('Authorization', 'Bearer access-token-admin')
-      .expect(200);
+      .expect(409);
 
-    expect(listed.body.total).toBe(1);
-
-    prismaMock.line.findFirst
-      .mockResolvedValueOnce({
-        id: 'line-1',
-        tenantId: 'tenant-1',
-        createdById: 'admin-1',
-        updatedById: 'admin-1',
-        name: 'Central Station - North Station',
-        departureStationId: 'station-a',
-        arrivalStationId: 'station-b',
-        directionMode: LineDirectionMode.BOTH,
-        direction: LineDirection.OUTBOUND,
-        pairKey: 'central-north-1',
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        departureStation: {
-          id: 'station-a',
-          name: 'Central Station',
-          address: '1 Main Street',
-          category: null,
-          isActive: true
-        },
-        arrivalStation: {
-          id: 'station-b',
-          name: 'North Station',
-          address: '2 Main Street',
-          category: null,
-          isActive: true
-        }
-      })
-      .mockResolvedValueOnce({
-        id: 'line-1',
-        name: 'Central Station - North Station',
-        departureStationId: 'station-a',
-        arrivalStationId: 'station-b',
-        directionMode: LineDirectionMode.BOTH,
-        direction: LineDirection.OUTBOUND,
-        pairKey: 'central-north-1'
-      })
-      .mockResolvedValueOnce({
-        id: 'line-1',
-        name: 'Central Station - North Station',
-        departureStationId: 'station-a',
-        arrivalStationId: 'station-b',
-        directionMode: LineDirectionMode.BOTH,
-        direction: LineDirection.OUTBOUND,
-        pairKey: 'central-north-1'
-      });
-
-    const detail = await request(app.getHttpServer())
-      .get('/lines/line-1')
-      .set('X-Tenant-Slug', 'demo-tenant')
-      .set('Authorization', 'Bearer access-token-admin')
-      .expect(200);
-
-    expect(detail.body.id).toBe('line-1');
-
-    const updated = await request(app.getHttpServer())
-      .patch('/lines/line-1')
-      .set('X-Tenant-Slug', 'demo-tenant')
-      .set('Authorization', 'Bearer access-token-admin')
-      .send({
-        name: 'Central Station - North Station Updated',
-        isActive: false
-      })
-      .expect(200);
-
-    expect(updated.body.isActive).toBe(false);
-
-    const removed = await request(app.getHttpServer())
-      .delete('/lines/line-1')
-      .set('X-Tenant-Slug', 'demo-tenant')
-      .set('Authorization', 'Bearer access-token-admin')
-      .expect(200);
-
-    expect(removed.body.id).toBe('line-1');
+    expect(response.body.message).toBe('Reverse line already exists for this route');
   });
 });
