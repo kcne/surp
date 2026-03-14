@@ -127,3 +127,77 @@ export class PaginatedRidesResponseDto {
   @ApiProperty({ example: 2 })
   total!: number;
 }
+
+export class RideInstanceLineSummaryDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty()
+  departureStationId!: string;
+
+  @ApiProperty()
+  arrivalStationId!: string;
+}
+
+export class RideInstanceAvailabilitySummaryDto {
+  @ApiProperty({ example: 38, minimum: 0 })
+  capacity!: number;
+
+  @ApiProperty({ example: 0, minimum: 0 })
+  reservedSeats!: number;
+
+  @ApiProperty({ example: 38, minimum: 0 })
+  availableSeats!: number;
+
+  @ApiProperty({ example: true })
+  hasAvailability!: boolean;
+}
+
+export class RideInstanceResponseDto {
+  @ApiProperty({ example: 'ride-1:2026-03-30:09:00:BASE' })
+  id!: string;
+
+  @ApiProperty({ example: 'ride-1' })
+  rideId!: string;
+
+  @ApiProperty({ example: '2026-03-30' })
+  date!: string;
+
+  @ApiProperty({ example: '09:00' })
+  departureTime!: string;
+
+  @ApiProperty({ example: '10:30' })
+  arrivalTime!: string;
+
+  @ApiProperty({ example: 'BASE', enum: ['BASE', 'ADDITIONAL'] })
+  source!: 'BASE' | 'ADDITIONAL';
+
+  @ApiProperty({ enum: RideType })
+  rideType!: RideType;
+
+  @ApiProperty({ enum: RideStatus })
+  status!: RideStatus;
+
+  @ApiProperty({ type: RideInstanceLineSummaryDto })
+  line!: RideInstanceLineSummaryDto;
+
+  @ApiProperty({ type: RideInstanceAvailabilitySummaryDto })
+  availability!: RideInstanceAvailabilitySummaryDto;
+
+  @ApiProperty({ example: 0, minimum: 0 })
+  reservationCount!: number;
+}
+
+export class RideInstancesByDateResponseDto {
+  @ApiProperty({ example: '2026-03-30' })
+  date!: string;
+
+  @ApiProperty({ example: 0 })
+  timezoneOffsetMinutes!: number;
+
+  @ApiProperty({ type: [RideInstanceResponseDto] })
+  items!: RideInstanceResponseDto[];
+}

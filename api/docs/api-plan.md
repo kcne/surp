@@ -217,7 +217,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Status transitions behave correctly.
 5. Exit criteria: Ride templates fully manageable.
 
-**Slice 13 - Ride Instances Query and Materialization**
+**Slice 13 - Ride Instances Query and Materialization** - DONE
 1. Goal: Serve date-based ride instances for reservation screen.
 2. Scope:
 1. Date query endpoint for ride instances.

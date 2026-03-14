@@ -158,4 +158,125 @@ describe('RidesService', () => {
 
     await expect(service.getById(auth, 'ride-missing')).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('materializes recurring instances using timezone offset day boundary', async () => {
+    prismaMock.ride.findMany.mockResolvedValue([
+      {
+        id: 'ride-1',
+        tenantId: 'tenant-1',
+        lineId: 'line-1',
+        name: 'Boundary Ride',
+        capacity: 38,
+        type: RideType.RECURRING,
+        status: RideStatus.ACTIVE,
+        recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+        recurringEndDate: null,
+        oneTimeDate: null,
+        oneTimeDepartureTime: null,
+        oneTimeArrivalTime: null,
+        line: {
+          id: 'line-1',
+          name: 'Line 1',
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-b'
+        },
+        dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+        exceptions: []
+      }
+    ]);
+
+    const result = await service.listInstancesByDate(auth, {
+      date: '2026-03-30',
+      timezoneOffsetMinutes: -300
+    });
+
+    expect(result.date).toBe('2026-03-30');
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].source).toBe('BASE');
+    expect(result.items[0].departureTime).toBe('09:00');
+  });
+
+  it('removes base instance when skip exception exists on date', async () => {
+    prismaMock.ride.findMany.mockResolvedValue([
+      {
+        id: 'ride-1',
+        tenantId: 'tenant-1',
+        lineId: 'line-1',
+        name: 'Skip Ride',
+        capacity: 38,
+        type: RideType.RECURRING,
+        status: RideStatus.ACTIVE,
+        recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+        recurringEndDate: null,
+        oneTimeDate: null,
+        oneTimeDepartureTime: null,
+        oneTimeArrivalTime: null,
+        line: {
+          id: 'line-1',
+          name: 'Line 1',
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-b'
+        },
+        dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+        exceptions: [
+          {
+            exceptionDate: new Date('2026-03-30T00:00:00.000Z'),
+            type: RideExceptionType.SKIP,
+            departureTime: null,
+            arrivalTime: null
+          }
+        ]
+      }
+    ]);
+
+    const result = await service.listInstancesByDate(auth, {
+      date: '2026-03-30'
+    });
+
+    expect(result.items).toHaveLength(0);
+  });
+
+  it('creates instance from additional exception when base does not exist', async () => {
+    prismaMock.ride.findMany.mockResolvedValue([
+      {
+        id: 'ride-1',
+        tenantId: 'tenant-1',
+        lineId: 'line-1',
+        name: 'Additional Ride',
+        capacity: 38,
+        type: RideType.RECURRING,
+        status: RideStatus.ACTIVE,
+        recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+        recurringEndDate: null,
+        oneTimeDate: null,
+        oneTimeDepartureTime: null,
+        oneTimeArrivalTime: null,
+        line: {
+          id: 'line-1',
+          name: 'Line 1',
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-b'
+        },
+        dayTimes: [{ dayOfWeek: 2, departureTime: '09:00', arrivalTime: '10:30' }],
+        exceptions: [
+          {
+            exceptionDate: new Date('2026-03-30T00:00:00.000Z'),
+            type: RideExceptionType.ADDITIONAL,
+            departureTime: '13:00',
+            arrivalTime: '14:10'
+          }
+        ]
+      }
+    ]);
+
+    const result = await service.listInstancesByDate(auth, {
+      date: '2026-03-30'
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].source).toBe('ADDITIONAL');
+    expect(result.items[0].departureTime).toBe('13:00');
+    expect(result.items[0].reservationCount).toBe(0);
+    expect(result.items[0].availability.availableSeats).toBe(38);
+  });
 });

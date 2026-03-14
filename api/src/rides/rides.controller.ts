@@ -15,10 +15,12 @@ import { UserRole } from '@prisma/client';
 import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
 import { CreateRideDto } from './dto/create-ride.dto';
+import { ListRideInstancesQueryDto } from './dto/ride-instances.query.dto';
 import { ListRidesQueryDto } from './dto/list-rides.query.dto';
 import { CreateRideExceptionDto } from './dto/ride-exception.dto';
 import { ReplaceRideDayTimesDto } from './dto/ride-day-time.dto';
 import {
+  RideInstancesByDateResponseDto,
   PaginatedRidesResponseDto,
   RideExceptionResponseDto,
   RideResponseDto
@@ -60,6 +62,20 @@ export class RidesController {
     @Query() query: ListRidesQueryDto
   ): Promise<PaginatedRidesResponseDto> {
     return this.ridesService.list(request.auth!, query);
+  }
+
+  @Get('instances')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({ summary: 'List materialized ride instances by date in the current tenant.' })
+  @ApiOkResponse({ type: RideInstancesByDateResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failure.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  listInstancesByDate(
+    @Req() request: RequestWithAuth,
+    @Query() query: ListRideInstancesQueryDto
+  ): Promise<RideInstancesByDateResponseDto> {
+    return this.ridesService.listInstancesByDate(request.auth!, query);
   }
 
   @Get(':id')

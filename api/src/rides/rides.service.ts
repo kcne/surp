@@ -10,11 +10,14 @@ import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRideDto } from './dto/create-ride.dto';
+import { ListRideInstancesQueryDto } from './dto/ride-instances.query.dto';
 import { ListRidesQueryDto } from './dto/list-rides.query.dto';
 import { RideDayTimeInputDto } from './dto/ride-day-time.dto';
 import { CreateRideExceptionDto } from './dto/ride-exception.dto';
 import {
   PaginatedRidesResponseDto,
+  RideInstanceResponseDto,
+  RideInstancesByDateResponseDto,
   RideExceptionResponseDto,
   RideResponseDto
 } from './dto/ride.response.dto';
@@ -92,6 +95,72 @@ type RideExceptionRecord = Prisma.RideExceptionGetPayload<{
     updatedAt: true;
   };
 }>;
+
+type RideWithInstanceMaterialization = Prisma.RideGetPayload<{
+  select: {
+    id: true;
+    tenantId: true;
+    lineId: true;
+    name: true;
+    capacity: true;
+    type: true;
+    status: true;
+    recurringStartDate: true;
+    recurringEndDate: true;
+    oneTimeDate: true;
+    oneTimeDepartureTime: true;
+    oneTimeArrivalTime: true;
+    line: {
+      select: {
+        id: true;
+        name: true;
+        departureStationId: true;
+        arrivalStationId: true;
+      };
+    };
+    dayTimes: {
+      select: {
+        dayOfWeek: true;
+        departureTime: true;
+        arrivalTime: true;
+      };
+      orderBy: {
+        dayOfWeek: 'asc';
+      };
+    };
+    exceptions: {
+      select: {
+        exceptionDate: true;
+        type: true;
+        departureTime: true;
+        arrivalTime: true;
+      };
+      where: {
+        exceptionDate: Date;
+      };
+      orderBy: {
+        createdAt: 'asc';
+      };
+    };
+  };
+}>;
+
+type MaterializedRideInstance = {
+  rideId: string;
+  date: string;
+  departureTime: string;
+  arrivalTime: string;
+  source: 'BASE' | 'ADDITIONAL';
+  rideType: RideType;
+  status: RideStatus;
+  capacity: number;
+  line: {
+    id: string;
+    name: string;
+    departureStationId: string;
+    arrivalStationId: string;
+  };
+};
 
 type RideScheduleInput = {
   type: RideType;
@@ -214,6 +283,122 @@ export class RidesService {
       total,
       page: pagination.page ?? DEFAULT_PAGE,
       pageSize: pagination.pageSize ?? DEFAULT_PAGE_SIZE
+    };
+  }
+
+  async listInstancesByDate(
+    auth: AccessTokenPayload,
+    query: ListRideInstancesQueryDto
+  ): Promise<RideInstancesByDateResponseDto> {
+    const timezoneOffsetMinutes = query.timezoneOffsetMinutes ?? 0;
+    const utcDate = this.resolveUtcDateFromLocalDate(query.date);
+    const targetDate = this.formatDate(utcDate)!;
+    const targetDayOfWeek = this.getDayOfWeekFromDateString(query.date);
+
+    const rides = await this.prisma.ride.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        status: RideStatus.ACTIVE
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        lineId: true,
+        name: true,
+        capacity: true,
+        type: true,
+        status: true,
+        recurringStartDate: true,
+        recurringEndDate: true,
+        oneTimeDate: true,
+        oneTimeDepartureTime: true,
+        oneTimeArrivalTime: true,
+        line: {
+          select: {
+            id: true,
+            name: true,
+            departureStationId: true,
+            arrivalStationId: true
+          }
+        },
+        dayTimes: {
+          select: {
+            dayOfWeek: true,
+            departureTime: true,
+            arrivalTime: true
+          },
+          orderBy: {
+            dayOfWeek: 'asc'
+          }
+        },
+        exceptions: {
+          where: {
+            exceptionDate: utcDate
+          },
+          select: {
+            exceptionDate: true,
+            type: true,
+            departureTime: true,
+            arrivalTime: true
+          },
+          orderBy: {
+            createdAt: 'asc'
+          }
+        }
+      }
+    });
+
+    const materialized = rides
+      .flatMap((ride) => this.materializeRideInstancesForDate(ride, targetDate, targetDayOfWeek))
+      .sort((a, b) => {
+        if (a.departureTime !== b.departureTime) {
+          return a.departureTime.localeCompare(b.departureTime);
+        }
+
+        if (a.arrivalTime !== b.arrivalTime) {
+          return a.arrivalTime.localeCompare(b.arrivalTime);
+        }
+
+        if (a.line.name !== b.line.name) {
+          return a.line.name.localeCompare(b.line.name);
+        }
+
+        return a.rideId.localeCompare(b.rideId);
+      });
+
+    const items = materialized.map((instance) => {
+      const reservationCount = 0;
+      const availableSeats = Math.max(instance.capacity - reservationCount, 0);
+
+      return {
+        id: `${instance.rideId}:${instance.date}:${instance.departureTime}:${instance.source}`,
+        rideId: instance.rideId,
+        date: instance.date,
+        departureTime: instance.departureTime,
+        arrivalTime: instance.arrivalTime,
+        source: instance.source,
+        rideType: instance.rideType,
+        status: instance.status,
+        line: {
+          id: instance.line.id,
+          name: instance.line.name,
+          departureStationId: instance.line.departureStationId,
+          arrivalStationId: instance.line.arrivalStationId
+        },
+        availability: {
+          capacity: instance.capacity,
+          reservedSeats: reservationCount,
+          availableSeats,
+          hasAvailability: availableSeats > 0
+        },
+        reservationCount
+      } satisfies RideInstanceResponseDto;
+    });
+
+    return {
+      date: targetDate,
+      timezoneOffsetMinutes,
+      items
     };
   }
 
@@ -666,6 +851,112 @@ export class RidesService {
 
   private parseDateOnly(value: string): Date {
     return new Date(`${value}T00:00:00.000Z`);
+  }
+
+  private resolveUtcDateFromLocalDate(localDate: string): Date {
+    const [year, month, day] = localDate.split('-').map((part) => Number(part));
+
+    if (!year || !month || !day) {
+      throw new BadRequestException('date must be in YYYY-MM-DD format');
+    }
+
+    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  }
+
+  private getDayOfWeekFromDateString(value: string): number {
+    const [year, month, day] = value.split('-').map((part) => Number(part));
+    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)).getUTCDay();
+  }
+
+  private materializeRideInstancesForDate(
+    ride: RideWithInstanceMaterialization,
+    targetDate: string,
+    targetDayOfWeek: number
+  ): MaterializedRideInstance[] {
+    const baseInstances: MaterializedRideInstance[] = [];
+
+    if (ride.type === RideType.RECURRING) {
+      if (!ride.recurringStartDate) {
+        return [];
+      }
+
+      const startDate = this.formatDate(ride.recurringStartDate)!;
+      const endDate = ride.recurringEndDate ? this.formatDate(ride.recurringEndDate)! : null;
+
+      const dateInRange = targetDate >= startDate && (!endDate || targetDate <= endDate);
+      const dayTime = ride.dayTimes.find((entry) => entry.dayOfWeek === targetDayOfWeek);
+
+      if (dateInRange && dayTime) {
+        baseInstances.push({
+          rideId: ride.id,
+          date: targetDate,
+          departureTime: dayTime.departureTime,
+          arrivalTime: dayTime.arrivalTime,
+          source: 'BASE',
+          rideType: ride.type,
+          status: ride.status,
+          capacity: ride.capacity,
+          line: {
+            id: ride.line.id,
+            name: ride.line.name,
+            departureStationId: ride.line.departureStationId,
+            arrivalStationId: ride.line.arrivalStationId
+          }
+        });
+      }
+    }
+
+    if (ride.type === RideType.ONE_TIME) {
+      const oneTimeDate = ride.oneTimeDate ? this.formatDate(ride.oneTimeDate) : null;
+
+      if (
+        oneTimeDate === targetDate &&
+        ride.oneTimeDepartureTime &&
+        ride.oneTimeArrivalTime
+      ) {
+        baseInstances.push({
+          rideId: ride.id,
+          date: targetDate,
+          departureTime: ride.oneTimeDepartureTime,
+          arrivalTime: ride.oneTimeArrivalTime,
+          source: 'BASE',
+          rideType: ride.type,
+          status: ride.status,
+          capacity: ride.capacity,
+          line: {
+            id: ride.line.id,
+            name: ride.line.name,
+            departureStationId: ride.line.departureStationId,
+            arrivalStationId: ride.line.arrivalStationId
+          }
+        });
+      }
+    }
+
+    const hasSkip = ride.exceptions.some((item) => item.type === RideExceptionType.SKIP);
+    const additionalInstances: MaterializedRideInstance[] = ride.exceptions
+      .filter((item) => item.type === RideExceptionType.ADDITIONAL)
+      .filter((item) => Boolean(item.departureTime && item.arrivalTime))
+      .map((item) => ({
+        rideId: ride.id,
+        date: targetDate,
+        departureTime: item.departureTime!,
+        arrivalTime: item.arrivalTime!,
+        source: 'ADDITIONAL' as const,
+        rideType: ride.type,
+        status: ride.status,
+        capacity: ride.capacity,
+        line: {
+          id: ride.line.id,
+          name: ride.line.name,
+          departureStationId: ride.line.departureStationId,
+          arrivalStationId: ride.line.arrivalStationId
+        }
+      }));
+
+    const effectiveBase = hasSkip ? [] : baseInstances;
+
+    return [...effectiveBase, ...additionalInstances];
   }
 
   private formatDate(value: Date | null): string | undefined {

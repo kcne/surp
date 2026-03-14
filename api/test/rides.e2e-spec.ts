@@ -323,4 +323,50 @@ describe('RidesController (e2e)', () => {
 
     expect(removed.body.id).toBe('ride-1');
   });
+
+  it('lists materialized ride instances for date query', async () => {
+    prismaMock.ride.findMany.mockResolvedValueOnce([
+      {
+        id: 'ride-1',
+        tenantId: 'tenant-1',
+        lineId: 'line-1',
+        name: 'Morning Central Route',
+        capacity: 38,
+        type: RideType.RECURRING,
+        status: RideStatus.ACTIVE,
+        recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+        recurringEndDate: null,
+        oneTimeDate: null,
+        oneTimeDepartureTime: null,
+        oneTimeArrivalTime: null,
+        line: {
+          id: 'line-1',
+          name: 'Central - North',
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-b'
+        },
+        dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+        exceptions: []
+      }
+    ]);
+
+    const response = await request(app.getHttpServer())
+      .get('/rides/instances?date=2026-03-30&timezoneOffsetMinutes=0')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .expect(200);
+
+    expect(response.body.date).toBe('2026-03-30');
+    expect(response.body.items).toHaveLength(1);
+    expect(response.body.items[0].source).toBe('BASE');
+    expect(response.body.items[0].reservationCount).toBe(0);
+  });
+
+  it('validates ride instances date query format', async () => {
+    await request(app.getHttpServer())
+      .get('/rides/instances?date=2026/03/30')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .expect(400);
+  });
 });
