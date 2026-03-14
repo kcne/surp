@@ -1029,6 +1029,303 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Lines",
+      "item": [
+        {
+          "name": "Create Line - Success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"departureStationId\": \"{{referencedStationId}}\",\n  \"arrivalStationId\": \"seed-station-main\",\n  \"directionMode\": \"BOTH\",\n  \"direction\": \"OUTBOUND\",\n  \"pairKey\": \"seed-line-pair-1\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lines",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Response includes line id', function () {",
+                  "  pm.expect(body).to.have.property('id');",
+                  "});",
+                  "",
+                  "if (body.id) {",
+                  "  pm.environment.set('lineId', body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Line - Invalid Direction Fails",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"departureStationId\": \"{{referencedStationId}}\",\n  \"arrivalStationId\": \"seed-station-main\",\n  \"directionMode\": \"SINGLE\",\n  \"direction\": \"OUTBOUND\",\n  \"pairKey\": \"invalid-for-single\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lines",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400 for invalid direction metadata', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Line - Invalid Station Reference Fails",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"departureStationId\": \"{{referencedStationId}}\",\n  \"arrivalStationId\": \"station-missing\",\n  \"directionMode\": \"SINGLE\",\n  \"direction\": \"OUTBOUND\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lines",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400 for invalid station reference', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Lines - Success",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/lines?page=1&pageSize=25&isActive=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "25"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Line Detail - Success",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/lines/{{lineId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines",
+                "{{lineId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Line - Success",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Seed Route Updated\",\n  \"isActive\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lines/{{lineId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines",
+                "{{lineId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Line - Success",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/lines/{{lineId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lines",
+                "{{lineId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
@@ -1091,6 +1388,10 @@
     {
       "key": "referencedStationId",
       "value": "seed-station-referenced"
+    },
+    {
+      "key": "lineId",
+      "value": ""
     }
   ]
 }

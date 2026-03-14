@@ -142,7 +142,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Cross-user edits reflect latest editor.
 5. Exit criteria: Audit trail trustworthy across modules.
 
-**Slice 8 - Stations Module**
+**Slice 8 - Stations Module** - DONE
 1. Goal: Deliver first business CRUD module.
 2. Scope:
 1. Station create, list, detail, update, delete.

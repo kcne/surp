@@ -18,6 +18,16 @@ enum StationCategory {
   BUS_STOP
 }
 
+enum LineDirectionMode {
+  SINGLE
+  BOTH
+}
+
+enum LineDirection {
+  OUTBOUND
+  RETURN
+}
+
 model HealthCheckLog {
   id        String   @id @default(cuid())
   message   String
@@ -104,8 +114,15 @@ model Station {
 model Line {
   id                 String   @id @default(cuid())
   tenantId           String
+  createdById        String?
+  updatedById        String?
+  name               String
   departureStationId String
   arrivalStationId   String
+  directionMode      LineDirectionMode @default(BOTH)
+  direction          LineDirection @default(OUTBOUND)
+  pairKey            String?
+  isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -113,8 +130,11 @@ model Line {
   arrivalStation     Station  @relation("LineArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
 
   @@index([tenantId])
+  @@index([tenantId, isActive])
   @@index([departureStationId])
   @@index([arrivalStationId])
+  @@index([pairKey])
+  @@index([updatedById])
 }
 
 model Reservation {

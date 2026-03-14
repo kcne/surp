@@ -146,14 +146,28 @@ async function main() {
     },
     update: {
       tenantId: tenant.id,
+      name: 'Seed Referenced Station - Seed Main Station',
       departureStationId: 'seed-station-referenced',
-      arrivalStationId: 'seed-station-main'
+      arrivalStationId: 'seed-station-main',
+      directionMode: 'SINGLE',
+      direction: 'OUTBOUND',
+      pairKey: null,
+      isActive: true,
+      createdById: adminUser.id,
+      updatedById: adminUser.id
     },
     create: {
       id: 'seed-line-referencing-station',
       tenantId: tenant.id,
+      name: 'Seed Referenced Station - Seed Main Station',
       departureStationId: 'seed-station-referenced',
-      arrivalStationId: 'seed-station-main'
+      arrivalStationId: 'seed-station-main',
+      directionMode: 'SINGLE',
+      direction: 'OUTBOUND',
+      pairKey: null,
+      isActive: true,
+      createdById: adminUser.id,
+      updatedById: adminUser.id
     }
   });
 
