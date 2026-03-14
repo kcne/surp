@@ -3478,6 +3478,246 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Reporting",
+      "item": [
+        {
+          "name": "Dashboard Metrics - Success",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reporting/dashboard?fromDate=2026-03-01&toDate=2026-03-31&topLinesLimit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reporting",
+                "dashboard"
+              ],
+              "query": [
+                {
+                  "key": "fromDate",
+                  "value": "2026-03-01"
+                },
+                {
+                  "key": "toDate",
+                  "value": "2026-03-31"
+                },
+                {
+                  "key": "topLinesLimit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 for dashboard metrics', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Dashboard summary and arrays exist', function () {",
+                  "  pm.expect(body).to.have.property('summary');",
+                  "  pm.expect(body).to.have.property('dailyReservations');",
+                  "  pm.expect(body).to.have.property('topLines');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Occupancy Trend - Success",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reporting/occupancy?fromDate=2026-03-01&toDate=2026-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reporting",
+                "occupancy"
+              ],
+              "query": [
+                {
+                  "key": "fromDate",
+                  "value": "2026-03-01"
+                },
+                {
+                  "key": "toDate",
+                  "value": "2026-03-31"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 for occupancy trend', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Occupancy payload shape is valid', function () {",
+                  "  pm.expect(body).to.have.property('summary');",
+                  "  pm.expect(body).to.have.property('points');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Audit Query - Success",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reporting/audit?entity=RESERVATIONS&fromDate=2026-03-01&toDate=2026-03-31&page=1&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reporting",
+                "audit"
+              ],
+              "query": [
+                {
+                  "key": "entity",
+                  "value": "RESERVATIONS"
+                },
+                {
+                  "key": "fromDate",
+                  "value": "2026-03-01"
+                },
+                {
+                  "key": "toDate",
+                  "value": "2026-03-31"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 for audit query', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Audit payload includes items and pagination', function () {",
+                  "  pm.expect(body).to.have.property('items');",
+                  "  pm.expect(body).to.have.property('total');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dashboard Invalid Date Range - Fail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reporting/dashboard?fromDate=2026-04-10&toDate=2026-03-01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reporting",
+                "dashboard"
+              ],
+              "query": [
+                {
+                  "key": "fromDate",
+                  "value": "2026-04-10"
+                },
+                {
+                  "key": "toDate",
+                  "value": "2026-03-01"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400 for invalid date range', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [

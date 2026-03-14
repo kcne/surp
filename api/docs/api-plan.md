@@ -262,7 +262,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Batch booking workflow works from frontend.
 5. Exit criteria: Reservation engine safe under load.
 
-**Slice 16 - Payment and Pricing Rules in Reservation Domain** - SKIP
+**Slice 16 - Payment and Pricing Rules in Reservation Domain** - CUT
 1. Goal: Stabilize financial fields and status transitions.
 2. Scope:
 1. Base price, discount, final price validation.
