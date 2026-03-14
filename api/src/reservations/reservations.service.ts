@@ -10,11 +10,16 @@ import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
+import { CreateReservationsBatchDto } from './dto/create-reservations-batch.dto';
 import { ListReservationsQueryDto } from './dto/list-reservations.query.dto';
 import {
   PaginatedReservationsResponseDto,
   ReservationResponseDto
 } from './dto/reservation.response.dto';
+import {
+  BatchReservationsResponseDto,
+  ReservationBatchItemResultDto
+} from './dto/reservations-batch.response.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 
 const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
@@ -67,6 +72,7 @@ type SelectedReservation = Prisma.ReservationGetPayload<{ select: typeof SAFE_RE
 
 type RideRouteContext = {
   rideId: string;
+  capacity: number;
   stationOrderById: Map<string, number>;
 };
 
@@ -75,53 +81,45 @@ type RouteSegment = {
   arrivalOrder: number;
 };
 
+type ReservationDbClient = PrismaService | Prisma.TransactionClient;
+
 @Injectable()
 export class ReservationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(auth: AccessTokenPayload, dto: CreateReservationDto): Promise<ReservationResponseDto> {
-    const rideContext = await this.getRideRouteContext(auth.tenantId, dto.rideId);
-    await this.ensurePassengerExistsInTenant(auth.tenantId, dto.passengerId);
-
-    const segment = this.validateAndResolveSegment(
-      rideContext.stationOrderById,
-      dto.departureStationId,
-      dto.arrivalStationId
+    const created = await this.prisma.$transaction((tx) =>
+      this.createSingleInTransaction(tx, auth, dto)
     );
 
-    const travelDate = this.toUtcDate(dto.travelDate);
-
-    await this.ensureSeatIsAvailable({
-      tenantId: auth.tenantId,
-      rideId: dto.rideId,
-      travelDate,
-      rideDepartureTime: dto.rideDepartureTime,
-      seatNumber: dto.seatNumber,
-      segment,
-      stationOrderById: rideContext.stationOrderById
-    });
-
-    const created = await this.prisma.reservation.create({
-      data: withCreateAudit(
-        {
-          tenantId: auth.tenantId,
-          rideId: dto.rideId,
-          passengerId: dto.passengerId,
-          travelDate,
-          rideDepartureTime: dto.rideDepartureTime,
-          rideArrivalTime: dto.rideArrivalTime,
-          seatNumber: dto.seatNumber,
-          departureStationId: dto.departureStationId,
-          arrivalStationId: dto.arrivalStationId,
-          status: ReservationStatus.ACTIVE,
-          cancelledAt: null
-        },
-        auth.sub
-      ),
-      select: SAFE_RESERVATION_SELECT
-    });
-
     return this.toResponse(created);
+  }
+
+  async createBatch(
+    auth: AccessTokenPayload,
+    dto: CreateReservationsBatchDto
+  ): Promise<BatchReservationsResponseDto> {
+    return this.prisma.$transaction(async (tx) => {
+      const results: ReservationBatchItemResultDto[] = [];
+
+      for (let index = 0; index < dto.items.length; index += 1) {
+        const item = dto.items[index];
+        const created = await this.createSingleInTransaction(tx, auth, item);
+
+        results.push({
+          index,
+          success: true,
+          reservation: this.toResponse(created)
+        });
+      }
+
+      return {
+        totalRequested: dto.items.length,
+        createdCount: results.length,
+        failedCount: 0,
+        items: results
+      };
+    });
   }
 
   async list(
@@ -168,53 +166,63 @@ export class ReservationsService {
     id: string,
     dto: UpdateReservationDto
   ): Promise<ReservationResponseDto> {
-    const existing = await this.getReservationOrThrow(auth.tenantId, id);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const existing = await this.getReservationOrThrow(auth.tenantId, id, tx);
 
-    if (existing.status === ReservationStatus.CANCELLED) {
-      throw new BadRequestException('Cancelled reservation cannot be updated');
-    }
+      if (existing.status === ReservationStatus.CANCELLED) {
+        throw new BadRequestException('Cancelled reservation cannot be updated');
+      }
 
-    const nextPassengerId = dto.passengerId ?? existing.passengerId;
-    if (nextPassengerId !== existing.passengerId) {
-      await this.ensurePassengerExistsInTenant(auth.tenantId, nextPassengerId);
-    }
+      const nextPassengerId = dto.passengerId ?? existing.passengerId;
+      if (nextPassengerId !== existing.passengerId) {
+        await this.ensurePassengerExistsInTenant(auth.tenantId, nextPassengerId, tx);
+      }
 
-    const departureStationId = dto.departureStationId ?? existing.departureStationId;
-    const arrivalStationId = dto.arrivalStationId ?? existing.arrivalStationId;
-    const seatNumber = dto.seatNumber ?? existing.seatNumber;
+      const departureStationId = dto.departureStationId ?? existing.departureStationId;
+      const arrivalStationId = dto.arrivalStationId ?? existing.arrivalStationId;
+      const seatNumber = dto.seatNumber ?? existing.seatNumber;
 
-    const rideContext = await this.getRideRouteContext(auth.tenantId, existing.rideId);
-    const segment = this.validateAndResolveSegment(
-      rideContext.stationOrderById,
-      departureStationId,
-      arrivalStationId
-    );
+      const rideContext = await this.getRideRouteContext(auth.tenantId, existing.rideId, tx);
+      const segment = this.validateAndResolveSegment(
+        rideContext.stationOrderById,
+        departureStationId,
+        arrivalStationId
+      );
 
-    await this.ensureSeatIsAvailable({
-      tenantId: auth.tenantId,
-      rideId: existing.rideId,
-      travelDate: existing.travelDate,
-      rideDepartureTime: existing.rideDepartureTime,
-      seatNumber,
-      segment,
-      stationOrderById: rideContext.stationOrderById,
-      excludeReservationId: existing.id
-    });
+      await this.acquireRideInstanceLock(tx, {
+        tenantId: auth.tenantId,
+        rideId: existing.rideId,
+        travelDate: existing.travelDate,
+        rideDepartureTime: existing.rideDepartureTime
+      });
 
-    const updated = await this.prisma.reservation.update({
-      where: {
-        id
-      },
-      data: withUpdateAudit(
-        {
-          ...(dto.passengerId ? { passengerId: dto.passengerId } : {}),
-          ...(dto.seatNumber !== undefined ? { seatNumber: dto.seatNumber } : {}),
-          ...(dto.departureStationId ? { departureStationId: dto.departureStationId } : {}),
-          ...(dto.arrivalStationId ? { arrivalStationId: dto.arrivalStationId } : {})
+      await this.ensureSeatAndCapacityAreAvailable(tx, {
+        tenantId: auth.tenantId,
+        rideId: existing.rideId,
+        travelDate: existing.travelDate,
+        rideDepartureTime: existing.rideDepartureTime,
+        seatNumber,
+        segment,
+        stationOrderById: rideContext.stationOrderById,
+        capacity: rideContext.capacity,
+        excludeReservationId: existing.id
+      });
+
+      return tx.reservation.update({
+        where: {
+          id
         },
-        auth.sub
-      ),
-      select: SAFE_RESERVATION_SELECT
+        data: withUpdateAudit(
+          {
+            ...(dto.passengerId ? { passengerId: dto.passengerId } : {}),
+            ...(dto.seatNumber !== undefined ? { seatNumber: dto.seatNumber } : {}),
+            ...(dto.departureStationId ? { departureStationId: dto.departureStationId } : {}),
+            ...(dto.arrivalStationId ? { arrivalStationId: dto.arrivalStationId } : {})
+          },
+          auth.sub
+        ),
+        select: SAFE_RESERVATION_SELECT
+      });
     });
 
     return this.toResponse(updated);
@@ -258,9 +266,10 @@ export class ReservationsService {
 
   private async getReservationOrThrow(
     tenantId: string,
-    id: string
+    id: string,
+    db: ReservationDbClient = this.prisma
   ): Promise<SelectedReservation> {
-    const reservation = await this.prisma.reservation.findFirst({
+    const reservation = await db.reservation.findFirst({
       where: {
         id,
         tenantId
@@ -275,14 +284,19 @@ export class ReservationsService {
     return reservation;
   }
 
-  private async getRideRouteContext(tenantId: string, rideId: string): Promise<RideRouteContext> {
-    const ride = await this.prisma.ride.findFirst({
+  private async getRideRouteContext(
+    tenantId: string,
+    rideId: string,
+    db: ReservationDbClient = this.prisma
+  ): Promise<RideRouteContext> {
+    const ride = await db.ride.findFirst({
       where: {
         id: rideId,
         tenantId
       },
       select: {
         id: true,
+        capacity: true,
         line: {
           select: {
             departureStationId: true,
@@ -316,6 +330,7 @@ export class ReservationsService {
 
     return {
       rideId: ride.id,
+      capacity: ride.capacity,
       stationOrderById
     };
   }
@@ -346,8 +361,12 @@ export class ReservationsService {
     };
   }
 
-  private async ensurePassengerExistsInTenant(tenantId: string, passengerId: string): Promise<void> {
-    const passenger = await this.prisma.passenger.findFirst({
+  private async ensurePassengerExistsInTenant(
+    tenantId: string,
+    passengerId: string,
+    db: ReservationDbClient = this.prisma
+  ): Promise<void> {
+    const passenger = await db.passenger.findFirst({
       where: {
         id: passengerId,
         tenantId
@@ -362,7 +381,9 @@ export class ReservationsService {
     }
   }
 
-  private async ensureSeatIsAvailable(input: {
+  private async ensureSeatAndCapacityAreAvailable(
+    db: ReservationDbClient,
+    input: {
     tenantId: string;
     rideId: string;
     travelDate: Date;
@@ -370,15 +391,20 @@ export class ReservationsService {
     seatNumber: number;
     segment: RouteSegment;
     stationOrderById: Map<string, number>;
+    capacity: number;
     excludeReservationId?: string;
-  }): Promise<void> {
-    const existing = await this.prisma.reservation.findMany({
+  }
+  ): Promise<void> {
+    if (input.seatNumber > input.capacity) {
+      throw new ConflictException('Seat number exceeds ride capacity');
+    }
+
+    const existing = await db.reservation.findMany({
       where: {
         tenantId: input.tenantId,
         rideId: input.rideId,
         travelDate: input.travelDate,
         rideDepartureTime: input.rideDepartureTime,
-        seatNumber: input.seatNumber,
         status: ReservationStatus.ACTIVE,
         ...(input.excludeReservationId
           ? {
@@ -390,12 +416,14 @@ export class ReservationsService {
       },
       select: {
         id: true,
+        seatNumber: true,
         departureStationId: true,
         arrivalStationId: true
       }
     });
 
-    const hasOverlapConflict = existing.some((item) => {
+    let overlappingReservationsCount = 0;
+    const hasOverlapSeatConflict = existing.some((item) => {
       const departureOrder = input.stationOrderById.get(item.departureStationId);
       const arrivalOrder = input.stationOrderById.get(item.arrivalStationId);
 
@@ -403,18 +431,102 @@ export class ReservationsService {
         return true;
       }
 
-      return this.segmentsOverlap(
+      const overlaps = this.segmentsOverlap(
         {
           departureOrder,
           arrivalOrder
         },
         input.segment
       );
+
+      if (!overlaps) {
+        return false;
+      }
+
+      overlappingReservationsCount += 1;
+      return item.seatNumber === input.seatNumber;
     });
 
-    if (hasOverlapConflict) {
+    if (hasOverlapSeatConflict) {
       throw new ConflictException('Seat is already booked for this route segment');
     }
+
+    if (overlappingReservationsCount >= input.capacity) {
+      throw new ConflictException('Ride capacity is exhausted for this route segment');
+    }
+  }
+
+  private async createSingleInTransaction(
+    tx: Prisma.TransactionClient,
+    auth: AccessTokenPayload,
+    dto: CreateReservationDto
+  ): Promise<SelectedReservation> {
+    const rideContext = await this.getRideRouteContext(auth.tenantId, dto.rideId, tx);
+    await this.ensurePassengerExistsInTenant(auth.tenantId, dto.passengerId, tx);
+
+    const segment = this.validateAndResolveSegment(
+      rideContext.stationOrderById,
+      dto.departureStationId,
+      dto.arrivalStationId
+    );
+
+    const travelDate = this.toUtcDate(dto.travelDate);
+    await this.acquireRideInstanceLock(tx, {
+      tenantId: auth.tenantId,
+      rideId: dto.rideId,
+      travelDate,
+      rideDepartureTime: dto.rideDepartureTime
+    });
+
+    await this.ensureSeatAndCapacityAreAvailable(tx, {
+      tenantId: auth.tenantId,
+      rideId: dto.rideId,
+      travelDate,
+      rideDepartureTime: dto.rideDepartureTime,
+      seatNumber: dto.seatNumber,
+      segment,
+      stationOrderById: rideContext.stationOrderById,
+      capacity: rideContext.capacity
+    });
+
+    return tx.reservation.create({
+      data: withCreateAudit(
+        {
+          tenantId: auth.tenantId,
+          rideId: dto.rideId,
+          passengerId: dto.passengerId,
+          travelDate,
+          rideDepartureTime: dto.rideDepartureTime,
+          rideArrivalTime: dto.rideArrivalTime,
+          seatNumber: dto.seatNumber,
+          departureStationId: dto.departureStationId,
+          arrivalStationId: dto.arrivalStationId,
+          status: ReservationStatus.ACTIVE,
+          cancelledAt: null
+        },
+        auth.sub
+      ),
+      select: SAFE_RESERVATION_SELECT
+    });
+  }
+
+  private async acquireRideInstanceLock(
+    tx: Prisma.TransactionClient,
+    input: {
+      tenantId: string;
+      rideId: string;
+      travelDate: Date;
+      rideDepartureTime: string;
+    }
+  ): Promise<void> {
+    const lockKey = [
+      input.tenantId,
+      input.rideId,
+      this.formatDate(input.travelDate),
+      input.rideDepartureTime
+    ].join(':');
+
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
   }
 
   private segmentsOverlap(a: RouteSegment, b: RouteSegment): boolean {

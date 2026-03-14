@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -15,11 +15,13 @@ import { UserRole } from '@prisma/client';
 import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
 import { CreateReservationDto } from './dto/create-reservation.dto';
+import { CreateReservationsBatchDto } from './dto/create-reservations-batch.dto';
 import { ListReservationsQueryDto } from './dto/list-reservations.query.dto';
 import {
   PaginatedReservationsResponseDto,
   ReservationResponseDto
 } from './dto/reservation.response.dto';
+import { BatchReservationsResponseDto } from './dto/reservations-batch.response.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { ReservationsService } from './reservations.service';
 
@@ -47,6 +49,22 @@ export class ReservationsController {
     @Body() dto: CreateReservationDto
   ): Promise<ReservationResponseDto> {
     return this.reservationsService.create(request.auth!, dto);
+  }
+
+  @Post('batch')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({ summary: 'Create multiple reservations in the current tenant.' })
+  @ApiOkResponse({ type: BatchReservationsResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failure or route path violation.' })
+  @ApiConflictResponse({ description: 'Seat overlap or route segment capacity exhaustion.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  createBatch(
+    @Req() request: RequestWithAuth,
+    @Body() dto: CreateReservationsBatchDto
+  ): Promise<BatchReservationsResponseDto> {
+    return this.reservationsService.createBatch(request.auth!, dto);
   }
 
   @Get()

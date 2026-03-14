@@ -3180,6 +3180,102 @@
           ]
         },
         {
+          "name": "Create Reservation Batch Conflict - All Or Nothing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"rideId\": \"{{reservationRideId}}\",\n      \"passengerId\": \"{{reservationPassengerId}}\",\n      \"travelDate\": \"2026-03-30\",\n      \"rideDepartureTime\": \"09:00\",\n      \"rideArrivalTime\": \"10:30\",\n      \"seatNumber\": 22,\n      \"departureStationId\": \"{{reservationDepartureStationId}}\",\n      \"arrivalStationId\": \"{{reservationMidStationId}}\"\n    },\n    {\n      \"rideId\": \"{{reservationRideId}}\",\n      \"passengerId\": \"{{reservationPassengerId}}\",\n      \"travelDate\": \"2026-03-30\",\n      \"rideDepartureTime\": \"09:00\",\n      \"rideArrivalTime\": \"10:30\",\n      \"seatNumber\": 12,\n      \"departureStationId\": \"{{reservationDepartureStationId}}\",\n      \"arrivalStationId\": \"{{reservationMidStationId}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reservations/batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reservations",
+                "batch"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409 for transactional batch conflict', function () {",
+                  "  pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Reservation Batch Seat Over Capacity - Conflict",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"rideId\": \"{{reservationRideId}}\",\n      \"passengerId\": \"{{reservationPassengerId}}\",\n      \"travelDate\": \"2026-03-30\",\n      \"rideDepartureTime\": \"09:00\",\n      \"rideArrivalTime\": \"10:30\",\n      \"seatNumber\": 99,\n      \"departureStationId\": \"{{reservationDepartureStationId}}\",\n      \"arrivalStationId\": \"{{reservationArrivalStationId}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reservations/batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reservations",
+                "batch"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409 for over-capacity batch request', function () {",
+                  "  pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Update Reservation - Success",
           "request": {
             "method": "PATCH",

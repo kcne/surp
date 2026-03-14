@@ -3,8 +3,25 @@ import { ReservationStatus, UserRole } from '@prisma/client';
 import { ReservationsService } from './reservations.service';
 
 describe('ReservationsService', () => {
+  let reservationStore: Array<{
+    id: string;
+    tenantId: string;
+    rideId: string;
+    passengerId: string;
+    travelDate: Date;
+    rideDepartureTime: string;
+    rideArrivalTime: string;
+    seatNumber: number;
+    status: ReservationStatus;
+    departureStationId: string;
+    arrivalStationId: string;
+  }>;
+
+  let transactionQueue: Promise<void>;
+
   const prismaMock = {
     $transaction: jest.fn(),
+    $executeRaw: jest.fn(),
     reservation: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -81,14 +98,117 @@ describe('ReservationsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    reservationStore = [];
+    transactionQueue = Promise.resolve();
+
     service = new ReservationsService(prismaMock as never);
 
-    prismaMock.ride.findFirst.mockResolvedValue(routeRide);
+    prismaMock.$executeRaw.mockResolvedValue(1);
+
+    prismaMock.$transaction.mockImplementation(async (input: unknown) => {
+      if (typeof input === 'function') {
+        const previous = transactionQueue;
+        let release: () => void = () => undefined;
+        const snapshot = reservationStore.map((item) => ({ ...item }));
+        transactionQueue = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+
+        await previous;
+
+        try {
+          return await (input as (tx: typeof prismaMock) => Promise<unknown>)(prismaMock);
+        } catch (error) {
+          reservationStore = snapshot;
+          throw error;
+        } finally {
+          release();
+        }
+      }
+
+      return Promise.all(input as Promise<unknown>[]);
+    });
+
+    prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
     prismaMock.passenger.findFirst.mockResolvedValue({ id: 'passenger-1' });
-    prismaMock.reservation.findMany.mockResolvedValue([]);
+
+    prismaMock.reservation.findMany.mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
+      return reservationStore
+        .filter((item) => {
+          if (where.tenantId && item.tenantId !== where.tenantId) {
+            return false;
+          }
+
+          if (where.rideId && item.rideId !== where.rideId) {
+            return false;
+          }
+
+          if (where.rideDepartureTime && item.rideDepartureTime !== where.rideDepartureTime) {
+            return false;
+          }
+
+          if (where.seatNumber !== undefined && item.seatNumber !== where.seatNumber) {
+            return false;
+          }
+
+          if (where.status && item.status !== where.status) {
+            return false;
+          }
+
+          if (where.travelDate && item.travelDate.toISOString() !== (where.travelDate as Date).toISOString()) {
+            return false;
+          }
+
+          if (where.id && typeof where.id === 'object' && where.id !== null && 'not' in where.id) {
+            if (item.id === (where.id as { not: string }).not) {
+              return false;
+            }
+          }
+
+          return true;
+        })
+        .map((item) => ({
+          id: item.id,
+          seatNumber: item.seatNumber,
+          departureStationId: item.departureStationId,
+          arrivalStationId: item.arrivalStationId
+        }));
+    });
+
     prismaMock.reservation.findFirst.mockResolvedValue({ ...baseReservation });
 
-    prismaMock.reservation.create.mockResolvedValue({ ...baseReservation });
+    prismaMock.reservation.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      const created = {
+        ...baseReservation,
+        id: `reservation-${reservationStore.length + 1}`,
+        passengerId: data.passengerId as string,
+        seatNumber: data.seatNumber as number,
+        departureStationId: data.departureStationId as string,
+        arrivalStationId: data.arrivalStationId as string,
+        travelDate: data.travelDate as Date,
+        rideDepartureTime: data.rideDepartureTime as string,
+        rideArrivalTime: data.rideArrivalTime as string,
+        createdById: data.createdById as string,
+        updatedById: data.updatedById as string
+      };
+
+      reservationStore.push({
+        id: created.id,
+        tenantId: created.tenantId,
+        rideId: created.rideId,
+        passengerId: created.passengerId,
+        travelDate: created.travelDate,
+        rideDepartureTime: created.rideDepartureTime,
+        rideArrivalTime: created.rideArrivalTime,
+        seatNumber: created.seatNumber,
+        status: created.status,
+        departureStationId: created.departureStationId,
+        arrivalStationId: created.arrivalStationId
+      });
+
+      return created;
+    });
+
     prismaMock.reservation.update.mockResolvedValue({
       ...baseReservation,
       status: ReservationStatus.CANCELLED,
@@ -98,13 +218,19 @@ describe('ReservationsService', () => {
   });
 
   it('fails when seat is already booked on overlapping segment', async () => {
-    prismaMock.reservation.findMany.mockResolvedValueOnce([
-      {
-        id: 'reservation-existing',
-        departureStationId: 'station-b',
-        arrivalStationId: 'station-d'
-      }
-    ]);
+    reservationStore.push({
+      id: 'reservation-existing',
+      tenantId: 'tenant-1',
+      rideId: 'ride-1',
+      passengerId: 'passenger-1',
+      travelDate: new Date('2026-03-30T00:00:00.000Z'),
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:30',
+      seatNumber: 12,
+      status: ReservationStatus.ACTIVE,
+      departureStationId: 'station-b',
+      arrivalStationId: 'station-d'
+    });
 
     await expect(
       service.create(auth, {
@@ -150,5 +276,105 @@ describe('ReservationsService', () => {
       })
     );
     expect(result.status).toBe(ReservationStatus.CANCELLED);
+  });
+
+  it('fails the whole batch and rolls back when one item fails', async () => {
+    reservationStore.push({
+      id: 'reservation-existing',
+      tenantId: 'tenant-1',
+      rideId: 'ride-1',
+      passengerId: 'passenger-1',
+      travelDate: new Date('2026-03-30T00:00:00.000Z'),
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:30',
+      seatNumber: 5,
+      status: ReservationStatus.ACTIVE,
+      departureStationId: 'station-a',
+      arrivalStationId: 'station-d'
+    });
+
+    await expect(
+      service.createBatch(auth, {
+        items: [
+          {
+            rideId: 'ride-1',
+            passengerId: 'passenger-1',
+            travelDate: '2026-03-30',
+            rideDepartureTime: '09:00',
+            rideArrivalTime: '10:30',
+            seatNumber: 6,
+            departureStationId: 'station-a',
+            arrivalStationId: 'station-c'
+          },
+          {
+            rideId: 'ride-1',
+            passengerId: 'passenger-1',
+            travelDate: '2026-03-30',
+            rideDepartureTime: '09:00',
+            rideArrivalTime: '10:30',
+            seatNumber: 5,
+            departureStationId: 'station-a',
+            arrivalStationId: 'station-c'
+          }
+        ]
+      })
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(reservationStore).toHaveLength(1);
+  });
+
+  it('fails when route segment capacity is exhausted', async () => {
+    prismaMock.ride.findFirst.mockResolvedValueOnce({ ...routeRide, capacity: 1 });
+
+    reservationStore.push({
+      id: 'reservation-existing',
+      tenantId: 'tenant-1',
+      rideId: 'ride-1',
+      passengerId: 'passenger-1',
+      travelDate: new Date('2026-03-30T00:00:00.000Z'),
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:30',
+      seatNumber: 1,
+      status: ReservationStatus.ACTIVE,
+      departureStationId: 'station-a',
+      arrivalStationId: 'station-d'
+    });
+
+    await expect(
+      service.create(auth, {
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 1,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-c'
+      })
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('prevents duplicate same-seat bookings in concurrent requests', async () => {
+    const requestPayload = {
+      rideId: 'ride-1',
+      passengerId: 'passenger-1',
+      travelDate: '2026-03-30',
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:30',
+      seatNumber: 11,
+      departureStationId: 'station-a',
+      arrivalStationId: 'station-c'
+    };
+
+    const [first, second] = await Promise.allSettled([
+      service.create(auth, requestPayload),
+      service.create(auth, requestPayload)
+    ]);
+
+    const fulfilledCount = [first, second].filter((item) => item.status === 'fulfilled').length;
+    const rejectedCount = [first, second].filter((item) => item.status === 'rejected').length;
+
+    expect(fulfilledCount).toBe(1);
+    expect(rejectedCount).toBe(1);
   });
 });
