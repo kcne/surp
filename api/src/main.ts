@@ -1,8 +1,9 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { createSwaggerDocument } from './config/swagger.config';
 import { PrismaService } from './prisma/prisma.service';
 
 async function bootstrap(): Promise<void> {
@@ -18,25 +19,7 @@ async function bootstrap(): Promise<void> {
     })
   );
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('SURP API')
-    .setDescription(
-      'Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers, and the tenant must match the token claim.'
-    )
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description:
-          'Access token issued by /auth/login. Use together with X-Tenant-Slug on protected endpoints.'
-      },
-      'access-token'
-    )
-    .setVersion('0.1.0')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  const document = createSwaggerDocument(app);
   SwaggerModule.setup('docs', app, document);
 
   await prismaService.enableShutdownHooks(app);

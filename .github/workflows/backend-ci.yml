@@ -3,6 +3,10 @@ name: Backend CI
 permissions:
   contents: read
 
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     paths:
@@ -15,7 +19,7 @@ on:
 
 jobs:
   backend-ci:
-    name: lint build test (api)
+    name: quality tests and scenarios (api)
     runs-on: ubuntu-latest
 
     services:
@@ -69,8 +73,8 @@ jobs:
       - name: Apply migrations
         run: pnpm prisma:migrate:deploy
 
-      - name: Lint
-        run: pnpm lint
+      - name: Run quality gates
+        run: pnpm quality:gates
 
       - name: Build
         run: pnpm build
@@ -80,3 +84,35 @@ jobs:
 
       - name: E2E tests
         run: pnpm test:e2e
+
+      - name: Seed database
+        run: pnpm prisma:seed
+
+      - name: Start API in background
+        run: pnpm start > /tmp/surp-api.log 2>&1 &
+
+      - name: Wait for API health
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:3001/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API failed to become healthy in time"
+          tail -n 200 /tmp/surp-api.log || true
+          exit 1
+
+      - name: Newman collection run
+        run: pnpm postman:run
+
+      - name: Upload OpenAPI artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-schema
+          path: api/docs/openapi.json
+
+      - name: Print API logs on failure
+        if: failure()
+        run: tail -n 300 /tmp/surp-api.log || true

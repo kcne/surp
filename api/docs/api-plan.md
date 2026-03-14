@@ -277,7 +277,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Postman negative scenarios pass.
 5. Exit criteria: Payment semantics safe and predictable.
 
-**Slice 17 - Reporting Essentials and Audit Query Endpoints**
+**Slice 17 - Reporting Essentials and Audit Query Endpoints** - DONE
 1. Goal: Provide operational visibility for dashboard and support.
 2. Scope:
 1. Lightweight metrics endpoints for dashboard cards.
@@ -291,7 +291,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Audit checks usable for support workflows.
 5. Exit criteria: Basic analytics available.
 
-**Slice 18 - OpenAPI Completion and Contract Freeze**
+**Slice 18 - OpenAPI Completion and Contract Freeze** - DONE
 1. Goal: Freeze API contract for frontend integration.
 2. Scope:
 1. Complete DTO docs and examples.
@@ -305,7 +305,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Breaking changes require version bump policy.
 5. Exit criteria: Stable API contract published.
 
-**Slice 19 - Postman Collection and Scenario Runner**
+**Slice 19 - Postman Collection and Scenario Runner** - DONE
 1. Goal: End-to-end executable API scenarios.
 2. Scope:
 1. Collection folders per module.

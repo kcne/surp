@@ -2,7 +2,7 @@
 
 NestJS backend for SURP.
 
-Current status: Slice 3 (tenant-scoped authentication login with JWT access token and refresh session persistence).
+Current status: Slice 19 (OpenAPI contract freeze and Postman scenario runner standardized).
 
 ## Tech Stack
 
@@ -46,13 +46,13 @@ Required variables:
 pnpm install
 ```
 
-2. Start PostgreSQL only:
+1. Start PostgreSQL only:
 
 ```bash
 docker compose up -d postgres
 ```
 
-3. Generate Prisma client and apply migrations:
+1. Generate Prisma client and apply migrations:
 
 ```bash
 pnpm prisma:generate
@@ -60,13 +60,13 @@ pnpm prisma:migrate:dev
 pnpm prisma:seed
 ```
 
-4. Start the API in watch mode:
+1. Start the API in watch mode:
 
 ```bash
 pnpm start:dev
 ```
 
-5. Verify health endpoints:
+1. Verify health endpoints:
 
 ```bash
 curl http://localhost:3001/health
@@ -95,35 +95,48 @@ The API container runs database migrations on startup.
 | test | pnpm test | Run Jest unit test suite |
 | test:watch | pnpm test:watch | Run tests in watch mode |
 | test:e2e | pnpm test:e2e | Run e2e test suite |
+| test:contract | pnpm test:contract | Run OpenAPI contract tests for critical endpoints |
+| openapi:generate | pnpm openapi:generate | Generate frozen OpenAPI artifact at docs/openapi.json |
+| openapi:lint | pnpm openapi:lint | Generate and lint OpenAPI schema |
+| quality:gates | pnpm quality:gates | Run lint + contract test + OpenAPI lint |
+| postman:run | pnpm postman:run | Run full Postman collection with local environment |
+| postman:run:negative | pnpm postman:run:negative | Run only negative Postman scenarios |
 | prisma:generate | pnpm prisma:generate | Generate Prisma client |
 | prisma:migrate:dev | pnpm prisma:migrate:dev | Create/apply local migration |
 | prisma:migrate:deploy | pnpm prisma:migrate:deploy | Apply migrations in deployment |
 | prisma:seed | pnpm prisma:seed | Seed baseline data |
 
-## Validation Checklist (Slice 3)
+## Validation Checklist (Slice 18 and Slice 19)
 
 Run these before merging:
 
 ```bash
 pnpm lint
-pnpm build
-pnpm test
-pnpm test:e2e
+pnpm test:contract
+pnpm openapi:lint
+pnpm postman:run
 pnpm prisma:seed
 ```
 
 Manual checks:
 
-- GET /health returns 200 when DB is reachable
-- GET /health/readiness returns 503 when DB is unavailable
-- POST /auth/login with `X-Tenant-Slug: demo-tenant` and seeded credentials returns access and refresh tokens
-- Login with invalid password returns 401
-- Login with inactive user returns 403
+- Frontend can consume `docs/openapi.json` without schema ambiguity.
+- `Negative Scenarios` folder in Postman validates expected 4xx responses.
+- `pnpm postman:run` passes on clean seeded database.
 
 ## API Docs and Postman
 
 - OpenAPI UI: <http://localhost:3001/docs>
+- OpenAPI artifact: docs/openapi.json
 - Postman collection: postman/surp-api.postman_collection.json
+- Postman local environment: postman/surp-api.local.postman_environment.json
+- Postman staging environment: postman/surp-api.staging.postman_environment.json
+
+## Versioning and Breaking Changes
+
+- API contract version is defined in `src/config/swagger.config.ts` as `OPENAPI_VERSION`.
+- Any breaking API change requires a version bump and release note entry.
+- See `docs/quality-gates.md` for detailed gate and policy rules.
 
 ## Project Layout
 

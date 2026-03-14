@@ -1,0 +1,5542 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "HealthController_health",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "status": "ok",
+                    "db": "up",
+                    "timestamp": "2026-03-13T00:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database is unavailable"
+          }
+        },
+        "summary": "Liveness check with database connectivity",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/readiness": {
+      "get": {
+        "operationId": "HealthController_readiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "status": "ready",
+                    "db": "up",
+                    "timestamp": "2026-03-13T00:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database is unavailable"
+          }
+        },
+        "summary": "Readiness check for serving traffic",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that scopes user authentication.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request payload/header."
+          },
+          "401": {
+            "description": "Credentials are invalid."
+          },
+          "403": {
+            "description": "Tenant or user is inactive."
+          },
+          "404": {
+            "description": "Tenant slug does not exist."
+          }
+        },
+        "summary": "Login with username/password in a tenant context.",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that scopes refresh sessions.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request payload/header."
+          },
+          "401": {
+            "description": "Refresh token is invalid, revoked, or expired."
+          },
+          "403": {
+            "description": "Tenant or user is inactive."
+          },
+          "404": {
+            "description": "Tenant slug does not exist."
+          }
+        },
+        "summary": "Rotate refresh token and issue a new token pair.",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that scopes refresh sessions.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request payload/header."
+          },
+          "401": {
+            "description": "Refresh token is invalid."
+          },
+          "403": {
+            "description": "Tenant is inactive."
+          },
+          "404": {
+            "description": "Tenant slug does not exist."
+          }
+        },
+        "summary": "Revoke the current refresh session.",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match the authenticated access token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginUserDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "X-Tenant-Slug header is required."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Tenant mismatch or inactive user."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get the current authenticated user profile.",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/users": {
+      "post": {
+        "operationId": "UsersController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "409": {
+            "description": "Username or email already exists in tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a tenant-scoped user.",
+        "tags": [
+          "Users"
+        ]
+      },
+      "get": {
+        "operationId": "UsersController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "isActive",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": true,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedUsersResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List users inside the current tenant.",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/{id}": {
+      "patch": {
+        "operationId": "UsersController_update",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "User not found in current tenant."
+          },
+          "409": {
+            "description": "Username or email already exists in tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Update user role, status, or profile fields in current tenant.",
+        "tags": [
+          "Users"
+        ]
+      },
+      "put": {
+        "operationId": "UsersController_replace",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "User not found in current tenant."
+          },
+          "409": {
+            "description": "Username or email already exists in tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Replace user role, status, and profile fields in current tenant.",
+        "tags": [
+          "Users"
+        ]
+      },
+      "delete": {
+        "operationId": "UsersController_remove",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "User not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Soft delete a user in current tenant by deactivating the account.",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/stations": {
+      "post": {
+        "operationId": "StationsController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a station in the current tenant.",
+        "tags": [
+          "Stations"
+        ]
+      },
+      "get": {
+        "operationId": "StationsController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "isActive",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "central",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedStationsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List stations inside the current tenant.",
+        "tags": [
+          "Stations"
+        ]
+      }
+    },
+    "/stations/{id}": {
+      "get": {
+        "operationId": "StationsController_getById",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StationResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Station not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get a station detail by id in the current tenant.",
+        "tags": [
+          "Stations"
+        ]
+      },
+      "patch": {
+        "operationId": "StationsController_update",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Station not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Update station fields in the current tenant.",
+        "tags": [
+          "Stations"
+        ]
+      },
+      "put": {
+        "operationId": "StationsController_replace",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Station not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Replace station fields in the current tenant.",
+        "tags": [
+          "Stations"
+        ]
+      },
+      "delete": {
+        "operationId": "StationsController_remove",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StationResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Station not found in current tenant."
+          },
+          "409": {
+            "description": "Station is referenced by lines or reservations."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Delete a station in the current tenant if no references exist.",
+        "tags": [
+          "Stations"
+        ]
+      }
+    },
+    "/lines": {
+      "post": {
+        "operationId": "LinesController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLineDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or route integrity violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a line in the current tenant.",
+        "tags": [
+          "Lines"
+        ]
+      },
+      "get": {
+        "operationId": "LinesController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "isActive",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "directionMode",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SINGLE",
+                "BOTH"
+              ]
+            }
+          },
+          {
+            "name": "direction",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OUTBOUND",
+                "RETURN"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "central",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedLinesResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List lines in the current tenant.",
+        "tags": [
+          "Lines"
+        ]
+      }
+    },
+    "/lines/{id}": {
+      "get": {
+        "operationId": "LinesController_getById",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Line not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get a line detail by id in the current tenant.",
+        "tags": [
+          "Lines"
+        ]
+      },
+      "patch": {
+        "operationId": "LinesController_update",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLineDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or route integrity violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Line not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Update line fields in the current tenant.",
+        "tags": [
+          "Lines"
+        ]
+      },
+      "put": {
+        "operationId": "LinesController_replace",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLineDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or route integrity violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Line not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Replace line fields in the current tenant.",
+        "tags": [
+          "Lines"
+        ]
+      },
+      "delete": {
+        "operationId": "LinesController_remove",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Line not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Delete a line in the current tenant.",
+        "tags": [
+          "Lines"
+        ]
+      }
+    },
+    "/lines/{id}/stops": {
+      "put": {
+        "operationId": "LinesController_replaceStops",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceLineStopsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or route integrity violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Line not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Replace ordered intermediate stops for a line in the current tenant.",
+        "tags": [
+          "Lines"
+        ]
+      }
+    },
+    "/lines/{id}/reverse": {
+      "post": {
+        "operationId": "LinesController_createReverse",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or route integrity violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Line not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a reverse line from an existing line route in the current tenant.",
+        "tags": [
+          "Lines"
+        ]
+      }
+    },
+    "/passengers": {
+      "post": {
+        "operationId": "PassengersController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePassengerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassengerResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a passenger in the current tenant.",
+        "tags": [
+          "Passengers"
+        ]
+      },
+      "get": {
+        "operationId": "PassengersController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "isActive",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "mila",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedPassengersResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List passengers in the current tenant.",
+        "tags": [
+          "Passengers"
+        ]
+      }
+    },
+    "/passengers/search": {
+      "get": {
+        "operationId": "PassengersController_search",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "isActive",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "mila",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedPassengersResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Search passengers by first name, last name, phone, or email.",
+        "tags": [
+          "Passengers"
+        ]
+      }
+    },
+    "/passengers/{id}": {
+      "get": {
+        "operationId": "PassengersController_getById",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassengerResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Passenger not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get passenger detail by id in the current tenant.",
+        "tags": [
+          "Passengers"
+        ]
+      },
+      "patch": {
+        "operationId": "PassengersController_update",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePassengerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassengerResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Passenger not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Update passenger fields in the current tenant.",
+        "tags": [
+          "Passengers"
+        ]
+      },
+      "put": {
+        "operationId": "PassengersController_replace",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePassengerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassengerResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Passenger not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Replace passenger fields in the current tenant.",
+        "tags": [
+          "Passengers"
+        ]
+      },
+      "delete": {
+        "operationId": "PassengersController_remove",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassengerResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Passenger not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Delete a passenger in the current tenant.",
+        "tags": [
+          "Passengers"
+        ]
+      }
+    },
+    "/rides": {
+      "post": {
+        "operationId": "RidesController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRideDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RideResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or scheduling rule violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a ride template in the current tenant.",
+        "tags": [
+          "Rides"
+        ]
+      },
+      "get": {
+        "operationId": "RidesController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RECURRING",
+                "ONE_TIME"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "ACTIVE",
+                "INACTIVE"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "central",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedRidesResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List rides in the current tenant.",
+        "tags": [
+          "Rides"
+        ]
+      }
+    },
+    "/rides/instances": {
+      "get": {
+        "operationId": "RidesController_listInstancesByDate",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": "2026-03-30",
+              "type": "string"
+            }
+          },
+          {
+            "name": "timezoneOffsetMinutes",
+            "required": false,
+            "in": "query",
+            "description": "Timezone offset in minutes, where west of UTC is negative and east of UTC is positive.",
+            "schema": {
+              "minimum": -840,
+              "maximum": 840,
+              "example": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RideInstancesByDateResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List materialized ride instances by date in the current tenant.",
+        "tags": [
+          "Rides"
+        ]
+      }
+    },
+    "/rides/{id}": {
+      "get": {
+        "operationId": "RidesController_getById",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RideResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ride not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get a ride template detail by id in the current tenant.",
+        "tags": [
+          "Rides"
+        ]
+      },
+      "patch": {
+        "operationId": "RidesController_update",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRideDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RideResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or scheduling rule violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ride not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Update ride fields in the current tenant.",
+        "tags": [
+          "Rides"
+        ]
+      },
+      "put": {
+        "operationId": "RidesController_replace",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRideDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RideResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or scheduling rule violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ride not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Replace ride fields in the current tenant.",
+        "tags": [
+          "Rides"
+        ]
+      },
+      "delete": {
+        "operationId": "RidesController_remove",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RideResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ride not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Delete a ride template in the current tenant.",
+        "tags": [
+          "Rides"
+        ]
+      }
+    },
+    "/rides/{id}/day-times": {
+      "put": {
+        "operationId": "RidesController_replaceDayTimes",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceRideDayTimesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RideResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or scheduling rule violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ride not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Replace recurring ride day-times in the current tenant.",
+        "tags": [
+          "Rides"
+        ]
+      }
+    },
+    "/rides/{id}/exceptions": {
+      "post": {
+        "operationId": "RidesController_addException",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRideExceptionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RideExceptionResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or invalid exception combination."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ride not found in current tenant."
+          },
+          "409": {
+            "description": "Duplicate exception for date or conflicting exception type."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Add a ride exception (skip/additional) in the current tenant.",
+        "tags": [
+          "Rides"
+        ]
+      }
+    },
+    "/rides/{id}/exceptions/{exceptionId}": {
+      "delete": {
+        "operationId": "RidesController_removeException",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exceptionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RideExceptionResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ride or exception not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Delete a ride exception in the current tenant.",
+        "tags": [
+          "Rides"
+        ]
+      }
+    },
+    "/reservations": {
+      "post": {
+        "operationId": "ReservationsController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReservationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or route path violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "409": {
+            "description": "Seat is already booked for overlapping route segment."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a single reservation in the current tenant.",
+        "tags": [
+          "Reservations"
+        ]
+      },
+      "get": {
+        "operationId": "ReservationsController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "rideId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "ride-id-123",
+              "type": "string"
+            }
+          },
+          {
+            "name": "passengerId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "passenger-id-123",
+              "type": "string"
+            }
+          },
+          {
+            "name": "travelDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-03-30",
+              "type": "string"
+            }
+          },
+          {
+            "name": "rideDepartureTime",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "09:00",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "CANCELLED"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedReservationsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List reservations in the current tenant.",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
+    "/reservations/batch": {
+      "post": {
+        "operationId": "ReservationsController_createBatch",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReservationsBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchReservationsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or route path violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "409": {
+            "description": "Seat overlap or route segment capacity exhaustion."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create multiple reservations in the current tenant.",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
+    "/reservations/{id}": {
+      "get": {
+        "operationId": "ReservationsController_getById",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Reservation not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get reservation detail by id in the current tenant.",
+        "tags": [
+          "Reservations"
+        ]
+      },
+      "patch": {
+        "operationId": "ReservationsController_update",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReservationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or route path violation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Reservation not found in current tenant."
+          },
+          "409": {
+            "description": "Seat is already booked for overlapping route segment."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Update reservation in the current tenant.",
+        "tags": [
+          "Reservations"
+        ]
+      },
+      "delete": {
+        "operationId": "ReservationsController_remove",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Reservation not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Soft delete reservation in the current tenant.",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
+    "/reservations/{id}/cancel": {
+      "post": {
+        "operationId": "ReservationsController_cancel",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Reservation is already cancelled."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Reservation not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Cancel reservation in the current tenant.",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
+    "/reporting/dashboard": {
+      "get": {
+        "operationId": "ReportingController_getDashboard",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-03-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-03-31",
+              "type": "string"
+            }
+          },
+          {
+            "name": "topLinesLimit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 5,
+              "example": 5,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportingDashboardResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or invalid date range."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get tenant dashboard metrics and top lines for a date range.",
+        "tags": [
+          "Reporting"
+        ]
+      }
+    },
+    "/reporting/occupancy": {
+      "get": {
+        "operationId": "ReportingController_getOccupancy",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-03-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-03-31",
+              "type": "string"
+            }
+          },
+          {
+            "name": "lineId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "line-id-123",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportingOccupancyResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or invalid date range."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get occupancy trend points by date and line for a date range.",
+        "tags": [
+          "Reporting"
+        ]
+      }
+    },
+    "/reporting/audit": {
+      "get": {
+        "operationId": "ReportingController_getAudit",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "USERS",
+                "STATIONS",
+                "LINES",
+                "PASSENGERS",
+                "RIDES",
+                "RESERVATIONS"
+              ]
+            }
+          },
+          {
+            "name": "actorUserId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "admin-1",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-03-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-03-31",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportingAuditResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or invalid date range."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Query tenant audit metadata based on created/updated fields.",
+        "tags": [
+          "Reporting"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "SURP API",
+    "description": "Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers, and the tenant must match the token claim.",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "access-token": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "description": "Access token issued by /auth/login. Use together with X-Tenant-Slug on protected endpoints."
+      }
+    },
+    "schemas": {
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "demo-admin",
+            "description": "Username or email used to authenticate."
+          },
+          "password": {
+            "type": "string",
+            "example": "demo-admin-pass"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "LoginUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MANAGER",
+              "STAFF"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "username",
+          "email",
+          "role"
+        ]
+      },
+      "LoginResponseDto": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/LoginUserDto"
+          },
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "tokenType": {
+            "type": "string",
+            "example": "Bearer"
+          },
+          "expiresIn": {
+            "type": "number",
+            "example": 900
+          }
+        },
+        "required": [
+          "user",
+          "accessToken",
+          "refreshToken",
+          "tokenType",
+          "expiresIn"
+        ]
+      },
+      "RefreshTokenDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "LogoutDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "LogoutResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "CreateUserDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "ops-manager"
+          },
+          "email": {
+            "type": "string",
+            "example": "ops.manager@demo.local"
+          },
+          "password": {
+            "type": "string",
+            "example": "strong-password-123"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "MANAGER",
+              "STAFF"
+            ]
+          }
+        },
+        "required": [
+          "username",
+          "email",
+          "password",
+          "role"
+        ]
+      },
+      "UserResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "createdById": {
+            "type": "object",
+            "nullable": true
+          },
+          "updatedById": {
+            "type": "object",
+            "nullable": true
+          },
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MANAGER",
+              "STAFF"
+            ]
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "createdById",
+          "updatedById",
+          "username",
+          "email",
+          "role",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaginatedUsersResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 25
+          },
+          "total": {
+            "type": "number",
+            "example": 2
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "UpdateUserDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "ops-manager-updated"
+          },
+          "email": {
+            "type": "string",
+            "example": "ops.manager.updated@demo.local"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "MANAGER",
+              "STAFF"
+            ]
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "CreateStationDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Central Station"
+          },
+          "address": {
+            "type": "string",
+            "example": "1 Main Street, Demo City"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "BUS_STATION",
+              "BUS_STOP"
+            ]
+          },
+          "contactPhone": {
+            "type": "string",
+            "example": "+1-555-0100"
+          },
+          "notes": {
+            "type": "string",
+            "example": "Primary station near downtown terminal."
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true,
+            "default": true
+          }
+        },
+        "required": [
+          "name",
+          "address"
+        ]
+      },
+      "StationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "createdById": {
+            "type": "object",
+            "nullable": true
+          },
+          "updatedById": {
+            "type": "object",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "BUS_STATION",
+              "BUS_STOP"
+            ],
+            "nullable": true
+          },
+          "contactPhone": {
+            "type": "object",
+            "nullable": true
+          },
+          "notes": {
+            "type": "object",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "createdById",
+          "updatedById",
+          "name",
+          "address",
+          "category",
+          "contactPhone",
+          "notes",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaginatedStationsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StationResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 25
+          },
+          "total": {
+            "type": "number",
+            "example": 2
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "UpdateStationDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Central Station - West Gate"
+          },
+          "address": {
+            "type": "string",
+            "example": "10 West Street, Demo City"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "BUS_STATION",
+              "BUS_STOP"
+            ]
+          },
+          "contactPhone": {
+            "type": "string",
+            "example": "+1-555-0109"
+          },
+          "notes": {
+            "type": "string",
+            "example": "Updated boarding area information."
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "LineStopInputDto": {
+        "type": "object",
+        "properties": {
+          "stationId": {
+            "type": "string",
+            "example": "station-intermediate-id"
+          },
+          "orderIndex": {
+            "type": "number",
+            "example": 1,
+            "minimum": 1
+          }
+        },
+        "required": [
+          "stationId",
+          "orderIndex"
+        ]
+      },
+      "CreateLineDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Central - North"
+          },
+          "departureStationId": {
+            "type": "string",
+            "example": "station-departure-id"
+          },
+          "arrivalStationId": {
+            "type": "string",
+            "example": "station-arrival-id"
+          },
+          "directionMode": {
+            "type": "string",
+            "enum": [
+              "SINGLE",
+              "BOTH"
+            ],
+            "default": "BOTH"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "OUTBOUND",
+              "RETURN"
+            ],
+            "default": "OUTBOUND"
+          },
+          "pairKey": {
+            "type": "string",
+            "example": "seed-station-main-seed-station-referenced-1"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true,
+            "default": true
+          },
+          "intermediateStops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineStopInputDto"
+            }
+          }
+        },
+        "required": [
+          "departureStationId",
+          "arrivalStationId"
+        ]
+      },
+      "LineStationSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "BUS_STATION",
+              "BUS_STOP"
+            ],
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "address",
+          "category",
+          "isActive"
+        ]
+      },
+      "LineIntermediateStopDto": {
+        "type": "object",
+        "properties": {
+          "stationId": {
+            "type": "string"
+          },
+          "stationName": {
+            "type": "string"
+          },
+          "orderIndex": {
+            "type": "number",
+            "example": 1
+          }
+        },
+        "required": [
+          "stationId",
+          "stationName",
+          "orderIndex"
+        ]
+      },
+      "LineResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "createdById": {
+            "type": "object",
+            "nullable": true
+          },
+          "updatedById": {
+            "type": "object",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "departureStationId": {
+            "type": "string"
+          },
+          "arrivalStationId": {
+            "type": "string"
+          },
+          "directionMode": {
+            "type": "string",
+            "enum": [
+              "SINGLE",
+              "BOTH"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "OUTBOUND",
+              "RETURN"
+            ]
+          },
+          "pairKey": {
+            "type": "object",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "departureStation": {
+            "$ref": "#/components/schemas/LineStationSummaryDto"
+          },
+          "arrivalStation": {
+            "$ref": "#/components/schemas/LineStationSummaryDto"
+          },
+          "intermediateStops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineIntermediateStopDto"
+            }
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "createdById",
+          "updatedById",
+          "name",
+          "departureStationId",
+          "arrivalStationId",
+          "directionMode",
+          "direction",
+          "pairKey",
+          "isActive",
+          "departureStation",
+          "arrivalStation",
+          "intermediateStops",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaginatedLinesResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 25
+          },
+          "total": {
+            "type": "number",
+            "example": 2
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "UpdateLineDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Central - North Updated"
+          },
+          "departureStationId": {
+            "type": "string",
+            "example": "station-departure-id"
+          },
+          "arrivalStationId": {
+            "type": "string",
+            "example": "station-arrival-id"
+          },
+          "directionMode": {
+            "type": "string",
+            "enum": [
+              "SINGLE",
+              "BOTH"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "OUTBOUND",
+              "RETURN"
+            ]
+          },
+          "pairKey": {
+            "type": "string",
+            "example": "seed-station-main-seed-station-referenced-1"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": false
+          },
+          "intermediateStops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineStopInputDto"
+            }
+          }
+        }
+      },
+      "ReplaceLineStopsDto": {
+        "type": "object",
+        "properties": {
+          "intermediateStops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineStopInputDto"
+            }
+          }
+        },
+        "required": [
+          "intermediateStops"
+        ]
+      },
+      "CreatePassengerDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "example": "Mila"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "Markovic"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+381640000111"
+          },
+          "email": {
+            "type": "string",
+            "example": "mila.markovic@demo.local"
+          },
+          "passengerType": {
+            "type": "string",
+            "enum": [
+              "ADULT",
+              "CHILD",
+              "STUDENT",
+              "SENIOR"
+            ],
+            "default": "ADULT"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true,
+            "default": true
+          },
+          "notes": {
+            "type": "string",
+            "example": "VIP customer"
+          }
+        },
+        "required": [
+          "firstName",
+          "lastName",
+          "phone"
+        ]
+      },
+      "PassengerResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "createdById": {
+            "type": "object",
+            "nullable": true
+          },
+          "updatedById": {
+            "type": "object",
+            "nullable": true
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "email": {
+            "type": "object",
+            "nullable": true
+          },
+          "passengerType": {
+            "type": "string",
+            "enum": [
+              "ADULT",
+              "CHILD",
+              "STUDENT",
+              "SENIOR"
+            ]
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "createdById",
+          "updatedById",
+          "firstName",
+          "lastName",
+          "phone",
+          "email",
+          "passengerType",
+          "isActive",
+          "notes",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaginatedPassengersResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PassengerResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 25
+          },
+          "total": {
+            "type": "number",
+            "example": 2
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "UpdatePassengerDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "example": "Mila"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "Markovic"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+381640000111"
+          },
+          "email": {
+            "type": "string",
+            "example": "mila.markovic@demo.local"
+          },
+          "passengerType": {
+            "type": "string",
+            "enum": [
+              "ADULT",
+              "CHILD",
+              "STUDENT",
+              "SENIOR"
+            ]
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "notes": {
+            "type": "string",
+            "example": "VIP customer"
+          }
+        }
+      },
+      "RideDayTimeInputDto": {
+        "type": "object",
+        "properties": {
+          "dayOfWeek": {
+            "type": "number",
+            "example": 1,
+            "minimum": 0,
+            "maximum": 6,
+            "description": "0=Sunday ... 6=Saturday"
+          },
+          "departureTime": {
+            "type": "string",
+            "example": "08:30"
+          },
+          "arrivalTime": {
+            "type": "string",
+            "example": "10:00"
+          }
+        },
+        "required": [
+          "dayOfWeek",
+          "departureTime",
+          "arrivalTime"
+        ]
+      },
+      "CreateRideDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Morning Central Route"
+          },
+          "lineId": {
+            "type": "string",
+            "example": "line-id-123"
+          },
+          "capacity": {
+            "type": "number",
+            "example": 38,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "RECURRING",
+              "ONE_TIME"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              "INACTIVE"
+            ],
+            "default": "DRAFT"
+          },
+          "recurringStartDate": {
+            "type": "string",
+            "example": "2026-03-14"
+          },
+          "recurringEndDate": {
+            "type": "string",
+            "example": "2026-06-30"
+          },
+          "oneTimeDate": {
+            "type": "string",
+            "example": "2026-03-20"
+          },
+          "oneTimeDepartureTime": {
+            "type": "string",
+            "example": "09:00"
+          },
+          "oneTimeArrivalTime": {
+            "type": "string",
+            "example": "10:30"
+          },
+          "dayTimes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RideDayTimeInputDto"
+            }
+          }
+        },
+        "required": [
+          "lineId",
+          "capacity",
+          "type"
+        ]
+      },
+      "RideDayTimeResponseDto": {
+        "type": "object",
+        "properties": {
+          "dayOfWeek": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 6
+          },
+          "departureTime": {
+            "type": "string",
+            "example": "08:30"
+          },
+          "arrivalTime": {
+            "type": "string",
+            "example": "10:00"
+          }
+        },
+        "required": [
+          "dayOfWeek",
+          "departureTime",
+          "arrivalTime"
+        ]
+      },
+      "RideExceptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-03-20"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "SKIP",
+              "ADDITIONAL"
+            ]
+          },
+          "departureTime": {
+            "type": "object",
+            "nullable": true
+          },
+          "arrivalTime": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdById": {
+            "type": "object",
+            "nullable": true
+          },
+          "updatedById": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "type",
+          "departureTime",
+          "arrivalTime",
+          "createdById",
+          "updatedById",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "RideLineSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "departureStationId": {
+            "type": "string"
+          },
+          "arrivalStationId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "departureStationId",
+          "arrivalStationId"
+        ]
+      },
+      "RideResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "lineId": {
+            "type": "string"
+          },
+          "createdById": {
+            "type": "object",
+            "nullable": true
+          },
+          "updatedById": {
+            "type": "object",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "capacity": {
+            "type": "number",
+            "minimum": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "RECURRING",
+              "ONE_TIME"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          },
+          "recurringStartDate": {
+            "type": "object",
+            "nullable": true,
+            "example": "2026-03-14"
+          },
+          "recurringEndDate": {
+            "type": "object",
+            "nullable": true,
+            "example": "2026-06-30"
+          },
+          "oneTimeDate": {
+            "type": "object",
+            "nullable": true,
+            "example": "2026-03-20"
+          },
+          "oneTimeDepartureTime": {
+            "type": "object",
+            "nullable": true
+          },
+          "oneTimeArrivalTime": {
+            "type": "object",
+            "nullable": true
+          },
+          "dayTimes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RideDayTimeResponseDto"
+            }
+          },
+          "exceptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RideExceptionResponseDto"
+            }
+          },
+          "line": {
+            "$ref": "#/components/schemas/RideLineSummaryDto"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "lineId",
+          "createdById",
+          "updatedById",
+          "name",
+          "capacity",
+          "type",
+          "status",
+          "recurringStartDate",
+          "recurringEndDate",
+          "oneTimeDate",
+          "oneTimeDepartureTime",
+          "oneTimeArrivalTime",
+          "dayTimes",
+          "exceptions",
+          "line",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaginatedRidesResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RideResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 25
+          },
+          "total": {
+            "type": "number",
+            "example": 2
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "RideInstanceLineSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "departureStationId": {
+            "type": "string"
+          },
+          "arrivalStationId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "departureStationId",
+          "arrivalStationId"
+        ]
+      },
+      "RideInstanceAvailabilitySummaryDto": {
+        "type": "object",
+        "properties": {
+          "capacity": {
+            "type": "number",
+            "example": 38,
+            "minimum": 0
+          },
+          "reservedSeats": {
+            "type": "number",
+            "example": 0,
+            "minimum": 0
+          },
+          "availableSeats": {
+            "type": "number",
+            "example": 38,
+            "minimum": 0
+          },
+          "hasAvailability": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "capacity",
+          "reservedSeats",
+          "availableSeats",
+          "hasAvailability"
+        ]
+      },
+      "RideInstanceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "ride-1:2026-03-30:09:00:BASE"
+          },
+          "rideId": {
+            "type": "string",
+            "example": "ride-1"
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-03-30"
+          },
+          "departureTime": {
+            "type": "string",
+            "example": "09:00"
+          },
+          "arrivalTime": {
+            "type": "string",
+            "example": "10:30"
+          },
+          "source": {
+            "type": "string",
+            "example": "BASE",
+            "enum": [
+              "BASE",
+              "ADDITIONAL"
+            ]
+          },
+          "rideType": {
+            "type": "string",
+            "enum": [
+              "RECURRING",
+              "ONE_TIME"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          },
+          "line": {
+            "$ref": "#/components/schemas/RideInstanceLineSummaryDto"
+          },
+          "availability": {
+            "$ref": "#/components/schemas/RideInstanceAvailabilitySummaryDto"
+          },
+          "reservationCount": {
+            "type": "number",
+            "example": 0,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "rideId",
+          "date",
+          "departureTime",
+          "arrivalTime",
+          "source",
+          "rideType",
+          "status",
+          "line",
+          "availability",
+          "reservationCount"
+        ]
+      },
+      "RideInstancesByDateResponseDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "example": "2026-03-30"
+          },
+          "timezoneOffsetMinutes": {
+            "type": "number",
+            "example": 0
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RideInstanceResponseDto"
+            }
+          }
+        },
+        "required": [
+          "date",
+          "timezoneOffsetMinutes",
+          "items"
+        ]
+      },
+      "UpdateRideDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Morning Central Route Updated"
+          },
+          "lineId": {
+            "type": "string",
+            "example": "line-id-123"
+          },
+          "capacity": {
+            "type": "number",
+            "example": 42,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "RECURRING",
+              "ONE_TIME"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          },
+          "recurringStartDate": {
+            "type": "string",
+            "example": "2026-03-14"
+          },
+          "recurringEndDate": {
+            "type": "string",
+            "example": "2026-06-30"
+          },
+          "oneTimeDate": {
+            "type": "string",
+            "example": "2026-03-20"
+          },
+          "oneTimeDepartureTime": {
+            "type": "string",
+            "example": "09:00"
+          },
+          "oneTimeArrivalTime": {
+            "type": "string",
+            "example": "10:30"
+          },
+          "dayTimes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RideDayTimeInputDto"
+            }
+          }
+        }
+      },
+      "ReplaceRideDayTimesDto": {
+        "type": "object",
+        "properties": {
+          "dayTimes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RideDayTimeInputDto"
+            }
+          }
+        },
+        "required": [
+          "dayTimes"
+        ]
+      },
+      "CreateRideExceptionDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "example": "2026-03-20"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "SKIP",
+              "ADDITIONAL"
+            ],
+            "example": "SKIP"
+          },
+          "departureTime": {
+            "type": "string",
+            "example": "09:00"
+          },
+          "arrivalTime": {
+            "type": "string",
+            "example": "10:30"
+          }
+        },
+        "required": [
+          "date",
+          "type"
+        ]
+      },
+      "CreateReservationDto": {
+        "type": "object",
+        "properties": {
+          "rideId": {
+            "type": "string",
+            "example": "ride-id-123"
+          },
+          "passengerId": {
+            "type": "string",
+            "example": "passenger-id-123"
+          },
+          "travelDate": {
+            "type": "string",
+            "example": "2026-03-30"
+          },
+          "rideDepartureTime": {
+            "type": "string",
+            "example": "09:00"
+          },
+          "rideArrivalTime": {
+            "type": "string",
+            "example": "10:30"
+          },
+          "seatNumber": {
+            "type": "number",
+            "example": 12,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "departureStationId": {
+            "type": "string",
+            "example": "station-id-departure"
+          },
+          "arrivalStationId": {
+            "type": "string",
+            "example": "station-id-arrival"
+          }
+        },
+        "required": [
+          "rideId",
+          "passengerId",
+          "travelDate",
+          "rideDepartureTime",
+          "rideArrivalTime",
+          "seatNumber",
+          "departureStationId",
+          "arrivalStationId"
+        ]
+      },
+      "ReservationRideSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "lineId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "lineId"
+        ]
+      },
+      "ReservationPassengerSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "phone"
+        ]
+      },
+      "ReservationStationSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "ReservationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "rideId": {
+            "type": "string"
+          },
+          "passengerId": {
+            "type": "string"
+          },
+          "createdById": {
+            "type": "object",
+            "nullable": true
+          },
+          "updatedById": {
+            "type": "object",
+            "nullable": true
+          },
+          "travelDate": {
+            "type": "string",
+            "example": "2026-03-30"
+          },
+          "rideDepartureTime": {
+            "type": "string",
+            "example": "09:00"
+          },
+          "rideArrivalTime": {
+            "type": "string",
+            "example": "10:30"
+          },
+          "seatNumber": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "CANCELLED"
+            ]
+          },
+          "cancelledAt": {
+            "type": "object",
+            "nullable": true
+          },
+          "departureStationId": {
+            "type": "string"
+          },
+          "arrivalStationId": {
+            "type": "string"
+          },
+          "ride": {
+            "$ref": "#/components/schemas/ReservationRideSummaryDto"
+          },
+          "passenger": {
+            "$ref": "#/components/schemas/ReservationPassengerSummaryDto"
+          },
+          "departureStation": {
+            "$ref": "#/components/schemas/ReservationStationSummaryDto"
+          },
+          "arrivalStation": {
+            "$ref": "#/components/schemas/ReservationStationSummaryDto"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "rideId",
+          "passengerId",
+          "createdById",
+          "updatedById",
+          "travelDate",
+          "rideDepartureTime",
+          "rideArrivalTime",
+          "seatNumber",
+          "status",
+          "cancelledAt",
+          "departureStationId",
+          "arrivalStationId",
+          "ride",
+          "passenger",
+          "departureStation",
+          "arrivalStation",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateReservationsBatchDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateReservationDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ReservationBatchItemErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "number"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "ReservationBatchItemResultDto": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "number",
+            "minimum": 0
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "reservation": {
+            "$ref": "#/components/schemas/ReservationResponseDto"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ReservationBatchItemErrorDto"
+          }
+        },
+        "required": [
+          "index",
+          "success"
+        ]
+      },
+      "BatchReservationsResponseDto": {
+        "type": "object",
+        "properties": {
+          "totalRequested": {
+            "type": "number",
+            "minimum": 1
+          },
+          "createdCount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "failedCount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReservationBatchItemResultDto"
+            }
+          }
+        },
+        "required": [
+          "totalRequested",
+          "createdCount",
+          "failedCount",
+          "items"
+        ]
+      },
+      "PaginatedReservationsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReservationResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 25
+          },
+          "total": {
+            "type": "number",
+            "example": 2
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "UpdateReservationDto": {
+        "type": "object",
+        "properties": {
+          "passengerId": {
+            "type": "string",
+            "example": "passenger-id-123"
+          },
+          "seatNumber": {
+            "type": "number",
+            "example": 14,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "departureStationId": {
+            "type": "string",
+            "example": "station-id-departure"
+          },
+          "arrivalStationId": {
+            "type": "string",
+            "example": "station-id-arrival"
+          }
+        }
+      },
+      "DateRangeResponseDto": {
+        "type": "object",
+        "properties": {
+          "fromDate": {
+            "type": "string",
+            "example": "2026-03-01"
+          },
+          "toDate": {
+            "type": "string",
+            "example": "2026-03-31"
+          }
+        },
+        "required": [
+          "fromDate",
+          "toDate"
+        ]
+      },
+      "DashboardSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "activeRides": {
+            "type": "number",
+            "example": 6
+          },
+          "activeLines": {
+            "type": "number",
+            "example": 4
+          },
+          "totalStations": {
+            "type": "number",
+            "example": 8
+          },
+          "totalPassengers": {
+            "type": "number",
+            "example": 127
+          },
+          "activePassengers": {
+            "type": "number",
+            "example": 112
+          },
+          "totalReservations": {
+            "type": "number",
+            "example": 240
+          },
+          "activeReservations": {
+            "type": "number",
+            "example": 212
+          },
+          "cancelledReservations": {
+            "type": "number",
+            "example": 28
+          },
+          "uniqueBookedPassengers": {
+            "type": "number",
+            "example": 95
+          },
+          "utilizationPercent": {
+            "type": "number",
+            "example": 68.57
+          }
+        },
+        "required": [
+          "activeRides",
+          "activeLines",
+          "totalStations",
+          "totalPassengers",
+          "activePassengers",
+          "totalReservations",
+          "activeReservations",
+          "cancelledReservations",
+          "uniqueBookedPassengers",
+          "utilizationPercent"
+        ]
+      },
+      "DailyReservationPointResponseDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "example": "2026-03-12"
+          },
+          "totalReservations": {
+            "type": "number",
+            "example": 21
+          },
+          "activeReservations": {
+            "type": "number",
+            "example": 18
+          },
+          "cancelledReservations": {
+            "type": "number",
+            "example": 3
+          }
+        },
+        "required": [
+          "date",
+          "totalReservations",
+          "activeReservations",
+          "cancelledReservations"
+        ]
+      },
+      "TopLineMetricResponseDto": {
+        "type": "object",
+        "properties": {
+          "lineId": {
+            "type": "string",
+            "example": "line-1"
+          },
+          "lineName": {
+            "type": "string",
+            "example": "Central - North"
+          },
+          "totalReservations": {
+            "type": "number",
+            "example": 75
+          },
+          "activeReservations": {
+            "type": "number",
+            "example": 68
+          },
+          "cancelledReservations": {
+            "type": "number",
+            "example": 7
+          },
+          "uniqueRideInstances": {
+            "type": "number",
+            "example": 12
+          },
+          "utilizationPercent": {
+            "type": "number",
+            "example": 69.23
+          }
+        },
+        "required": [
+          "lineId",
+          "lineName",
+          "totalReservations",
+          "activeReservations",
+          "cancelledReservations",
+          "uniqueRideInstances",
+          "utilizationPercent"
+        ]
+      },
+      "ReportingDashboardResponseDto": {
+        "type": "object",
+        "properties": {
+          "range": {
+            "$ref": "#/components/schemas/DateRangeResponseDto"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DashboardSummaryResponseDto"
+          },
+          "dailyReservations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailyReservationPointResponseDto"
+            }
+          },
+          "topLines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopLineMetricResponseDto"
+            }
+          }
+        },
+        "required": [
+          "range",
+          "summary",
+          "dailyReservations",
+          "topLines"
+        ]
+      },
+      "OccupancySummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "totalActiveReservations": {
+            "type": "number",
+            "example": 240
+          },
+          "totalCapacity": {
+            "type": "number",
+            "example": 360
+          },
+          "overallUtilizationPercent": {
+            "type": "number",
+            "example": 66.67
+          }
+        },
+        "required": [
+          "totalActiveReservations",
+          "totalCapacity",
+          "overallUtilizationPercent"
+        ]
+      },
+      "OccupancyPointResponseDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "example": "2026-03-12"
+          },
+          "lineId": {
+            "type": "string",
+            "example": "line-1"
+          },
+          "lineName": {
+            "type": "string",
+            "example": "Central - North"
+          },
+          "activeReservations": {
+            "type": "number",
+            "example": 18
+          },
+          "cancelledReservations": {
+            "type": "number",
+            "example": 3
+          },
+          "totalCapacity": {
+            "type": "number",
+            "example": 30
+          },
+          "utilizationPercent": {
+            "type": "number",
+            "example": 60
+          }
+        },
+        "required": [
+          "date",
+          "lineId",
+          "lineName",
+          "activeReservations",
+          "cancelledReservations",
+          "totalCapacity",
+          "utilizationPercent"
+        ]
+      },
+      "ReportingOccupancyResponseDto": {
+        "type": "object",
+        "properties": {
+          "range": {
+            "$ref": "#/components/schemas/DateRangeResponseDto"
+          },
+          "lineId": {
+            "type": "object",
+            "nullable": true,
+            "example": "line-1"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/OccupancySummaryResponseDto"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OccupancyPointResponseDto"
+            }
+          }
+        },
+        "required": [
+          "range",
+          "lineId",
+          "summary",
+          "points"
+        ]
+      },
+      "AuditItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "USERS",
+              "STATIONS",
+              "LINES",
+              "PASSENGERS",
+              "RIDES",
+              "RESERVATIONS"
+            ]
+          },
+          "entityId": {
+            "type": "string",
+            "example": "reservation-1"
+          },
+          "action": {
+            "type": "string",
+            "example": "UPDATED",
+            "enum": [
+              "CREATED",
+              "UPDATED"
+            ]
+          },
+          "actorUserId": {
+            "type": "object",
+            "nullable": true,
+            "example": "admin-1"
+          },
+          "createdById": {
+            "type": "object",
+            "nullable": true,
+            "example": "admin-1"
+          },
+          "updatedById": {
+            "type": "object",
+            "nullable": true,
+            "example": "manager-1"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "changedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity",
+          "entityId",
+          "action",
+          "actorUserId",
+          "createdById",
+          "updatedById",
+          "createdAt",
+          "updatedAt",
+          "changedAt"
+        ]
+      },
+      "ReportingAuditResponseDto": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "USERS",
+              "STATIONS",
+              "LINES",
+              "PASSENGERS",
+              "RIDES",
+              "RESERVATIONS"
+            ]
+          },
+          "actorUserId": {
+            "type": "object",
+            "nullable": true
+          },
+          "range": {
+            "$ref": "#/components/schemas/DateRangeResponseDto"
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 25
+          },
+          "total": {
+            "type": "number",
+            "example": 42
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditItemResponseDto"
+            }
+          }
+        },
+        "required": [
+          "entity",
+          "actorUserId",
+          "range",
+          "page",
+          "pageSize",
+          "total",
+          "items"
+        ]
+      }
+    }
+  }
+}
