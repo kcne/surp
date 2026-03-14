@@ -51,6 +51,11 @@ enum RideExceptionType {
   ADDITIONAL
 }
 
+enum ReservationStatus {
+  ACTIVE
+  CANCELLED
+}
+
 model HealthCheckLog {
   id        String   @id @default(cuid())
   message   String
@@ -193,17 +198,35 @@ model LineStop {
 model Reservation {
   id                 String   @id @default(cuid())
   tenantId           String
+  rideId             String
+  passengerId        String
+  createdById        String?
+  updatedById        String?
+  travelDate         DateTime @db.Date
+  rideDepartureTime  String
+  rideArrivalTime    String
+  seatNumber         Int
+  status             ReservationStatus @default(ACTIVE)
+  cancelledAt        DateTime?
   departureStationId String
   arrivalStationId   String
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ride               Ride     @relation(fields: [rideId], references: [id], onDelete: Restrict)
+  passenger          Passenger @relation(fields: [passengerId], references: [id], onDelete: Restrict)
   departureStation   Station  @relation("ReservationDepartureStation", fields: [departureStationId], references: [id], onDelete: Restrict)
   arrivalStation     Station  @relation("ReservationArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
 
   @@index([tenantId])
+  @@index([rideId])
+  @@index([passengerId])
+  @@index([tenantId, rideId, travelDate])
+  @@index([tenantId, rideId, travelDate, rideDepartureTime])
+  @@index([tenantId, rideId, travelDate, rideDepartureTime, seatNumber, status])
   @@index([departureStationId])
   @@index([arrivalStationId])
+  @@index([updatedById])
 }
 
 model Passenger {
@@ -221,6 +244,7 @@ model Passenger {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  reservations  Reservation[]
 
   @@index([tenantId])
   @@index([tenantId, isActive])
@@ -252,6 +276,7 @@ model Ride {
   line                Line            @relation(fields: [lineId], references: [id], onDelete: Restrict)
   dayTimes            RideDayTime[]
   exceptions          RideException[]
+  reservations        Reservation[]
 
   @@index([tenantId])
   @@index([tenantId, status])

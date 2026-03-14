@@ -232,7 +232,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Instance counts align with reservations.
 5. Exit criteria: Reservation entry screen has reliable data.
 
-**Slice 14 - Reservations Single Booking**
+**Slice 14 - Reservations Single Booking** - DONE
 1. Goal: Create and manage individual reservations.
 2. Scope:
 1. Create reservation endpoint with seat and station validation.

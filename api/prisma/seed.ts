@@ -171,20 +171,40 @@ async function main() {
     }
   });
 
-  await prisma.reservation.upsert({
+  await prisma.ride.upsert({
     where: {
-      id: 'seed-reservation-referencing-station'
+      id: 'seed-ride-referencing-line'
     },
     update: {
       tenantId: tenant.id,
-      departureStationId: 'seed-station-referenced',
-      arrivalStationId: 'seed-station-main'
+      lineId: 'seed-line-referencing-station',
+      name: 'Seed Ride Referencing Line',
+      capacity: 40,
+      type: 'RECURRING',
+      status: 'ACTIVE',
+      recurringStartDate: new Date('2026-03-01T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      createdById: adminUser.id,
+      updatedById: adminUser.id
     },
     create: {
-      id: 'seed-reservation-referencing-station',
+      id: 'seed-ride-referencing-line',
       tenantId: tenant.id,
-      departureStationId: 'seed-station-referenced',
-      arrivalStationId: 'seed-station-main'
+      lineId: 'seed-line-referencing-station',
+      name: 'Seed Ride Referencing Line',
+      capacity: 40,
+      type: 'RECURRING',
+      status: 'ACTIVE',
+      recurringStartDate: new Date('2026-03-01T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      createdById: adminUser.id,
+      updatedById: adminUser.id
     }
   });
 
@@ -245,6 +265,43 @@ async function main() {
       passengerType: 'STUDENT',
       isActive: false,
       notes: 'Seed inactive passenger',
+      createdById: adminUser.id,
+      updatedById: adminUser.id
+    }
+  });
+
+  await prisma.reservation.upsert({
+    where: {
+      id: 'seed-reservation-referencing-station'
+    },
+    update: {
+      tenantId: tenant.id,
+      rideId: 'seed-ride-referencing-line',
+      passengerId: 'seed-passenger-active',
+      departureStationId: 'seed-station-referenced',
+      arrivalStationId: 'seed-station-main',
+      travelDate: new Date('2026-03-30T00:00:00.000Z'),
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:00',
+      seatNumber: 1,
+      status: 'ACTIVE',
+      cancelledAt: null,
+      createdById: adminUser.id,
+      updatedById: adminUser.id
+    },
+    create: {
+      id: 'seed-reservation-referencing-station',
+      tenantId: tenant.id,
+      rideId: 'seed-ride-referencing-line',
+      passengerId: 'seed-passenger-active',
+      departureStationId: 'seed-station-referenced',
+      arrivalStationId: 'seed-station-main',
+      travelDate: new Date('2026-03-30T00:00:00.000Z'),
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:00',
+      seatNumber: 1,
+      status: 'ACTIVE',
+      cancelledAt: null,
       createdById: adminUser.id,
       updatedById: adminUser.id
     }
