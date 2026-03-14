@@ -6,6 +6,7 @@ import { HealthModule } from './health/health.module';
 import { LinesModule } from './lines/lines.module';
 import { PassengersModule } from './passengers/passengers.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RidesModule } from './rides/rides.module';
 import { StationsModule } from './stations/stations.module';
 import { UsersModule } from './users/users.module';
 
@@ -21,7 +22,8 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     StationsModule,
     LinesModule,
-    PassengersModule
+    PassengersModule,
+    RidesModule
   ]
 })
 export class AppModule {}

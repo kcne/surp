@@ -202,7 +202,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. Postman search scenarios pass.
 5. Exit criteria: Reservation flow can reliably find passengers.
 
-**Slice 12 - Rides Template Module**
+**Slice 12 - Rides Template Module** - DONE
 1. Goal: Model schedule templates for recurring and one-time rides.
 2. Scope:
 1. Ride CRUD with type, status, capacity.

@@ -35,6 +35,22 @@ enum PassengerType {
   SENIOR
 }
 
+enum RideType {
+  RECURRING
+  ONE_TIME
+}
+
+enum RideStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum RideExceptionType {
+  SKIP
+  ADDITIONAL
+}
+
 model HealthCheckLog {
   id        String   @id @default(cuid())
   message   String
@@ -54,6 +70,9 @@ model Tenant {
   lines           Line[]
   lineStops       LineStop[]
   passengers      Passenger[]
+  rides           Ride[]
+  rideDayTimes    RideDayTime[]
+  rideExceptions  RideException[]
   reservations    Reservation[]
 }
 
@@ -139,6 +158,7 @@ model Line {
   departureStation   Station  @relation("LineDepartureStation", fields: [departureStationId], references: [id], onDelete: Restrict)
   arrivalStation     Station  @relation("LineArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
   intermediateStops  LineStop[]
+  rides              Ride[]
 
   @@index([tenantId])
   @@index([tenantId, isActive])
@@ -208,5 +228,74 @@ model Passenger {
   @@index([tenantId, lastName])
   @@index([tenantId, phone])
   @@index([tenantId, email])
+  @@index([updatedById])
+}
+
+model Ride {
+  id                  String          @id @default(cuid())
+  tenantId            String
+  lineId              String
+  createdById         String?
+  updatedById         String?
+  name                String
+  capacity            Int
+  type                RideType
+  status              RideStatus      @default(DRAFT)
+  recurringStartDate  DateTime?       @db.Date
+  recurringEndDate    DateTime?       @db.Date
+  oneTimeDate         DateTime?       @db.Date
+  oneTimeDepartureTime String?
+  oneTimeArrivalTime  String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  line                Line            @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  dayTimes            RideDayTime[]
+  exceptions          RideException[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([lineId])
+  @@index([updatedById])
+}
+
+model RideDayTime {
+  id            String   @id @default(cuid())
+  tenantId      String
+  rideId        String
+  dayOfWeek     Int
+  departureTime String
+  arrivalTime   String
+  createdById   String?
+  updatedById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ride          Ride     @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@unique([rideId, dayOfWeek])
+  @@index([tenantId])
+  @@index([rideId])
+  @@index([updatedById])
+}
+
+model RideException {
+  id            String            @id @default(cuid())
+  tenantId      String
+  rideId        String
+  exceptionDate DateTime          @db.Date
+  type          RideExceptionType
+  departureTime String?
+  arrivalTime   String?
+  createdById   String?
+  updatedById   String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ride          Ride              @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([rideId])
+  @@index([rideId, exceptionDate])
   @@index([updatedById])
 }
