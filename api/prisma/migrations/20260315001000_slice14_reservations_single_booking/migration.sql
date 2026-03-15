@@ -56,6 +56,10 @@ CREATE INDEX "Reservation_tenantId_rideId_travelDate_rideDepartureTime_idx" ON "
 CREATE INDEX "Reservation_tenantId_rideId_travelDate_rideDepartureTime_seatN_idx"
 ON "Reservation"("tenantId", "rideId", "travelDate", "rideDepartureTime", "seatNumber", "status");
 
+-- RenameIndex
+ALTER INDEX "Reservation_tenantId_rideId_travelDate_rideDepartureTime_seatN_idx"
+RENAME TO "Reservation_tenantId_rideId_travelDate_rideDepartureTime_se_idx";
+
 -- CreateIndex
 CREATE INDEX "Reservation_updatedById_idx" ON "Reservation"("updatedById");
 
