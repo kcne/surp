@@ -11,6 +11,7 @@ import {
   ApiUnauthorizedResponse
 } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
+import { Public } from '../auth/public.decorator';
 import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
 import { SkipTenantGuard } from '../auth/skip-tenant.decorator';
@@ -18,13 +19,13 @@ import { CreatePlatformTenantDto } from './dto/create-platform-tenant.dto';
 import { ListPlatformTenantsQueryDto } from './dto/list-platform-tenants.query.dto';
 import {
   PaginatedPlatformTenantsResponseDto,
+  PlatformTenantLoginOptionResponseDto,
   PlatformTenantResponseDto
 } from './dto/platform-tenant.response.dto';
 import { UpdatePlatformTenantDto } from './dto/update-platform-tenant.dto';
 import { PlatformTenantsService } from './platform-tenants.service';
 
 @ApiTags('Platform Tenants')
-@ApiBearerAuth('access-token')
 @SkipTenantGuard()
 @Roles(UserRole.SUPERADMIN)
 @Controller('platform/tenants')
@@ -32,6 +33,7 @@ export class PlatformTenantsController {
   constructor(private readonly platformTenantsService: PlatformTenantsService) {}
 
   @Post()
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Create a new tenant in platform scope.' })
   @ApiOkResponse({ type: PlatformTenantResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure.' })
@@ -46,6 +48,7 @@ export class PlatformTenantsController {
   }
 
   @Get()
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List tenants across platform scope.' })
   @ApiOkResponse({ type: PaginatedPlatformTenantsResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure.' })
@@ -55,7 +58,16 @@ export class PlatformTenantsController {
     return this.platformTenantsService.list(query);
   }
 
+  @Get('public')
+  @Public()
+  @ApiOperation({ summary: 'List active tenant login options.' })
+  @ApiOkResponse({ type: PlatformTenantLoginOptionResponseDto, isArray: true })
+  listLoginOptions(): Promise<PlatformTenantLoginOptionResponseDto[]> {
+    return this.platformTenantsService.listLoginOptions();
+  }
+
   @Get(':id')
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get a tenant by id in platform scope.' })
   @ApiOkResponse({ type: PlatformTenantResponseDto })
   @ApiNotFoundResponse({ description: 'Tenant not found.' })
@@ -66,6 +78,7 @@ export class PlatformTenantsController {
   }
 
   @Patch(':id')
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update tenant slug/name in platform scope.' })
   @ApiOkResponse({ type: PlatformTenantResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure.' })
@@ -81,6 +94,7 @@ export class PlatformTenantsController {
   }
 
   @Patch(':id/activate')
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Activate a tenant.' })
   @ApiOkResponse({ type: PlatformTenantResponseDto })
   @ApiNotFoundResponse({ description: 'Tenant not found.' })
@@ -91,6 +105,7 @@ export class PlatformTenantsController {
   }
 
   @Patch(':id/deactivate')
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Deactivate a tenant.' })
   @ApiOkResponse({ type: PlatformTenantResponseDto })
   @ApiNotFoundResponse({ description: 'Tenant not found.' })

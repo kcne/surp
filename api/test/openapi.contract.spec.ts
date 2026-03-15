@@ -95,4 +95,11 @@ describe('OpenAPI contract', () => {
 
     expect(tenantHeader).toBeUndefined();
   });
+
+  it('keeps platform tenant login options endpoint public', () => {
+    const publicTenantOptions = document.paths['/platform/tenants/public']?.get;
+
+    expect(publicTenantOptions).toBeDefined();
+    expect(publicTenantOptions?.security).toBeUndefined();
+  });
 });

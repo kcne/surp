@@ -1946,6 +1946,347 @@
         ]
       }
     },
+    "/platform/tenants": {
+      "post": {
+        "operationId": "PlatformTenantsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePlatformTenantDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTenantResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "409": {
+            "description": "Tenant slug already exists."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a new tenant in platform scope.",
+        "tags": [
+          "Platform Tenants"
+        ]
+      },
+      "get": {
+        "operationId": "PlatformTenantsController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "isActive",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "acme",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedPlatformTenantsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List tenants across platform scope.",
+        "tags": [
+          "Platform Tenants"
+        ]
+      }
+    },
+    "/platform/tenants/public": {
+      "get": {
+        "operationId": "PlatformTenantsController_listLoginOptions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlatformTenantLoginOptionResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "List active tenant login options.",
+        "tags": [
+          "Platform Tenants"
+        ]
+      }
+    },
+    "/platform/tenants/{id}": {
+      "get": {
+        "operationId": "PlatformTenantsController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTenantResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Tenant not found."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get a tenant by id in platform scope.",
+        "tags": [
+          "Platform Tenants"
+        ]
+      },
+      "patch": {
+        "operationId": "PlatformTenantsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePlatformTenantDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTenantResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Tenant not found."
+          },
+          "409": {
+            "description": "Tenant slug already exists."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Update tenant slug/name in platform scope.",
+        "tags": [
+          "Platform Tenants"
+        ]
+      }
+    },
+    "/platform/tenants/{id}/activate": {
+      "patch": {
+        "operationId": "PlatformTenantsController_activate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTenantResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Tenant not found."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Activate a tenant.",
+        "tags": [
+          "Platform Tenants"
+        ]
+      }
+    },
+    "/platform/tenants/{id}/deactivate": {
+      "patch": {
+        "operationId": "PlatformTenantsController_deactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTenantResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Tenant not found."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Deactivate a tenant.",
+        "tags": [
+          "Platform Tenants"
+        ]
+      }
+    },
     "/rides": {
       "post": {
         "operationId": "RidesController_create",
@@ -3322,7 +3663,7 @@
   },
   "info": {
     "title": "SURP API",
-    "description": "Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers, and the tenant must match the token claim.",
+    "description": "Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.",
     "version": "0.1.0",
     "contact": {}
   },
@@ -3374,6 +3715,7 @@
           "role": {
             "type": "string",
             "enum": [
+              "SUPERADMIN",
               "ADMIN",
               "MANAGER",
               "STAFF"
@@ -3507,6 +3849,7 @@
           "role": {
             "type": "string",
             "enum": [
+              "SUPERADMIN",
               "ADMIN",
               "MANAGER",
               "STAFF"
@@ -4231,6 +4574,123 @@
           "notes": {
             "type": "string",
             "example": "VIP customer"
+          }
+        }
+      },
+      "CreatePlatformTenantDto": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "example": "acme-transit"
+          },
+          "name": {
+            "type": "string",
+            "example": "Acme Transit"
+          }
+        },
+        "required": [
+          "slug",
+          "name"
+        ]
+      },
+      "PlatformTenantResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "deactivatedAt": {
+            "type": "object",
+            "nullable": true
+          },
+          "deactivatedById": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "isActive",
+          "deactivatedAt",
+          "deactivatedById",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaginatedPlatformTenantsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformTenantResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 25
+          },
+          "total": {
+            "type": "number",
+            "example": 1
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "PlatformTenantLoginOptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name"
+        ]
+      },
+      "UpdatePlatformTenantDto": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "example": "acme-transit"
+          },
+          "name": {
+            "type": "string",
+            "example": "Acme Transit"
           }
         }
       },

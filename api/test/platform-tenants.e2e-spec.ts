@@ -70,18 +70,35 @@ describe('PlatformTenantsController (e2e)', () => {
       updatedAt
     });
 
-    prismaMock.tenant.findMany.mockResolvedValue([
-      {
-        id: 'tenant-acme',
-        slug: 'acme-transit',
-        name: 'Acme Transit',
-        isActive: true,
-        deactivatedAt: null,
-        deactivatedById: null,
-        createdAt,
-        updatedAt
+    prismaMock.tenant.findMany.mockImplementation(
+      ({ where, select }: { where?: { isActive?: boolean }; select?: Record<string, boolean> }) => {
+        if (where?.isActive === true && select?.slug && select?.name) {
+          return Promise.resolve([
+            {
+              slug: 'acme-transit',
+              name: 'Acme Transit'
+            },
+            {
+              slug: 'metro-city',
+              name: 'Metro City'
+            }
+          ]);
+        }
+
+        return Promise.resolve([
+          {
+            id: 'tenant-acme',
+            slug: 'acme-transit',
+            name: 'Acme Transit',
+            isActive: true,
+            deactivatedAt: null,
+            deactivatedById: null,
+            createdAt,
+            updatedAt
+          }
+        ]);
       }
-    ]);
+    );
 
     prismaMock.tenant.count.mockResolvedValue(1);
 
@@ -186,6 +203,23 @@ describe('PlatformTenantsController (e2e)', () => {
 
     expect(activateResponse.body.isActive).toBe(true);
     expect(activateResponse.body.deactivatedAt).toBeNull();
+  });
+
+  it('lists public active tenant login options without auth', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/platform/tenants/public')
+      .expect(200);
+
+    expect(response.body).toEqual([
+      {
+        slug: 'acme-transit',
+        name: 'Acme Transit'
+      },
+      {
+        slug: 'metro-city',
+        name: 'Metro City'
+      }
+    ]);
   });
 
   it('returns 404 for missing tenant id', async () => {
