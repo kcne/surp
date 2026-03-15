@@ -7,15 +7,22 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { useAuthStore } from "@/stores/authStore"
+import type { PlatformTenantLoginOption } from "@/infrastructure/types/auth.types"
+import { useTenantLoginOptionsQuery } from "@/infrastructure/hooks/queries/useTenantLoginOptionsQuery"
+import { getApiErrorMessage } from "@/infrastructure/utils/errors"
 import { Button } from "@/components/ui/button"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, LogIn } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Check, ChevronsUpDown, Eye, EyeOff, LogIn } from "lucide-react"
 import { toast } from "sonner"
 
 const loginSchema = z.object({
+  tenantSlug: z.string().min(1, "Agencija je obavezna"),
   email: z.string().min(1, "Email je obavezan").email("Unesite ispravan email"),
   password: z.string().min(1, "Lozinka je obavezna"),
 })
@@ -25,20 +32,43 @@ type LoginFormData = z.infer<typeof loginSchema>
 export default function LoginPage() {
   const router = useRouter()
   const { login, loading, error, clearError } = useAuthStore()
+  const {
+    data: tenantOptions = [],
+    isLoading: isTenantOptionsLoading,
+    isError: isTenantOptionsError,
+    error: tenantOptionsError,
+  } = useTenantLoginOptionsQuery()
   const [showPassword, setShowPassword] = useState(false)
+  const [agencyOpen, setAgencyOpen] = useState(false)
+  const [agencySearchQuery, setAgencySearchQuery] = useState("")
 
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      tenantSlug: "",
+      email: "",
+      password: "",
+    },
+  })
+
+  const selectedTenantSlug = watch("tenantSlug")
+  const selectedTenant = tenantOptions.find((tenant) => tenant.slug === selectedTenantSlug)
+
+  const filteredTenantOptions = tenantOptions.filter((tenant) => {
+    const query = agencySearchQuery.toLowerCase()
+    return tenant.name.toLowerCase().includes(query) || tenant.slug.toLowerCase().includes(query)
   })
 
   const onSubmit = async (data: LoginFormData) => {
     try {
       clearError()
-      await login(data.email, data.password)
+      await login(data.email, data.password, data.tenantSlug)
       toast.success("Uspešno ste se prijavili!")
       router.push("/dashboard")
     } catch (err) {
@@ -71,12 +101,90 @@ export default function LoginPage() {
               </Alert>
             )}
 
+            {isTenantOptionsError && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {getApiErrorMessage(
+                    tenantOptionsError,
+                    "Ne možemo da učitamo listu agencija. Pokušajte ponovo."
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="agency">Agencija</Label>
+              <input type="hidden" {...register("tenantSlug")} />
+              <Popover open={agencyOpen} onOpenChange={setAgencyOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="agency"
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={agencyOpen}
+                    disabled={loading || isTenantOptionsLoading}
+                    className={cn(
+                      "w-full justify-between font-normal",
+                      !selectedTenant && "text-muted-foreground",
+                      errors.tenantSlug && "border-danger"
+                    )}
+                  >
+                    {isTenantOptionsLoading
+                      ? "Učitavanje agencija..."
+                      : selectedTenant?.name || "Izaberite agenciju"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="Pretražite agenciju..."
+                      value={agencySearchQuery}
+                      onValueChange={setAgencySearchQuery}
+                    />
+                    <CommandList>
+                      <CommandEmpty>Nema rezultata za unetu pretragu.</CommandEmpty>
+                      <CommandGroup>
+                        {filteredTenantOptions.map((tenant: PlatformTenantLoginOption) => (
+                          <CommandItem
+                            key={tenant.slug}
+                            value={`${tenant.name} ${tenant.slug}`}
+                            onSelect={() => {
+                              setValue("tenantSlug", tenant.slug, {
+                                shouldDirty: true,
+                                shouldTouch: true,
+                                shouldValidate: true,
+                              })
+                              setAgencyOpen(false)
+                              setAgencySearchQuery("")
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedTenantSlug === tenant.slug ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <span>{tenant.name}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {errors.tenantSlug && (
+                <p className="text-sm text-danger">{errors.tenantSlug.message}</p>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="Unesite email"
+                  placeholder="Unesite username ili email"
                 {...register("email")}
                 disabled={loading}
                 className={errors.email ? "border-danger" : ""}

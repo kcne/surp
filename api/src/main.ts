@@ -11,6 +11,19 @@ async function bootstrap(): Promise<void> {
   const configService = app.get(ConfigService);
   const prismaService = app.get(PrismaService);
 
+  const corsOrigins = configService
+    .get<string>('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
+  app.enableCors({
+    origin: corsOrigins,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Slug'],
+    credentials: false
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

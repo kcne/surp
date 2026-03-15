@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+export class PlatformTenantLoginOptionResponseDto {
+  @ApiProperty()
+  slug!: string;
+
+  @ApiProperty()
+  name!: string;
+}
+
 export class PlatformTenantResponseDto {
   @ApiProperty()
   id!: string;

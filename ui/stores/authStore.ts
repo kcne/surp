@@ -1,56 +1,64 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import type { User } from "@/types"
-import { authApi } from "@/lib/api"
+import { loginRequest } from "@/infrastructure/requests/auth.requests"
+import { getApiErrorMessage } from "@/infrastructure/utils/errors"
+import {
+  clearAuthSession,
+  setAccessToken,
+  setRefreshToken,
+  setTenantSlug,
+} from "@/infrastructure/utils/storage"
 
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
   loading: boolean
   error: string | null
-  login: (username: string, password: string) => Promise<void>
+  login: (username: string, password: string, tenantSlug: string) => Promise<void>
   logout: () => void
   clearError: () => void
-}
-
-// Default mock user
-const defaultUser: User = {
-  id: "1",
-  username: "admin",
-  name: "Administrator",
-  email: "admin@example.com",
-  role: "admin",
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      user: defaultUser,
-      isAuthenticated: true,
+      user: null,
+      isAuthenticated: false,
       loading: false,
       error: null,
 
-      login: async (username: string, password: string) => {
+      login: async (username: string, password: string, tenantSlug: string) => {
         set({ loading: true, error: null })
         try {
-          const response = await authApi.login(username, password)
-          const { user, token } = response.data
+          const response = await loginRequest({
+            username,
+            password,
+            tenantSlug,
+          })
 
-          // Store token in localStorage
-          if (typeof window !== "undefined") {
-            localStorage.setItem("auth_token", token)
-          }
+          setAccessToken(response.accessToken)
+          setRefreshToken(response.refreshToken)
+          setTenantSlug(tenantSlug)
 
           set({
-            user,
+            user: {
+              id: response.user.id,
+              username: response.user.username,
+              email: response.user.email,
+              role: response.user.role,
+            },
             isAuthenticated: true,
             loading: false,
             error: null,
           })
-        } catch (error: any) {
+        } catch (error: unknown) {
           set({
             loading: false,
-            error: error?.message || "Greška pri prijavljivanju. Molimo pokušajte ponovo.",
+            error: getApiErrorMessage(
+              error,
+              "Greška pri prijavljivanju. Molimo pokušajte ponovo."
+            ),
             isAuthenticated: false,
             user: null,
           })
@@ -59,7 +67,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        authApi.logout()
+        clearAuthSession()
         set({
           user: null,
           isAuthenticated: false,

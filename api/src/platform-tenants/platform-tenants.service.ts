@@ -12,6 +12,7 @@ import { CreatePlatformTenantDto } from './dto/create-platform-tenant.dto';
 import { ListPlatformTenantsQueryDto } from './dto/list-platform-tenants.query.dto';
 import {
   PaginatedPlatformTenantsResponseDto,
+  PlatformTenantLoginOptionResponseDto,
   PlatformTenantResponseDto
 } from './dto/platform-tenant.response.dto';
 import { UpdatePlatformTenantDto } from './dto/update-platform-tenant.dto';
@@ -27,6 +28,11 @@ export class PlatformTenantsService {
     deactivatedById: true,
     createdAt: true,
     updatedAt: true
+  } satisfies Prisma.TenantSelect;
+
+  private readonly tenantLoginOptionSelect = {
+    slug: true,
+    name: true
   } satisfies Prisma.TenantSelect;
 
   constructor(private readonly prisma: PrismaService) {}
@@ -78,6 +84,14 @@ export class PlatformTenantsService {
       page: pagination.page ?? DEFAULT_PAGE,
       pageSize: pagination.pageSize ?? DEFAULT_PAGE_SIZE
     };
+  }
+
+  async listLoginOptions(): Promise<PlatformTenantLoginOptionResponseDto[]> {
+    return this.prisma.tenant.findMany({
+      where: { isActive: true },
+      orderBy: [{ name: 'asc' }],
+      select: this.tenantLoginOptionSelect
+    });
   }
 
   async getById(id: string): Promise<PlatformTenantResponseDto> {
