@@ -1,135 +1,29 @@
 "use client"
 
-import { useState } from "react"
-import type { ColumnDef } from "@tanstack/react-table"
 import { Layout } from "@/components/layout/Layout"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Mail, Pencil, Phone, Plus, Settings2, Trash2, UserRound, Users } from "lucide-react"
+import { Plus, Users } from "lucide-react"
 import { usePassengersStore } from "@/stores/passengersStore"
 import { PassengerModal } from "@/components/passengers/PassengerModal"
 import { DeletePassengerDialog } from "@/components/passengers/DeletePassengerDialog"
-import { DataTable } from "@/components/ui/data-table"
+import { PassengersDataTable } from "@/components/passengers/PassengersDataTable"
+import { useCrudDialogState } from "@/hooks/useCrudDialogState"
 import type { Passenger } from "@/types"
-
-const passengerTypeLabels: Record<Passenger["passengerType"], string> = {
-  dete: "Dete",
-  odrasli: "Odrasli",
-  student: "Student",
-  penzioner: "Penzioner",
-}
 
 export default function PassengersPage() {
   const { passengers, loading } = usePassengersStore()
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [selectedPassenger, setSelectedPassenger] = useState<Passenger | null>(null)
-  const [passengerToDelete, setPassengerToDelete] = useState<Passenger | null>(null)
-
-  const handleEdit = (passenger: Passenger) => {
-    setSelectedPassenger(passenger)
-    setIsModalOpen(true)
-  }
-
-  const handleDelete = (passenger: Passenger) => {
-    setPassengerToDelete(passenger)
-    setIsDeleteDialogOpen(true)
-  }
-
-  const handleAddNew = () => {
-    setSelectedPassenger(null)
-    setIsModalOpen(true)
-  }
-
-  const handleModalClose = () => {
-    setIsModalOpen(false)
-    setSelectedPassenger(null)
-  }
-
-  const columns: ColumnDef<Passenger>[] = [
-    {
-      accessorFn: (row) => `${row.firstName} ${row.lastName}`,
-      id: "fullName",
-      header: () => (
-        <div className="inline-flex items-center gap-1">
-          <UserRound className="h-4 w-4 text-muted-foreground" />
-          Ime i prezime
-        </div>
-      ),
-      cell: ({ row }) => (
-        <div className="font-semibold text-primary">
-          {row.original.firstName} {row.original.lastName}
-        </div>
-      ),
-    },
-    {
-      accessorKey: "phone",
-      header: () => (
-        <div className="inline-flex items-center gap-1">
-          <Phone className="h-4 w-4 text-muted-foreground" />
-          Telefon
-        </div>
-      ),
-    },
-    {
-      accessorKey: "email",
-      header: () => (
-        <div className="inline-flex items-center gap-1">
-          <Mail className="h-4 w-4 text-muted-foreground" />
-          Email
-        </div>
-      ),
-      cell: ({ row }) =>
-        row.original.email || <span className="text-muted-foreground">-</span>,
-    },
-    {
-      accessorKey: "passengerType",
-      header: () => (
-        <div className="inline-flex items-center gap-1">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          Tip putnika
-        </div>
-      ),
-      cell: ({ row }) => (
-        <Badge variant="secondary">
-          {passengerTypeLabels[row.original.passengerType]}
-        </Badge>
-      ),
-    },
-    {
-      id: "actions",
-      header: () => (
-        <div className="inline-flex items-center justify-end gap-1 text-right">
-          <Settings2 className="h-4 w-4 text-muted-foreground" />
-          Akcije
-        </div>
-      ),
-      cell: ({ row }) => {
-        const passenger = row.original
-
-        return (
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleEdit(passenger)}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleDelete(passenger)}
-              className="text-danger hover:text-danger hover:bg-danger/10"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        )
-      },
-    },
-  ]
+  const {
+    isModalOpen,
+    isDeleteDialogOpen,
+    selectedItem: selectedPassenger,
+    itemToDelete: passengerToDelete,
+    openCreate,
+    openEdit,
+    closeModal,
+    openDelete,
+    setIsDeleteDialogOpen,
+  } = useCrudDialogState<Passenger>()
 
   return (
     <Layout>
@@ -144,7 +38,7 @@ export default function PassengersPage() {
               Upravljajte putnicima u sistemu
             </p>
           </div>
-          <Button onClick={handleAddNew}>
+          <Button onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />
             Dodaj Putnika
           </Button>
@@ -165,24 +59,22 @@ export default function PassengersPage() {
             <p className="mb-4 text-sm text-muted-foreground">
               Dodajte prvog putnika da biste počeli
             </p>
-            <Button onClick={handleAddNew}>
+            <Button onClick={openCreate}>
               <Plus className="mr-2 h-4 w-4" />
               Dodaj Putnika
             </Button>
           </div>
         ) : (
-          <DataTable
-            columns={columns}
-            data={passengers}
-            noResultsText="Nema putnika"
-            searchColumn="fullName"
-            searchPlaceholder="Pretraži putnike..."
+          <PassengersDataTable
+            passengers={passengers}
+            onEdit={openEdit}
+            onDelete={openDelete}
           />
         )}
 
         <PassengerModal
           open={isModalOpen}
-          onOpenChange={handleModalClose}
+          onOpenChange={closeModal}
           passenger={selectedPassenger}
         />
 

@@ -30,8 +30,11 @@ interface DataTableProps<TData, TValue> {
   data: TData[]
   noResultsText?: string
   initialPageSize?: number
+  pageSizeOptions?: number[]
+  enablePagination?: boolean
   searchColumn?: string
   searchPlaceholder?: string
+  searchDebounceMs?: number
 }
 
 export function DataTable<TData, TValue>({
@@ -39,8 +42,11 @@ export function DataTable<TData, TValue>({
   data,
   noResultsText = "Nema rezultata.",
   initialPageSize = 8,
+  pageSizeOptions = [8, 16, 24],
+  enablePagination = true,
   searchColumn,
   searchPlaceholder = "Pretraga...",
+  searchDebounceMs = 300,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -56,7 +62,7 @@ export function DataTable<TData, TValue>({
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getPaginationRowModel: enablePagination ? getPaginationRowModel() : undefined,
     initialState: {
       pagination: {
         pageSize: initialPageSize,
@@ -76,10 +82,10 @@ export function DataTable<TData, TValue>({
 
     const timeout = setTimeout(() => {
       table.getColumn(searchColumn)?.setFilterValue(searchValue)
-    }, 300)
+    }, searchDebounceMs)
 
     return () => clearTimeout(timeout)
-  }, [searchColumn, searchValue, table])
+  }, [searchColumn, searchValue, searchDebounceMs, table])
 
   return (
     <div className="space-y-4">
@@ -142,7 +148,9 @@ export function DataTable<TData, TValue>({
         </Table>
       </div>
 
-      <DataTablePagination table={table} />
+      {enablePagination && (
+        <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />
+      )}
     </div>
   )
 }

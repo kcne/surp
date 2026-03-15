@@ -1,17 +1,10 @@
 "use client"
 
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+  ConfirmDeleteDialog,
+} from "@/components/ui/confirm-delete-dialog"
 import { useRidesStore } from "@/stores/ridesStore"
-import { Ban, X } from "lucide-react"
+import { Ban } from "lucide-react"
 
 interface DeleteRideDialogProps {
   open: boolean
@@ -38,31 +31,16 @@ export function DeleteRideDialog({
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Da li ste sigurni?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Da li ste sigurni da želite da otkažete vožnju{" "}
-            <strong>{ride?.name}</strong>? Ova akcija će otkazati vožnju.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={loading}>
-            <X className="mr-2 h-4 w-4" />
-            Otkaži
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleCancel}
-            disabled={loading}
-            className="bg-danger text-white hover:bg-danger/90"
-          >
-            <Ban className="mr-2 h-4 w-4" />
-            {loading ? "Otkazivanje..." : "Otkaži Vožnju"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmDeleteDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      loading={loading}
+      confirmLabel="Otkaži Vožnju"
+      loadingLabel="Otkazivanje..."
+      confirmIcon={Ban}
+      description={`Da li ste sigurni da želite da otkažete vožnju ${ride?.name ?? ""}? Ova akcija će otkazati vožnju.`}
+      onConfirm={handleCancel}
+    />
   )
 }
 

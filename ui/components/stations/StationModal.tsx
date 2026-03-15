@@ -6,14 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { stationSchema } from "@/utils/validators"
 import type { Station, StationFormData } from "@/types"
 import { useStationsStore } from "@/stores/stationsStore"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -32,7 +25,30 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+import { FormModalShell } from "@/components/forms/FormModalShell"
 import { MapPinPlus, Save, X } from "lucide-react"
+
+const STATION_DEFAULT_VALUES: StationFormData = {
+  name: "",
+  address: "",
+  category: undefined,
+  contactPhone: "",
+  notes: "",
+}
+
+function getStationFormValues(station?: Station | null): StationFormData {
+  if (!station) {
+    return STATION_DEFAULT_VALUES
+  }
+
+  return {
+    name: station.name,
+    address: station.address,
+    category: station.category,
+    contactPhone: station.contactPhone || "",
+    notes: station.notes || "",
+  }
+}
 
 interface StationModalProps {
   open: boolean
@@ -47,33 +63,11 @@ export function StationModal({ open, onOpenChange, station, readOnly = false }: 
 
   const form = useForm<StationFormData>({
     resolver: zodResolver(stationSchema),
-    defaultValues: {
-      name: "",
-      address: "",
-      category: undefined,
-      contactPhone: "",
-      notes: "",
-    },
+    defaultValues: STATION_DEFAULT_VALUES,
   })
 
   useEffect(() => {
-    if (station) {
-      form.reset({
-        name: station.name,
-        address: station.address,
-        category: station.category,
-        contactPhone: station.contactPhone || "",
-        notes: station.notes || "",
-      })
-    } else {
-      form.reset({
-        name: "",
-        address: "",
-        category: undefined,
-        contactPhone: "",
-        notes: "",
-      })
-    }
+    form.reset(getStationFormValues(station))
   }, [station, form])
 
   const onSubmit = async (data: StationFormData) => {
@@ -88,27 +82,24 @@ export function StationModal({ open, onOpenChange, station, readOnly = false }: 
         await createStation(data)
       }
       onOpenChange(false)
-      form.reset()
+      form.reset(STATION_DEFAULT_VALUES)
     } catch (error) {
       // Error is handled in store
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>
-            {readOnly ? "Pregled Stanice" : isEdit ? "Izmeni Stanicu" : "Dodaj Novu Stanicu"}
-          </DialogTitle>
-          <DialogDescription>
-            {readOnly
-              ? "Pregled informacija o stanici."
-              : isEdit
-              ? "Izmenite informacije o stanici."
-              : "Unesite informacije o novoj stanici."}
-          </DialogDescription>
-        </DialogHeader>
+    <FormModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={readOnly ? "Pregled Stanice" : isEdit ? "Izmeni Stanicu" : "Dodaj Novu Stanicu"}
+      description={readOnly
+        ? "Pregled informacija o stanici."
+        : isEdit
+        ? "Izmenite informacije o stanici."
+        : "Unesite informacije o novoj stanici."}
+      contentClassName="sm:max-w-[600px]"
+    >
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -218,7 +209,7 @@ export function StationModal({ open, onOpenChange, station, readOnly = false }: 
                 variant="outline"
                 onClick={() => {
                   onOpenChange(false)
-                  form.reset()
+                  form.reset(STATION_DEFAULT_VALUES)
                 }}
                 disabled={loading}
               >
@@ -244,8 +235,7 @@ export function StationModal({ open, onOpenChange, station, readOnly = false }: 
             </DialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+    </FormModalShell>
   )
 }
 

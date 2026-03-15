@@ -1,0 +1,185 @@
+import type { Passenger, PassengerFormData, Reservation, ReservationFormData, RideInstance } from "@/types"
+import type { UseFormReturn } from "react-hook-form"
+import { buildReturnRequests } from "@/utils/reservationReturnHelpers"
+import { toast } from "sonner"
+
+interface UseReservationSubmissionParams {
+  form: UseFormReturn<ReservationFormData>
+  isEdit: boolean
+  reservation?: Reservation | null
+  isReturnTicket: boolean
+  selectedReturnRideInstance: RideInstance | undefined
+  isMultiReservation: boolean
+  selectedSeats: number[]
+  perSeatPassengers: Record<number, Passenger | null>
+  allReservations: Record<string, Reservation[]>
+  closeReservationModal: () => void
+  onComplete?: () => void
+  assignmentMode: "single" | "perSeat"
+  setSelectedPassenger: (passenger: Passenger | null) => void
+  setNewPassenger: (passenger: Passenger | null) => void
+  setShowPassengerForm: (open: boolean) => void
+  createReservation: (data: ReservationFormData) => Promise<void>
+  createReservationsBatch: (data: ReservationFormData[]) => Promise<void>
+  createReservationsForRideInstance: (
+    instance: RideInstance,
+    requests: ReservationFormData[],
+    options?: { showSuccessToast?: boolean }
+  ) => Promise<void>
+  updateReservation: (reservationId: string, data: ReservationFormData) => Promise<void>
+  clearSelectedSeats: () => void
+  createPassenger: (data: PassengerFormData) => Promise<Passenger>
+}
+
+export function useReservationSubmission({
+  form,
+  isEdit,
+  reservation,
+  isReturnTicket,
+  selectedReturnRideInstance,
+  isMultiReservation,
+  selectedSeats,
+  perSeatPassengers,
+  allReservations,
+  closeReservationModal,
+  onComplete,
+  assignmentMode,
+  setSelectedPassenger,
+  setNewPassenger,
+  setShowPassengerForm,
+  createReservation,
+  createReservationsBatch,
+  createReservationsForRideInstance,
+  updateReservation,
+  clearSelectedSeats,
+  createPassenger,
+}: UseReservationSubmissionParams) {
+  const createWithOptionalReturn = async (outboundRequests: ReservationFormData[]) => {
+    let returnRequests: ReservationFormData[] = []
+
+    if (isReturnTicket) {
+      if (!selectedReturnRideInstance) {
+        throw new Error("Izaberite datum i vreme povratne vožnje.")
+      }
+
+      returnRequests = buildReturnRequests({
+        outboundRequests,
+        returnInstance: selectedReturnRideInstance,
+        returnDepartureStationId: form.getValues("arrivalStationId"),
+        returnArrivalStationId: form.getValues("departureStationId"),
+        allReservations,
+      })
+    }
+
+    if (outboundRequests.length === 1 && !isMultiReservation) {
+      await createReservation(outboundRequests[0])
+    } else {
+      await createReservationsBatch(outboundRequests)
+    }
+
+    if (returnRequests.length > 0 && selectedReturnRideInstance) {
+      await createReservationsForRideInstance(selectedReturnRideInstance, returnRequests, {
+        showSuccessToast: false,
+      })
+      toast.success("Povratna karta je uspešno rezervisana")
+    }
+  }
+
+  const onSubmit = async (data: ReservationFormData) => {
+    try {
+      if (isEdit && reservation) {
+        await updateReservation(reservation.id, data)
+        if (isReturnTicket) {
+          if (!selectedReturnRideInstance) {
+            throw new Error("Izaberite datum i vreme povratne vožnje.")
+          }
+
+          const returnRequests = buildReturnRequests({
+            outboundRequests: [data],
+            returnInstance: selectedReturnRideInstance,
+            returnDepartureStationId: form.getValues("arrivalStationId"),
+            returnArrivalStationId: form.getValues("departureStationId"),
+            allReservations,
+          })
+          await createReservationsForRideInstance(selectedReturnRideInstance, returnRequests, {
+            showSuccessToast: false,
+          })
+          toast.success("Povratna karta je uspešno rezervisana")
+        }
+      } else if (isMultiReservation) {
+        const requests = selectedSeats.map((seat) => ({
+          ...data,
+          seatNumber: seat,
+        }))
+        await createWithOptionalReturn(requests)
+        clearSelectedSeats()
+        onComplete?.()
+        return
+      } else {
+        await createWithOptionalReturn([data])
+      }
+
+      closeReservationModal()
+    } catch (error) {
+      if (error instanceof Error) {
+        toast.error(error.message)
+      }
+    }
+  }
+
+  const handlePerSeatSubmit = async () => {
+    try {
+      const isStationsValid = await form.trigger([
+        "departureStationId",
+        "arrivalStationId",
+      ])
+
+      if (!isStationsValid) {
+        return
+      }
+
+      const sharedValues = form.getValues()
+
+      const perSeatRequests = selectedSeats.map((seat) => {
+        const passenger = perSeatPassengers[seat]
+        if (!passenger) {
+          throw new Error(`Putnik nije izabran za sedište ${seat}`)
+        }
+
+        return {
+          ...sharedValues,
+          seatNumber: seat,
+          passengerId: passenger.id,
+        }
+      })
+
+      await createWithOptionalReturn(perSeatRequests)
+      clearSelectedSeats()
+      onComplete?.()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Greška pri kreiranju rezervacija")
+    }
+  }
+
+  const handleAddNewPassenger = async (passengerData: PassengerFormData) => {
+    try {
+      const passenger = await createPassenger(passengerData)
+
+      if (assignmentMode === "single") {
+        setSelectedPassenger(passenger)
+        form.setValue("passengerId", passenger.id)
+        setNewPassenger(passenger)
+      }
+
+      setShowPassengerForm(false)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  return {
+    onSubmit,
+    handlePerSeatSubmit,
+    handleAddNewPassenger,
+  }
+}

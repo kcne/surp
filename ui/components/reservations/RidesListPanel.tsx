@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
 import { format } from "date-fns"
 import { srLatn } from "date-fns/locale"
 import {
@@ -13,7 +12,6 @@ import {
   type ColumnFiltersState,
   type FilterFn,
 } from "@tanstack/react-table"
-import { formatDateDisplay, formatTimeDisplay } from "@/utils/dateHelpers"
 import type { Ride, RideInstance, RideStatus } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,18 +38,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { LineRoute } from "@/components/lines/LineRoute"
+import { RideInstanceCard } from "@/components/reservations/RideInstanceCard"
+import { RideInstanceInfoDialog } from "@/components/reservations/RideInstanceInfoDialog"
 import { cn } from "@/lib/utils"
 import { useRidesStore } from "@/stores/ridesStore"
 import { useReservationsStore } from "@/stores/reservationsStore"
-import { Armchair, CalendarDays, Check, ChevronsUpDown, Clock3, Filter, Info, Route, Search, Ticket, X } from "lucide-react"
+import { CalendarDays, Check, ChevronsUpDown, Filter, Search, Ticket, X } from "lucide-react"
 
 interface RidesListPanelProps {
   selectedDate: Date | undefined
@@ -504,144 +496,33 @@ export function RidesListPanel({
         <div className="space-y-3">
           {table.getRowModel().rows.map((row) => {
             const instance = row.original
-            const capacity = instance.ride.busCapacity
-            const reserved = instance.reservationCount || 0
-            const available = capacity - reserved
             const durationLabel = formatDuration(instance.ride.line.duration)
             const isPastRide = isRideInstanceInPast(instance)
 
             return (
-              <div
+              <RideInstanceCard
                 key={row.id}
-                className="w-full rounded-lg border bg-background p-4 shadow-sm"
-              >
-                <div className="grid gap-5 md:grid-cols-[auto_1.6fr_1fr_1fr_auto] md:items-center">
-                  <div className="flex justify-start">
-                    <Image
-                      src="/uvs-logo.svg"
-                      alt="Company logo"
-                      width={132}
-                      height={32}
-                      className="h-8 w-auto"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <p className="inline-flex items-center gap-1 text-xs font-semibold uppercase text-muted-foreground">
-                      <Route className="h-3.5 w-3.5" />
-                      Vožnja:
-                    </p>
-                    <p className="text-base font-semibold">
-                      {instance.ride.line.departureStation.name} -&gt; {instance.ride.line.arrivalStation.name}
-                    </p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <p className="inline-flex items-center gap-1 text-xs font-semibold uppercase text-muted-foreground">
-                      <Clock3 className="h-3.5 w-3.5" />
-                      Vreme:
-                    </p>
-                    <p className="text-base font-semibold">{formatTimeDisplay(instance.departureTime)}</p>
-                    {durationLabel && (
-                      <p className="text-sm text-muted-foreground">({durationLabel})</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1">
-                    <p className="inline-flex items-center gap-1 text-xs font-semibold uppercase text-muted-foreground">
-                      <Armchair className="h-3.5 w-3.5" />
-                      Slobodno:
-                    </p>
-                    <p className="text-base font-semibold">{available}/35</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex flex-col gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedInstance(instance)
-                        setInfoModalOpen(true)
-                      }}
-                    >
-                      <Info className="mr-2 h-4 w-4" />
-                      Više informacija
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleViewSeats(instance)}
-                      disabled={instance.status === "cancelled" || isPastRide}
-                      title={isPastRide ? "Rezervacija za prošle vožnje nije moguća" : undefined}
-                    >
-                      <Ticket className="mr-2 h-4 w-4" />
-                      Rezerviši
-                    </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                instance={instance}
+                isPastRide={isPastRide}
+                durationLabel={durationLabel}
+                onViewInfo={(value) => {
+                  setSelectedInstance(value)
+                  setInfoModalOpen(true)
+                }}
+                onReserve={handleViewSeats}
+              />
             )
           })}
         </div>
       )}
 
-      <Dialog open={infoModalOpen} onOpenChange={setInfoModalOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Više informacija</DialogTitle>
-            <DialogDescription>
-              {selectedInstance?.ride.line.name}
-            </DialogDescription>
-          </DialogHeader>
-          {selectedInstance && (
-            <div className="space-y-4">
-              <div className="grid gap-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-2">
-                <p className="text-sm">
-                  Datum: <span className="font-medium">{formatDateDisplay(selectedInstance.date)}</span>
-                </p>
-                <p className="text-sm">
-                  Vreme: <span className="font-medium">{formatTimeDisplay(selectedInstance.departureTime)}</span>
-                </p>
-                <p className="text-sm">
-                  Status: <span className="font-medium">{statusLabels[selectedInstance.status]}</span>
-                </p>
-                <p className="text-sm">
-                  Putnika: <span className="font-medium">{selectedInstanceReservations.length}</span>
-                </p>
-              </div>
-
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <p className="mb-3 text-sm font-semibold">Ruta</p>
-                <LineRoute line={selectedInstance.ride.line} />
-              </div>
-
-              <div className="rounded-lg border p-4">
-                <p className="mb-3 text-sm font-semibold">Lista putnika</p>
-                {selectedInstanceReservations.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nema rezervisanih putnika za ovu vožnju.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {selectedInstanceReservations.map((reservation) => (
-                      <div
-                        key={reservation.id}
-                        className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2 text-sm"
-                      >
-                        <span className="font-medium">
-                          {reservation.passenger.firstName} {reservation.passenger.lastName}
-                        </span>
-                        <span className="text-muted-foreground">
-                          Sedište {reservation.seatNumber} • {reservation.departureStation.name} → {reservation.arrivalStation.name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <RideInstanceInfoDialog
+        open={infoModalOpen}
+        onOpenChange={setInfoModalOpen}
+        selectedInstance={selectedInstance}
+        selectedInstanceReservations={selectedInstanceReservations}
+        statusLabels={statusLabels}
+      />
     </div>
   )
 }

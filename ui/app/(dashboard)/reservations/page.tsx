@@ -1,34 +1,12 @@
 "use client"
 
-import { useEffect } from "react"
 import { Layout } from "@/components/layout/Layout"
 import { RidesListPanel } from "@/components/reservations/RidesListPanel"
-import { useRidesStore } from "@/stores/ridesStore"
+import { useReservationsDashboardPage } from "@/hooks/useReservationsDashboardPage"
 import { Ticket } from "lucide-react"
 
-function isValidDate(date: any): date is Date {
-  return date instanceof Date && !isNaN(date.getTime())
-}
-
 export default function ReservationsPage() {
-  const { fetchRides, fetchRideInstances, rideInstances, selectedDate, setSelectedDate, loading } =
-    useRidesStore()
-
-  // Initialize: fetch GTFS trip instances for the persisted date on mount
-  useEffect(() => {
-    fetchRides()
-    if (selectedDate && isValidDate(selectedDate)) {
-      fetchRideInstances(selectedDate)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Only run on mount
-
-  const handleDateSelect = (date: Date | undefined) => {
-    if (date && isValidDate(date)) {
-      setSelectedDate(date)
-      fetchRideInstances(date)
-    }
-  }
+  const { rideInstances, selectedDate, loading } = useReservationsDashboardPage()
 
   return (
     <Layout>
@@ -44,7 +22,7 @@ export default function ReservationsPage() {
         </div>
 
         <RidesListPanel
-          selectedDate={selectedDate && isValidDate(selectedDate) ? selectedDate : undefined}
+          selectedDate={selectedDate}
           rideInstances={rideInstances}
           loading={loading}
         />

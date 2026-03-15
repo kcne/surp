@@ -82,7 +82,7 @@ export function PassengerSearch({ value, onSelect, onAddNew }: PassengerSearchPr
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2 py-4">
-                  <p>Nema rezultata za "{searchQuery}"</p>
+                  <p>Nema rezultata za &quot;{searchQuery}&quot;</p>
                   {onAddNew && (
                     <Button
                       variant="outline"

@@ -1,12 +1,8 @@
 "use client"
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+  FormModalShell,
+} from "@/components/forms/FormModalShell"
 import { PassengerForm } from "@/components/passengers/PassengerForm"
 import { usePassengersStore } from "@/stores/passengersStore"
 import type { Passenger, PassengerFormData } from "@/types"
@@ -36,16 +32,15 @@ export function PassengerModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[720px]">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Izmeni Putnika" : "Dodaj Novog Putnika"}</DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? "Ažurirajte informacije o putniku."
-              : "Unesite informacije o novom putniku."}
-          </DialogDescription>
-        </DialogHeader>
+    <FormModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isEdit ? "Izmeni Putnika" : "Dodaj Novog Putnika"}
+      description={isEdit
+        ? "Ažurirajte informacije o putniku."
+        : "Unesite informacije o novom putniku."}
+      contentClassName="sm:max-w-[720px]"
+    >
 
         <PassengerForm
           key={passenger?.id || "new-passenger"}
@@ -67,7 +62,6 @@ export function PassengerModal({
           onCancel={() => onOpenChange(false)}
           loading={loading}
         />
-      </DialogContent>
-    </Dialog>
+    </FormModalShell>
   )
 }

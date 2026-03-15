@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { Layout } from "@/components/layout/Layout"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -10,41 +10,29 @@ import { useStationsStore } from "@/stores/stationsStore"
 import { LineModal } from "@/components/lines/LineModal"
 import { DeleteLineDialog } from "@/components/lines/DeleteLineDialog"
 import { LinesDataTable } from "@/components/lines/LinesDataTable"
+import { useCrudDialogState } from "@/hooks/useCrudDialogState"
 import type { Line } from "@/types"
 
 export default function LinesPage() {
   const { lines, loading, fetchLines } = useLinesStore()
   const { fetchStations } = useStationsStore()
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [selectedLine, setSelectedLine] = useState<Line | null>(null)
-  const [lineToDelete, setLineToDelete] = useState<Line | null>(null)
+  const {
+    isModalOpen,
+    isDeleteDialogOpen,
+    selectedItem: selectedLine,
+    itemToDelete: lineToDelete,
+    openCreate,
+    openEdit,
+    closeModal,
+    openDelete,
+    setIsDeleteDialogOpen,
+  } = useCrudDialogState<Line>()
 
   useEffect(() => {
     fetchStations().then(() => {
       fetchLines()
     })
   }, [fetchStations, fetchLines])
-
-  const handleEdit = (line: Line) => {
-    setSelectedLine(line)
-    setIsModalOpen(true)
-  }
-
-  const handleDelete = (line: Line) => {
-    setLineToDelete(line)
-    setIsDeleteDialogOpen(true)
-  }
-
-  const handleAddNew = () => {
-    setSelectedLine(null)
-    setIsModalOpen(true)
-  }
-
-  const handleModalClose = () => {
-    setIsModalOpen(false)
-    setSelectedLine(null)
-  }
 
   return (
     <Layout>
@@ -59,7 +47,7 @@ export default function LinesPage() {
               Upravljajte autobuskim linijama u sistemu
             </p>
           </div>
-          <Button onClick={handleAddNew}>
+          <Button onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />
             Dodaj Liniju
           </Button>
@@ -80,18 +68,18 @@ export default function LinesPage() {
             <p className="mb-4 text-sm text-muted-foreground">
               Dodajte prvu liniju da biste počeli
             </p>
-            <Button onClick={handleAddNew}>
+            <Button onClick={openCreate}>
               <Plus className="mr-2 h-4 w-4" />
               Dodaj Liniju
             </Button>
           </div>
         ) : (
-          <LinesDataTable lines={lines} onEdit={handleEdit} onDelete={handleDelete} />
+          <LinesDataTable lines={lines} onEdit={openEdit} onDelete={openDelete} />
         )}
 
         <LineModal
           open={isModalOpen}
-          onOpenChange={handleModalClose}
+          onOpenChange={closeModal}
           line={selectedLine}
         />
 

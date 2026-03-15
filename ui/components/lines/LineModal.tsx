@@ -1,20 +1,13 @@
 "use client"
 
 import { useEffect } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { lineSchema } from "@/utils/validators"
 import type { Line, LineFormData } from "@/types"
 import { useLinesStore } from "@/stores/linesStore"
 import { useStationsStore } from "@/stores/stationsStore"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -41,7 +34,38 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import { FormModalShell } from "@/components/forms/FormModalShell"
 import { PlusCircle, Save, X } from "lucide-react"
+
+const LINE_DEFAULT_VALUES: LineFormData = {
+  name: "",
+  departureStationId: "",
+  arrivalStationId: "",
+  intermediateStationIds: [],
+  directionMode: "both",
+  distance: undefined,
+  duration: undefined,
+  basePrice: undefined,
+  isActive: true,
+}
+
+function getLineFormValues(line?: Line | null): LineFormData {
+  if (!line) {
+    return LINE_DEFAULT_VALUES
+  }
+
+  return {
+    name: line.name,
+    departureStationId: line.departureStation.id,
+    arrivalStationId: line.arrivalStation.id,
+    intermediateStationIds: line.intermediateStations.map((station) => station.stationId),
+    directionMode: line.directionMode || "single",
+    distance: line.distance,
+    duration: line.duration,
+    basePrice: line.basePrice,
+    isActive: line.isActive,
+  }
+}
 
 interface LineModalProps {
   open: boolean
@@ -63,45 +87,11 @@ export function LineModal({ open, onOpenChange, line }: LineModalProps) {
 
   const form = useForm<LineFormData>({
     resolver: zodResolver(lineSchema),
-    defaultValues: {
-      name: "",
-      departureStationId: "",
-      arrivalStationId: "",
-      intermediateStationIds: [],
-      directionMode: "both",
-      distance: undefined,
-      duration: undefined,
-      basePrice: undefined,
-      isActive: true,
-    },
+    defaultValues: LINE_DEFAULT_VALUES,
   })
 
   useEffect(() => {
-    if (line) {
-      form.reset({
-        name: line.name,
-        departureStationId: line.departureStation.id,
-        arrivalStationId: line.arrivalStation.id,
-        intermediateStationIds: line.intermediateStations.map((s) => s.stationId),
-        directionMode: line.directionMode || "single",
-        distance: line.distance,
-        duration: line.duration,
-        basePrice: line.basePrice,
-        isActive: line.isActive,
-      })
-    } else {
-      form.reset({
-        name: "",
-        departureStationId: "",
-        arrivalStationId: "",
-        intermediateStationIds: [],
-        directionMode: "both",
-        distance: undefined,
-        duration: undefined,
-        basePrice: undefined,
-        isActive: true,
-      })
-    }
+    form.reset(getLineFormValues(line))
   }, [line, form])
 
   const onSubmit = async (data: LineFormData) => {
@@ -118,27 +108,35 @@ export function LineModal({ open, onOpenChange, line }: LineModalProps) {
         await createLine({ ...data, name: autoName })
       }
       onOpenChange(false)
-      form.reset()
+      form.reset(LINE_DEFAULT_VALUES)
     } catch (error) {
       // Error is handled in store
     }
   }
 
-  const intermediateStationIds = form.watch("intermediateStationIds") || []
+  const departureStationId = useWatch({
+    control: form.control,
+    name: "departureStationId",
+  })
+  const arrivalStationId = useWatch({
+    control: form.control,
+    name: "arrivalStationId",
+  })
+  const intermediateStationIds = useWatch({
+    control: form.control,
+    name: "intermediateStationIds",
+  }) || []
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {isEdit ? "Izmeni Liniju" : "Dodaj Novu Liniju"}
-          </DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? "Izmenite informacije o liniji."
-              : "Unesite informacije o novoj liniji."}
-          </DialogDescription>
-        </DialogHeader>
+    <FormModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isEdit ? "Izmeni Liniju" : "Dodaj Novu Liniju"}
+      description={isEdit
+        ? "Izmenite informacije o liniji."
+        : "Unesite informacije o novoj liniji."}
+      contentClassName="sm:max-w-[700px] max-h-[90vh] overflow-y-auto"
+    >
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -185,7 +183,7 @@ export function LineModal({ open, onOpenChange, line }: LineModalProps) {
                       <SelectContent>
                         {stations
                           .filter(
-                            (s) => s.id !== form.watch("arrivalStationId")
+                            (s) => s.id !== arrivalStationId
                           )
                           .map((station) => (
                             <SelectItem key={station.id} value={station.id}>
@@ -217,7 +215,7 @@ export function LineModal({ open, onOpenChange, line }: LineModalProps) {
                       <SelectContent>
                         {stations
                           .filter(
-                            (s) => s.id !== form.watch("departureStationId")
+                            (s) => s.id !== departureStationId
                           )
                           .map((station) => (
                             <SelectItem key={station.id} value={station.id}>
@@ -241,8 +239,8 @@ export function LineModal({ open, onOpenChange, line }: LineModalProps) {
                     <IntermediateStationsList
                       selectedStationIds={field.value || []}
                       onChange={field.onChange}
-                      departureStationId={form.watch("departureStationId")}
-                      arrivalStationId={form.watch("arrivalStationId")}
+                      departureStationId={departureStationId}
+                      arrivalStationId={arrivalStationId}
                     />
                   </FormControl>
                   <FormMessage />
@@ -388,8 +386,7 @@ export function LineModal({ open, onOpenChange, line }: LineModalProps) {
             </DialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+    </FormModalShell>
   )
 }
 

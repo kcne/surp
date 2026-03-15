@@ -1,20 +1,14 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { rideSchema } from "@/utils/validators"
 import type { Ride, RideFormData } from "@/types"
 import { useRidesStore } from "@/stores/ridesStore"
 import { useLinesStore } from "@/stores/linesStore"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { DialogFooter } from "@/components/ui/dialog"
+import { FormModalShell } from "@/components/forms/FormModalShell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -92,7 +86,8 @@ export function RideModal({ open, onOpenChange, ride }: RideModalProps) {
   })
 
   const rideType = form.watch("type")
-  const daysOfWeek = form.watch("daysOfWeek") || []
+  const watchedDaysOfWeek = form.watch("daysOfWeek")
+  const daysOfWeek = useMemo(() => watchedDaysOfWeek ?? [], [watchedDaysOfWeek])
   const dayTimes = form.watch("dayTimes") || {}
 
   // Ensure dayTimes structure exists for all selected days
@@ -208,18 +203,15 @@ export function RideModal({ open, onOpenChange, ride }: RideModalProps) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {isEdit ? "Izmeni Vožnju" : "Dodaj Novu Vožnju"}
-          </DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? "Izmenite informacije o vožnji."
-              : "Unesite informacije o novoj vožnji."}
-          </DialogDescription>
-        </DialogHeader>
+    <FormModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isEdit ? "Izmeni Vožnju" : "Dodaj Novu Vožnju"}
+      description={isEdit
+        ? "Izmenite informacije o vožnji."
+        : "Unesite informacije o novoj vožnji."}
+      contentClassName="sm:max-w-[800px] max-h-[90vh] overflow-y-auto"
+    >
 
         <Form {...form}>
           <form 
@@ -726,8 +718,7 @@ export function RideModal({ open, onOpenChange, ride }: RideModalProps) {
             </DialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+    </FormModalShell>
   )
 }
 

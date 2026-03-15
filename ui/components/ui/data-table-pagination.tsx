@@ -4,14 +4,23 @@ import {
   Table,
 } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Hash, ListOrdered } from "lucide-react"
 
 interface DataTablePaginationProps<TData> {
   table: Table<TData>
+  pageSizeOptions?: number[]
 }
 
 export function DataTablePagination<TData>({
   table,
+  pageSizeOptions = [8, 16, 24],
 }: DataTablePaginationProps<TData>) {
   const pageCount = Math.max(table.getPageCount(), 1)
   const currentPage = table.getState().pagination.pageIndex
@@ -26,9 +35,25 @@ export function DataTablePagination<TData>({
         <div className="text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <ListOrdered className="h-3.5 w-3.5" />
-            Redova po strani {table.getState().pagination.pageSize}
+            Redova po strani
           </span>
         </div>
+
+        <Select
+          value={String(table.getState().pagination.pageSize)}
+          onValueChange={(value) => table.setPageSize(Number(value))}
+        >
+          <SelectTrigger className="h-8 w-[92px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {pageSizeOptions.map((size) => (
+              <SelectItem key={size} value={String(size)}>
+                {size}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <div className="text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1">
