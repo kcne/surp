@@ -194,6 +194,27 @@ describe('AuthController (e2e)', () => {
       .expect(401);
   });
 
+  it('rejects login when password change is required', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({
+      id: 'user-1',
+      tenantId: 'tenant-1',
+      username: 'demo-admin',
+      email: 'admin@demo.local',
+      passwordHash: activeUserPasswordHash,
+      role: 'ADMIN',
+      requirePasswordChange: true,
+      isActive: true
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/auth/login')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ username: 'demo-admin', password: 'demo-admin-pass' })
+      .expect(403);
+
+    expect(response.body.message).toBe('Password change required');
+  });
+
   it('returns validation error when tenant header is missing', async () => {
     const response = await request(app.getHttpServer())
       .post('/auth/login')
@@ -303,6 +324,34 @@ describe('AuthController (e2e)', () => {
       .expect(401);
 
     expect(response.body.message).toBe('Refresh token is expired');
+  });
+
+  it('rejects refresh when password change is required', async () => {
+    prismaMock.refreshSession.findUnique.mockResolvedValue({
+      id: 'session-1',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      user: {
+        id: 'user-1',
+        tenantId: 'tenant-1',
+        username: 'demo-admin',
+        email: 'admin@demo.local',
+        passwordHash: activeUserPasswordHash,
+        role: 'ADMIN',
+        requirePasswordChange: true,
+        isActive: true
+      }
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ refreshToken: 'refresh-token-1' })
+      .expect(403);
+
+    expect(response.body.message).toBe('Password change required');
   });
 
   it('logs out by revoking the current refresh session', async () => {

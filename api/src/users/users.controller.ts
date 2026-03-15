@@ -16,6 +16,7 @@ import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersQueryDto } from './dto/list-users.query.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { PaginatedUsersResponseDto, UserResponseDto } from './dto/user.response.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
@@ -106,5 +107,21 @@ export class UsersController {
     @Param('id') id: string
   ): Promise<UserResponseDto> {
     return this.usersService.softDelete(request.auth!, id);
+  }
+
+  @Post(':id/reset-password')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Reset a user password in the current tenant and revoke active sessions.' })
+  @ApiOkResponse({ type: UserResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failure.' })
+  @ApiNotFoundResponse({ description: 'User not found in current tenant.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  resetPassword(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: ResetPasswordDto
+  ): Promise<UserResponseDto> {
+    return this.usersService.resetPassword(request.auth!, id, dto);
   }
 }

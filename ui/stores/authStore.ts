@@ -13,8 +13,10 @@ import {
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
+  hasHydrated: boolean
   loading: boolean
   error: string | null
+  setHasHydrated: (hydrated: boolean) => void
   login: (username: string, password: string, tenantSlug: string) => Promise<void>
   logout: () => void
   clearError: () => void
@@ -25,8 +27,12 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
+      hasHydrated: false,
       loading: false,
       error: null,
+      setHasHydrated: (hydrated: boolean) => {
+        set({ hasHydrated: hydrated })
+      },
 
       login: async (username: string, password: string, tenantSlug: string) => {
         set({ loading: true, error: null })
@@ -85,6 +91,9 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true)
+      },
     }
   )
 )

@@ -23,6 +23,9 @@ export class UserResponseDto {
   @ApiProperty({ enum: UserRole })
   role!: UserRole;
 
+  @ApiProperty({ example: false })
+  requirePasswordChange!: boolean;
+
   @ApiProperty()
   isActive!: boolean;
 

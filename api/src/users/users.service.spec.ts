@@ -11,6 +11,12 @@ describe('UsersService', () => {
       count: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn()
+    },
+    refreshSession: {
+      updateMany: jest.fn()
+    },
+    auditEvent: {
+      create: jest.fn()
     }
   };
 
@@ -25,7 +31,13 @@ describe('UsersService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    prismaMock.$transaction.mockResolvedValue([[], 0]);
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => unknown) => {
+      if (typeof callback === 'function') {
+        return callback(prismaMock);
+      }
+
+      return [[], 0];
+    });
     service = new UsersService(prismaMock as never);
   });
 
@@ -69,6 +81,7 @@ describe('UsersService', () => {
           username: 'manager-a',
           email: 'manager-a@demo.local',
           role: UserRole.MANAGER,
+          requirePasswordChange: false,
           isActive: true,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -107,6 +120,7 @@ describe('UsersService', () => {
       username: 'manager-a',
       email: 'manager-a@demo.local',
       role: UserRole.MANAGER,
+      requirePasswordChange: false,
       isActive: false,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -126,6 +140,7 @@ describe('UsersService', () => {
       username: 'manager-a',
       email: 'manager-a@demo.local',
       role: UserRole.MANAGER,
+      requirePasswordChange: false,
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -158,6 +173,7 @@ describe('UsersService', () => {
       username: 'manager-a',
       email: 'manager-a@demo.local',
       role: UserRole.STAFF,
+      requirePasswordChange: false,
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -183,5 +199,49 @@ describe('UsersService', () => {
 
   it('rejects self soft delete', async () => {
     await expect(service.softDelete(auth, auth.sub)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('resets password, revokes active sessions, and writes audit event', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'user-2' });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'user-2',
+      tenantId: 'tenant-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      username: 'manager-a',
+      email: 'manager-a@demo.local',
+      role: UserRole.MANAGER,
+      requirePasswordChange: true,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    prismaMock.refreshSession.updateMany.mockResolvedValue({ count: 2 });
+    prismaMock.auditEvent.create.mockResolvedValue({ id: 'evt-1' });
+
+    const result = await service.resetPassword(auth, 'user-2', {
+      newPassword: 'new-strong-password-123'
+    });
+
+    expect(result.requirePasswordChange).toBe(true);
+    expect(prismaMock.refreshSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: 'tenant-1',
+          userId: 'user-2',
+          revokedAt: null
+        })
+      })
+    );
+    expect(prismaMock.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: 'tenant-1',
+          actorUserId: 'admin-1',
+          targetUserId: 'user-2',
+          type: 'PASSWORD_RESET_ADMIN'
+        })
+      })
+    );
   });
 });

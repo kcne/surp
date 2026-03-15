@@ -319,6 +319,42 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 2. CI optional Newman run passes.
 5. Exit criteria: Manual and CI API verification standardized.
 
+**Slice 20 - Password Reset and Recovery Flows** - PLANNED
+1. Goal: Support secure password recovery and admin-assisted reset for tenant users.
+2. Scope:
+1. Admin reset endpoint for tenant users:
+	1. `POST /users/:id/reset-password`
+	2. Auth: `ADMIN` role in same tenant.
+	3. Request body:
+		1. `newPassword: string` (min 8)
+		2. `requirePasswordChange: boolean` (optional, default `true`)
+	4. Behavior:
+		1. Re-hash and replace password for target user.
+		2. Revoke all active refresh sessions for target user.
+		3. Write audit event (`PASSWORD_RESET_ADMIN`).
+2. Optional self-service forgot-password flow (if email channel is enabled):
+	1. `POST /auth/password/forgot`
+	2. `POST /auth/password/reset`
+	3. Token-based reset with expiration and one-time use.
+3. DTO and persistence updates:
+	1. Add password reset DTOs and OpenAPI examples.
+	2. Add `requirePasswordChange` flag to user model if policy is required.
+	3. Extend login flow to block normal access until password change is completed when flag is set.
+3. Tests:
+1. Admin can reset password only inside own tenant.
+2. Manager and staff cannot reset passwords.
+3. Reset revokes existing refresh sessions of target user.
+4. User can login with new password and cannot login with old password.
+5. Failure paths:
+	1. Non-existing user returns not found.
+	2. Invalid password policy returns bad request.
+	3. Cross-tenant target user returns forbidden/not found.
+4. Validation:
+1. OpenAPI updated and linted.
+2. Postman collection updated with folder `Users > Password Reset` and negative scenarios.
+3. Newman run validates local environment flow.
+5. Exit criteria: Tenant admins can safely recover user access without DB manual intervention.
+
 **Slice 20 - CI Pipeline and Quality Gates**
 1. Goal: Prevent regressions.
 2. Scope:

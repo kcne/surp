@@ -95,6 +95,10 @@ export class AuthService {
       throw new ForbiddenException('User is inactive');
     }
 
+    if ((existingSession.user as { requirePasswordChange?: boolean }).requirePasswordChange) {
+      throw new ForbiddenException('Password change required');
+    }
+
     const { accessToken, nextRefreshToken } = await this.prisma.$transaction(async (tx) => {
       const nowTx = new Date();
       const revokeResult = await tx.refreshSession.updateMany({
@@ -250,6 +254,10 @@ export class AuthService {
 
     if (!user.isActive) {
       throw new ForbiddenException('User is inactive');
+    }
+
+    if ((user as { requirePasswordChange?: boolean }).requirePasswordChange) {
+      throw new ForbiddenException('Password change required');
     }
 
     return user;

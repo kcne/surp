@@ -3,8 +3,10 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { useAuthStore } from "@/stores/authStore"
 import {
   BarChart3,
+  Building2,
   MapPin,
   Route,
   Calendar,
@@ -47,12 +49,25 @@ const menuItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { user } = useAuthStore()
+
+  const scopedMenuItems =
+    user?.role === "ADMIN"
+      ? [
+          ...menuItems,
+          {
+            title: "Upravljanje Agencijom",
+            href: "/agency-management",
+            icon: Building2,
+          },
+        ]
+      : menuItems
 
   return (
     <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:top-16 md:flex md:w-60 md:flex-col md:border-r md:bg-background">
       <div className="flex h-full flex-col">
         <nav className="flex-1 space-y-1 px-3 py-4">
-          {menuItems.map((item) => {
+          {scopedMenuItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href || pathname?.startsWith(item.href + "/")
 

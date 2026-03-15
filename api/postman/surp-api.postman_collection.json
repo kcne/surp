@@ -741,6 +741,214 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Password Reset",
+          "item": [
+            {
+              "name": "Create Password Reset User (Admin)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenantSlug}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{passwordResetUsername}}\",\n  \"email\": \"{{passwordResetEmail}}\",\n  \"password\": \"{{passwordResetOriginalPassword}}\",\n  \"role\": \"STAFF\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "users"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;",
+                      "pm.environment.set('passwordResetUsername', `reset_user_${suffix}`);",
+                      "pm.environment.set('passwordResetEmail', `reset_user_${suffix}@demo.local`);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status code is 201', function () {",
+                      "  pm.response.to.have.status(201);",
+                      "});",
+                      "const body = pm.response.json();",
+                      "if (body.id) {",
+                      "  pm.environment.set('passwordResetUserId', body.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Reset Password (Admin)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenantSlug}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"newPassword\": \"{{passwordResetNewPassword}}\",\n  \"requirePasswordChange\": false\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{passwordResetUserId}}/reset-password",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "users",
+                    "{{passwordResetUserId}}",
+                    "reset-password"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status code is 201', function () {",
+                      "  pm.response.to.have.status(201);",
+                      "});",
+                      "const body = pm.response.json();",
+                      "pm.test('Reset response includes password policy flag', function () {",
+                      "  pm.expect(body).to.have.property(\"requirePasswordChange\", false);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Login With Old Password Fails",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenantSlug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{passwordResetUsername}}\",\n  \"password\": \"{{passwordResetOriginalPassword}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "login"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status code is 401', function () {",
+                      "  pm.response.to.have.status(401);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Login With New Password Succeeds",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenantSlug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{passwordResetUsername}}\",\n  \"password\": \"{{passwordResetNewPassword}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "login"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status code is 200', function () {",
+                      "  pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -3911,6 +4119,114 @@
               }
             }
           ]
+        },
+        {
+          "name": "Users - Reset Password Invalid Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"short\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{passwordResetTargetUserId}}/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{passwordResetTargetUserId}}",
+                "reset-password"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const targetUserId = pm.environment.get('passwordResetUserId') || pm.environment.get('currentUserId') || 'fallback-user-id';",
+                  "pm.environment.set('passwordResetTargetUserId', targetUserId);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Users - Reset Password Unknown User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"{{passwordResetNewPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/not-a-real-user/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "not-a-real-user",
+                "reset-password"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', function () {",
+                  "  pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -4373,6 +4689,30 @@
     },
     {
       "key": "newPlatformTenantSlug",
+      "value": ""
+    },
+    {
+      "key": "passwordResetUsername",
+      "value": "slice20_reset_user"
+    },
+    {
+      "key": "passwordResetEmail",
+      "value": "slice20_reset_user@demo.local"
+    },
+    {
+      "key": "passwordResetOriginalPassword",
+      "value": "reset-user-pass-123"
+    },
+    {
+      "key": "passwordResetNewPassword",
+      "value": "reset-user-new-pass-123"
+    },
+    {
+      "key": "passwordResetUserId",
+      "value": ""
+    },
+    {
+      "key": "passwordResetTargetUserId",
       "value": ""
     }
   ],

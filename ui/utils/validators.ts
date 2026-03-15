@@ -107,6 +107,27 @@ export const passengerSchema = z.object({
   notes: z.string().optional(),
 })
 
+// Agency user validators
+export const createAgencyUserSchema = z.object({
+  username: z.string().min(1, "Korisničko ime je obavezno"),
+  email: z.string().email("Neispravan format email-a"),
+  password: z
+    .string()
+    .min(8, "Lozinka mora imati najmanje 8 karaktera"),
+  role: z.enum(["MANAGER", "STAFF"], {
+    required_error: "Rola je obavezna",
+  }),
+})
+
+export const updateAgencyUserSchema = z.object({
+  username: z.string().min(1, "Korisničko ime je obavezno"),
+  email: z.string().email("Neispravan format email-a"),
+  role: z.enum(["MANAGER", "STAFF"], {
+    required_error: "Rola je obavezna",
+  }),
+  isActive: z.boolean(),
+})
+
 // Reservation validators
 export const reservationSchema = z.object({
   rideInstanceId: z.string().min(1, "Vožnja je obavezna"),

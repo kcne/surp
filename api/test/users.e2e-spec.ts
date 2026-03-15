@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
+import { hash } from 'bcryptjs';
 import { UserRole } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
@@ -8,6 +9,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('UsersController (e2e)', () => {
   let app: INestApplication;
+  let mutablePasswordHash: string;
 
   const prismaMock = {
     $transaction: jest.fn(),
@@ -24,6 +26,14 @@ describe('UsersController (e2e)', () => {
       count: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn()
+    },
+    refreshSession: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      updateMany: jest.fn()
+    },
+    auditEvent: {
+      create: jest.fn()
     }
   };
 
@@ -34,6 +44,7 @@ describe('UsersController (e2e)', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mutablePasswordHash = await hash('strong-password-123', 10);
 
     prismaMock.tenant.findUnique.mockImplementation(async ({ where }: { where: { slug: string } }) => {
       if (where.slug === 'demo-tenant') {
@@ -103,6 +114,7 @@ describe('UsersController (e2e)', () => {
 
       throw new Error('invalid token');
     });
+    jwtServiceMock.sign.mockReturnValue('access-token');
 
     prismaMock.user.create.mockResolvedValue({
       id: 'user-2',
@@ -112,31 +124,59 @@ describe('UsersController (e2e)', () => {
       username: 'ops-manager',
       email: 'ops.manager@demo.local',
       role: UserRole.MANAGER,
+      requirePasswordChange: false,
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date()
     });
 
-    prismaMock.$transaction.mockResolvedValue([
-      [
-        {
-          id: 'admin-1',
-          tenantId: 'tenant-1',
-          createdById: null,
-          updatedById: null,
-          username: 'demo-admin',
-          email: 'admin@demo.local',
-          role: UserRole.ADMIN,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      ],
-      1
-    ]);
+    prismaMock.$transaction.mockImplementation(async (input: unknown) => {
+      if (typeof input === 'function') {
+        return input(prismaMock);
+      }
 
-    prismaMock.user.findFirst.mockResolvedValue({ id: 'user-2' });
-    prismaMock.user.update.mockResolvedValue({
+      return [
+        [
+          {
+            id: 'admin-1',
+            tenantId: 'tenant-1',
+            createdById: null,
+            updatedById: null,
+            username: 'demo-admin',
+            email: 'admin@demo.local',
+            role: UserRole.ADMIN,
+            requirePasswordChange: false,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        ],
+        1
+      ];
+    });
+
+    prismaMock.user.findFirst.mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
+      if (where.id) {
+        return { id: 'user-2' };
+      }
+
+      return {
+        id: 'user-2',
+        tenantId: 'tenant-1',
+        username: 'ops-manager',
+        email: 'ops.manager@demo.local',
+        passwordHash: mutablePasswordHash,
+        role: UserRole.MANAGER,
+        requirePasswordChange: false,
+        isActive: true
+      };
+    });
+    prismaMock.user.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      if (typeof data.passwordHash === 'string') {
+        mutablePasswordHash = data.passwordHash;
+      }
+
+      return {
       id: 'user-2',
       tenantId: 'tenant-1',
       createdById: 'admin-1',
@@ -144,10 +184,16 @@ describe('UsersController (e2e)', () => {
       username: 'ops-manager',
       email: 'ops.manager@demo.local',
       role: UserRole.STAFF,
+      requirePasswordChange: Boolean(data.requirePasswordChange),
       isActive: false,
       createdAt: new Date(),
       updatedAt: new Date()
+      };
     });
+    prismaMock.refreshSession.create.mockResolvedValue({ id: 'session-1' });
+    prismaMock.refreshSession.findUnique.mockResolvedValue(null);
+    prismaMock.refreshSession.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.auditEvent.create.mockResolvedValue({ id: 'evt-1' });
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule]
@@ -416,5 +462,101 @@ describe('UsersController (e2e)', () => {
       .set('X-Tenant-Slug', 'demo-tenant')
       .set('Authorization', 'Bearer access-token-staff')
       .expect(403);
+  });
+
+  it('admin can reset user password inside own tenant', async () => {
+    prismaMock.user.findFirst.mockResolvedValueOnce({ id: 'user-2' });
+    prismaMock.user.update.mockResolvedValueOnce({
+      id: 'user-2',
+      tenantId: 'tenant-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      username: 'ops-manager',
+      email: 'ops.manager@demo.local',
+      role: UserRole.MANAGER,
+      requirePasswordChange: true,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/users/user-2/reset-password')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        newPassword: 'new-strong-password-123',
+        requirePasswordChange: true
+      })
+      .expect(201);
+
+    expect(response.body.id).toBe('user-2');
+    expect(response.body.requirePasswordChange).toBe(true);
+    expect(prismaMock.refreshSession.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.auditEvent.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('manager and staff cannot reset passwords', async () => {
+    await request(app.getHttpServer())
+      .post('/users/user-2/reset-password')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-manager')
+      .send({ newPassword: 'new-strong-password-123' })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post('/users/user-2/reset-password')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-staff')
+      .send({ newPassword: 'new-strong-password-123' })
+      .expect(403);
+  });
+
+  it('returns not found for cross-tenant or missing target user reset', async () => {
+    prismaMock.user.findFirst.mockResolvedValueOnce(null);
+
+    const response = await request(app.getHttpServer())
+      .post('/users/user-missing/reset-password')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({ newPassword: 'new-strong-password-123' })
+      .expect(404);
+
+    expect(response.body.message).toBe('User not found');
+  });
+
+  it('returns validation error for invalid password policy', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/users/user-2/reset-password')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({ newPassword: 'short' })
+      .expect(400);
+
+    expect(response.body.message).toEqual(expect.arrayContaining(['newPassword must be longer than or equal to 8 characters']));
+  });
+
+  it('allows login with new password and rejects old password after reset', async () => {
+    await request(app.getHttpServer())
+      .post('/users/user-2/reset-password')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        newPassword: 'new-strong-password-123',
+        requirePasswordChange: false
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ username: 'ops-manager', password: 'strong-password-123' })
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .send({ username: 'ops-manager', password: 'new-strong-password-123' })
+      .expect(200);
   });
 });

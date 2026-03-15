@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { AccessTokenPayload } from '../auth/auth.types';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
@@ -12,6 +12,7 @@ import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersQueryDto } from './dto/list-users.query.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { PaginatedUsersResponseDto, UserResponseDto } from './dto/user.response.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
@@ -23,6 +24,7 @@ type SafeUserSelect = {
   username: true;
   email: true;
   role: true;
+  requirePasswordChange: true;
   isActive: true;
   createdAt: true;
   updatedAt: true;
@@ -38,6 +40,7 @@ export class UsersService {
     username: true,
     email: true,
     role: true,
+    requirePasswordChange: true,
     isActive: true,
     createdAt: true,
     updatedAt: true
@@ -188,6 +191,79 @@ export class UsersService {
       },
       data: withUpdateAudit({ isActive: false }, auth.sub),
       select: this.safeUserSelect
+    });
+  }
+
+  async resetPassword(auth: AccessTokenPayload, id: string, dto: ResetPasswordDto): Promise<UserResponseDto> {
+    const targetUser = await this.prisma.user.findFirst({
+      where: {
+        id,
+        tenantId: auth.tenantId
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    const now = new Date();
+    const requirePasswordChange = dto.requirePasswordChange ?? true;
+    const passwordHash = await hash(dto.newPassword, 10);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.update({
+        where: {
+          id
+        },
+        data: withUpdateAudit(
+          {
+            passwordHash,
+            requirePasswordChange
+          },
+          auth.sub,
+          now
+        ),
+        select: this.safeUserSelect
+      });
+
+      const revokedSessionsResult = await tx.refreshSession.updateMany({
+        where: {
+          tenantId: auth.tenantId,
+          userId: id,
+          revokedAt: null
+        },
+        data: withUpdateAudit(
+          {
+            revokedAt: now
+          },
+          auth.sub,
+          now
+        )
+      });
+
+      const txWithAuditEvent = tx as typeof tx & {
+        auditEvent: {
+          create: (args: { data: Record<string, unknown> }) => Promise<unknown>;
+        };
+      };
+
+      await txWithAuditEvent.auditEvent.create({
+        data: {
+          tenantId: auth.tenantId,
+          actorUserId: auth.sub,
+          targetUserId: id,
+          type: 'PASSWORD_RESET_ADMIN',
+          metadata: {
+            requirePasswordChange,
+            revokedSessions: revokedSessionsResult.count
+          } as Prisma.InputJsonValue
+        }
+      });
+
+      return updatedUser;
     });
   }
 

@@ -589,6 +589,73 @@
         ]
       }
     },
+    "/users/{id}/reset-password": {
+      "post": {
+        "operationId": "UsersController_resetPassword",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "User not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Reset a user password in the current tenant and revoke active sessions.",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
     "/stations": {
       "post": {
         "operationId": "StationsController_create",
@@ -3855,6 +3922,10 @@
               "STAFF"
             ]
           },
+          "requirePasswordChange": {
+            "type": "boolean",
+            "example": false
+          },
           "isActive": {
             "type": "boolean"
           },
@@ -3875,6 +3946,7 @@
           "username",
           "email",
           "role",
+          "requirePasswordChange",
           "isActive",
           "createdAt",
           "updatedAt"
@@ -3932,6 +4004,25 @@
             "example": false
           }
         }
+      },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "newPassword": {
+            "type": "string",
+            "example": "strong-new-password-123",
+            "description": "New password for the target user. Minimum 8 characters."
+          },
+          "requirePasswordChange": {
+            "type": "boolean",
+            "example": true,
+            "default": true,
+            "description": "When true, blocks normal login until user updates password via policy flow."
+          }
+        },
+        "required": [
+          "newPassword"
+        ]
       },
       "CreateStationDto": {
         "type": "object",
