@@ -5,6 +5,7 @@ import { envValidationSchema } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { LinesModule } from './lines/lines.module';
 import { PassengersModule } from './passengers/passengers.module';
+import { PlatformTenantsModule } from './platform-tenants/platform-tenants.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReportingModule } from './reporting/reporting.module';
 import { ReservationsModule } from './reservations/reservations.module';
@@ -25,6 +26,7 @@ import { UsersModule } from './users/users.module';
     StationsModule,
     LinesModule,
     PassengersModule,
+    PlatformTenantsModule,
     RidesModule,
     ReservationsModule,
     ReportingModule

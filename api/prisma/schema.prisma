@@ -8,6 +8,7 @@ datasource db {
 }
 
 enum UserRole {
+  SUPERADMIN
   ADMIN
   MANAGER
   STAFF
@@ -67,6 +68,8 @@ model Tenant {
   slug            String           @unique
   name            String
   isActive        Boolean          @default(true)
+  deactivatedAt   DateTime?
+  deactivatedById String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   users           User[]
@@ -79,6 +82,8 @@ model Tenant {
   rideDayTimes    RideDayTime[]
   rideExceptions  RideException[]
   reservations    Reservation[]
+
+  @@index([isActive])
 }
 
 model User {

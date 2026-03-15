@@ -8,7 +8,7 @@ import {
   UnauthorizedException
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY } from './auth.constants';
+import { IS_PUBLIC_KEY, SKIP_TENANT_GUARD_KEY } from './auth.constants';
 import { RequestWithAuth } from './auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -25,7 +25,12 @@ export class TenantGuard implements CanActivate {
       context.getClass()
     ]);
 
-    if (isPublic) {
+    const skipTenantGuard = this.reflector.getAllAndOverride<boolean>(SKIP_TENANT_GUARD_KEY, [
+      context.getHandler(),
+      context.getClass()
+    ]);
+
+    if (isPublic || skipTenantGuard) {
       return true;
     }
 

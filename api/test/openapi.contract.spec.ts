@@ -74,4 +74,25 @@ describe('OpenAPI contract', () => {
     expect(health).toBeDefined();
     expect(health?.security).toBeUndefined();
   });
+
+  it('documents platform tenants endpoint with bearer auth and without tenant header requirement', () => {
+    const listPlatformTenants = document.paths['/platform/tenants']?.get;
+    expect(listPlatformTenants).toBeDefined();
+
+    const hasBearerSecurity =
+      listPlatformTenants?.security?.some((entry) =>
+        Object.prototype.hasOwnProperty.call(entry, 'access-token')
+      ) ?? false;
+
+    expect(hasBearerSecurity).toBe(true);
+
+    const tenantHeader = listPlatformTenants?.parameters?.find(
+      (parameter) =>
+        '$ref' in parameter === false &&
+        parameter.in === 'header' &&
+        parameter.name.toLowerCase() === 'x-tenant-slug'
+    );
+
+    expect(tenantHeader).toBeUndefined();
+  });
 });

@@ -24,9 +24,12 @@ async function main() {
   }
 
   const tenantSlug = 'demo-tenant';
+  const platformTenantSlug = 'platform';
   const adminUsername = 'demo-admin';
   const adminPassword = 'demo-admin-pass';
   const inactiveUsername = 'demo-inactive';
+  const superadminUsername = 'platform-superadmin';
+  const superadminPassword = 'platform-superadmin-pass';
 
   const tenant = await prisma.tenant.upsert({
     where: { slug: tenantSlug },
@@ -41,8 +44,26 @@ async function main() {
     }
   });
 
+  const platformTenant = await prisma.tenant.upsert({
+    where: { slug: platformTenantSlug },
+    update: {
+      name: 'Platform Tenant',
+      isActive: true,
+      deactivatedAt: null,
+      deactivatedById: null
+    },
+    create: {
+      slug: platformTenantSlug,
+      name: 'Platform Tenant',
+      isActive: true,
+      deactivatedAt: null,
+      deactivatedById: null
+    }
+  });
+
   const adminPasswordHash = await hash(adminPassword, 10);
   const inactivePasswordHash = await hash('demo-inactive-pass', 10);
+  const superadminPasswordHash = await hash(superadminPassword, 10);
 
   const adminUser = await prisma.user.upsert({
     where: {
@@ -87,6 +108,29 @@ async function main() {
       passwordHash: inactivePasswordHash,
       role: 'STAFF',
       isActive: false
+    }
+  });
+
+  await prisma.user.upsert({
+    where: {
+      tenantId_username: {
+        tenantId: platformTenant.id,
+        username: superadminUsername
+      }
+    },
+    update: {
+      email: 'platform.superadmin@demo.local',
+      passwordHash: superadminPasswordHash,
+      role: 'SUPERADMIN',
+      isActive: true
+    },
+    create: {
+      tenantId: platformTenant.id,
+      username: superadminUsername,
+      email: 'platform.superadmin@demo.local',
+      passwordHash: superadminPasswordHash,
+      role: 'SUPERADMIN',
+      isActive: true
     }
   });
 

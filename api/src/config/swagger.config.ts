@@ -8,7 +8,7 @@ export function createSwaggerDocument(app: INestApplication): OpenAPIObject {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('SURP API')
     .setDescription(
-      'Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers, and the tenant must match the token claim.'
+      'Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.'
     )
     .addBearerAuth(
       {
