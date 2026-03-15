@@ -10,6 +10,8 @@ interface AgencyUsersDataTableProps {
   onEdit: (user: AgencyUser) => void
   onDelete: (user: AgencyUser) => void
   onResetPassword: (user: AgencyUser) => void
+  canResetPassword: boolean
+  currentUserId?: string
 }
 
 export function AgencyUsersDataTable({
@@ -17,10 +19,19 @@ export function AgencyUsersDataTable({
   onEdit,
   onDelete,
   onResetPassword,
+  canResetPassword,
+  currentUserId,
 }: AgencyUsersDataTableProps) {
   const columns = useMemo(
-    () => getAgencyUsersTableColumns({ onEdit, onDelete, onResetPassword }),
-    [onEdit, onDelete, onResetPassword]
+    () =>
+      getAgencyUsersTableColumns({
+        onEdit,
+        onDelete,
+        onResetPassword,
+        canResetPassword,
+        currentUserId,
+      }),
+    [onEdit, onDelete, onResetPassword, canResetPassword, currentUserId]
   )
 
   return (

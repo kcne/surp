@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { createAgencyUserSchema, updateAgencyUserSchema } from "@/utils/validators"
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { AgencyUserFormData } from "@/components/agency-management/types"
-import { Save, UserPlus, X } from "lucide-react"
+import { Eye, EyeOff, Save, UserPlus, X } from "lucide-react"
 
 interface AgencyUserFormProps {
   isEdit: boolean
@@ -27,6 +27,8 @@ export function AgencyUserForm({
   initialData,
   loading = false,
 }: AgencyUserFormProps) {
+  const [showPassword, setShowPassword] = useState(false)
+
   const resolver = useMemo(
     () => zodResolver(isEdit ? updateAgencyUserSchema : createAgencyUserSchema),
     [isEdit]
@@ -117,7 +119,23 @@ export function AgencyUserForm({
                 <FormItem>
                   <FormLabel>Lozinka *</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Unesite lozinku" {...field} />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Unesite lozinku"
+                        className="pr-10"
+                        {...field}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        disabled={loading}
+                        aria-label={showPassword ? "Sakrij lozinku" : "Prikaži lozinku"}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </FormControl>
                   <FormDescription>Minimum 8 karaktera</FormDescription>
                   <FormMessage />

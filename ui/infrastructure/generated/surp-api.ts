@@ -66,6 +66,7 @@ import type {
   ReportingOccupancyResponseDto,
   ReservationResponseDto,
   ReservationsControllerListParams,
+  ResetPasswordDto,
   RideExceptionResponseDto,
   RideInstancesByDateResponseDto,
   RideResponseDto,
@@ -1328,6 +1329,112 @@ export const useUsersControllerRemove = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUsersControllerRemoveMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Reset a user password in the current tenant and revoke active sessions.
+ */
+export type usersControllerResetPasswordResponse200 = {
+  data: UserResponseDto
+  status: 200
+}
+
+export type usersControllerResetPasswordResponse400 = {
+  data: void
+  status: 400
+}
+
+export type usersControllerResetPasswordResponse401 = {
+  data: void
+  status: 401
+}
+
+export type usersControllerResetPasswordResponse403 = {
+  data: void
+  status: 403
+}
+
+export type usersControllerResetPasswordResponse404 = {
+  data: void
+  status: 404
+}
+
+export type usersControllerResetPasswordResponseSuccess = (usersControllerResetPasswordResponse200) & {
+  headers: Headers;
+};
+export type usersControllerResetPasswordResponseError = (usersControllerResetPasswordResponse400 | usersControllerResetPasswordResponse401 | usersControllerResetPasswordResponse403 | usersControllerResetPasswordResponse404) & {
+  headers: Headers;
+};
+
+export type usersControllerResetPasswordResponse = (usersControllerResetPasswordResponseSuccess | usersControllerResetPasswordResponseError)
+
+export const getUsersControllerResetPasswordUrl = (id: string,) => {
+
+
+  
+
+  return `/users/${id}/reset-password`
+}
+
+export const usersControllerResetPassword = async (id: string,
+    resetPasswordDto: ResetPasswordDto, options?: RequestInit): Promise<usersControllerResetPasswordResponse> => {
+  
+  return customInstance<usersControllerResetPasswordResponse>(getUsersControllerResetPasswordUrl(id),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      resetPasswordDto,)
+  }
+);}
+  
+
+
+
+export const getUsersControllerResetPasswordMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof usersControllerResetPassword>>, TError,{id: string;data: ResetPasswordDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof usersControllerResetPassword>>, TError,{id: string;data: ResetPasswordDto}, TContext> => {
+
+const mutationKey = ['usersControllerResetPassword'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof usersControllerResetPassword>>, {id: string;data: ResetPasswordDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  usersControllerResetPassword(id,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UsersControllerResetPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof usersControllerResetPassword>>>
+    export type UsersControllerResetPasswordMutationBody = ResetPasswordDto
+    export type UsersControllerResetPasswordMutationError = ErrorType<void>
+
+    /**
+ * @summary Reset a user password in the current tenant and revoke active sessions.
+ */
+export const useUsersControllerResetPassword = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof usersControllerResetPassword>>, TError,{id: string;data: ResetPasswordDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof usersControllerResetPassword>>,
+        TError,
+        {id: string;data: ResetPasswordDto},
+        TContext
+      > => {
+      return useMutation(getUsersControllerResetPasswordMutationOptions(options), queryClient);
     }
     
 /**

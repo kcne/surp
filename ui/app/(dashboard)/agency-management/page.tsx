@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Layout } from "@/components/layout/Layout"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AgencyUsersDataTable } from "@/components/agency-management/AgencyUsersDataTable"
 import { AgencyUserModal } from "@/components/agency-management/AgencyUserModal"
 import { DeleteAgencyUserDialog } from "@/components/agency-management/DeleteAgencyUserDialog"
+import { ResetAgencyUserPasswordModal } from "@/components/agency-management/ResetAgencyUserPasswordModal"
 import { useCrudDialogState } from "@/hooks/useCrudDialogState"
 import { useAgencyUsersManagement } from "@/hooks/useAgencyUsersManagement"
 import { useAuthStore } from "@/stores/authStore"
@@ -20,7 +21,21 @@ export default function AgencyManagementPage() {
   const router = useRouter()
   const { isAuthenticated, hasHydrated, user } = useAuthStore()
   const isTenantAdmin = user?.role === "ADMIN"
-  const { users, loading, isLoadingUsers, hasError, errorMessage, createUser, updateUser, deleteUser } =
+  const canResetPassword = user?.role === "ADMIN"
+  const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false)
+  const [userToResetPassword, setUserToResetPassword] = useState<AgencyUser | null>(null)
+
+  const {
+    users,
+    loading,
+    isLoadingUsers,
+    hasError,
+    errorMessage,
+    createUser,
+    updateUser,
+    deleteUser,
+    resetUserPassword,
+  } =
     useAgencyUsersManagement({ enabled: hasHydrated && isAuthenticated && isTenantAdmin })
 
   const {
@@ -54,9 +69,25 @@ export default function AgencyManagementPage() {
   }
 
   const handleResetPassword = (targetUser: AgencyUser) => {
-    toast.info(
-      `Reset lozinke za korisnika ${targetUser.username} trenutno nije dostupan jer API contract još nema reset password endpoint.`
-    )
+    if (!canResetPassword) {
+      toast.error("Samo admin može da resetuje lozinke")
+      return
+    }
+
+    if (targetUser.id === user?.id) {
+      toast.info("Ne možete postaviti novu lozinku trenutno ulogovanom korisniku")
+      return
+    }
+
+    setUserToResetPassword(targetUser)
+    setIsResetPasswordModalOpen(true)
+  }
+
+  const handleResetPasswordModalChange = (open: boolean) => {
+    setIsResetPasswordModalOpen(open)
+    if (!open) {
+      setUserToResetPassword(null)
+    }
   }
 
   useEffect(() => {
@@ -142,6 +173,8 @@ export default function AgencyManagementPage() {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onResetPassword={handleResetPassword}
+            canResetPassword={canResetPassword}
+            currentUserId={user?.id}
           />
         )}
 
@@ -160,6 +193,14 @@ export default function AgencyManagementPage() {
           user={userToDelete}
           loading={loading}
           onDelete={deleteUser}
+        />
+
+        <ResetAgencyUserPasswordModal
+          open={isResetPasswordModalOpen}
+          onOpenChange={handleResetPasswordModalChange}
+          user={userToResetPassword}
+          loading={loading}
+          onSubmit={resetUserPassword}
         />
       </div>
     </Layout>

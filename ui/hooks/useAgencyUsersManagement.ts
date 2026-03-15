@@ -5,6 +5,7 @@ import {
   useUsersControllerCreate,
   useUsersControllerList,
   useUsersControllerRemove,
+  useUsersControllerResetPassword,
   useUsersControllerUpdate,
 } from "@/infrastructure/generated/surp-api"
 import { getApiErrorMessage } from "@/infrastructure/utils/errors"
@@ -12,6 +13,7 @@ import type { UserResponseDto } from "@/infrastructure/generated/model"
 import type {
   AgencyUser,
   CreateAgencyUserPayload,
+  ResetAgencyUserPasswordPayload,
   UpdateAgencyUserPayload,
 } from "@/components/agency-management/types"
 import { toast } from "sonner"
@@ -46,6 +48,7 @@ export function useAgencyUsersManagement({ enabled = true }: UseAgencyUsersManag
   const createUserMutation = useUsersControllerCreate()
   const updateUserMutation = useUsersControllerUpdate()
   const deleteUserMutation = useUsersControllerRemove()
+  const resetPasswordMutation = useUsersControllerResetPassword()
 
   const users = useMemo(() => {
     const rawUsers = usersQuery.data?.status === 200 ? usersQuery.data.data.items : []
@@ -59,7 +62,8 @@ export function useAgencyUsersManagement({ enabled = true }: UseAgencyUsersManag
     usersQuery.isLoading ||
     createUserMutation.isPending ||
     updateUserMutation.isPending ||
-    deleteUserMutation.isPending
+    deleteUserMutation.isPending ||
+    resetPasswordMutation.isPending
 
   const refreshUsers = async () => {
     await queryClient.invalidateQueries({ queryKey: getUsersControllerListQueryKey() })
@@ -101,6 +105,18 @@ export function useAgencyUsersManagement({ enabled = true }: UseAgencyUsersManag
     }
   }
 
+  const resetUserPassword = async (id: string, payload: ResetAgencyUserPasswordPayload) => {
+    try {
+      await resetPasswordMutation.mutateAsync({ id, data: payload })
+      await refreshUsers()
+      toast.success("Lozinka je uspešno resetovana")
+    } catch (error: unknown) {
+      const message = getApiErrorMessage(error, "Greška pri resetovanju lozinke")
+      toast.error(message)
+      throw error
+    }
+  }
+
   return {
     users,
     loading,
@@ -112,5 +128,6 @@ export function useAgencyUsersManagement({ enabled = true }: UseAgencyUsersManag
     createUser,
     updateUser,
     deleteUser,
+    resetUserPassword,
   }
 }

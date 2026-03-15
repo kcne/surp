@@ -117,15 +117,22 @@ export const createAgencyUserSchema = z.object({
   role: z.enum(["MANAGER", "STAFF"], {
     required_error: "Rola je obavezna",
   }),
+  isActive: z.boolean(),
 })
 
 export const updateAgencyUserSchema = z.object({
   username: z.string().min(1, "Korisničko ime je obavezno"),
   email: z.string().email("Neispravan format email-a"),
+  password: z.string().optional().or(z.literal("")),
   role: z.enum(["MANAGER", "STAFF"], {
     required_error: "Rola je obavezna",
   }),
   isActive: z.boolean(),
+})
+
+export const resetAgencyUserPasswordSchema = z.object({
+  newPassword: z.string().min(8, "Lozinka mora imati najmanje 8 karaktera"),
+  requirePasswordChange: z.boolean(),
 })
 
 // Reservation validators

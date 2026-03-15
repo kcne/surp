@@ -99,6 +99,7 @@ export * from './reservationRideSummaryDto';
 export * from './reservationsControllerListParams';
 export * from './reservationsControllerListStatus';
 export * from './reservationStationSummaryDto';
+export * from './resetPasswordDto';
 export * from './rideDayTimeInputDto';
 export * from './rideDayTimeResponseDto';
 export * from './rideExceptionResponseDto';

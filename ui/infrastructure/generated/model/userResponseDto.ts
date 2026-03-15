@@ -19,6 +19,7 @@ export interface UserResponseDto {
   username: string;
   email: string;
   role: UserResponseDtoRole;
+  requirePasswordChange: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

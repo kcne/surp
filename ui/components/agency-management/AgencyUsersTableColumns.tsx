@@ -17,10 +17,14 @@ export function getAgencyUsersTableColumns({
   onEdit,
   onDelete,
   onResetPassword,
+  canResetPassword,
+  currentUserId,
 }: {
   onEdit: (user: AgencyUser) => void
   onDelete: (user: AgencyUser) => void
   onResetPassword: (user: AgencyUser) => void
+  canResetPassword: boolean
+  currentUserId?: string
 }): ColumnDef<AgencyUser>[] {
   return [
     {
@@ -72,6 +76,8 @@ export function getAgencyUsersTableColumns({
       cell: ({ row }) => {
         const user = row.original
         const canEdit = isEditableAgencyRole(user.role)
+        const isSelf = currentUserId === user.id
+        const canResetThisUser = canResetPassword && !isSelf
 
         return (
           <div className="flex items-center justify-end gap-2">
@@ -79,7 +85,14 @@ export function getAgencyUsersTableColumns({
               variant="ghost"
               size="icon"
               onClick={() => onResetPassword(user)}
-              title="Reset lozinke"
+              disabled={!canResetThisUser}
+              title={
+                canResetThisUser
+                  ? "Reset lozinke"
+                  : isSelf
+                    ? "Ne možete resetovati lozinku trenutno ulogovanom korisniku"
+                    : "Samo admin može da resetuje lozinku"
+              }
             >
               <KeyRound className="h-4 w-4" />
             </Button>
