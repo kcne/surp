@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import type { Ride } from "@/types"
-import { useRidesStore } from "@/stores/ridesStore"
+import type { Ride, RideInstance } from "@/types"
 import {
   Dialog,
   DialogContent,
@@ -26,65 +25,120 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Ban, ChevronDown, Ticket } from "lucide-react"
+import { formatDateToISO, generateRideInstanceDates } from "@/utils/dateHelpers"
 
 interface RideInstancesViewProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   ride: Ride
+  loading: boolean
+  onCancelInstance: (ride: Ride, instanceDate: string) => Promise<Ride | void>
 }
 
 export function RideInstancesView({
   open,
   onOpenChange,
   ride,
+  loading,
+  onCancelInstance,
 }: RideInstancesViewProps) {
   const router = useRouter()
-  const {
-    generateRideInstances,
-    updateRide,
-    cancelRide,
-    rides,
-    setSelectedDate,
-    fetchRideInstances,
-  } = useRidesStore()
-  const activeRide = useMemo(
-    () => rides.find((existingRide) => existingRide.id === ride.id) || ride,
-    [rides, ride]
-  )
-  const instances = generateRideInstances(activeRide)
+  const [activeRide, setActiveRide] = useState<Ride>(ride)
+
+  useEffect(() => {
+    setActiveRide(ride)
+  }, [ride])
+
+  const instances = useMemo(() => {
+    const generatedInstances: RideInstance[] = []
+
+    if (activeRide.type === "recurring") {
+      if (!activeRide.startDate || !activeRide.daysOfWeek || activeRide.daysOfWeek.length === 0) {
+        return generatedInstances
+      }
+
+      const startDate = new Date(`${activeRide.startDate}T00:00:00`)
+      const endDate = activeRide.endDate ? new Date(`${activeRide.endDate}T00:00:00`) : null
+      const threeMonthsFromNow = new Date()
+      threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3)
+
+      const effectiveEndDate =
+        endDate && endDate < threeMonthsFromNow ? endDate : threeMonthsFromNow
+
+      const dates = generateRideInstanceDates(startDate, effectiveEndDate, activeRide.daysOfWeek)
+
+      dates.forEach((date) => {
+        const dateString = formatDateToISO(date)
+        const exception = activeRide.exceptions?.find((ex) => ex.date === dateString)
+
+        if (exception?.type === "skip") {
+          return
+        }
+
+        const dayOfWeek = date.getDay()
+
+        let departureTime: string | undefined
+        let arrivalTime: string | undefined
+
+        if (exception?.type === "additional") {
+          departureTime = exception.departureTime
+          arrivalTime = exception.arrivalTime
+        } else if (activeRide.dayTimes && activeRide.dayTimes[dayOfWeek]) {
+          departureTime = activeRide.dayTimes[dayOfWeek].departureTime
+          arrivalTime = activeRide.dayTimes[dayOfWeek].arrivalTime
+        } else if (activeRide.departureTime && activeRide.arrivalTime) {
+          departureTime = activeRide.departureTime
+          arrivalTime = activeRide.arrivalTime
+        }
+
+        if (!departureTime || !arrivalTime) {
+          return
+        }
+
+        generatedInstances.push({
+          id: `${activeRide.id}-${dateString}`,
+          rideId: activeRide.id,
+          ride: activeRide,
+          date: dateString,
+          departureTime,
+          arrivalTime,
+          status: activeRide.status,
+          reservationCount: 0,
+          availableSeats: activeRide.busCapacity,
+        })
+      })
+    } else if (
+      activeRide.type === "one-time" &&
+      activeRide.date &&
+      activeRide.oneTimeDepartureTime &&
+      activeRide.oneTimeArrivalTime
+    ) {
+      generatedInstances.push({
+        id: `${activeRide.id}-${activeRide.date}`,
+        rideId: activeRide.id,
+        ride: activeRide,
+        date: activeRide.date,
+        departureTime: activeRide.oneTimeDepartureTime,
+        arrivalTime: activeRide.oneTimeArrivalTime,
+        status: activeRide.status,
+        reservationCount: 0,
+        availableSeats: activeRide.busCapacity,
+      })
+    }
+
+    return generatedInstances
+  }, [activeRide])
     const handleReserve = async (instanceId: string, instanceDate: string) => {
-      const targetDate = new Date(`${instanceDate}T00:00:00`)
-      setSelectedDate(targetDate)
-      await fetchRideInstances(targetDate)
       onOpenChange(false)
-      router.push(`/reservations/${instanceId}`)
+      router.push(`/reservations/${instanceId}?date=${instanceDate}`)
     }
 
     const handleCancelInstance = async (instanceDate: string) => {
-      if (activeRide.type === "one-time") {
-        await cancelRide(activeRide.id)
-        return
+      const maybeUpdatedRide = await onCancelInstance(activeRide, instanceDate)
+
+      if (maybeUpdatedRide) {
+        setActiveRide(maybeUpdatedRide)
       }
-
-      const existingExceptions = activeRide.exceptions || []
-      const alreadyCancelled = existingExceptions.some(
-        (exception) => exception.date === instanceDate && exception.type === "skip"
-      )
-
-      if (alreadyCancelled) {
-        return
-      }
-
-      await updateRide(activeRide.id, {
-        exceptions: [
-          ...existingExceptions,
-          {
-            id: `${Date.now()}-${instanceDate}`,
-            date: instanceDate,
-            type: "skip",
-          },
-        ],
-      })
     }
 
   const [visibleCount, setVisibleCount] = useState(10)
@@ -257,7 +311,7 @@ export function RideInstancesView({
                             size="sm"
                             variant="outline"
                             onClick={() => handleCancelInstance(instance.date)}
-                            disabled={isPastInstance(instance.date)}
+                            disabled={loading || isPastInstance(instance.date)}
                           >
                             <Ban className="mr-2 h-4 w-4" />
                             Otkaži

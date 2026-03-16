@@ -745,6 +745,12 @@ export class RidesService {
       throw new BadRequestException('One-time rides require oneTimeDate, oneTimeDepartureTime and oneTimeArrivalTime');
     }
 
+    if (this.isZeroDurationTimeRange(normalized.oneTimeDepartureTime, normalized.oneTimeArrivalTime)) {
+      throw new BadRequestException(
+        'one-time departureTime and arrivalTime cannot be equal (overnight rides are allowed)'
+      );
+    }
+
     if (normalized.dayTimes.length > 0) {
       throw new BadRequestException('One-time rides cannot include recurring day-times');
     }
@@ -764,8 +770,10 @@ export class RidesService {
         throw new BadRequestException('Duplicate dayOfWeek in day-times is not allowed');
       }
 
-      if (dayTime.departureTime >= dayTime.arrivalTime) {
-        throw new BadRequestException('day-time departureTime must be before arrivalTime');
+      if (this.isZeroDurationTimeRange(dayTime.departureTime, dayTime.arrivalTime)) {
+        throw new BadRequestException(
+          'day-time departureTime and arrivalTime cannot be equal (overnight rides are allowed)'
+        );
       }
 
       daySet.add(dayTime.dayOfWeek);
@@ -807,9 +815,15 @@ export class RidesService {
       throw new BadRequestException('ADDITIONAL exceptions require departureTime and arrivalTime');
     }
 
-    if (dto.departureTime >= dto.arrivalTime) {
-      throw new BadRequestException('ADDITIONAL exception departureTime must be before arrivalTime');
+    if (this.isZeroDurationTimeRange(dto.departureTime, dto.arrivalTime)) {
+      throw new BadRequestException(
+        'ADDITIONAL exception departureTime and arrivalTime cannot be equal (overnight rides are allowed)'
+      );
     }
+  }
+
+  private isZeroDurationTimeRange(departureTime: string, arrivalTime: string): boolean {
+    return departureTime.trim() === arrivalTime.trim();
   }
 
   private async replaceRideDayTimesTx(

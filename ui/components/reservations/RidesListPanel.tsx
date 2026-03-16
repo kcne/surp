@@ -41,14 +41,15 @@ import {
 import { RideInstanceCard } from "@/components/reservations/RideInstanceCard"
 import { RideInstanceInfoDialog } from "@/components/reservations/RideInstanceInfoDialog"
 import { cn } from "@/lib/utils"
-import { useRidesStore } from "@/stores/ridesStore"
 import { useReservationsStore } from "@/stores/reservationsStore"
 import { CalendarDays, Check, ChevronsUpDown, Filter, Search, Ticket, X } from "lucide-react"
 
 interface RidesListPanelProps {
+  rides: Ride[]
   selectedDate: Date | undefined
   rideInstances: RideInstance[]
   loading: boolean
+  onDateSelect: (date: Date) => void
 }
 
 const statusLabels: Record<RideStatus, string> = {
@@ -126,12 +127,13 @@ const matchesStationPair = (
 }
 
 export function RidesListPanel({
+  rides,
   selectedDate,
   rideInstances,
   loading,
+  onDateSelect,
 }: RidesListPanelProps) {
   const router = useRouter()
-  const { rides, fetchRideInstances, setSelectedDate } = useRidesStore()
   const allReservations = useReservationsStore((state) => state.allReservations)
   const [infoModalOpen, setInfoModalOpen] = useState(false)
   const [selectedInstance, setSelectedInstance] = useState<RideInstance | null>(null)
@@ -173,8 +175,7 @@ export function RidesListPanel({
       if (isDateInPast(date)) {
         return
       }
-      setSelectedDate(date)
-      fetchRideInstances(date)
+      onDateSelect(date)
     }
   }
 

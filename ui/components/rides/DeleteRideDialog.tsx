@@ -3,27 +3,28 @@
 import {
   ConfirmDeleteDialog,
 } from "@/components/ui/confirm-delete-dialog"
-import { useRidesStore } from "@/stores/ridesStore"
 import { Ban } from "lucide-react"
 
 interface DeleteRideDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   ride: { id: string; name: string } | null
+  loading: boolean
+  onDelete: (id: string) => Promise<void>
 }
 
 export function DeleteRideDialog({
   open,
   onOpenChange,
   ride,
+  loading,
+  onDelete,
 }: DeleteRideDialogProps) {
-  const { cancelRide, loading } = useRidesStore()
-
   const handleCancel = async () => {
     if (!ride) return
 
     try {
-      await cancelRide(ride.id)
+      await onDelete(ride.id)
       onOpenChange(false)
     } catch (error) {
       // Error is handled in store

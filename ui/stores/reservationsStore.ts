@@ -15,7 +15,6 @@ import type { StationResponseDto } from "@/infrastructure/generated/model"
 import { toast } from "sonner"
 import { buildSeatMap, checkSeatConflict } from "@/utils/seatHelpers"
 import { usePassengersStore } from "./passengersStore"
-import { useRidesStore } from "./ridesStore"
 
 interface ReservationsState {
   allReservations: Record<string, Reservation[]> // Key: rideInstanceId, Value: reservations for that ride
@@ -237,12 +236,6 @@ export const useReservationsStore = create<ReservationsState>()(
         loading: false,
       })
       
-      // Refresh ride instances to update seat counts
-      const selectedDate = useRidesStore.getState().selectedDate
-      if (selectedDate) {
-        useRidesStore.getState().fetchRideInstances(selectedDate)
-      }
-      
       toast.success("Rezervacija je uspešno kreirana")
     } catch (error: any) {
       set({
@@ -377,11 +370,6 @@ export const useReservationsStore = create<ReservationsState>()(
         selectedSeat: null,
         loading: false,
       })
-
-      const selectedDate = useRidesStore.getState().selectedDate
-      if (selectedDate) {
-        useRidesStore.getState().fetchRideInstances(selectedDate)
-      }
 
       toast.success("Rezervacije su uspešno kreirane")
     } catch (error: any) {
@@ -540,11 +528,6 @@ export const useReservationsStore = create<ReservationsState>()(
         loading: false,
       }))
 
-      const selectedDate = useRidesStore.getState().selectedDate
-      if (selectedDate) {
-        useRidesStore.getState().fetchRideInstances(selectedDate)
-      }
-
       if (options?.showSuccessToast !== false) {
         toast.success("Rezervacije su uspešno kreirane")
       }
@@ -656,12 +639,6 @@ export const useReservationsStore = create<ReservationsState>()(
         }
       })
       
-      // Refresh ride instances to update seat counts
-      const selectedDate = useRidesStore.getState().selectedDate
-      if (selectedDate) {
-        useRidesStore.getState().fetchRideInstances(selectedDate)
-      }
-      
       toast.success("Rezervacija je uspešno ažurirana")
     } catch (error: any) {
       set({
@@ -711,12 +688,6 @@ export const useReservationsStore = create<ReservationsState>()(
           loading: false,
         }
       })
-      
-      // Refresh ride instances to update seat counts
-      const selectedDate = useRidesStore.getState().selectedDate
-      if (selectedDate) {
-        useRidesStore.getState().fetchRideInstances(selectedDate)
-      }
       
       toast.success("Rezervacija je uspešno otkazana")
     } catch (error: any) {

@@ -7,7 +7,7 @@ import { reservationSchema } from "@/utils/validators"
 import type { ReservationFormData, Reservation, Passenger, RideInstance } from "@/types"
 import { useReservationsStore } from "@/stores/reservationsStore"
 import { usePassengersStore } from "@/stores/passengersStore"
-import { useRidesStore } from "@/stores/ridesStore"
+import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import { FormModalShell } from "@/components/forms/FormModalShell"
 import {
   Form,
@@ -24,6 +24,9 @@ import { ReservationStationsSection } from "@/components/reservations/Reservatio
 import { useReservationModalState } from "@/hooks/useReservationModalState"
 import { useReservationReturnSync } from "@/hooks/useReservationReturnSync"
 import { useReservationSubmission } from "@/hooks/useReservationSubmission"
+import { generateRideInstancesForRide } from "@/utils/rideInstanceGenerators"
+
+const EMPTY_RIDES: Reservation["rideInstance"]["ride"][] = []
 
 interface ReservationModalProps {
   open: boolean
@@ -56,7 +59,8 @@ export function ReservationModal({
     loading,
     clearSelectedSeats,
   } = useReservationsStore()
-  const { rides, generateRideInstances } = useRidesStore()
+  const ridesQuery = useRidesListQuery()
+  const rides = ridesQuery.data ?? EMPTY_RIDES
   const { createPassenger } = usePassengersStore()
 
   const isEdit = !!reservation
@@ -137,14 +141,14 @@ export function ReservationModal({
           ride.line.departureStation.id === currentLine.arrivalStation.id &&
           ride.line.arrivalStation.id === currentLine.departureStation.id
       )
-      .flatMap((ride) => generateRideInstances(ride))
+      .flatMap((ride) => generateRideInstancesForRide(ride))
       .filter((instance) => instance.date >= selectedRideInstance.date)
       .sort((left, right) => {
         const leftDateTime = `${left.date}T${left.departureTime}`
         const rightDateTime = `${right.date}T${right.departureTime}`
         return leftDateTime.localeCompare(rightDateTime)
       })
-  }, [generateRideInstances, rides, selectedRideInstance])
+  }, [rides, selectedRideInstance])
 
   const availableReturnDateKeys = useMemo(
     () => new Set(returnRideInstances.map((instance) => instance.date)),
@@ -165,7 +169,7 @@ export function ReservationModal({
 
   const selectedReturnRideInstance = returnRideInstances.find(
     (instance) => instance.id === selectedReturnRideInstanceId
-  )
+  ) ?? null
 
   const outboundSeatNumbers = useMemo(() => {
     if (isMultiReservation) {
@@ -201,7 +205,7 @@ export function ReservationModal({
     isEdit,
     reservation,
     isReturnTicket,
-    selectedReturnRideInstance,
+    selectedReturnRideInstance: selectedReturnRideInstance ?? undefined,
     isMultiReservation,
     selectedSeats,
     perSeatPassengers,

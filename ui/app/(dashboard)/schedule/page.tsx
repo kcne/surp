@@ -5,16 +5,33 @@ import { Layout } from "@/components/layout/Layout"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Plus, CalendarClock } from "lucide-react"
-import { useRidesStore } from "@/stores/ridesStore"
 import { RideModal } from "@/components/rides/RideModal"
 import { DeleteRideDialog } from "@/components/rides/DeleteRideDialog"
 import { RideInstancesView } from "@/components/rides/RideInstancesView"
 import { RidesDataTable } from "@/components/rides/RidesDataTable"
 import { useCrudDialogState } from "@/hooks/useCrudDialogState"
-import type { Ride } from "@/types"
+import {
+  useCreateRideMutation,
+  useDeleteRideMutation,
+  useUpdateRideMutation,
+} from "@/infrastructure/hooks/mutations/useRideMutations"
+import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
+import type { Ride, RideFormData } from "@/types"
+
+const EMPTY_RIDES: Ride[] = []
 
 export default function SchedulePage() {
-  const { rides, loading, fetchRides } = useRidesStore()
+  const ridesQuery = useRidesListQuery()
+  const createRideMutation = useCreateRideMutation()
+  const updateRideMutation = useUpdateRideMutation()
+  const deleteRideMutation = useDeleteRideMutation()
+  const rides = ridesQuery.data ?? EMPTY_RIDES
+  const loading = ridesQuery.isLoading
+  const error = ridesQuery.error
+  const mutationLoading =
+    createRideMutation.isPending ||
+    updateRideMutation.isPending ||
+    deleteRideMutation.isPending
   const [isInstancesViewOpen, setIsInstancesViewOpen] = useState(false)
   const [instancesRide, setInstancesRide] = useState<Ride | null>(null)
   const {
@@ -30,14 +47,25 @@ export default function SchedulePage() {
   } = useCrudDialogState<Ride>()
 
   useEffect(() => {
-    fetchRides()
-  }, [fetchRides])
+    if (!isInstancesViewOpen) {
+      return
+    }
+
+    if (!instancesRide) {
+      return
+    }
+
+    const refreshed = rides.find((ride) => ride.id === instancesRide.id)
+    if (refreshed) {
+      setInstancesRide(refreshed)
+    }
+  }, [rides, isInstancesViewOpen, instancesRide])
 
   const handleEdit = (ride: Ride) => {
     openEdit(ride)
   }
 
-  const handleDelete = (ride: Ride) => {
+  const handleOpenDelete = (ride: Ride) => {
     openDelete(ride)
   }
 
@@ -48,6 +76,55 @@ export default function SchedulePage() {
 
   const handleAddNew = () => {
     openCreate()
+  }
+
+  const handleCreate = async (payload: RideFormData) => {
+    await createRideMutation.mutateAsync(payload)
+  }
+
+  const handleUpdate = async (id: string, payload: Partial<RideFormData>) => {
+    await updateRideMutation.mutateAsync({ id, payload })
+  }
+
+  const handleDeleteRide = async (id: string) => {
+    await deleteRideMutation.mutateAsync(id)
+  }
+
+  const handleCancelInstance = async (ride: Ride, instanceDate: string): Promise<Ride | void> => {
+    if (ride.type === "one-time") {
+      await deleteRideMutation.mutateAsync(ride.id)
+      return
+    }
+
+    const existingExceptions = ride.exceptions || []
+    const alreadyCancelled = existingExceptions.some(
+      (exception) => exception.date === instanceDate && exception.type === "skip"
+    )
+
+    if (alreadyCancelled) {
+      return ride
+    }
+
+    const nextRide = {
+      ...ride,
+      exceptions: [
+        ...existingExceptions,
+        {
+          id: `${Date.now()}-${instanceDate}`,
+          date: instanceDate,
+          type: "skip" as const,
+        },
+      ],
+    }
+
+    await updateRideMutation.mutateAsync({
+      id: ride.id,
+      payload: {
+        exceptions: nextRide.exceptions,
+      },
+    })
+
+    return nextRide
   }
 
   const scheduledRides = rides.filter((ride) => ride.status === "scheduled")
@@ -77,6 +154,21 @@ export default function SchedulePage() {
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
           </div>
+        ) : ridesQuery.isError ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12">
+            <CalendarClock className="mb-3 h-10 w-10 text-muted-foreground" />
+            <p className="text-lg font-medium text-muted-foreground">
+              Greska pri ucitavanju rasporeda
+            </p>
+            <p className="mb-4 text-sm text-muted-foreground">
+              {error instanceof Error
+                ? error.message
+                : "Pokrenite ponovno ucitavanje podataka."}
+            </p>
+            <Button onClick={() => ridesQuery.refetch()}>
+              Pokusaj ponovo
+            </Button>
+          </div>
         ) : scheduledRides.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12">
             <CalendarClock className="mb-3 h-10 w-10 text-muted-foreground" />
@@ -96,7 +188,7 @@ export default function SchedulePage() {
             rides={scheduledRides}
             onViewInstances={handleViewInstances}
             onEdit={handleEdit}
-            onDelete={handleDelete}
+            onDelete={handleOpenDelete}
           />
         )}
 
@@ -104,12 +196,17 @@ export default function SchedulePage() {
           open={isModalOpen}
           onOpenChange={closeModal}
           ride={selectedRide}
+          loading={mutationLoading}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
         />
 
         <DeleteRideDialog
           open={isDeleteDialogOpen}
           onOpenChange={setIsDeleteDialogOpen}
           ride={rideToDelete}
+          loading={mutationLoading}
+          onDelete={handleDeleteRide}
         />
 
         {instancesRide && (
@@ -122,6 +219,8 @@ export default function SchedulePage() {
               }
             }}
             ride={instancesRide}
+            loading={mutationLoading}
+            onCancelInstance={handleCancelInstance}
           />
         )}
       </div>

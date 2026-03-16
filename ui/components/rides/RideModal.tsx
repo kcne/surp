@@ -5,7 +5,6 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { rideSchema } from "@/utils/validators"
 import type { Ride, RideFormData } from "@/types"
-import { useRidesStore } from "@/stores/ridesStore"
 import { useLinesListQuery } from "@/infrastructure/hooks/queries/useLinesListQuery"
 import { DialogFooter } from "@/components/ui/dialog"
 import { FormModalShell } from "@/components/forms/FormModalShell"
@@ -48,6 +47,9 @@ interface RideModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   ride?: Ride | null
+  loading: boolean
+  onCreate: (payload: RideFormData) => Promise<void>
+  onUpdate: (id: string, payload: Partial<RideFormData>) => Promise<void>
 }
 
 const DAYS_OF_WEEK = [
@@ -60,8 +62,14 @@ const DAYS_OF_WEEK = [
   { value: 6, label: "Subota" },
 ]
 
-export function RideModal({ open, onOpenChange, ride }: RideModalProps) {
-  const { createRide, updateRide, loading } = useRidesStore()
+export function RideModal({
+  open,
+  onOpenChange,
+  ride,
+  loading,
+  onCreate,
+  onUpdate,
+}: RideModalProps) {
   const linesQuery = useLinesListQuery()
   const lines = linesQuery.data || []
   const isEdit = !!ride
@@ -191,9 +199,9 @@ export function RideModal({ open, onOpenChange, ride }: RideModalProps) {
       }
 
       if (isEdit && ride) {
-        await updateRide(ride.id, data)
+        await onUpdate(ride.id, data)
       } else {
-        await createRide(data)
+        await onCreate(data)
       }
       onOpenChange(false)
       form.reset()

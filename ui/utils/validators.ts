@@ -101,7 +101,7 @@ export const passengerSchema = z.object({
   email: z.string().email("Neispravan format email-a").optional().or(z.literal("")),
   idCardNumber: z.string().optional(),
   passengerType: z.enum(["dete", "odrasli", "student", "penzioner"], {
-    required_error: "Tip putnika je obavezan",
+    message: "Tip putnika je obavezan",
   }),
   address: z.string().optional(),
   notes: z.string().optional(),
@@ -115,7 +115,7 @@ export const createAgencyUserSchema = z.object({
     .string()
     .min(8, "Lozinka mora imati najmanje 8 karaktera"),
   role: z.enum(["MANAGER", "STAFF"], {
-    required_error: "Rola je obavezna",
+    message: "Rola je obavezna",
   }),
   isActive: z.boolean(),
 })
@@ -125,7 +125,7 @@ export const updateAgencyUserSchema = z.object({
   email: z.string().email("Neispravan format email-a"),
   password: z.string().optional().or(z.literal("")),
   role: z.enum(["MANAGER", "STAFF"], {
-    required_error: "Rola je obavezna",
+    message: "Rola je obavezna",
   }),
   isActive: z.boolean(),
 })

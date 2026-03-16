@@ -57,6 +57,16 @@ describe('RidesService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('allows overnight day-times for recurring rides', () => {
+    const validator = service as unknown as {
+      validateDayTimes: (dayTimes: Array<{ dayOfWeek: number; departureTime: string; arrivalTime: string }>) => void;
+    };
+
+    expect(() =>
+      validator.validateDayTimes([{ dayOfWeek: 1, departureTime: '12:00', arrivalTime: '00:00' }])
+    ).not.toThrow();
+  });
+
   it('requires date and times for one-time rides', async () => {
     prismaMock.line.findFirst.mockResolvedValue({ id: 'line-1', name: 'Central - North' });
 
@@ -67,6 +77,22 @@ describe('RidesService', () => {
         capacity: 38,
         type: RideType.ONE_TIME,
         oneTimeDate: '2026-03-21'
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects zero-duration one-time rides', async () => {
+    prismaMock.line.findFirst.mockResolvedValue({ id: 'line-1', name: 'Central - North' });
+
+    await expect(
+      service.create(auth, {
+        lineId: 'line-1',
+        name: 'Invalid Equal Time Ride',
+        capacity: 38,
+        type: RideType.ONE_TIME,
+        oneTimeDate: '2026-03-21',
+        oneTimeDepartureTime: '10:00',
+        oneTimeArrivalTime: '10:00'
       })
     ).rejects.toBeInstanceOf(BadRequestException);
   });

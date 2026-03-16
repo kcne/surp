@@ -1,11 +1,36 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
-import type { Ride, RideInstance, RideFormData, RideException } from "@/types"
-import { ridesApi } from "@/lib/api"
+import type { Ride, RideInstance, RideFormData } from "@/types"
 import { toast } from "sonner"
-import { linesControllerGetById } from "@/infrastructure/generated/surp-api"
+import {
+  linesControllerGetById,
+  ridesControllerAddException,
+  ridesControllerCreate,
+  ridesControllerGetById,
+  ridesControllerList,
+  ridesControllerListInstancesByDate,
+  ridesControllerRemove,
+  ridesControllerRemoveException,
+  ridesControllerReplace,
+  ridesControllerReplaceDayTimes,
+  ridesControllerUpdate,
+} from "@/infrastructure/generated/surp-api"
+import type {
+  PaginatedRidesResponseDto,
+  RideInstancesByDateResponseDto,
+  RideResponseDto,
+} from "@/infrastructure/generated/model"
 import { toLine } from "@/infrastructure/mappers/lineMappers"
-import { generateRideInstanceDates, isExceptionDate, formatDateToISO, parseISODate } from "@/utils/dateHelpers"
+import {
+  toCreateRideDto,
+  toCreateRideExceptionDto,
+  toRide,
+  toRideInstance,
+  toReplaceRideDayTimesDto,
+  toUpdateRideDto,
+} from "@/infrastructure/mappers/rideMappers"
+import { getApiErrorMessage } from "@/infrastructure/utils/errors"
+import { formatDateToISO, generateRideInstanceDates } from "@/utils/dateHelpers"
 import { useReservationsStore } from "./reservationsStore"
 
 interface RidesState {
@@ -26,9 +51,12 @@ interface RidesState {
   clearError: () => void
 }
 
-// Helper to generate ride name
-const generateRideName = (lineName: string): string => {
-  return lineName
+function isSuccessStatus(status: number, expected?: number): boolean {
+  if (expected !== undefined) {
+    return status === expected
+  }
+
+  return status >= 200 && status < 300
 }
 
 const fetchLineById = async (lineId: string) => {
@@ -39,6 +67,15 @@ const fetchLineById = async (lineId: string) => {
   }
 
   return toLine(response.data)
+}
+
+function hasPatchableFields(data: Partial<RideFormData>): boolean {
+  const payload = toUpdateRideDto(data)
+  return Object.values(payload).some((value) => value !== undefined)
+}
+
+function shouldUsePutReplace(data: Partial<RideFormData>): boolean {
+  return Boolean(data.lineId && data.type)
 }
 
 export const useRidesStore = create<RidesState>()(
@@ -75,413 +112,388 @@ export const useRidesStore = create<RidesState>()(
         loading: false,
         error: null,
 
-  fetchRides: async () => {
-    set({ loading: true, error: null })
-    try {
-      // TODO: Replace with actual API call
-      // const response = await ridesApi.getAll()
-      // set({ rides: response.data, loading: false })
+        fetchRides: async () => {
+          set({ loading: true, error: null })
 
-      // For now, use existing rides from store (persisted in localStorage)
-      // Don't overwrite existing rides
-      const currentRides = get().rides
-      set({ loading: false })
-    } catch (error: any) {
-      set({
-        loading: false,
-        error: error?.message || "Greška pri učitavanju vožnji",
-      })
-      toast.error("Greška pri učitavanju vožnji")
-    }
-  },
+          try {
+            const response = await ridesControllerList({ page: 1, pageSize: 200 })
+            if (!isSuccessStatus(response.status, 200)) {
+              throw new Error("Neuspesno ucitavanje voznji")
+            }
 
-  fetchRideInstances: async (date: Date) => {
-    set({ loading: true, error: null, selectedDate: date })
-    try {
-      // TODO: Replace with actual API call
-      // const dateString = formatDateToISO(date)
-      // const response = await ridesApi.getInstances(dateString)
-      // set({ rideInstances: response.data, loading: false })
+            const ridesPage = response.data as PaginatedRidesResponseDto
 
-      // For now, generate instances from rides
-      const rides = get().rides
-      const instances: RideInstance[] = []
+            const lineIds = Array.from(
+              new Set(ridesPage.items.map((item: RideResponseDto) => item.lineId))
+            )
+            const lineFetchResults = await Promise.allSettled(
+              lineIds.map(async (lineId) => ({ lineId, line: await fetchLineById(lineId) }))
+            )
 
-      // Get reservations from reservations store to calculate seat counts
-      const allReservations = useReservationsStore.getState().allReservations
+            const lineLookup = new Map<string, ReturnType<typeof toLine>>()
 
-      rides.forEach((ride) => {
-        if (ride.status === "cancelled") return
-
-        const rideDate = formatDateToISO(date)
-        const isException = ride.exceptions?.some((ex) => ex.date === rideDate)
-
-        if (ride.type === "recurring") {
-          if (!ride.startDate || !ride.daysOfWeek || ride.daysOfWeek.length === 0) {
-            return
-          }
-
-          const startDate = new Date(ride.startDate + "T00:00:00")
-          if (date < startDate) return
-
-          if (ride.endDate) {
-            const endDate = new Date(ride.endDate + "T00:00:00")
-            if (date > endDate) return
-          }
-
-          const dayOfWeek = date.getDay()
-          if (!ride.daysOfWeek.includes(dayOfWeek)) return
-
-          // Check if this date is an exception
-          const exception = ride.exceptions?.find((ex) => ex.date === rideDate)
-          if (exception?.type === "skip") return
-
-          // Get times for this day - prefer dayTimes, fallback to old format
-          let departureTime: string | undefined
-          let arrivalTime: string | undefined
-
-          if (exception) {
-            // Exception overrides everything
-            departureTime = exception.departureTime
-            arrivalTime = exception.arrivalTime
-          } else if (ride.dayTimes && ride.dayTimes[dayOfWeek]) {
-            // Use per-day times
-            departureTime = ride.dayTimes[dayOfWeek].departureTime
-            arrivalTime = ride.dayTimes[dayOfWeek].arrivalTime
-          } else if (ride.departureTime && ride.arrivalTime) {
-            // Fallback to old format
-            departureTime = ride.departureTime
-            arrivalTime = ride.arrivalTime
-          }
-
-          if (!departureTime || !arrivalTime) return
-
-          const instanceId = `${ride.id}-${rideDate}`
-          // Get reservations for this instance
-          const reservations = allReservations[instanceId] || []
-          // Count only active reservations
-          const reservationCount = reservations.filter((r) => r.status === "active").length
-          const capacity = ride.busCapacity
-          const availableSeats = capacity - reservationCount
-
-          instances.push({
-            id: instanceId,
-            rideId: ride.id,
-            ride,
-            date: rideDate,
-            departureTime,
-            arrivalTime,
-            status: ride.status,
-            reservationCount,
-            availableSeats,
-          })
-        } else if (ride.type === "one-time") {
-          if (ride.date === rideDate && ride.oneTimeDepartureTime && ride.oneTimeArrivalTime) {
-            const instanceId = `${ride.id}-${rideDate}`
-            // Get reservations for this instance
-            const reservations = allReservations[instanceId] || []
-            // Count only active reservations
-            const reservationCount = reservations.filter((r) => r.status === "active").length
-            const capacity = ride.busCapacity
-            const availableSeats = capacity - reservationCount
-
-            instances.push({
-              id: instanceId,
-              rideId: ride.id,
-              ride,
-              date: rideDate,
-              departureTime: ride.oneTimeDepartureTime,
-              arrivalTime: ride.oneTimeArrivalTime,
-              status: ride.status,
-              reservationCount,
-              availableSeats,
+            lineFetchResults.forEach((result) => {
+              if (result.status === "fulfilled") {
+                lineLookup.set(result.value.lineId, result.value.line)
+              }
             })
+
+            const rides = ridesPage.items.map((item: RideResponseDto) =>
+              toRide(item, lineLookup.get(item.lineId))
+            )
+
+            const selectedRideId = get().selectedRide?.id
+            const selectedRide = selectedRideId
+              ? rides.find((ride) => ride.id === selectedRideId) ?? null
+              : null
+
+            set({ rides, selectedRide, loading: false })
+          } catch (error: unknown) {
+            const message = getApiErrorMessage(error, "Greška pri učitavanju vožnji")
+            set({ loading: false, error: message })
+            toast.error(message)
           }
-        }
-      })
+        },
 
-      set({ rideInstances: instances, loading: false })
-    } catch (error: any) {
-      set({
-        loading: false,
-        error: error?.message || "Greška pri učitavanju instanci vožnji",
-      })
-      toast.error("Greška pri učitavanju instanci vožnji")
-    }
-  },
+        fetchRideInstances: async (date: Date) => {
+          set({ loading: true, error: null, selectedDate: date })
 
-  createRide: async (data: RideFormData) => {
-    set({ loading: true, error: null })
-    try {
-      // TODO: Replace with actual API call
-      // const response = await ridesApi.create(data as Ride)
-      // set((state) => ({ rides: [...state.rides, response.data], loading: false }))
+          try {
+            if (get().rides.length === 0) {
+              await get().fetchRides()
+            }
 
-      // For now, use mock
-      const line = await fetchLineById(data.lineId)
+            const response = await ridesControllerListInstancesByDate({
+              date: formatDateToISO(date),
+              timezoneOffsetMinutes: -date.getTimezoneOffset(),
+            })
 
-      const rideName = generateRideName(line.name)
+            if (!isSuccessStatus(response.status, 200)) {
+              throw new Error("Neuspesno ucitavanje instanci voznji")
+            }
 
-      const newRide: Ride = {
-        id: Date.now().toString(),
-        name: rideName,
-        line,
-        busCapacity: data.busCapacity ?? 38,
-        type: data.type,
-        status: (data.status ?? "scheduled") as Ride["status"],
-        startDate: data.startDate,
-        endDate: data.endDate,
-        daysOfWeek: data.daysOfWeek,
-        departureTime: data.departureTime, // Keep for backward compatibility
-        arrivalTime: data.arrivalTime, // Keep for backward compatibility
-        dayTimes: data.dayTimes,
-        exceptions: data.exceptions || [],
-        date: data.date,
-        oneTimeDepartureTime: data.oneTimeDepartureTime,
-        oneTimeArrivalTime: data.oneTimeArrivalTime,
-        createdAt: new Date().toISOString(),
-      }
+            const rideLookup = new Map(get().rides.map((ride) => [ride.id, ride]))
+            const instancesPayload = response.data as RideInstancesByDateResponseDto
+            const instances = instancesPayload.items.map((item) =>
+              toRideInstance(item, rideLookup.get(item.rideId))
+            )
 
-      set((state) => ({
-        rides: [...state.rides, newRide],
-        loading: false,
-      }))
-      
-      // Regenerate ride instances for the current selected date if it exists
-      const currentDate = get().selectedDate
-      if (currentDate) {
-        get().fetchRideInstances(currentDate)
-      }
-      
-      toast.success("Vožnja je uspešno kreirana")
-    } catch (error: any) {
-      set({
-        loading: false,
-        error: error?.message || "Greška pri kreiranju vožnje",
-      })
-      toast.error(error?.message || "Greška pri kreiranju vožnje")
-      throw error
-    }
-  },
+            set({ rideInstances: instances, loading: false })
+          } catch (error: unknown) {
+            const message = getApiErrorMessage(
+              error,
+              "Greška pri učitavanju instanci vožnji"
+            )
+            set({ loading: false, error: message })
+            toast.error(message)
+          }
+        },
 
-  updateRide: async (id: string, data: Partial<RideFormData>) => {
-    set({ loading: true, error: null })
-    try {
-      // TODO: Replace with actual API call
-      // const response = await ridesApi.update(id, data)
-      // set((state) => ({
-      //   rides: state.rides.map((r) => (r.id === id ? response.data : r)),
-      //   loading: false,
-      // }))
+        createRide: async (data: RideFormData) => {
+          set({ loading: true, error: null })
 
-      // For now, use mock
-      const ride = get().rides.find((r) => r.id === id)
-      if (!ride) {
-        throw new Error("Vožnja nije pronađena")
-      }
+          try {
+            const createResponse = await ridesControllerCreate(toCreateRideDto(data))
+            if (!isSuccessStatus(createResponse.status)) {
+              throw new Error("Neuspesno kreiranje voznje")
+            }
 
-      const lineId = data.lineId || ride.line.id
-      const line = await fetchLineById(lineId)
+            const createdRide = createResponse.data as RideResponseDto
 
-      const rideName = generateRideName(line.name)
+            if (data.exceptions?.length) {
+              for (const exception of data.exceptions) {
+                const addExceptionResponse = await ridesControllerAddException(
+                  createdRide.id,
+                  toCreateRideExceptionDto(exception)
+                )
 
-      const updatedRide: Ride = {
-        ...ride,
-        ...data,
-        name: rideName,
-        line: line,
-        updatedAt: new Date().toISOString(),
-      }
+                if (!isSuccessStatus(addExceptionResponse.status)) {
+                  throw new Error("Neuspesno dodavanje izuzetka voznje")
+                }
+              }
+            }
 
-      set((state) => ({
-        rides: state.rides.map((r) => (r.id === id ? updatedRide : r)),
-        loading: false,
-      }))
-      
-      // Regenerate ride instances for the current selected date if it exists
-      const currentDate = get().selectedDate
-      if (currentDate) {
-        get().fetchRideInstances(currentDate)
-      }
-      
-      toast.success("Vožnja je uspešno ažurirana")
-    } catch (error: any) {
-      set({
-        loading: false,
-        error: error?.message || "Greška pri ažuriranju vožnje",
-      })
-      toast.error("Greška pri ažuriranju vožnje")
-      throw error
-    }
-  },
+            const detailResponse = await ridesControllerGetById(createdRide.id)
+            if (!isSuccessStatus(detailResponse.status, 200)) {
+              throw new Error("Neuspesno ucitavanje detalja voznje")
+            }
 
-  cancelRide: async (id: string) => {
-    set({ loading: true, error: null })
-    try {
-      // TODO: Replace with actual API call
-      // await ridesApi.delete(id)
-      // set((state) => ({
-      //   rides: state.rides.map((r) =>
-      //     r.id === id ? { ...r, status: "cancelled" } : r
-      //   ),
-      //   loading: false,
-      // }))
+            const detailedRide = detailResponse.data as RideResponseDto
+            const line = await fetchLineById(detailedRide.lineId).catch(() => undefined)
+            const newRide = toRide(detailedRide, line)
 
-      // For now, use mock
-      set((state) => ({
-        rides: state.rides.map((r) =>
-          r.id === id ? { ...r, status: "cancelled", updatedAt: new Date().toISOString() } : r
-        ),
-        loading: false,
-      }))
-      
-      // Regenerate ride instances for the current selected date if it exists
-      const currentDate = get().selectedDate
-      if (currentDate) {
-        get().fetchRideInstances(currentDate)
-      }
-      
-      toast.success("Vožnja je uspešno otkazana")
-    } catch (error: any) {
-      set({
-        loading: false,
-        error: error?.message || "Greška pri otkazivanju vožnje",
-      })
-      toast.error("Greška pri otkazivanju vožnje")
-      throw error
-    }
-  },
+            set((state) => ({
+              rides: [...state.rides.filter((ride) => ride.id !== newRide.id), newRide],
+              loading: false,
+            }))
 
-  generateRideInstances: (ride: Ride): RideInstance[] => {
-    const instances: RideInstance[] = []
+            await get().fetchRideInstances(get().selectedDate)
 
-    // Get reservations from reservations store to calculate seat counts
-    const allReservations = useReservationsStore.getState().allReservations
+            toast.success("Vožnja je uspešno kreirana")
+          } catch (error: unknown) {
+            const message = getApiErrorMessage(error, "Greška pri kreiranju vožnje")
+            set({ loading: false, error: message })
+            toast.error(message)
+            throw error
+          }
+        },
 
-    if (ride.type === "recurring") {
-      if (!ride.startDate || !ride.daysOfWeek || ride.daysOfWeek.length === 0) {
-        return instances
-      }
+        updateRide: async (id: string, data: Partial<RideFormData>) => {
+          set({ loading: true, error: null })
 
-      const startDate = new Date(ride.startDate + "T00:00:00")
-      const endDate = ride.endDate ? new Date(ride.endDate + "T00:00:00") : null
-      const threeMonthsFromNow = new Date()
-      threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3)
+          try {
+            const existingRide = get().rides.find((ride) => ride.id === id)
+            if (!existingRide) {
+              throw new Error("Vožnja nije pronađena")
+            }
 
-      const effectiveEndDate = endDate && endDate < threeMonthsFromNow ? endDate : threeMonthsFromNow
+            const hasExceptionsUpdate = Array.isArray(data.exceptions)
+            const hasDayTimesUpdate = data.dayTimes !== undefined
+            const patchable = hasPatchableFields(data)
 
-      const dates = generateRideInstanceDates(startDate, effectiveEndDate, ride.daysOfWeek)
+            if (hasDayTimesUpdate) {
+              const dayTimesResponse = await ridesControllerReplaceDayTimes(
+                id,
+                toReplaceRideDayTimesDto(data.dayTimes)
+              )
 
-      dates.forEach((date) => {
-        const dateString = formatDateToISO(date)
-        const exception = ride.exceptions?.find((ex) => ex.date === dateString)
+              if (!isSuccessStatus(dayTimesResponse.status, 200)) {
+                throw new Error("Neuspesno azuriranje rasporeda vremena voznje")
+              }
+            }
 
-        if (exception?.type === "skip") return
+            if (patchable) {
+              const payload = toUpdateRideDto(
+                hasDayTimesUpdate
+                  ? {
+                      ...data,
+                      dayTimes: undefined,
+                    }
+                  : data
+              )
 
-        const dayOfWeek = date.getDay()
-        
-        // Get times for this day - prefer dayTimes, fallback to old format
-        let departureTime: string | undefined
-        let arrivalTime: string | undefined
+              const response = shouldUsePutReplace(data) && !hasExceptionsUpdate
+                ? await ridesControllerReplace(id, payload)
+                : await ridesControllerUpdate(id, payload)
 
-        if (exception) {
-          // Exception overrides everything
-          departureTime = exception.departureTime
-          arrivalTime = exception.arrivalTime
-        } else if (ride.dayTimes && ride.dayTimes[dayOfWeek]) {
-          // Use per-day times
-          departureTime = ride.dayTimes[dayOfWeek].departureTime
-          arrivalTime = ride.dayTimes[dayOfWeek].arrivalTime
-        } else if (ride.departureTime && ride.arrivalTime) {
-          // Fallback to old format
-          departureTime = ride.departureTime
-          arrivalTime = ride.arrivalTime
-        }
+              if (!isSuccessStatus(response.status, 200)) {
+                throw new Error("Neuspesno azuriranje voznje")
+              }
+            }
 
-        if (!departureTime || !arrivalTime) return
+            if (hasExceptionsUpdate) {
+              const nextExceptions = data.exceptions ?? []
+              const existingExceptions = existingRide.exceptions ?? []
 
-        const instanceId = `${ride.id}-${dateString}`
-        // Get reservations for this instance
-        const reservations = allReservations[instanceId] || []
-        // Count only active reservations
-        const reservationCount = reservations.filter((r) => r.status === "active").length
-        const capacity = ride.busCapacity
-        const availableSeats = capacity - reservationCount
+              const nextIds = new Set(nextExceptions.map((exception) => exception.id))
+              const existingIds = new Set(existingExceptions.map((exception) => exception.id))
 
-        instances.push({
-          id: instanceId,
-          rideId: ride.id,
-          ride,
-          date: dateString,
-          departureTime,
-          arrivalTime,
-          status: ride.status,
-          reservationCount,
-          availableSeats,
-        })
-      })
-    } else if (ride.type === "one-time") {
-      if (ride.date && ride.oneTimeDepartureTime && ride.oneTimeArrivalTime) {
-        const instanceId = `${ride.id}-${ride.date}`
-        // Get reservations for this instance
-        const reservations = allReservations[instanceId] || []
-        // Count only active reservations
-        const reservationCount = reservations.filter((r) => r.status === "active").length
-        const capacity = ride.busCapacity
-        const availableSeats = capacity - reservationCount
+              const toRemove = existingExceptions.filter(
+                (exception) => !nextIds.has(exception.id)
+              )
+              const toAdd = nextExceptions.filter(
+                (exception) => !existingIds.has(exception.id)
+              )
 
-        instances.push({
-          id: instanceId,
-          rideId: ride.id,
-          ride,
-          date: ride.date,
-          departureTime: ride.oneTimeDepartureTime,
-          arrivalTime: ride.oneTimeArrivalTime,
-          status: ride.status,
-          reservationCount,
-          availableSeats,
-        })
-      }
-    }
+              for (const exception of toRemove) {
+                const removeResponse = await ridesControllerRemoveException(id, exception.id)
 
-    return instances
-  },
+                if (!isSuccessStatus(removeResponse.status)) {
+                  throw new Error("Neuspesno uklanjanje izuzetka voznje")
+                }
+              }
 
-  setSelectedRide: (ride: Ride | null) => {
-    set({ selectedRide: ride })
-  },
+              for (const exception of toAdd) {
+                const addResponse = await ridesControllerAddException(
+                  id,
+                  toCreateRideExceptionDto(exception)
+                )
 
-  setSelectedDate: (date: Date) => {
-    // Ensure date is a Date object
-    const dateObj = date instanceof Date ? date : new Date(date)
-    set({ selectedDate: dateObj })
-  },
+                if (!isSuccessStatus(addResponse.status)) {
+                  throw new Error("Neuspesno dodavanje izuzetka voznje")
+                }
+              }
+            }
 
-  clearError: () => {
-    set({ error: null })
-  },
+            const detailResponse = await ridesControllerGetById(id)
+            if (!isSuccessStatus(detailResponse.status, 200)) {
+              throw new Error("Neuspesno ucitavanje detalja voznje")
+            }
+
+            const detailedRide = detailResponse.data as RideResponseDto
+            const line = await fetchLineById(detailedRide.lineId).catch(() => undefined)
+            const updatedRide = toRide(detailedRide, line)
+
+            set((state) => ({
+              rides: state.rides.map((ride) =>
+                ride.id === id ? updatedRide : ride
+              ),
+              selectedRide:
+                state.selectedRide?.id === id ? updatedRide : state.selectedRide,
+              loading: false,
+            }))
+
+            await get().fetchRideInstances(get().selectedDate)
+
+            toast.success("Vožnja je uspešno ažurirana")
+          } catch (error: unknown) {
+            const message = getApiErrorMessage(error, "Greška pri ažuriranju vožnje")
+            set({ loading: false, error: message })
+            toast.error(message)
+            throw error
+          }
+        },
+
+        cancelRide: async (id: string) => {
+          set({ loading: true, error: null })
+
+          try {
+            const response = await ridesControllerRemove(id)
+            if (!isSuccessStatus(response.status, 200)) {
+              throw new Error("Neuspesno brisanje voznje")
+            }
+
+            set((state) => ({
+              rides: state.rides.filter((ride) => ride.id !== id),
+              rideInstances: state.rideInstances.filter((instance) => instance.rideId !== id),
+              selectedRide: state.selectedRide?.id === id ? null : state.selectedRide,
+              loading: false,
+            }))
+
+            await get().fetchRideInstances(get().selectedDate)
+
+            toast.success("Vožnja je uspešno obrisana")
+          } catch (error: unknown) {
+            const message = getApiErrorMessage(error, "Greška pri brisanju vožnje")
+            set({ loading: false, error: message })
+            toast.error(message)
+            throw error
+          }
+        },
+
+        generateRideInstances: (ride: Ride): RideInstance[] => {
+          const instances: RideInstance[] = []
+
+          const allReservations = useReservationsStore.getState().allReservations
+
+          if (ride.type === "recurring") {
+            if (!ride.startDate || !ride.daysOfWeek || ride.daysOfWeek.length === 0) {
+              return instances
+            }
+
+            const startDate = new Date(`${ride.startDate}T00:00:00`)
+            const endDate = ride.endDate ? new Date(`${ride.endDate}T00:00:00`) : null
+            const threeMonthsFromNow = new Date()
+            threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3)
+
+            const effectiveEndDate =
+              endDate && endDate < threeMonthsFromNow ? endDate : threeMonthsFromNow
+
+            const dates = generateRideInstanceDates(startDate, effectiveEndDate, ride.daysOfWeek)
+
+            dates.forEach((date) => {
+              const dateString = formatDateToISO(date)
+              const exception = ride.exceptions?.find((ex) => ex.date === dateString)
+
+              if (exception?.type === "skip") {
+                return
+              }
+
+              const dayOfWeek = date.getDay()
+
+              let departureTime: string | undefined
+              let arrivalTime: string | undefined
+
+              if (exception?.type === "additional") {
+                departureTime = exception.departureTime
+                arrivalTime = exception.arrivalTime
+              } else if (ride.dayTimes && ride.dayTimes[dayOfWeek]) {
+                departureTime = ride.dayTimes[dayOfWeek].departureTime
+                arrivalTime = ride.dayTimes[dayOfWeek].arrivalTime
+              } else if (ride.departureTime && ride.arrivalTime) {
+                departureTime = ride.departureTime
+                arrivalTime = ride.arrivalTime
+              }
+
+              if (!departureTime || !arrivalTime) {
+                return
+              }
+
+              const instanceId = `${ride.id}-${dateString}`
+              const reservations = allReservations[instanceId] || []
+              const reservationCount = reservations.filter((r) => r.status === "active").length
+              const capacity = ride.busCapacity
+              const availableSeats = capacity - reservationCount
+
+              instances.push({
+                id: instanceId,
+                rideId: ride.id,
+                ride,
+                date: dateString,
+                departureTime,
+                arrivalTime,
+                status: ride.status,
+                reservationCount,
+                availableSeats,
+              })
+            })
+          } else if (ride.type === "one-time") {
+            if (ride.date && ride.oneTimeDepartureTime && ride.oneTimeArrivalTime) {
+              const instanceId = `${ride.id}-${ride.date}`
+              const reservations = allReservations[instanceId] || []
+              const reservationCount = reservations.filter((r) => r.status === "active").length
+              const capacity = ride.busCapacity
+              const availableSeats = capacity - reservationCount
+
+              instances.push({
+                id: instanceId,
+                rideId: ride.id,
+                ride,
+                date: ride.date,
+                departureTime: ride.oneTimeDepartureTime,
+                arrivalTime: ride.oneTimeArrivalTime,
+                status: ride.status,
+                reservationCount,
+                availableSeats,
+              })
+            }
+          }
+
+          return instances
+        },
+
+        setSelectedRide: (ride: Ride | null) => {
+          set({ selectedRide: ride })
+        },
+
+        setSelectedDate: (date: Date) => {
+          const dateObj = date instanceof Date ? date : new Date(date)
+          set({ selectedDate: dateObj })
+        },
+
+        clearError: () => {
+          set({ error: null })
+        },
       }
     },
     {
       name: "rides-storage",
       partialize: (state) => ({
-        rides: state.rides,
-        selectedDate: state.selectedDate instanceof Date 
-          ? state.selectedDate.toISOString() 
+        selectedDate:
+          state.selectedDate instanceof Date
+            ? state.selectedDate.toISOString()
           : state.selectedDate,
       }),
-      // Convert stored ISO string back to Date on rehydration
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Convert selectedDate from string to Date
           if (state.selectedDate) {
-            if (typeof state.selectedDate === 'string') {
+            if (typeof state.selectedDate === "string") {
               state.selectedDate = new Date(state.selectedDate)
             } else if (!(state.selectedDate instanceof Date)) {
               state.selectedDate = new Date()
             }
           }
-          // Ensure rides array exists (should be loaded from localStorage)
+
           if (!state.rides) {
             state.rides = []
           }

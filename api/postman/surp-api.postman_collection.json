@@ -2455,7 +2455,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Slice12 Recurring {{$timestamp}}\",\n  \"lineId\": \"{{rideLineId}}\",\n  \"capacity\": 38,\n  \"type\": \"RECURRING\",\n  \"status\": \"DRAFT\",\n  \"recurringStartDate\": \"2026-03-20\",\n  \"dayTimes\": [\n    {\n      \"dayOfWeek\": 1,\n      \"departureTime\": \"09:00\",\n      \"arrivalTime\": \"10:30\"\n    },\n    {\n      \"dayOfWeek\": 3,\n      \"departureTime\": \"11:00\",\n      \"arrivalTime\": \"12:20\"\n    }\n  ]\n}"
+              "raw": "{\n  \"name\": \"Slice12 Recurring {{$timestamp}}\",\n  \"lineId\": \"{{rideLineId}}\",\n  \"capacity\": 38,\n  \"type\": \"RECURRING\",\n  \"status\": \"DRAFT\",\n  \"recurringStartDate\": \"2026-03-20\",\n  \"dayTimes\": [\n    {\n      \"dayOfWeek\": 1,\n      \"departureTime\": \"09:00\",\n      \"arrivalTime\": \"10:30\"\n    },\n    {\n      \"dayOfWeek\": 3,\n      \"departureTime\": \"23:00\",\n      \"arrivalTime\": \"00:20\"\n    }\n  ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/rides",

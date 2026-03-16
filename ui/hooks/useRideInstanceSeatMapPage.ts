@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
-import { useRidesStore } from "@/stores/ridesStore"
+import { useSearchParams } from "next/navigation"
 import { useReservationsStore } from "@/stores/reservationsStore"
+import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
+import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/useRidesInstancesByDateQuery"
 import type { Reservation } from "@/types"
 
 interface UseRideInstanceSeatMapPageParams {
@@ -10,7 +12,12 @@ interface UseRideInstanceSeatMapPageParams {
 const CSV_BOM = "\uFEFF"
 
 export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSeatMapPageParams) {
-  const { rideInstances, fetchRideInstances, selectedDate } = useRidesStore()
+  const searchParams = useSearchParams()
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
+  const ridesQuery = useRidesListQuery()
+  const rides = ridesQuery.data || []
+  const rideInstancesQuery = useRidesInstancesByDateQuery(selectedDate, rides)
+  const rideInstances = rideInstancesQuery.data || []
   const {
     seatMap,
     reservations,
@@ -30,10 +37,18 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   const [reservationToEdit, setReservationToEdit] = useState<Reservation | null>(null)
 
   useEffect(() => {
-    if (selectedDate) {
-      fetchRideInstances(selectedDate)
+    const queryDate = searchParams.get("date")
+    if (!queryDate) {
+      return
     }
-  }, [selectedDate, fetchRideInstances])
+
+    const parsed = new Date(`${queryDate}T00:00:00`)
+    if (Number.isNaN(parsed.getTime())) {
+      return
+    }
+
+    setSelectedDate(parsed)
+  }, [searchParams, setSelectedDate])
 
   useEffect(() => {
     const instance = rideInstances.find((rideInstance) => rideInstance.id === rideInstanceId)
@@ -140,7 +155,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   return {
     selectedDate,
     seatMap,
-    loading,
+    loading: loading || ridesQuery.isLoading || rideInstancesQuery.isLoading,
     selectedSeat,
     selectedSeats,
     selectedRideInstance,

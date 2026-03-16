@@ -246,6 +246,24 @@ describe('RidesController (e2e)', () => {
     );
   });
 
+  it('allows overnight recurring day-times', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/rides')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        lineId: 'line-1',
+        capacity: 38,
+        type: RideType.RECURRING,
+        status: RideStatus.ACTIVE,
+        recurringStartDate: '2026-03-20',
+        dayTimes: [{ dayOfWeek: 1, departureTime: '12:00', arrivalTime: '00:00' }]
+      })
+      .expect(201);
+
+    expect(response.body.id).toBe('ride-1');
+  });
+
   it('rejects invalid exception combinations', async () => {
     prismaMock.rideException.findMany.mockResolvedValueOnce([
       {
