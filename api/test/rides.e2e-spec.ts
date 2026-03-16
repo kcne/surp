@@ -75,6 +75,9 @@ describe('RidesController (e2e)', () => {
       findFirst: jest.fn(),
       create: jest.fn(),
       delete: jest.fn()
+    },
+    reservation: {
+      groupBy: jest.fn()
     }
   };
 
@@ -164,6 +167,8 @@ describe('RidesController (e2e)', () => {
       createdAt: new Date(),
       updatedAt: new Date()
     });
+
+    prismaMock.reservation.groupBy.mockResolvedValue([]);
 
     prismaMock.$transaction.mockImplementation(async (arg: unknown) => {
       if (typeof arg === 'function') {
