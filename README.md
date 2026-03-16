@@ -80,6 +80,20 @@ Recommended setup is two Railway services plus one PostgreSQL instance:
 2. `ui` service (root directory: `ui`)
 3. `postgres` service (Railway PostgreSQL)
 
+If you are only deploying the API from this monorepo, Railway can build directly from the repo root using the top-level `Dockerfile`.
+
+### Monorepo Root Docker Deploy (API only)
+
+1. In Railway, create the API service from this repository.
+2. Keep root directory as repository root (default).
+3. Railway will detect and use the top-level `Dockerfile`.
+4. Add service variables from `.env.railway.example` and set `DATABASE_URL` using Railway Postgres variable reference.
+
+Important:
+
+1. Do not commit real secrets in `.env` files.
+2. Use Railway Variables for production credentials.
+
 ### API service settings
 
 Build command:
