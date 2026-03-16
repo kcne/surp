@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { lineSchema } from "@/utils/validators"
 import type { Line, LineFormData } from "@/types"
 import { useLinesStore } from "@/stores/linesStore"
-import { useStationsStore } from "@/stores/stationsStore"
+import { useStationsListQuery } from "@/infrastructure/hooks/queries/useStationsListQuery"
 import { DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -75,15 +75,9 @@ interface LineModalProps {
 
 export function LineModal({ open, onOpenChange, line }: LineModalProps) {
   const { createLine, updateLine, loading } = useLinesStore()
-  const { stations, fetchStations } = useStationsStore()
+  const stationsQuery = useStationsListQuery()
+  const stations = stationsQuery.data || []
   const isEdit = !!line
-
-  // Fetch stations when modal opens to ensure all stations are available
-  useEffect(() => {
-    if (open) {
-      fetchStations()
-    }
-  }, [open, fetchStations])
 
   const form = useForm<LineFormData>({
     resolver: zodResolver(lineSchema),

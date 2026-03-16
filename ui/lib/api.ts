@@ -1,7 +1,6 @@
 import apiClient from "./axios"
 import type {
   User,
-  Station,
   Line,
   Ride,
   RideInstance,
@@ -31,30 +30,6 @@ export const authApi = {
     if (typeof window !== "undefined") {
       localStorage.removeItem("auth_token")
     }
-  },
-}
-
-// Stations API
-export const stationsApi = {
-  getAll: async (): Promise<ApiResponse<Station[]>> => {
-    // TODO: Replace with actual API call
-    return { data: [] }
-  },
-  getById: async (id: string): Promise<ApiResponse<Station>> => {
-    // TODO: Replace with actual API call
-    throw new Error("Not implemented")
-  },
-  create: async (data: Station): Promise<ApiResponse<Station>> => {
-    // TODO: Replace with actual API call
-    return { data }
-  },
-  update: async (id: string, data: Partial<Station>): Promise<ApiResponse<Station>> => {
-    // TODO: Replace with actual API call
-    return { data: { ...data, id } as Station }
-  },
-  delete: async (id: string): Promise<ApiResponse<void>> => {
-    // TODO: Replace with actual API call
-    return { data: undefined }
   },
 }
 

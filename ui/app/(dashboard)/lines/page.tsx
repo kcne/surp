@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Plus, Route } from "lucide-react"
 import { useLinesStore } from "@/stores/linesStore"
-import { useStationsStore } from "@/stores/stationsStore"
 import { LineModal } from "@/components/lines/LineModal"
 import { DeleteLineDialog } from "@/components/lines/DeleteLineDialog"
 import { LinesDataTable } from "@/components/lines/LinesDataTable"
@@ -15,7 +14,6 @@ import type { Line } from "@/types"
 
 export default function LinesPage() {
   const { lines, loading, fetchLines } = useLinesStore()
-  const { fetchStations } = useStationsStore()
   const {
     isModalOpen,
     isDeleteDialogOpen,
@@ -29,10 +27,8 @@ export default function LinesPage() {
   } = useCrudDialogState<Line>()
 
   useEffect(() => {
-    fetchStations().then(() => {
-      fetchLines()
-    })
-  }, [fetchStations, fetchLines])
+    fetchLines()
+  }, [fetchLines])
 
   return (
     <Layout>

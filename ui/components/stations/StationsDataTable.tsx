@@ -3,13 +3,13 @@
 import { useMemo } from "react"
 import { DataTable } from "@/components/ui/data-table"
 import { getStationsTableColumns } from "@/components/stations/StationsTableColumns"
-import type { Station } from "@/types"
+import type { StationListItem } from "@/infrastructure/hooks/queries/useStationsListQuery"
 
 interface StationsDataTableProps {
-  stations: Station[]
-  onView: (station: Station) => void
-  onEdit: (station: Station) => void
-  onDelete: (station: Station) => void
+  stations: StationListItem[]
+  onView: (station: StationListItem) => void
+  onEdit: (station: StationListItem) => void
+  onDelete: (station: StationListItem) => void
 }
 
 export function StationsDataTable({

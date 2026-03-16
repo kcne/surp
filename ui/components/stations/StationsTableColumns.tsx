@@ -4,7 +4,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Eye, FileText, Map, MapPin, Pencil, Phone, Settings2, Tags, Trash2 } from "lucide-react"
-import type { Station } from "@/types"
+import type { StationListItem } from "@/infrastructure/hooks/queries/useStationsListQuery"
 import {
   Tooltip,
   TooltipContent,
@@ -13,16 +13,16 @@ import {
 } from "@/components/ui/tooltip"
 
 interface StationColumnActions {
-  onView: (station: Station) => void
-  onEdit: (station: Station) => void
-  onDelete: (station: Station) => void
+  onView: (station: StationListItem) => void
+  onEdit: (station: StationListItem) => void
+  onDelete: (station: StationListItem) => void
 }
 
 export function getStationsTableColumns({
   onView,
   onEdit,
   onDelete,
-}: StationColumnActions): ColumnDef<Station>[] {
+}: StationColumnActions): ColumnDef<StationListItem>[] {
   return [
     {
       accessorKey: "name",
@@ -52,8 +52,8 @@ export function getStationsTableColumns({
         </span>
       ),
       cell: ({ row }) =>
-        row.original.category ? (
-          <Badge variant="secondary">{row.original.category}</Badge>
+        row.original.categoryLabel !== "-" ? (
+          <Badge variant="secondary">{row.original.categoryLabel}</Badge>
         ) : (
           <span className="text-muted-foreground">-</span>
         ),
@@ -77,7 +77,7 @@ export function getStationsTableColumns({
         </span>
       ),
       cell: ({ row }) => {
-        const notes = row.original.notes
+        const notes = row.original.notes || ""
 
         if (!notes) {
           return <span className="text-muted-foreground">-</span>

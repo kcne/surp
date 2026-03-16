@@ -3,29 +3,30 @@
 import {
   ConfirmDeleteDialog,
 } from "@/components/ui/confirm-delete-dialog"
-import { useStationsStore } from "@/stores/stationsStore"
 
 interface DeleteStationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   station: { id: string; name: string } | null
+  loading: boolean
+  onDelete: (id: string) => Promise<void>
 }
 
 export function DeleteStationDialog({
   open,
   onOpenChange,
   station,
+  loading,
+  onDelete,
 }: DeleteStationDialogProps) {
-  const { deleteStation, loading } = useStationsStore()
-
   const handleDelete = async () => {
     if (!station) return
 
     try {
-      await deleteStation(station.id)
+      await onDelete(station.id)
       onOpenChange(false)
     } catch (error) {
-      // Error is handled in store
+      // Error toast is handled in mutation hook.
     }
   }
 

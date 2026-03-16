@@ -1,19 +1,35 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Layout } from "@/components/layout/Layout"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Plus, MapPin } from "lucide-react"
-import { useStationsStore } from "@/stores/stationsStore"
 import { StationModal } from "@/components/stations/StationModal"
 import { DeleteStationDialog } from "@/components/stations/DeleteStationDialog"
 import { StationsDataTable } from "@/components/stations/StationsDataTable"
 import { useCrudDialogState } from "@/hooks/useCrudDialogState"
-import type { Station } from "@/types"
+import {
+  useCreateStationMutation,
+  useDeleteStationMutation,
+  useUpdateStationMutation,
+} from "@/infrastructure/hooks/mutations/useStationMutations"
+import { useStationsListQuery } from "@/infrastructure/hooks/queries/useStationsListQuery"
+import type { CreateStationDto, UpdateStationDto } from "@/infrastructure/generated/model"
+import type { StationListItem } from "@/infrastructure/hooks/queries/useStationsListQuery"
 
 export default function StationsPage() {
-  const { stations, loading, fetchStations } = useStationsStore()
+  const stationsQuery = useStationsListQuery()
+  const createStationMutation = useCreateStationMutation()
+  const updateStationMutation = useUpdateStationMutation()
+  const deleteStationMutation = useDeleteStationMutation()
+  const stations = stationsQuery.data || []
+  const loading = stationsQuery.isLoading
+  const error = stationsQuery.error
+  const mutationLoading =
+    createStationMutation.isPending ||
+    updateStationMutation.isPending ||
+    deleteStationMutation.isPending
   const [isViewMode, setIsViewMode] = useState(false)
   const {
     isModalOpen,
@@ -25,23 +41,31 @@ export default function StationsPage() {
     closeModal,
     openDelete,
     setIsDeleteDialogOpen,
-  } = useCrudDialogState<Station>()
+  } = useCrudDialogState<StationListItem>()
 
-  useEffect(() => {
-    fetchStations()
-  }, [fetchStations])
+  const handleCreate = async (payload: CreateStationDto) => {
+    await createStationMutation.mutateAsync(payload)
+  }
 
-  const handleEdit = (station: Station) => {
+  const handleUpdate = async (id: string, payload: UpdateStationDto) => {
+    await updateStationMutation.mutateAsync({ id, payload })
+  }
+
+  const handleDelete = async (id: string) => {
+    await deleteStationMutation.mutateAsync(id)
+  }
+
+  const handleEdit = (station: StationListItem) => {
     setIsViewMode(false)
     openEdit(station)
   }
 
-  const handleView = (station: Station) => {
+  const handleView = (station: StationListItem) => {
     setIsViewMode(true)
     openEdit(station)
   }
 
-  const handleDelete = (station: Station) => {
+  const handleOpenDelete = (station: StationListItem) => {
     openDelete(station)
   }
 
@@ -80,6 +104,21 @@ export default function StationsPage() {
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
           </div>
+        ) : stationsQuery.isError ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12">
+            <MapPin className="mb-3 h-10 w-10 text-muted-foreground" />
+            <p className="text-lg font-medium text-muted-foreground">
+              Greska pri ucitavanju stanica
+            </p>
+            <p className="mb-4 text-sm text-muted-foreground">
+              {error instanceof Error
+                ? error.message
+                : "Pokrenite ponovno ucitavanje podataka."}
+            </p>
+            <Button onClick={() => stationsQuery.refetch()}>
+              Pokusaj ponovo
+            </Button>
+          </div>
         ) : stations.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12">
             <MapPin className="mb-3 h-10 w-10 text-muted-foreground" />
@@ -99,7 +138,7 @@ export default function StationsPage() {
             stations={stations}
             onView={handleView}
             onEdit={handleEdit}
-            onDelete={handleDelete}
+            onDelete={handleOpenDelete}
           />
         )}
 
@@ -108,12 +147,17 @@ export default function StationsPage() {
           onOpenChange={handleModalClose}
           station={selectedStation}
           readOnly={isViewMode}
+          loading={mutationLoading}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
         />
 
         <DeleteStationDialog
           open={isDeleteDialogOpen}
           onOpenChange={setIsDeleteDialogOpen}
           station={stationToDelete}
+          loading={mutationLoading}
+          onDelete={handleDelete}
         />
       </div>
     </Layout>

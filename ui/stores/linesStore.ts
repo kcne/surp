@@ -2,8 +2,9 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import type { Line, LineFormData, Station } from "@/types"
 import { linesApi } from "@/lib/api"
+import { stationsControllerList } from "@/infrastructure/generated/surp-api"
+import type { StationResponseDto } from "@/infrastructure/generated/model"
 import { toast } from "sonner"
-import { useStationsStore } from "./stationsStore"
 
 interface LinesState {
   lines: Line[]
@@ -18,14 +19,44 @@ interface LinesState {
   clearError: () => void
 }
 
-// Helper function to get station by ID
-const getStationById = (id: string): Station | null => {
-  const stations = useStationsStore.getState().stations
-  return stations.find((s) => s.id === id) || null
+const toStationCategory = (category: StationResponseDto["category"]): Station["category"] => {
+  if (category === "BUS_STATION") {
+    return "Autobuska stanica"
+  }
+
+  if (category === "BUS_STOP") {
+    return "Stajalište"
+  }
+
+  return undefined
+}
+
+const toStation = (station: StationResponseDto): Station => {
+  return {
+    id: station.id,
+    name: station.name,
+    address: station.address,
+    category: toStationCategory(station.category),
+    contactPhone: typeof station.contactPhone === "string" ? station.contactPhone : undefined,
+    notes: typeof station.notes === "string" ? station.notes : undefined,
+    createdAt: station.createdAt,
+    updatedAt: station.updatedAt,
+  }
+}
+
+const fetchStationsMap = async (): Promise<Map<string, Station>> => {
+  const response = await stationsControllerList()
+
+  if (response.status !== 200) {
+    throw new Error("Greška pri učitavanju stanica")
+  }
+
+  return new Map(response.data.items.map((station) => [station.id, toStation(station)]))
 }
 
 // Mock data for development
 const createMockLine = (
+  stationsMap: Map<string, Station>,
   id: string,
   depStationId: string,
   arrStationId: string,
@@ -34,8 +65,8 @@ const createMockLine = (
   direction: "outbound" | "return" = "outbound",
   pairKey?: string
 ): Line => {
-  const depStation = getStationById(depStationId)
-  const arrStation = getStationById(arrStationId)
+  const depStation = stationsMap.get(depStationId)
+  const arrStation = stationsMap.get(arrStationId)
 
   if (!depStation || !arrStation) {
     throw new Error("Station not found")
@@ -44,7 +75,7 @@ const createMockLine = (
   const allStations = [
     { stationId: depStationId, stationName: depStation.name, order: 0 },
     ...intermediateIds.map((sid, idx) => {
-      const station = getStationById(sid)
+      const station = stationsMap.get(sid)
       return {
         stationId: sid,
         stationName: station?.name || "",
@@ -93,10 +124,12 @@ export const useLinesStore = create<LinesState>()(
       // For now, use mock data only if no lines exist
       const currentLines = get().lines
       if (currentLines.length === 0) {
-        const stations = useStationsStore.getState().stations
+        const stationsMap = await fetchStationsMap()
+        const stations = Array.from(stationsMap.values())
         if (stations.length >= 2) {
           const mockLines: Line[] = [
             createMockLine(
+              stationsMap,
               "1",
               stations[0].id,
               stations[1].id,
@@ -127,8 +160,9 @@ export const useLinesStore = create<LinesState>()(
       // set((state) => ({ lines: [...state.lines, response.data], loading: false }))
 
       // For now, use mock
-      const depStation = getStationById(data.departureStationId)
-      const arrStation = getStationById(data.arrivalStationId)
+      const stationsMap = await fetchStationsMap()
+      const depStation = stationsMap.get(data.departureStationId)
+      const arrStation = stationsMap.get(data.arrivalStationId)
 
       if (!depStation || !arrStation) {
         throw new Error("Stanica nije pronađena")
@@ -136,7 +170,7 @@ export const useLinesStore = create<LinesState>()(
 
       const intermediateStations = (data.intermediateStationIds || []).map(
         (sid, idx) => {
-          const station = getStationById(sid)
+          const station = stationsMap.get(sid)
           return {
             stationId: sid,
             stationName: station?.name || "",
@@ -241,6 +275,7 @@ export const useLinesStore = create<LinesState>()(
       if (!line) {
         throw new Error("Linija nije pronađena")
       }
+      const stationsMap = await fetchStationsMap()
 
       const updatedLine: Line = {
         ...line,
@@ -250,10 +285,10 @@ export const useLinesStore = create<LinesState>()(
 
       // Update stations if changed
       if (data.departureStationId || data.arrivalStationId) {
-        const depStation = getStationById(
+        const depStation = stationsMap.get(
           data.departureStationId || line.departureStation.id
         )
-        const arrStation = getStationById(
+        const arrStation = stationsMap.get(
           data.arrivalStationId || line.arrivalStation.id
         )
 
@@ -266,7 +301,7 @@ export const useLinesStore = create<LinesState>()(
       if (data.intermediateStationIds) {
         updatedLine.intermediateStations = data.intermediateStationIds.map(
           (sid, idx) => {
-            const station = getStationById(sid)
+            const station = stationsMap.get(sid)
             return {
               stationId: sid,
               stationName: station?.name || "",

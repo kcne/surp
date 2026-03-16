@@ -34,8 +34,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { useStationsStore } from "@/stores/stationsStore"
-import type { Station } from "@/types"
+import { useStationsListQuery } from "@/infrastructure/hooks/queries/useStationsListQuery"
+import type { StationListItem } from "@/infrastructure/hooks/queries/useStationsListQuery"
 import { cn } from "@/lib/utils"
 
 interface IntermediateStationsListProps {
@@ -106,7 +106,8 @@ export function IntermediateStationsList({
   departureStationId,
   arrivalStationId,
 }: IntermediateStationsListProps) {
-  const { stations } = useStationsStore()
+  const stationsQuery = useStationsListQuery()
+  const stations = stationsQuery.data || []
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
 
   const sensors = useSensors(
@@ -130,7 +131,7 @@ export function IntermediateStationsList({
 
   const selectedStations = selectedStationIds
     .map((id) => stations.find((s) => s.id === id))
-    .filter((s): s is Station => !!s)
+    .filter((s): s is StationListItem => !!s)
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event

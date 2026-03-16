@@ -10,10 +10,11 @@ import type {
   Passenger,
 } from "@/types"
 import { reservationsApi } from "@/lib/api"
+import { stationsControllerList } from "@/infrastructure/generated/surp-api"
+import type { StationResponseDto } from "@/infrastructure/generated/model"
 import { toast } from "sonner"
 import { buildSeatMap, checkSeatConflict } from "@/utils/seatHelpers"
 import { usePassengersStore } from "./passengersStore"
-import { useStationsStore } from "./stationsStore"
 import { useRidesStore } from "./ridesStore"
 
 interface ReservationsState {
@@ -60,6 +61,41 @@ const getLineStationsForRideInstance = (rideInstance: RideInstance) => {
       order: lineStations.length + 1,
     },
   ]
+}
+
+const toStationCategory = (category: StationResponseDto["category"]): Station["category"] => {
+  if (category === "BUS_STATION") {
+    return "Autobuska stanica"
+  }
+
+  if (category === "BUS_STOP") {
+    return "Stajalište"
+  }
+
+  return undefined
+}
+
+const toStation = (station: StationResponseDto): Station => {
+  return {
+    id: station.id,
+    name: station.name,
+    address: station.address,
+    category: toStationCategory(station.category),
+    contactPhone: typeof station.contactPhone === "string" ? station.contactPhone : undefined,
+    notes: typeof station.notes === "string" ? station.notes : undefined,
+    createdAt: station.createdAt,
+    updatedAt: station.updatedAt,
+  }
+}
+
+const fetchStations = async (): Promise<Station[]> => {
+  const response = await stationsControllerList()
+
+  if (response.status !== 200) {
+    throw new Error("Greška pri učitavanju stanica")
+  }
+
+  return response.data.items.map(toStation)
 }
 
 export const useReservationsStore = create<ReservationsState>()(
@@ -150,7 +186,7 @@ export const useReservationsStore = create<ReservationsState>()(
       // For now, use mock
       // Get passenger and stations from their respective stores
       const passengers = usePassengersStore.getState().passengers
-      const stations = useStationsStore.getState().stations
+      const stations = await fetchStations()
 
       const passenger = passengers.find((p) => p.id === data.passengerId)
       const departureStation = stations.find(

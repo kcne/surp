@@ -4,7 +4,7 @@ import { z } from "zod"
 export const stationSchema = z.object({
   name: z.string().min(1, "Naziv stanice je obavezan"),
   address: z.string().min(1, "Adresa je obavezna"),
-  category: z.enum(["Autobuska stanica", "Stajalište"]).optional(),
+  category: z.enum(["BUS_STATION", "BUS_STOP"]).optional(),
   contactPhone: z
     .string()
     .regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, "Neispravan format telefona")

@@ -4,8 +4,9 @@ import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { stationSchema } from "@/utils/validators"
-import type { Station, StationFormData } from "@/types"
-import { useStationsStore } from "@/stores/stationsStore"
+import type { CreateStationDto, UpdateStationDto } from "@/infrastructure/generated/model"
+import type { StationListItem } from "@/infrastructure/hooks/queries/useStationsListQuery"
+import type { z } from "zod"
 import { DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,7 +29,9 @@ import {
 import { FormModalShell } from "@/components/forms/FormModalShell"
 import { MapPinPlus, Save, X } from "lucide-react"
 
-const STATION_DEFAULT_VALUES: StationFormData = {
+type StationFormValues = z.infer<typeof stationSchema>
+
+const STATION_DEFAULT_VALUES: StationFormValues = {
   name: "",
   address: "",
   category: undefined,
@@ -36,7 +39,7 @@ const STATION_DEFAULT_VALUES: StationFormData = {
   notes: "",
 }
 
-function getStationFormValues(station?: Station | null): StationFormData {
+function getStationFormValues(station?: StationListItem | null): StationFormValues {
   if (!station) {
     return STATION_DEFAULT_VALUES
   }
@@ -44,24 +47,48 @@ function getStationFormValues(station?: Station | null): StationFormData {
   return {
     name: station.name,
     address: station.address,
-    category: station.category,
-    contactPhone: station.contactPhone || "",
-    notes: station.notes || "",
+    category: station.category ?? undefined,
+    contactPhone: typeof station.contactPhone === "string" ? station.contactPhone : "",
+    notes: typeof station.notes === "string" ? station.notes : "",
   }
+}
+
+function toCreatePayload(values: StationFormValues): CreateStationDto {
+  return {
+    name: values.name,
+    address: values.address,
+    category: values.category,
+    contactPhone: values.contactPhone || undefined,
+    notes: values.notes || undefined,
+  }
+}
+
+function toUpdatePayload(values: StationFormValues): UpdateStationDto {
+  return toCreatePayload(values)
 }
 
 interface StationModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  station?: Station | null
+  station?: StationListItem | null
   readOnly?: boolean
+  loading: boolean
+  onCreate: (payload: CreateStationDto) => Promise<void>
+  onUpdate: (id: string, payload: UpdateStationDto) => Promise<void>
 }
 
-export function StationModal({ open, onOpenChange, station, readOnly = false }: StationModalProps) {
-  const { createStation, updateStation, loading } = useStationsStore()
+export function StationModal({
+  open,
+  onOpenChange,
+  station,
+  readOnly = false,
+  loading,
+  onCreate,
+  onUpdate,
+}: StationModalProps) {
   const isEdit = !!station
 
-  const form = useForm<StationFormData>({
+  const form = useForm<StationFormValues>({
     resolver: zodResolver(stationSchema),
     defaultValues: STATION_DEFAULT_VALUES,
   })
@@ -70,21 +97,21 @@ export function StationModal({ open, onOpenChange, station, readOnly = false }: 
     form.reset(getStationFormValues(station))
   }, [station, form])
 
-  const onSubmit = async (data: StationFormData) => {
+  const onSubmit = async (data: StationFormValues) => {
     if (readOnly) {
       return
     }
 
     try {
       if (isEdit && station) {
-        await updateStation(station.id, data)
+        await onUpdate(station.id, toUpdatePayload(data))
       } else {
-        await createStation(data)
+        await onCreate(toCreatePayload(data))
       }
       onOpenChange(false)
       form.reset(STATION_DEFAULT_VALUES)
     } catch (error) {
-      // Error is handled in store
+      // Error toast is handled in mutation hook.
     }
   }
 
@@ -155,8 +182,8 @@ export function StationModal({ open, onOpenChange, station, readOnly = false }: 
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="Autobuska stanica">Autobuska stanica</SelectItem>
-                      <SelectItem value="Stajalište">Stajalište</SelectItem>
+                      <SelectItem value="BUS_STATION">Autobuska stanica</SelectItem>
+                      <SelectItem value="BUS_STOP">Stajaliste</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
