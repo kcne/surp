@@ -83,6 +83,32 @@ docker compose up --build
 
 The API container runs database migrations on startup.
 
+## Deploy on Railway (API)
+
+Service root directory: `api`
+
+Build command:
+
+```bash
+pnpm install --frozen-lockfile && pnpm prisma:generate && pnpm build
+```
+
+Start command:
+
+```bash
+pnpm prisma:migrate:deploy && pnpm start:prod
+```
+
+Environment checklist:
+
+1. `NODE_ENV=production`
+2. `PORT` (Railway provides this automatically)
+3. `DATABASE_URL` (Railway PostgreSQL connection string)
+4. `JWT_ACCESS_TOKEN_SECRET`
+5. `JWT_ACCESS_TOKEN_TTL_SECONDS`
+6. `JWT_REFRESH_TOKEN_TTL_SECONDS`
+7. `CORS_ALLOWED_ORIGINS` including the deployed UI domain
+
 ## Available Scripts
 
 | Script | Command | Purpose |

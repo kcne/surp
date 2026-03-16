@@ -11,8 +11,15 @@ Every pull request must pass the following checks:
 3. `pnpm openapi:lint`
 4. Module-focused tests for touched code (`pnpm test` and/or `pnpm test:e2e` subsets)
 5. Postman scenario validation with Newman (`pnpm postman:run`)
+6. Frontend lint (`pnpm --dir ui lint`) for UI changes
+7. Frontend production build (`pnpm --dir ui build`) for UI changes
 
 `pnpm quality:gates` runs the core contract gate set (lint + contract test + OpenAPI lint).
+
+GitHub Actions workflows enforcing these gates:
+
+1. `Backend CI` in `.github/workflows/backend-ci.yml`
+2. `Frontend CI` in `.github/workflows/frontend-ci.yml`
 
 ## OpenAPI Contract Freeze Policy
 

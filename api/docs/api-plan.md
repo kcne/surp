@@ -359,11 +359,13 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 1. Goal: Prevent regressions.
 2. Scope:
 1. CI jobs for lint, unit, integration, and e2e subsets.
-2. Migration drift checks.
-3. Coverage thresholds by module.
+2. Frontend CI jobs for lint and production build.
+3. Migration drift checks.
+4. Coverage thresholds by module.
 3. Tests:
 1. Intentional failing test blocks pipeline.
 2. Schema drift failure path tested.
+3. Frontend lint or build failure blocks pipeline.
 4. Validation:
 1. Pull requests require green checks.
 2. Quality gates are documented and enforced.
@@ -372,7 +374,7 @@ Deliver the NestJS backend through short, independently verifiable slices. Each 
 **Slice 21 - Staging Readiness and Launch Checklist**
 1. Goal: Prepare first stable backend release.
 2. Scope:
-1. Staging docker deployment guide.
+1. Railway deployment guide for api and ui services.
 2. Seed strategy for demo tenants.
 3. Security checklist and operational runbook.
 3. Tests:
