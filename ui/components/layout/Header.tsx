@@ -40,7 +40,7 @@ export function Header() {
             />
           </div>
           <div className="hidden md:block">
-            <h1 className="text-lg font-semibold tracking-tight text-foreground">SVR</h1>
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">SURP</h1>
           </div>
         </div>
 

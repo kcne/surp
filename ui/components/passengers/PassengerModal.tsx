@@ -4,7 +4,10 @@ import {
   FormModalShell,
 } from "@/components/forms/FormModalShell"
 import { PassengerForm } from "@/components/passengers/PassengerForm"
-import { usePassengersStore } from "@/stores/passengersStore"
+import {
+  useCreatePassengerMutation,
+  useUpdatePassengerMutation,
+} from "@/infrastructure/hooks/mutations/usePassengerMutations"
 import type { Passenger, PassengerFormData } from "@/types"
 
 interface PassengerModalProps {
@@ -18,14 +21,16 @@ export function PassengerModal({
   onOpenChange,
   passenger,
 }: PassengerModalProps) {
-  const { createPassenger, updatePassenger, loading } = usePassengersStore()
+  const createPassengerMutation = useCreatePassengerMutation()
+  const updatePassengerMutation = useUpdatePassengerMutation()
   const isEdit = !!passenger
+  const loading = createPassengerMutation.isPending || updatePassengerMutation.isPending
 
   const handleSubmit = async (data: PassengerFormData) => {
     if (isEdit && passenger) {
-      await updatePassenger(passenger.id, data)
+      await updatePassengerMutation.mutateAsync({ id: passenger.id, payload: data })
     } else {
-      await createPassenger(data)
+      await createPassengerMutation.mutateAsync(data)
     }
 
     onOpenChange(false)

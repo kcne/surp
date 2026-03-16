@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
-import { Prisma, RideExceptionType, RideStatus, RideType } from '@prisma/client';
+import { Prisma, ReservationStatus, RideExceptionType, RideStatus, RideType } from '@prisma/client';
 import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
@@ -366,8 +366,33 @@ export class RidesService {
         return a.rideId.localeCompare(b.rideId);
       });
 
+    const rideIds = [...new Set(materialized.map((instance) => instance.rideId))];
+    const reservationCounts =
+      rideIds.length > 0
+        ? await this.prisma.reservation.groupBy({
+            by: ['rideId', 'rideDepartureTime'],
+            where: {
+              tenantId: auth.tenantId,
+              rideId: { in: rideIds },
+              travelDate: utcDate,
+              status: ReservationStatus.ACTIVE
+            },
+            _count: {
+              _all: true
+            }
+          })
+        : [];
+
+    const reservationCountByInstance = new Map<string, number>(
+      reservationCounts.map((item) => [
+        `${item.rideId}:${item.rideDepartureTime}`,
+        item._count._all
+      ])
+    );
+
     const items = materialized.map((instance) => {
-      const reservationCount = 0;
+      const reservationCount =
+        reservationCountByInstance.get(`${instance.rideId}:${instance.departureTime}`) ?? 0;
       const availableSeats = Math.max(instance.capacity - reservationCount, 0);
 
       return {

@@ -81,6 +81,7 @@ function SortableStationItem({
       )}
     >
       <button
+        type="button"
         {...attributes}
         {...listeners}
         className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
@@ -89,6 +90,7 @@ function SortableStationItem({
       </button>
       <span className="flex-1 font-medium">{stationName}</span>
       <Button
+        type="button"
         variant="ghost"
         size="icon"
         onClick={onRemove}

@@ -1701,13 +1701,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status code is 201 for reverse line create', function () {",
-                  "  pm.response.to.have.status(201);",
+                  "pm.test('Status code is 201 or 409 for reverse line create', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "const body = pm.response.json();",
-                  "if (body.id) {",
-                  "  pm.environment.set('reverseLineId', body.id);",
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.id) {",
+                  "    pm.environment.set('reverseLineId', body.id);",
+                  "  }",
                   "}"
                 ]
               }

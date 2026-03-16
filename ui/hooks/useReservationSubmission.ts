@@ -19,8 +19,12 @@ interface UseReservationSubmissionParams {
   setSelectedPassenger: (passenger: Passenger | null) => void
   setNewPassenger: (passenger: Passenger | null) => void
   setShowPassengerForm: (open: boolean) => void
-  createReservation: (data: ReservationFormData) => Promise<void>
-  createReservationsBatch: (data: ReservationFormData[]) => Promise<void>
+  selectedRideInstance: RideInstance | null
+  createReservation: (payload: { data: ReservationFormData; rideInstance: RideInstance }) => Promise<void>
+  createReservationsBatch: (payload: {
+    data: ReservationFormData[]
+    rideInstance: RideInstance
+  }) => Promise<void>
   createReservationsForRideInstance: (
     instance: RideInstance,
     requests: ReservationFormData[],
@@ -47,6 +51,7 @@ export function useReservationSubmission({
   setSelectedPassenger,
   setNewPassenger,
   setShowPassengerForm,
+  selectedRideInstance,
   createReservation,
   createReservationsBatch,
   createReservationsForRideInstance,
@@ -55,6 +60,10 @@ export function useReservationSubmission({
   createPassenger,
 }: UseReservationSubmissionParams) {
   const createWithOptionalReturn = async (outboundRequests: ReservationFormData[]) => {
+    if (!selectedRideInstance) {
+      throw new Error("Voznja nije izabrana")
+    }
+
     let returnRequests: ReservationFormData[] = []
 
     if (isReturnTicket) {
@@ -72,9 +81,15 @@ export function useReservationSubmission({
     }
 
     if (outboundRequests.length === 1 && !isMultiReservation) {
-      await createReservation(outboundRequests[0])
+      await createReservation({
+        data: outboundRequests[0],
+        rideInstance: selectedRideInstance,
+      })
     } else {
-      await createReservationsBatch(outboundRequests)
+      await createReservationsBatch({
+        data: outboundRequests,
+        rideInstance: selectedRideInstance,
+      })
     }
 
     if (returnRequests.length > 0 && selectedReturnRideInstance) {

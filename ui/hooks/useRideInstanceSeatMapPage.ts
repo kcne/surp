@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { useReservationsStore } from "@/stores/reservationsStore"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/useRidesInstancesByDateQuery"
+import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
+import { buildSeatMap } from "@/utils/seatHelpers"
 import type { Reservation } from "@/types"
 
 interface UseRideInstanceSeatMapPageParams {
@@ -11,57 +12,87 @@ interface UseRideInstanceSeatMapPageParams {
 
 const CSV_BOM = "\uFEFF"
 
+function extractDateFromRideInstanceId(rideInstanceId: string): Date | null {
+  const parts = rideInstanceId.split(":")
+  if (parts.length < 2) {
+    return null
+  }
+
+  const parsed = new Date(`${parts[1]}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) {
+    return null
+  }
+
+  return parsed
+}
+
 export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSeatMapPageParams) {
   const searchParams = useSearchParams()
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
-  const ridesQuery = useRidesListQuery()
-  const rides = ridesQuery.data || []
-  const rideInstancesQuery = useRidesInstancesByDateQuery(selectedDate, rides)
-  const rideInstances = rideInstancesQuery.data || []
-  const {
-    seatMap,
-    reservations,
-    selectedSeat,
-    selectedSeats,
-    selectedRideInstance,
-    setSelectedRideInstance,
-    fetchReservations,
-    loading,
-    toggleSelectedSeat,
-    clearSelectedSeats,
-    setSelectedSeat,
-  } = useReservationsStore()
-
+  const [selectedSeat, setSelectedSeat] = useState<number | null>(null)
+  const [selectedSeats, setSelectedSeats] = useState<number[]>([])
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false)
   const [isMultiReservationModalOpen, setIsMultiReservationModalOpen] = useState(false)
   const [reservationToEdit, setReservationToEdit] = useState<Reservation | null>(null)
+  const ridesQuery = useRidesListQuery()
+  const rides = ridesQuery.data || []
+  const rideInstancesQuery = useRidesInstancesByDateQuery(selectedDate, rides)
+  const rideInstances = useMemo(
+    () => rideInstancesQuery.data ?? [],
+    [rideInstancesQuery.data]
+  )
+  const selectedRideInstance = useMemo(
+    () => rideInstances.find((rideInstance) => rideInstance.id === rideInstanceId) ?? null,
+    [rideInstanceId, rideInstances]
+  )
+  const reservationsQuery = useReservationsByRideInstanceQuery(selectedRideInstance)
+  const reservations = useMemo(
+    () => reservationsQuery.data ?? [],
+    [reservationsQuery.data]
+  )
+
+  const seatMap = useMemo(() => {
+    if (!selectedRideInstance) {
+      return null
+    }
+
+    return buildSeatMap(reservations, selectedRideInstance.ride.busCapacity, selectedSeats)
+  }, [reservations, selectedRideInstance, selectedSeats])
 
   useEffect(() => {
     const queryDate = searchParams.get("date")
-    if (!queryDate) {
+    if (queryDate) {
+      const parsedFromQuery = new Date(`${queryDate}T00:00:00`)
+      if (!Number.isNaN(parsedFromQuery.getTime())) {
+        setSelectedDate(parsedFromQuery)
+      }
       return
     }
 
-    const parsed = new Date(`${queryDate}T00:00:00`)
-    if (Number.isNaN(parsed.getTime())) {
-      return
+    const parsedFromSlug = extractDateFromRideInstanceId(rideInstanceId)
+    if (parsedFromSlug) {
+      setSelectedDate(parsedFromSlug)
     }
-
-    setSelectedDate(parsed)
-  }, [searchParams, setSelectedDate])
+  }, [rideInstanceId, searchParams, setSelectedDate])
 
   useEffect(() => {
-    const instance = rideInstances.find((rideInstance) => rideInstance.id === rideInstanceId)
-    if (instance && selectedRideInstance?.id !== instance.id) {
-      setSelectedRideInstance(instance)
-    }
-  }, [rideInstanceId, rideInstances, selectedRideInstance?.id, setSelectedRideInstance])
+    setSelectedSeat(null)
+    setSelectedSeats([])
+    setReservationToEdit(null)
+  }, [rideInstanceId])
 
-  useEffect(() => {
-    if (selectedRideInstance && selectedRideInstance.id === rideInstanceId) {
-      fetchReservations(selectedRideInstance.id)
-    }
-  }, [selectedRideInstance, rideInstanceId, fetchReservations])
+  const toggleSelectedSeat = (seatNumber: number) => {
+    setSelectedSeats((previous) =>
+      previous.includes(seatNumber)
+        ? previous.filter((value) => value !== seatNumber)
+        : [...previous, seatNumber]
+    )
+  }
+
+  const clearSelectedSeats = () => {
+    setSelectedSeats([])
+    setSelectedSeat(null)
+  }
 
   const handleSeatClick = (seatNumber: number, reservation?: Reservation) => {
     if (reservation) {
@@ -155,7 +186,12 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   return {
     selectedDate,
     seatMap,
-    loading: loading || ridesQuery.isLoading || rideInstancesQuery.isLoading,
+    reservations,
+    loading:
+      reservationsQuery.isLoading ||
+      reservationsQuery.isFetching ||
+      ridesQuery.isLoading ||
+      rideInstancesQuery.isLoading,
     selectedSeat,
     selectedSeats,
     selectedRideInstance,

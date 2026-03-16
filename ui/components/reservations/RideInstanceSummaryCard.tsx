@@ -28,6 +28,8 @@ export function RideInstanceSummaryCard({
   onReserveSelectedSeats,
   onExport,
 }: RideInstanceSummaryCardProps) {
+  const availableSeats = Math.max(totalSeats - reservedCount, 0)
+
   return (
     <Card>
       <CardHeader>
@@ -52,8 +54,8 @@ export function RideInstanceSummaryCard({
               </p>
               <p className="flex items-center gap-2">
                 <Armchair className="h-4 w-4 text-muted-foreground" />
-                <span className="font-semibold">Sedišta (total/reserved):</span>{" "}
-                {totalSeats}/{reservedCount}
+                <span className="font-semibold">Broj slobodnih sedista:</span>{" "}
+                {availableSeats}
               </p>
             </CardDescription>
           </div>

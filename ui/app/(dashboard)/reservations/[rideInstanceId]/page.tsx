@@ -20,10 +20,11 @@ import { formatDateDisplay, formatTimeDisplay } from "@/utils/dateHelpers"
 
 export default function SeatMapPage() {
   const params = useParams()
-  const rideInstanceId = params.rideInstanceId as string
+  const rideInstanceId = decodeURIComponent(params.rideInstanceId as string)
   const {
     selectedDate,
     seatMap,
+    reservations,
     loading,
     selectedSeat,
     selectedSeats,
@@ -102,6 +103,8 @@ export default function SeatMapPage() {
         <ReservationModal
           open={isReservationModalOpen}
           onOpenChange={handleSingleReservationOpenChange}
+          selectedRideInstance={selectedRideInstance}
+          reservations={reservations}
           seatNumber={selectedSeat}
           reservation={reservationToEdit}
         />
@@ -109,6 +112,8 @@ export default function SeatMapPage() {
         <ReservationModal
           open={isMultiReservationModalOpen}
           onOpenChange={setIsMultiReservationModalOpen}
+          selectedRideInstance={selectedRideInstance}
+          reservations={reservations}
           seatNumber={selectedSeat}
           reservation={null}
           selectedSeats={selectedSeats}

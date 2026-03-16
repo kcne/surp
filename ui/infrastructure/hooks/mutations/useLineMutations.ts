@@ -3,7 +3,6 @@ import { toast } from "sonner"
 import {
   linesControllerCreate,
   linesControllerCreateReverse,
-  linesControllerCreateResponse,
   linesControllerRemove,
   linesControllerRemoveResponse,
   linesControllerUpdate,
@@ -24,6 +23,19 @@ function isLineMutationSuccess<TResponse extends { status: number }>(
   return response.status >= 200 && response.status < 300
 }
 
+function hasLineIdPayload(response: { data?: unknown }): response is { data: { id: string } } {
+  if (!response || typeof response !== "object") {
+    return false
+  }
+
+  const data = response.data
+  if (!data || typeof data !== "object") {
+    return false
+  }
+
+  return typeof (data as { id?: unknown }).id === "string"
+}
+
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) {
     return error.message
@@ -42,9 +54,10 @@ export function useCreateLineMutation() {
   return useMutation({
     mutationFn: async (payload: CreateLineDto) => {
       const response = await linesControllerCreate(payload)
-      if (!isLineMutationSuccess<linesControllerCreateResponse>(response)) {
+      if (!isLineMutationSuccess(response) || !hasLineIdPayload(response)) {
         throw new Error("Neuspesno kreiranje linije")
       }
+
       return response.data
     },
     onSuccess: () => {

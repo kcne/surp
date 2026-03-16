@@ -7,8 +7,8 @@ import { toRideInstance } from "@/infrastructure/mappers/rideMappers"
 import { formatDateToISO } from "@/utils/dateHelpers"
 import type { Ride, RideInstance } from "@/types"
 
-export const ridesInstancesByDateQueryKey = (dateIso: string) =>
-  ["rides", "instances", dateIso] as const
+export const ridesInstancesByDateQueryKey = (dateIso: string, ridesSignature: string) =>
+  ["rides", "instances", dateIso, ridesSignature] as const
 
 function isRidesInstancesByDateSuccess(
   response: ridesControllerListInstancesByDateResponse
@@ -21,10 +21,13 @@ export function useRidesInstancesByDateQuery(
   rides: Ride[]
 ) {
   const dateIso = date ? formatDateToISO(date) : ""
+  const ridesSignature = rides
+    .map((ride) => `${ride.id}:${ride.updatedAt ?? ""}`)
+    .join("|")
 
   return useQuery({
-    queryKey: ridesInstancesByDateQueryKey(dateIso),
-    enabled: Boolean(dateIso),
+    queryKey: ridesInstancesByDateQueryKey(dateIso, ridesSignature),
+    enabled: Boolean(dateIso) && rides.length > 0,
     queryFn: async (): Promise<RideInstance[]> => {
       if (!date) {
         return []

@@ -33,6 +33,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
+import { srLatn } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { formatDateToISO } from "@/utils/dateHelpers"
 import {
@@ -73,6 +74,7 @@ export function RideModal({
   const linesQuery = useLinesListQuery()
   const lines = linesQuery.data || []
   const isEdit = !!ride
+  const todayIso = formatDateToISO(new Date())
 
   const form = useForm<RideFormData>({
     resolver: zodResolver(rideSchema),
@@ -81,7 +83,7 @@ export function RideModal({
       busCapacity: 38,
       type: "recurring",
       status: "scheduled",
-      startDate: undefined,
+      startDate: todayIso,
       endDate: undefined,
       daysOfWeek: [],
       departureTime: "",
@@ -166,7 +168,7 @@ export function RideModal({
         busCapacity: 38,
         type: "recurring",
         status: "scheduled",
-        startDate: undefined,
+        startDate: todayIso,
         endDate: undefined,
         daysOfWeek: [],
         departureTime: "",
@@ -178,7 +180,7 @@ export function RideModal({
         oneTimeArrivalTime: "",
       })
     }
-  }, [ride, form])
+  }, [ride, form, todayIso])
 
   const onSubmit = async (data: RideFormData) => {
     try {
@@ -336,7 +338,7 @@ export function RideModal({
                                 )}
                               >
                                 {field.value ? (
-                                  format(new Date(field.value + "T00:00:00"), "PPP", { locale: undefined })
+                                  format(new Date(field.value + "T00:00:00"), "PPP", { locale: srLatn })
                                 ) : (
                                   <span>Izaberite datum</span>
                                 )}
@@ -351,6 +353,7 @@ export function RideModal({
                               onSelect={(date) => {
                                 field.onChange(date ? formatDateToISO(date) : undefined)
                               }}
+                              locale={srLatn}
                               disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                               initialFocus
                             />
@@ -378,7 +381,7 @@ export function RideModal({
                                 )}
                               >
                                 {field.value ? (
-                                  format(new Date(field.value + "T00:00:00"), "PPP", { locale: undefined })
+                                  format(new Date(field.value + "T00:00:00"), "PPP", { locale: srLatn })
                                 ) : (
                                   <span>Izaberite datum</span>
                                 )}
@@ -393,6 +396,7 @@ export function RideModal({
                               onSelect={(date) => {
                                 field.onChange(date ? formatDateToISO(date) : undefined)
                               }}
+                              locale={srLatn}
                               disabled={(date) => {
                                 const startDate = form.watch("startDate")
                                 if (startDate) {
@@ -600,7 +604,7 @@ export function RideModal({
                               )}
                             >
                               {field.value ? (
-                                format(new Date(field.value + "T00:00:00"), "PPP", { locale: undefined })
+                                format(new Date(field.value + "T00:00:00"), "PPP", { locale: srLatn })
                               ) : (
                                 <span>Izaberite datum</span>
                               )}
@@ -615,6 +619,7 @@ export function RideModal({
                             onSelect={(date) => {
                               field.onChange(date ? formatDateToISO(date) : undefined)
                             }}
+                            locale={srLatn}
                             disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                             initialFocus
                           />

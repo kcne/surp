@@ -70,7 +70,7 @@ export default function LoginPage() {
       clearError()
       await login(data.email, data.password, data.tenantSlug)
       toast.success("Uspešno ste se prijavili!")
-      router.push("/dashboard")
+      router.push("/reservations")
     } catch (err) {
       toast.error("Greška pri prijavljivanju. Molimo pokušajte ponovo.")
     }

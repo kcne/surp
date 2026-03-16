@@ -16,19 +16,9 @@ import {
 
 const menuItems = [
   {
-    title: "Analitika",
-    href: "/dashboard",
-    icon: BarChart3,
-  },
-  {
-    title: "Stanice",
-    href: "/stations",
-    icon: MapPin,
-  },
-  {
-    title: "Linije",
-    href: "/lines",
-    icon: Route,
+    title: "Rezervacije",
+    href: "/reservations",
+    icon: Ticket,
   },
   {
     title: "Raspored",
@@ -36,16 +26,33 @@ const menuItems = [
     icon: Calendar,
   },
   {
-    title: "Rezervacije",
-    href: "/reservations",
-    icon: Ticket,
-  },
-  {
     title: "Putnici",
     href: "/passengers",
     icon: Users,
   },
+  {
+    title: "Linije",
+    href: "/lines",
+    icon: Route,
+  },
+  {
+    title: "Stanice",
+    href: "/stations",
+    icon: MapPin,
+  },
 ]
+
+const analyticsMenuItem = {
+  title: "Analitika",
+  href: "/analytics",
+  icon: BarChart3,
+}
+
+const agencyManagementMenuItem = {
+  title: "Upravljanje Agencijom",
+  href: "/agency-management",
+  icon: Building2,
+}
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -53,15 +60,8 @@ export function Sidebar() {
 
   const scopedMenuItems =
     user?.role === "ADMIN"
-      ? [
-          ...menuItems,
-          {
-            title: "Upravljanje Agencijom",
-            href: "/agency-management",
-            icon: Building2,
-          },
-        ]
-      : menuItems
+      ? [...menuItems, analyticsMenuItem, agencyManagementMenuItem]
+      : [...menuItems, analyticsMenuItem]
 
   return (
     <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:top-16 md:flex md:w-60 md:flex-col md:border-r md:bg-background">

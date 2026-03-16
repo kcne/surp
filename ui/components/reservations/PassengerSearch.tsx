@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useMemo, useState } from "react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { Check, ChevronsUpDown, User, UserPlus } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { usePassengersStore } from "@/stores/passengersStore"
+import { usePassengersListQuery } from "@/infrastructure/hooks/queries/usePassengersListQuery"
+import { usePassengersSearchQuery } from "@/infrastructure/hooks/queries/usePassengersSearchQuery"
 import type { Passenger } from "@/types"
 import { formatPassengerName } from "@/utils/formatters"
 
@@ -19,14 +20,25 @@ interface PassengerSearchProps {
 export function PassengerSearch({ value, onSelect, onAddNew }: PassengerSearchProps) {
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const { searchPassengers, searchResults, loading, passengers } = usePassengersStore()
+  const trimmedSearchQuery = searchQuery.trim()
+  const passengersListQuery = usePassengersListQuery({
+    pageSize: 50,
+    enabled: open && trimmedSearchQuery.length < 1,
+  })
+  const passengersSearchQuery = usePassengersSearchQuery(trimmedSearchQuery, {
+    enabled: open && trimmedSearchQuery.length >= 1,
+    pageSize: 50,
+  })
 
-  // Search when popover is open and query/passengers change
-  useEffect(() => {
-    if (open) {
-      searchPassengers(searchQuery)
+  const searchResults = useMemo(() => {
+    if (trimmedSearchQuery.length < 1) {
+      return passengersListQuery.data ?? []
     }
-  }, [open, searchQuery, passengers.length, searchPassengers])
+
+    return passengersSearchQuery.data ?? []
+  }, [passengersListQuery.data, passengersSearchQuery.data, trimmedSearchQuery.length])
+
+  const loading = passengersListQuery.isFetching || passengersSearchQuery.isFetching
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

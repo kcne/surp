@@ -22,9 +22,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="sr" className={inter.variable}>
-      <body>
+      <body className="min-h-screen flex flex-col">
         <QueryProvider>
-          {children}
+          <div className="flex-1">{children}</div>
+          <footer className="border-t bg-background/95 px-4 py-3 text-center text-sm text-muted-foreground md:px-6">
+            © 2026 Copyright Gradient Labs
+          </footer>
           <Toaster />
           <SonnerToaster position="top-right" />
         </QueryProvider>

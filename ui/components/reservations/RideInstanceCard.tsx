@@ -22,10 +22,11 @@ export function RideInstanceCard({
   const capacity = instance.ride.busCapacity
   const reserved = instance.reservationCount || 0
   const available = capacity - reserved
+  const availableTextClass = available > 0 ? "text-green-600" : "text-red-600"
 
   return (
-    <div className="w-full rounded-lg border bg-background p-4 shadow-sm">
-      <div className="grid gap-5 md:grid-cols-[auto_1.6fr_1fr_1fr_auto] md:items-center">
+    <div className="w-full rounded-lg border bg-background p-4 shadow-sm md:p-5">
+      <div className="grid gap-4 md:grid-cols-[auto_1.6fr_1.8fr_auto] md:items-center md:gap-6">
         <div className="flex justify-start">
           <Image
             src="/uvs-logo.svg"
@@ -36,37 +37,45 @@ export function RideInstanceCard({
           />
         </div>
 
-        <div className="space-y-1">
-          <p className="inline-flex items-center gap-1 text-xs font-semibold uppercase text-muted-foreground">
-            <Route className="h-3.5 w-3.5" />
+        <div className="space-y-1.5">
+          <p className="inline-flex items-center gap-1 text-sm font-semibold uppercase text-muted-foreground">
+            <Route className="h-4 w-4" />
             Vožnja:
           </p>
-          <p className="text-base font-semibold">
+          <p className="text-lg font-semibold">
             {instance.ride.line.departureStation.name} -&gt; {instance.ride.line.arrivalStation.name}
           </p>
         </div>
 
-        <div className="space-y-1">
-          <p className="inline-flex items-center gap-1 text-xs font-semibold uppercase text-muted-foreground">
-            <Clock3 className="h-3.5 w-3.5" />
-            Vreme:
-          </p>
-          <p className="text-base font-semibold">{formatTimeDisplay(instance.departureTime)}</p>
-          {durationLabel && <p className="text-sm text-muted-foreground">({durationLabel})</p>}
-        </div>
-
-        <div className="space-y-1">
-          <p className="inline-flex items-center gap-1 text-xs font-semibold uppercase text-muted-foreground">
-            <Armchair className="h-3.5 w-3.5" />
-            Slobodno:
-          </p>
-          <p className="text-base font-semibold">
-            {available}/{capacity}
-          </p>
-        </div>
-
         <div className="space-y-2">
-          <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-3">
+            <div className="space-y-0.5">
+              <p className="inline-flex items-center gap-1 text-sm font-semibold uppercase text-muted-foreground">
+                <Clock3 className="h-3 w-3" />
+                Polazak:
+              </p>
+              <p className="text-xl font-semibold text-muted-foreground pl-4">{formatTimeDisplay(instance.departureTime)}</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="inline-flex items-center gap-1 text-sm font-semibold uppercase text-muted-foreground">
+                <Clock3 className="h-3 w-3" />
+                Dolazak:
+              </p>
+              <p className="text-xl font-semibold text-muted-foreground pl-4">{formatTimeDisplay(instance.arrivalTime)}</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="inline-flex items-center gap-1 text-sm font-semibold uppercase text-muted-foreground">
+                <Armchair className="h-4 w-4" />
+                Slobodno:
+              </p>
+              <p className={`text-xl font-semibold ${availableTextClass} pl-8`}>{available}</p>
+            </div>
+          </div>
+          {durationLabel && <p className="text-sm text-muted-foreground ">({durationLabel})</p>}
+        </div>
+
+        <div className="space-y-2 md:justify-self-end">
+          <div className="flex flex-col gap-2 sm:flex-row md:flex-col">
             <Button variant="outline" size="sm" onClick={() => onViewInfo(instance)}>
               <Info className="mr-2 h-4 w-4" />
               Više informacija

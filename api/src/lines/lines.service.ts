@@ -101,6 +101,8 @@ export class LinesService {
     const directionMode = dto.directionMode ?? LineDirectionMode.BOTH;
     const direction = dto.direction ?? LineDirection.OUTBOUND;
     const pairKey = this.normalizePairKey(dto.pairKey);
+    const shouldAutoCreateReverse =
+      directionMode === LineDirectionMode.BOTH && direction === LineDirection.OUTBOUND;
 
     this.validateDirectionMetadata(directionMode, direction, pairKey);
 
@@ -133,6 +135,54 @@ export class LinesService {
           intermediateStops,
           false
         );
+
+        if (shouldAutoCreateReverse) {
+          const effectivePairKey = pairKey ?? `pair-${createdLine.id}`;
+
+          if (!pairKey) {
+            await tx.line.update({
+              where: {
+                id: createdLine.id
+              },
+              data: withUpdateAudit(
+                {
+                  pairKey: effectivePairKey
+                },
+                auth.sub
+              )
+            });
+          }
+
+          const reverseLine = await tx.line.create({
+            data: withCreateAudit(
+              {
+                tenantId: auth.tenantId,
+                name: `${stations.arrival.name} - ${stations.departure.name}`,
+                departureStationId: dto.arrivalStationId,
+                arrivalStationId: dto.departureStationId,
+                directionMode: LineDirectionMode.BOTH,
+                direction: LineDirection.RETURN,
+                pairKey: effectivePairKey,
+                isActive: dto.isActive ?? true
+              },
+              auth.sub
+            ),
+            select: {
+              id: true
+            }
+          });
+
+          const reversedStops = this.buildReversedStops(intermediateStops);
+
+          await this.replaceLineStopsTx(
+            tx,
+            auth.tenantId,
+            reverseLine.id,
+            auth.sub,
+            reversedStops,
+            false
+          );
+        }
 
         return tx.line.findFirst({
           where: {
@@ -351,6 +401,15 @@ export class LinesService {
       isActive: source.isActive,
       intermediateStops: reversedStops
     });
+  }
+
+  private buildReversedStops(stops: LineStopInputDto[]): LineStopInputDto[] {
+    return [...stops]
+      .sort((a, b) => b.orderIndex - a.orderIndex)
+      .map((stop, index) => ({
+        stationId: stop.stationId,
+        orderIndex: index + 1
+      }));
   }
 
   async remove(auth: AccessTokenPayload, id: string): Promise<LineResponseDto> {

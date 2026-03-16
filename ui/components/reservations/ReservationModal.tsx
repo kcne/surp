@@ -1,13 +1,21 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useMemo } from "react"
 import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { reservationSchema } from "@/utils/validators"
 import type { ReservationFormData, Reservation, Passenger, RideInstance } from "@/types"
-import { useReservationsStore } from "@/stores/reservationsStore"
-import { usePassengersStore } from "@/stores/passengersStore"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
+import {
+  useReservationsByRideInstancesQuery,
+} from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
+import {
+  useCancelReservationMutation,
+  useCreateReservationMutation,
+  useCreateReservationsBatchMutation,
+  useUpdateReservationMutation,
+} from "@/infrastructure/hooks/mutations/useReservationMutations"
+import { useCreatePassengerMutation } from "@/infrastructure/hooks/mutations/usePassengerMutations"
 import { FormModalShell } from "@/components/forms/FormModalShell"
 import {
   Form,
@@ -31,6 +39,8 @@ const EMPTY_RIDES: Reservation["rideInstance"]["ride"][] = []
 interface ReservationModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  selectedRideInstance: RideInstance | null
+  reservations: Reservation[]
   seatNumber: number | null
   reservation?: Reservation | null
   selectedSeats?: number[]
@@ -42,26 +52,21 @@ interface ReservationModalProps {
 export function ReservationModal({
   open,
   onOpenChange,
+  selectedRideInstance,
+  reservations,
   seatNumber,
   reservation,
   selectedSeats = [],
   multipleSelectionMode = false,
   onComplete,
 }: ReservationModalProps) {
-  const {
-    createReservation,
-    createReservationsBatch,
-    createReservationsForRideInstance,
-    updateReservation,
-    cancelReservation,
-    selectedRideInstance,
-    allReservations,
-    loading,
-    clearSelectedSeats,
-  } = useReservationsStore()
+  const createReservationMutation = useCreateReservationMutation()
+  const createReservationsBatchMutation = useCreateReservationsBatchMutation()
+  const updateReservationMutation = useUpdateReservationMutation()
+  const cancelReservationMutation = useCancelReservationMutation()
+  const createPassengerMutation = useCreatePassengerMutation()
   const ridesQuery = useRidesListQuery()
   const rides = ridesQuery.data ?? EMPTY_RIDES
-  const { createPassenger } = usePassengersStore()
 
   const isEdit = !!reservation
   const isMultiReservation = multipleSelectionMode && selectedSeats.length > 0
@@ -171,6 +176,16 @@ export function ReservationModal({
     (instance) => instance.id === selectedReturnRideInstanceId
   ) ?? null
 
+  const returnReservationsQuery = useReservationsByRideInstancesQuery(returnRideInstances)
+
+  const allReservations = useMemo(
+    () => ({
+      ...returnReservationsQuery.reservationsByRideInstanceId,
+      ...(selectedRideInstance ? { [selectedRideInstance.id]: reservations } : {}),
+    }),
+    [reservations, returnReservationsQuery.reservationsByRideInstanceId, selectedRideInstance]
+  )
+
   const outboundSeatNumbers = useMemo(() => {
     if (isMultiReservation) {
       return selectedSeats.slice().sort((left, right) => left - right)
@@ -216,12 +231,32 @@ export function ReservationModal({
     setSelectedPassenger,
     setNewPassenger,
     setShowPassengerForm,
-    createReservation,
-    createReservationsBatch,
-    createReservationsForRideInstance,
-    updateReservation,
-    clearSelectedSeats,
-    createPassenger,
+    selectedRideInstance,
+    createReservation: async (payload) => {
+      await createReservationMutation.mutateAsync(payload)
+    },
+    createReservationsBatch: async (payload) => {
+      await createReservationsBatchMutation.mutateAsync(payload)
+    },
+    createReservationsForRideInstance: async (instance, requests, _options) => {
+      if (requests.length === 1) {
+        await createReservationMutation.mutateAsync({
+          data: requests[0],
+          rideInstance: instance,
+        })
+        return
+      }
+
+      await createReservationsBatchMutation.mutateAsync({
+        data: requests,
+        rideInstance: instance,
+      })
+    },
+    updateReservation: async (reservationId, data) => {
+      await updateReservationMutation.mutateAsync({ id: reservationId, payload: data })
+    },
+    clearSelectedSeats: () => undefined,
+    createPassenger: createPassengerMutation.mutateAsync,
   })
 
   const allStations = selectedRideInstance
@@ -381,14 +416,20 @@ export function ReservationModal({
                 }
 
                 try {
-                  await cancelReservation(reservation.id)
+                  await cancelReservationMutation.mutateAsync(reservation.id)
                   closeReservationModal()
                 } catch (error) {
-                  // Error is handled in store
+                  // Error is handled in mutation hook
                 }
               }}
               onClose={closeReservationModal}
-              loading={loading}
+              loading={
+                createReservationMutation.isPending ||
+                createReservationsBatchMutation.isPending ||
+                updateReservationMutation.isPending ||
+                cancelReservationMutation.isPending ||
+                createPassengerMutation.isPending
+              }
               useSubmitAction={assignmentMode === "single" || !showAssignmentMode}
               isMultipleSeatsSelection={isMultipleSeatsSelection}
               onPerSeatSubmit={handlePerSeatSubmit}

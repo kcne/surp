@@ -41,7 +41,7 @@ import {
 import { RideInstanceCard } from "@/components/reservations/RideInstanceCard"
 import { RideInstanceInfoDialog } from "@/components/reservations/RideInstanceInfoDialog"
 import { cn } from "@/lib/utils"
-import { useReservationsStore } from "@/stores/reservationsStore"
+import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
 import { CalendarDays, Check, ChevronsUpDown, Filter, Search, Ticket, X } from "lucide-react"
 
 interface RidesListPanelProps {
@@ -134,7 +134,6 @@ export function RidesListPanel({
   onDateSelect,
 }: RidesListPanelProps) {
   const router = useRouter()
-  const allReservations = useReservationsStore((state) => state.allReservations)
   const [infoModalOpen, setInfoModalOpen] = useState(false)
   const [selectedInstance, setSelectedInstance] = useState<RideInstance | null>(null)
   const [searchValue, setSearchValue] = useState("")
@@ -144,12 +143,17 @@ export function RidesListPanel({
   const [departurePopoverOpen, setDeparturePopoverOpen] = useState(false)
   const [arrivalPopoverOpen, setArrivalPopoverOpen] = useState(false)
 
-  const selectedInstanceReservations = useMemo(() => {
-    if (!selectedInstance) return []
-    return (allReservations[selectedInstance.id] || []).filter(
-      (reservation) => reservation.status === "active"
-    )
-  }, [allReservations, selectedInstance])
+  const selectedInstanceReservationsQuery = useReservationsByRideInstanceQuery(selectedInstance, {
+    enabled: infoModalOpen && Boolean(selectedInstance),
+  })
+
+  const selectedInstanceReservations = useMemo(
+    () =>
+      (selectedInstanceReservationsQuery.data ?? []).filter(
+        (reservation) => reservation.status === "active"
+      ),
+    [selectedInstanceReservationsQuery.data]
+  )
 
   const isDateInPast = (date: Date) => {
     const today = new Date()
@@ -167,7 +171,9 @@ export function RidesListPanel({
   }
 
   const handleViewSeats = (rideInstance: RideInstance) => {
-    router.push(`/reservations/${rideInstance.id}`)
+    const encodedRideInstanceId = encodeURIComponent(rideInstance.id)
+    const encodedDate = encodeURIComponent(rideInstance.date)
+    router.push(`/reservations/${encodedRideInstanceId}?date=${encodedDate}`)
   }
 
   const handleDateSelect = (date: Date | undefined) => {

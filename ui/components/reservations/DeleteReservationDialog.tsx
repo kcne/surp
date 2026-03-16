@@ -3,7 +3,7 @@
 import {
   ConfirmDeleteDialog,
 } from "@/components/ui/confirm-delete-dialog"
-import { useReservationsStore } from "@/stores/reservationsStore"
+import { useCancelReservationMutation } from "@/infrastructure/hooks/mutations/useReservationMutations"
 import type { Reservation } from "@/types"
 import { formatPassengerName } from "@/utils/formatters"
 import { Ban } from "lucide-react"
@@ -19,16 +19,16 @@ export function DeleteReservationDialog({
   onOpenChange,
   reservation,
 }: DeleteReservationDialogProps) {
-  const { cancelReservation, loading } = useReservationsStore()
+  const cancelReservationMutation = useCancelReservationMutation()
 
   const handleCancel = async () => {
     if (!reservation) return
 
     try {
-      await cancelReservation(reservation.id)
+      await cancelReservationMutation.mutateAsync(reservation.id)
       onOpenChange(false)
     } catch (error) {
-      // Error is handled in store
+      // Error is handled in mutation hook
     }
   }
 
@@ -48,7 +48,7 @@ export function DeleteReservationDialog({
       confirmLabel="Otkaži Rezervaciju"
       loadingLabel="Otkazivanje..."
       confirmIcon={Ban}
-      loading={loading}
+      loading={cancelReservationMutation.isPending}
       description={`Da li ste sigurni da želite da otkažete rezervaciju za ${passengerName} na sedištu ${reservation.seatNumber}? Ova akcija se ne može poništiti.`}
       onConfirm={handleCancel}
     />

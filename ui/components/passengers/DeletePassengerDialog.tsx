@@ -3,7 +3,7 @@
 import {
   ConfirmDeleteDialog,
 } from "@/components/ui/confirm-delete-dialog"
-import { usePassengersStore } from "@/stores/passengersStore"
+import { useDeletePassengerMutation } from "@/infrastructure/hooks/mutations/usePassengerMutations"
 
 interface DeletePassengerDialogProps {
   open: boolean
@@ -16,16 +16,16 @@ export function DeletePassengerDialog({
   onOpenChange,
   passenger,
 }: DeletePassengerDialogProps) {
-  const { deletePassenger, loading } = usePassengersStore()
+  const deletePassengerMutation = useDeletePassengerMutation()
 
   const handleDelete = async () => {
     if (!passenger) return
 
     try {
-      await deletePassenger(passenger.id)
+      await deletePassengerMutation.mutateAsync(passenger.id)
       onOpenChange(false)
     } catch (error) {
-      // Error is handled in store
+      // Error is handled in mutation hook
     }
   }
 
@@ -33,7 +33,7 @@ export function DeletePassengerDialog({
     <ConfirmDeleteDialog
       open={open}
       onOpenChange={onOpenChange}
-      loading={loading}
+      loading={deletePassengerMutation.isPending}
       description={`Da li ste sigurni da želite da obrišete putnika ${passenger?.firstName ?? ""} ${passenger?.lastName ?? ""}? Ova akcija se ne može poništiti.`}
       onConfirm={handleDelete}
     />

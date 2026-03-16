@@ -8,6 +8,9 @@ describe('RidesService', () => {
     line: {
       findFirst: jest.fn()
     },
+    reservation: {
+      groupBy: jest.fn()
+    },
     ride: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -39,6 +42,7 @@ describe('RidesService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prismaMock.reservation.groupBy.mockResolvedValue([]);
     service = new RidesService(prismaMock as never);
   });
 
@@ -304,5 +308,58 @@ describe('RidesService', () => {
     expect(result.items[0].departureTime).toBe('13:00');
     expect(result.items[0].reservationCount).toBe(0);
     expect(result.items[0].availability.availableSeats).toBe(38);
+  });
+
+  it('computes availability from active reservations for matching ride instance', async () => {
+    prismaMock.ride.findMany.mockResolvedValue([
+      {
+        id: 'ride-1',
+        tenantId: 'tenant-1',
+        lineId: 'line-1',
+        name: 'Reserved Ride',
+        capacity: 38,
+        type: RideType.RECURRING,
+        status: RideStatus.ACTIVE,
+        recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+        recurringEndDate: null,
+        oneTimeDate: null,
+        oneTimeDepartureTime: null,
+        oneTimeArrivalTime: null,
+        line: {
+          id: 'line-1',
+          name: 'Line 1',
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-b'
+        },
+        dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+        exceptions: []
+      }
+    ]);
+
+    prismaMock.reservation.groupBy.mockResolvedValue([
+      {
+        rideId: 'ride-1',
+        rideDepartureTime: '09:00',
+        _count: { _all: 2 }
+      }
+    ]);
+
+    const result = await service.listInstancesByDate(auth, {
+      date: '2026-03-30'
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].reservationCount).toBe(2);
+    expect(result.items[0].availability.reservedSeats).toBe(2);
+    expect(result.items[0].availability.availableSeats).toBe(36);
+    expect(prismaMock.reservation.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ['rideId', 'rideDepartureTime'],
+        where: expect.objectContaining({
+          tenantId: 'tenant-1',
+          travelDate: new Date('2026-03-30T00:00:00.000Z')
+        })
+      })
+    );
   });
 });

@@ -4,7 +4,7 @@ import { Layout } from "@/components/layout/Layout"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Plus, Users } from "lucide-react"
-import { usePassengersStore } from "@/stores/passengersStore"
+import { usePassengersListQuery } from "@/infrastructure/hooks/queries/usePassengersListQuery"
 import { PassengerModal } from "@/components/passengers/PassengerModal"
 import { DeletePassengerDialog } from "@/components/passengers/DeletePassengerDialog"
 import { PassengersDataTable } from "@/components/passengers/PassengersDataTable"
@@ -12,7 +12,9 @@ import { useCrudDialogState } from "@/hooks/useCrudDialogState"
 import type { Passenger } from "@/types"
 
 export default function PassengersPage() {
-  const { passengers, loading } = usePassengersStore()
+  const passengersQuery = usePassengersListQuery()
+  const passengers = passengersQuery.data ?? []
+  const loading = passengersQuery.isLoading
   const {
     isModalOpen,
     isDeleteDialogOpen,
