@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { rideSchema } from "@/utils/validators"
 import type { Ride, RideFormData } from "@/types"
 import { useRidesStore } from "@/stores/ridesStore"
-import { useLinesStore } from "@/stores/linesStore"
+import { useLinesListQuery } from "@/infrastructure/hooks/queries/useLinesListQuery"
 import { DialogFooter } from "@/components/ui/dialog"
 import { FormModalShell } from "@/components/forms/FormModalShell"
 import { Button } from "@/components/ui/button"
@@ -62,7 +62,8 @@ const DAYS_OF_WEEK = [
 
 export function RideModal({ open, onOpenChange, ride }: RideModalProps) {
   const { createRide, updateRide, loading } = useRidesStore()
-  const { lines } = useLinesStore()
+  const linesQuery = useLinesListQuery()
+  const lines = linesQuery.data || []
   const isEdit = !!ride
 
   const form = useForm<RideFormData>({

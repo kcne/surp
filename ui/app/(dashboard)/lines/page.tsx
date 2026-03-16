@@ -1,19 +1,34 @@
 "use client"
 
-import { useEffect } from "react"
 import { Layout } from "@/components/layout/Layout"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Plus, Route } from "lucide-react"
-import { useLinesStore } from "@/stores/linesStore"
 import { LineModal } from "@/components/lines/LineModal"
 import { DeleteLineDialog } from "@/components/lines/DeleteLineDialog"
 import { LinesDataTable } from "@/components/lines/LinesDataTable"
 import { useCrudDialogState } from "@/hooks/useCrudDialogState"
+import {
+  useCreateLineMutation,
+  useDeleteLineMutation,
+  useUpdateLineMutation,
+} from "@/infrastructure/hooks/mutations/useLineMutations"
+import { useLinesListQuery } from "@/infrastructure/hooks/queries/useLinesListQuery"
+import type { CreateLineDto, UpdateLineDto } from "@/infrastructure/generated/model"
 import type { Line } from "@/types"
 
 export default function LinesPage() {
-  const { lines, loading, fetchLines } = useLinesStore()
+  const linesQuery = useLinesListQuery()
+  const createLineMutation = useCreateLineMutation()
+  const updateLineMutation = useUpdateLineMutation()
+  const deleteLineMutation = useDeleteLineMutation()
+  const lines = linesQuery.data || []
+  const loading = linesQuery.isLoading
+  const error = linesQuery.error
+  const mutationLoading =
+    createLineMutation.isPending ||
+    updateLineMutation.isPending ||
+    deleteLineMutation.isPending
   const {
     isModalOpen,
     isDeleteDialogOpen,
@@ -26,9 +41,17 @@ export default function LinesPage() {
     setIsDeleteDialogOpen,
   } = useCrudDialogState<Line>()
 
-  useEffect(() => {
-    fetchLines()
-  }, [fetchLines])
+  const handleCreate = async (payload: CreateLineDto) => {
+    await createLineMutation.mutateAsync(payload)
+  }
+
+  const handleUpdate = async (id: string, payload: UpdateLineDto) => {
+    await updateLineMutation.mutateAsync({ id, payload })
+  }
+
+  const handleDelete = async (id: string) => {
+    await deleteLineMutation.mutateAsync(id)
+  }
 
   return (
     <Layout>
@@ -55,6 +78,21 @@ export default function LinesPage() {
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
           </div>
+        ) : linesQuery.isError ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12">
+            <Route className="mb-3 h-10 w-10 text-muted-foreground" />
+            <p className="text-lg font-medium text-muted-foreground">
+              Greska pri ucitavanju linija
+            </p>
+            <p className="mb-4 text-sm text-muted-foreground">
+              {error instanceof Error
+                ? error.message
+                : "Pokrenite ponovno ucitavanje podataka."}
+            </p>
+            <Button onClick={() => linesQuery.refetch()}>
+              Pokusaj ponovo
+            </Button>
+          </div>
         ) : lines.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12">
             <Route className="mb-3 h-10 w-10 text-muted-foreground" />
@@ -77,12 +115,17 @@ export default function LinesPage() {
           open={isModalOpen}
           onOpenChange={closeModal}
           line={selectedLine}
+          loading={mutationLoading}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
         />
 
         <DeleteLineDialog
           open={isDeleteDialogOpen}
           onOpenChange={setIsDeleteDialogOpen}
           line={lineToDelete}
+          loading={mutationLoading}
+          onDelete={handleDelete}
         />
       </div>
     </Layout>

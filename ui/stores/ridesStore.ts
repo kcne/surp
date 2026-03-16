@@ -3,7 +3,8 @@ import { persist } from "zustand/middleware"
 import type { Ride, RideInstance, RideFormData, RideException } from "@/types"
 import { ridesApi } from "@/lib/api"
 import { toast } from "sonner"
-import { useLinesStore } from "./linesStore"
+import { linesControllerGetById } from "@/infrastructure/generated/surp-api"
+import { toLine } from "@/infrastructure/mappers/lineMappers"
 import { generateRideInstanceDates, isExceptionDate, formatDateToISO, parseISODate } from "@/utils/dateHelpers"
 import { useReservationsStore } from "./reservationsStore"
 
@@ -28,6 +29,16 @@ interface RidesState {
 // Helper to generate ride name
 const generateRideName = (lineName: string): string => {
   return lineName
+}
+
+const fetchLineById = async (lineId: string) => {
+  const response = await linesControllerGetById(lineId)
+
+  if (response.status !== 200) {
+    throw new Error("Linija nije pronađena")
+  }
+
+  return toLine(response.data)
 }
 
 export const useRidesStore = create<RidesState>()(
@@ -207,12 +218,7 @@ export const useRidesStore = create<RidesState>()(
       // set((state) => ({ rides: [...state.rides, response.data], loading: false }))
 
       // For now, use mock
-      const lines = useLinesStore.getState().lines
-      const line = lines.find((l) => l.id === data.lineId)
-
-      if (!line) {
-        throw new Error("Linija nije pronađena")
-      }
+      const line = await fetchLineById(data.lineId)
 
       const rideName = generateRideName(line.name)
 
@@ -274,13 +280,8 @@ export const useRidesStore = create<RidesState>()(
         throw new Error("Vožnja nije pronađena")
       }
 
-      const lines = useLinesStore.getState().lines
       const lineId = data.lineId || ride.line.id
-      const line = lines.find((l) => l.id === lineId)
-
-      if (!line) {
-        throw new Error("Linija nije pronađena")
-      }
+      const line = await fetchLineById(lineId)
 
       const rideName = generateRideName(line.name)
 

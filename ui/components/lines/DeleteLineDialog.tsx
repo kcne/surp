@@ -3,29 +3,30 @@
 import {
   ConfirmDeleteDialog,
 } from "@/components/ui/confirm-delete-dialog"
-import { useLinesStore } from "@/stores/linesStore"
 
 interface DeleteLineDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   line: { id: string; name: string } | null
+  loading: boolean
+  onDelete: (id: string) => Promise<void>
 }
 
 export function DeleteLineDialog({
   open,
   onOpenChange,
   line,
+  loading,
+  onDelete,
 }: DeleteLineDialogProps) {
-  const { deleteLine, loading } = useLinesStore()
-
   const handleDelete = async () => {
     if (!line) return
 
     try {
-      await deleteLine(line.id)
+      await onDelete(line.id)
       onOpenChange(false)
     } catch (error) {
-      // Error is handled in store
+      // Error is handled in mutation hook
     }
   }
 

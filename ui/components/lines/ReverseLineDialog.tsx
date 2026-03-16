@@ -10,8 +10,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { useLinesStore } from "@/stores/linesStore"
-import { formatStationRoute } from "@/utils/formatters"
 import { Repeat, X } from "lucide-react"
 
 interface ReverseLineDialogProps {
@@ -24,23 +22,25 @@ interface ReverseLineDialogProps {
     arrivalStation: { name: string }
     intermediateStations: Array<{ stationName: string }>
   } | null
+  loading: boolean
+  onReverse: (id: string) => Promise<void>
 }
 
 export function ReverseLineDialog({
   open,
   onOpenChange,
   line,
+  loading,
+  onReverse,
 }: ReverseLineDialogProps) {
-  const { reverseLine, loading } = useLinesStore()
-
   const handleReverse = async () => {
     if (!line) return
 
     try {
-      await reverseLine(line.id)
+      await onReverse(line.id)
       onOpenChange(false)
     } catch (error) {
-      // Error is handled in store
+      // Error is handled in mutation hook
     }
   }
 

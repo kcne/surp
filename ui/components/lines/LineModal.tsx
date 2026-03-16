@@ -5,8 +5,9 @@ import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { lineSchema } from "@/utils/validators"
 import type { Line, LineFormData } from "@/types"
-import { useLinesStore } from "@/stores/linesStore"
 import { useStationsListQuery } from "@/infrastructure/hooks/queries/useStationsListQuery"
+import { toCreateLineDto, toUpdateLineDto } from "@/infrastructure/mappers/lineMappers"
+import type { CreateLineDto, UpdateLineDto } from "@/infrastructure/generated/model"
 import { DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -71,10 +72,19 @@ interface LineModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   line?: Line | null
+  loading: boolean
+  onCreate: (payload: CreateLineDto) => Promise<void>
+  onUpdate: (id: string, payload: UpdateLineDto) => Promise<void>
 }
 
-export function LineModal({ open, onOpenChange, line }: LineModalProps) {
-  const { createLine, updateLine, loading } = useLinesStore()
+export function LineModal({
+  open,
+  onOpenChange,
+  line,
+  loading,
+  onCreate,
+  onUpdate,
+}: LineModalProps) {
   const stationsQuery = useStationsListQuery()
   const stations = stationsQuery.data || []
   const isEdit = !!line
@@ -95,11 +105,12 @@ export function LineModal({ open, onOpenChange, line }: LineModalProps) {
       const autoName = departureStation && arrivalStation
         ? `${departureStation.name} - ${arrivalStation.name}`
         : ""
+      const payloadWithName = { ...data, name: autoName }
 
       if (isEdit && line) {
-        await updateLine(line.id, { ...data, name: autoName })
+        await onUpdate(line.id, toUpdateLineDto(payloadWithName))
       } else {
-        await createLine({ ...data, name: autoName })
+        await onCreate(toCreateLineDto(payloadWithName))
       }
       onOpenChange(false)
       form.reset(LINE_DEFAULT_VALUES)
