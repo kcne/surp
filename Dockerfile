@@ -14,6 +14,6 @@ COPY api/ .
 RUN pnpm prisma:generate
 RUN pnpm build
 
-EXPOSE 3001
+EXPOSE 3000
 
 CMD ["sh", "-c", "pnpm prisma:migrate:deploy && pnpm start:prod"]

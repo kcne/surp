@@ -37,8 +37,8 @@ async function bootstrap(): Promise<void> {
 
   await prismaService.enableShutdownHooks(app);
 
-  const port = configService.get<number>('PORT', 3001);
-  await app.listen(port);
+  const port = configService.get<number>('PORT', 3000);
+  await app.listen(port, '0.0.0.0');
 }
 
 void bootstrap();
