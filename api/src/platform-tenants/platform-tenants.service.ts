@@ -1,6 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
+import { hash } from 'bcryptjs';
 import { AccessTokenPayload } from '../auth/auth.types';
+import { withCreateAudit } from '../prisma/audit-write.helper';
 import {
   DEFAULT_PAGE,
   DEFAULT_PAGE_SIZE,
@@ -8,6 +10,8 @@ import {
   resolvePagination
 } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
+import { UserResponseDto } from '../users/dto/user.response.dto';
+import { CreatePlatformTenantAdminDto } from './dto/create-platform-tenant-admin.dto';
 import { CreatePlatformTenantDto } from './dto/create-platform-tenant.dto';
 import { ListPlatformTenantsQueryDto } from './dto/list-platform-tenants.query.dto';
 import {
@@ -19,6 +23,20 @@ import { UpdatePlatformTenantDto } from './dto/update-platform-tenant.dto';
 
 @Injectable()
 export class PlatformTenantsService {
+  private readonly safeUserSelect = {
+    id: true,
+    tenantId: true,
+    createdById: true,
+    updatedById: true,
+    username: true,
+    email: true,
+    role: true,
+    requirePasswordChange: true,
+    isActive: true,
+    createdAt: true,
+    updatedAt: true
+  } satisfies Prisma.UserSelect;
+
   private readonly tenantSelect = {
     id: true,
     slug: true,
@@ -54,6 +72,38 @@ export class PlatformTenantsService {
       });
     } catch (error) {
       this.throwIfSlugConflict(error);
+      throw error;
+    }
+  }
+
+  async createAdmin(
+    auth: AccessTokenPayload,
+    tenantId: string,
+    dto: CreatePlatformTenantAdminDto
+  ): Promise<UserResponseDto> {
+    await this.assertTenantExists(tenantId);
+
+    const normalizedUsername = dto.username.trim();
+    const normalizedEmail = dto.email.trim().toLowerCase();
+
+    try {
+      return await this.prisma.user.create({
+        data: withCreateAudit(
+          {
+            tenantId,
+            username: normalizedUsername,
+            email: normalizedEmail,
+            passwordHash: await hash(dto.password, 10),
+            role: UserRole.ADMIN,
+            isActive: true,
+            requirePasswordChange: dto.requirePasswordChange ?? false
+          },
+          auth.sub
+        ),
+        select: this.safeUserSelect
+      });
+    } catch (error) {
+      this.throwIfUserUniqueConstraint(error);
       throw error;
     }
   }
@@ -193,5 +243,29 @@ export class PlatformTenantsService {
     if (targets.includes('slug')) {
       throw new ConflictException('Tenant slug already exists');
     }
+  }
+
+  private throwIfUserUniqueConstraint(error: unknown): void {
+    const prismaError = error as {
+      code?: string;
+      meta?: {
+        target?: string[];
+      };
+    };
+
+    if (prismaError?.code !== 'P2002') {
+      return;
+    }
+
+    const targets = prismaError.meta?.target ?? [];
+    if (targets.includes('username') || targets.includes('tenantId') || targets.includes('tenantId_username')) {
+      throw new ConflictException('Username already exists in this tenant');
+    }
+
+    if (targets.includes('email') || targets.includes('tenantId_email')) {
+      throw new ConflictException('Email already exists in this tenant');
+    }
+
+    throw new ConflictException('User unique constraint violated in this tenant');
   }
 }

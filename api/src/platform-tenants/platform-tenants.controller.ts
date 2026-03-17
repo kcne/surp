@@ -15,6 +15,8 @@ import { Public } from '../auth/public.decorator';
 import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
 import { SkipTenantGuard } from '../auth/skip-tenant.decorator';
+import { UserResponseDto } from '../users/dto/user.response.dto';
+import { CreatePlatformTenantAdminDto } from './dto/create-platform-tenant-admin.dto';
 import { CreatePlatformTenantDto } from './dto/create-platform-tenant.dto';
 import { ListPlatformTenantsQueryDto } from './dto/list-platform-tenants.query.dto';
 import {
@@ -45,6 +47,23 @@ export class PlatformTenantsController {
     @Body() dto: CreatePlatformTenantDto
   ): Promise<PlatformTenantResponseDto> {
     return this.platformTenantsService.create(request.auth!, dto);
+  }
+
+  @Post(':tenantId/create-admin')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Create an ADMIN user in a target tenant from platform scope.' })
+  @ApiOkResponse({ type: UserResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failure.' })
+  @ApiNotFoundResponse({ description: 'Tenant not found.' })
+  @ApiConflictResponse({ description: 'Username or email already exists in tenant.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  createAdmin(
+    @Req() request: RequestWithAuth,
+    @Param('tenantId') tenantId: string,
+    @Body() dto: CreatePlatformTenantAdminDto
+  ): Promise<UserResponseDto> {
+    return this.platformTenantsService.createAdmin(request.auth!, tenantId, dto);
   }
 
   @Get()

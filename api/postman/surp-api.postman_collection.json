@@ -4403,6 +4403,65 @@
           ]
         },
         {
+          "name": "Platform Tenants - Create Admin",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;",
+                  "pm.environment.set('platformTenantAdminUsername', `tenant-admin-${suffix}`);",
+                  "pm.environment.set('platformTenantAdminEmail', `tenant-admin-${suffix}@demo.local`);",
+                  "pm.environment.set('platformTenantAdminPassword', `admin-pass-${suffix}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('Created user is tenant admin', function () {",
+                  "  pm.expect(body.role).to.eql('ADMIN');",
+                  "});",
+                  "if (body.id) { pm.environment.set('platformTenantAdminUserId', body.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{platformTenantAdminUsername}}\",\n  \"email\": \"{{platformTenantAdminEmail}}\",\n  \"password\": \"{{platformTenantAdminPassword}}\",\n  \"requirePasswordChange\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/platform/tenants/{{platformTenantId}}/create-admin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "platform",
+                "tenants",
+                "{{platformTenantId}}",
+                "create-admin"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Platform Tenants - Deactivate Tenant",
           "request": {
             "method": "PATCH",

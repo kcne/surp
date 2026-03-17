@@ -24,6 +24,9 @@ describe('PlatformTenantsController (e2e)', () => {
       findMany: jest.fn(),
       count: jest.fn(),
       update: jest.fn()
+    },
+    user: {
+      create: jest.fn()
     }
   };
 
@@ -136,6 +139,33 @@ describe('PlatformTenantsController (e2e)', () => {
       });
     });
 
+    prismaMock.user.create.mockImplementation(({ data }: { data: Record<string, unknown> }) => {
+      if (data.email === 'existing@acme.local') {
+        const error = {
+          code: 'P2002',
+          meta: {
+            target: ['tenantId_email']
+          }
+        };
+
+        return Promise.reject(error);
+      }
+
+      return Promise.resolve({
+        id: 'user-admin-acme',
+        tenantId: data.tenantId,
+        createdById: 'superadmin-1',
+        updatedById: 'superadmin-1',
+        username: data.username,
+        email: data.email,
+        role: UserRole.ADMIN,
+        requirePasswordChange: Boolean(data.requirePasswordChange),
+        isActive: true,
+        createdAt,
+        updatedAt
+      });
+    });
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule]
     })
@@ -203,6 +233,35 @@ describe('PlatformTenantsController (e2e)', () => {
 
     expect(activateResponse.body.isActive).toBe(true);
     expect(activateResponse.body.deactivatedAt).toBeNull();
+  });
+
+  it('superadmin can create admin inside target tenant', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/platform/tenants/tenant-acme/create-admin')
+      .set('Authorization', 'Bearer access-token-superadmin')
+      .send({
+        username: 'acme-admin',
+        email: 'acme.admin@demo.local',
+        password: 'strong-password-123',
+        requirePasswordChange: false
+      })
+      .expect(201);
+
+    expect(response.body.role).toBe(UserRole.ADMIN);
+    expect(response.body.tenantId).toBe('tenant-acme');
+    expect(response.body.email).toBe('acme.admin@demo.local');
+  });
+
+  it('returns conflict when tenant admin email already exists', async () => {
+    await request(app.getHttpServer())
+      .post('/platform/tenants/tenant-acme/create-admin')
+      .set('Authorization', 'Bearer access-token-superadmin')
+      .send({
+        username: 'acme-admin-2',
+        email: 'existing@acme.local',
+        password: 'strong-password-123'
+      })
+      .expect(409);
   });
 
   it('lists public active tenant login options without auth', async () => {
