@@ -8,7 +8,7 @@ import {
 } from "@/infrastructure/utils/storage"
 import { buildAuthAndTenantHeaders } from "@/infrastructure/utils/request-context"
 
-const DEFAULT_API_URL = "http://localhost:3001"
+const DEFAULT_API_URL = "http://localhost:3000"
 
 export const httpClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL,
