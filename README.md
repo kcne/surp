@@ -136,6 +136,20 @@ Required environment variable:
 
 1. `NEXT_PUBLIC_API_URL=https://<your-api-domain>`
 
+### Railway-native CI/CD model
+
+Use GitHub Actions for verification and Railway for deployment orchestration:
+
+1. Keep Railway auto-deploy enabled for `main` on both `api` and `ui` services.
+2. Use GitHub branch protection to require CI workflows before merging to `main`:
+   - `Backend CI`
+   - `Frontend CI`
+   - `Security CI`
+3. Keep deployment secrets in Railway Variables, not in GitHub deploy-hook secrets.
+4. Use Railway deployment history for rollback and release audit.
+
+This keeps deployment logic in Railway while preserving strict merge-time quality gates in GitHub.
+
 ### Post-deploy checks
 
 1. API health endpoint responds: `/health`

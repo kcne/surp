@@ -8,6 +8,13 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  workflow_dispatch:
+    inputs:
+      run_build:
+        description: "Run production build"
+        required: false
+        type: boolean
+        default: true
   push:
     paths:
       - "ui/**"
@@ -18,9 +25,10 @@ on:
       - ".github/workflows/frontend-ci.yml"
 
 jobs:
-  ui-verify:
-    name: ui lint and build
+  ui-lint:
+    name: ui lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     defaults:
       run:
@@ -47,6 +55,38 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+  ui-build:
+    name: ui build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: ui-lint
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_build)
+
+    defaults:
+      run:
+        working-directory: ui
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
