@@ -21,7 +21,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "prisma:seed": "pnpm prisma db seed"
+    "prisma:seed": "pnpm prisma db seed",
+    "seed:prod:once": "ts-node --transpile-only scripts/prod-bootstrap-once.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",
