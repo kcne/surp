@@ -25,6 +25,8 @@
     "seed:prod:once": "ts-node --transpile-only scripts/prod-bootstrap-once.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1011.0",
+    "@aws-sdk/s3-request-presigner": "^3.1011.0",
     "@nestjs/common": "^11.1.0",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.0",
@@ -41,15 +43,15 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
     "@nestjs/cli": "^11.0.5",
     "@nestjs/schematics": "^11.0.2",
     "@nestjs/testing": "^11.1.0",
-    "@types/express": "^5.0.1",
     "@types/bcryptjs": "^2.4.6",
+    "@types/express": "^5.0.1",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.13.10",
     "@types/supertest": "^6.0.2",
-    "@apidevtools/swagger-parser": "^12.1.0",
     "@typescript-eslint/eslint-plugin": "^8.27.0",
     "@typescript-eslint/parser": "^8.27.0",
     "eslint": "^9.22.0",

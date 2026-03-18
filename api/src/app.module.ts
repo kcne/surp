@@ -11,6 +11,7 @@ import { ReportingModule } from './reporting/reporting.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { RidesModule } from './rides/rides.module';
 import { StationsModule } from './stations/stations.module';
+import { TicketsModule } from './tickets/tickets.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -29,7 +30,8 @@ import { UsersModule } from './users/users.module';
     PlatformTenantsModule,
     RidesModule,
     ReservationsModule,
-    ReportingModule
+    ReportingModule,
+    TicketsModule
   ]
 })
 export class AppModule {}

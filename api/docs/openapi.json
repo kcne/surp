@@ -2135,6 +2135,67 @@
         ]
       }
     },
+    "/platform/tenants/{tenantId}/create-admin": {
+      "post": {
+        "operationId": "PlatformTenantsController_createAdmin",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePlatformTenantAdminDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Tenant not found."
+          },
+          "409": {
+            "description": "Username or email already exists in tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create an ADMIN user in a target tenant from platform scope.",
+        "tags": [
+          "Platform Tenants"
+        ]
+      }
+    },
     "/platform/tenants/public": {
       "get": {
         "operationId": "PlatformTenantsController_listLoginOptions",
@@ -3726,6 +3787,627 @@
           "Reporting"
         ]
       }
+    },
+    "/tickets": {
+      "post": {
+        "operationId": "TicketsController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTicketDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a support ticket in the current tenant.",
+        "tags": [
+          "Tickets"
+        ]
+      },
+      "get": {
+        "operationId": "TicketsController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OPEN",
+                "IN_PROGRESS",
+                "RESOLVED",
+                "CLOSED"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BUG",
+                "IDEA",
+                "FEATURE",
+                "QUESTION",
+                "OTHER"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "reservation page crash",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedTicketsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List support tickets in the current tenant.",
+        "tags": [
+          "Tickets"
+        ]
+      }
+    },
+    "/tickets/{id}": {
+      "get": {
+        "operationId": "TicketsController_getById",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ticket not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get support ticket detail by id in the current tenant.",
+        "tags": [
+          "Tickets"
+        ]
+      },
+      "patch": {
+        "operationId": "TicketsController_update",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTicketDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or invalid status transition."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ticket not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Update support ticket fields in the current tenant.",
+        "tags": [
+          "Tickets"
+        ]
+      }
+    },
+    "/tickets/{id}/comments": {
+      "post": {
+        "operationId": "TicketsController_addComment",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTicketCommentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ticket not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Add a ticket comment in the current tenant.",
+        "tags": [
+          "Tickets"
+        ]
+      }
+    },
+    "/tickets/{id}/attachments/presign-upload": {
+      "post": {
+        "operationId": "TicketsController_presignUpload",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTicketAttachmentPresignDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketAttachmentPresignResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or invalid image metadata."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ticket not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create signed upload URL for a ticket attachment image.",
+        "tags": [
+          "Tickets"
+        ]
+      }
+    },
+    "/tickets/{id}/attachments/complete": {
+      "post": {
+        "operationId": "TicketsController_completeAttachment",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteTicketAttachmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or invalid storage key context."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ticket not found in current tenant."
+          },
+          "409": {
+            "description": "Attachment key already recorded."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Persist uploaded ticket-level attachment metadata.",
+        "tags": [
+          "Tickets"
+        ]
+      }
+    },
+    "/tickets/{id}/comments/{commentId}/attachments/complete": {
+      "post": {
+        "operationId": "TicketsController_completeCommentAttachment",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "commentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteTicketAttachmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or invalid storage key context."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ticket or comment not found in current tenant."
+          },
+          "409": {
+            "description": "Attachment key already recorded."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Persist uploaded comment-level attachment metadata.",
+        "tags": [
+          "Tickets"
+        ]
+      }
+    },
+    "/tickets/{id}/attachments/{attachmentId}/presign-download": {
+      "get": {
+        "operationId": "TicketsController_presignDownload",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketAttachmentDownloadResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Attachment not found in current tenant ticket."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create signed download URL for a tenant ticket attachment image.",
+        "tags": [
+          "Tickets"
+        ]
+      }
     }
   },
   "info": {
@@ -4726,6 +5408,34 @@
           "deactivatedById",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "CreatePlatformTenantAdminDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "balbus-admin"
+          },
+          "email": {
+            "type": "string",
+            "example": "admin@balbus.rs"
+          },
+          "password": {
+            "type": "string",
+            "example": "strong-password-123"
+          },
+          "requirePasswordChange": {
+            "type": "boolean",
+            "example": false,
+            "default": false,
+            "description": "When true, admin must change password before normal login."
+          }
+        },
+        "required": [
+          "username",
+          "email",
+          "password"
         ]
       },
       "PaginatedPlatformTenantsResponseDto": {
@@ -6086,6 +6796,411 @@
           "pageSize",
           "total",
           "items"
+        ]
+      },
+      "CreateTicketDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Application crashes when opening reservation details"
+          },
+          "description": {
+            "type": "string",
+            "example": "When opening reservation details page the UI freezes and request fails."
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "BUG",
+              "IDEA",
+              "FEATURE",
+              "QUESTION",
+              "OTHER"
+            ],
+            "default": "QUESTION"
+          }
+        },
+        "required": [
+          "title",
+          "description"
+        ]
+      },
+      "TicketActorResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "email"
+        ]
+      },
+      "TicketAttachmentResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "ticketId": {
+            "type": "string"
+          },
+          "commentId": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdById": {
+            "type": "object",
+            "nullable": true
+          },
+          "updatedById": {
+            "type": "object",
+            "nullable": true
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "number"
+          },
+          "storageKey": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "ticketId",
+          "commentId",
+          "createdById",
+          "updatedById",
+          "fileName",
+          "mimeType",
+          "sizeBytes",
+          "storageKey",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "TicketCommentResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "ticketId": {
+            "type": "string"
+          },
+          "authorUserId": {
+            "type": "string"
+          },
+          "author": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TicketActorResponseDto"
+              }
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketAttachmentResponseDto"
+            }
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "ticketId",
+          "authorUserId",
+          "author",
+          "content",
+          "attachments",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "TicketResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "createdById": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdBy": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TicketActorResponseDto"
+              }
+            ]
+          },
+          "updatedById": {
+            "type": "object",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "IN_PROGRESS",
+              "RESOLVED",
+              "CLOSED"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "BUG",
+              "IDEA",
+              "FEATURE",
+              "QUESTION",
+              "OTHER"
+            ]
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketAttachmentResponseDto"
+            }
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketCommentResponseDto"
+            }
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "createdById",
+          "createdBy",
+          "updatedById",
+          "title",
+          "description",
+          "status",
+          "category",
+          "attachments",
+          "comments",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaginatedTicketsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 25
+          },
+          "total": {
+            "type": "number",
+            "example": 2
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "UpdateTicketDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Updated ticket title"
+          },
+          "description": {
+            "type": "string",
+            "example": "Updated description with additional details."
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "BUG",
+              "IDEA",
+              "FEATURE",
+              "QUESTION",
+              "OTHER"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "IN_PROGRESS",
+              "RESOLVED",
+              "CLOSED"
+            ]
+          }
+        }
+      },
+      "CreateTicketCommentDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "example": "We are investigating this issue and will update shortly."
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "CreateTicketAttachmentPresignDto": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "example": "screenshot-issue.png"
+          },
+          "mimeType": {
+            "type": "string",
+            "example": "image/png"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "example": 345612
+          }
+        },
+        "required": [
+          "fileName",
+          "mimeType",
+          "sizeBytes"
+        ]
+      },
+      "TicketAttachmentPresignResponseDto": {
+        "type": "object",
+        "properties": {
+          "uploadUrl": {
+            "type": "string"
+          },
+          "storageKey": {
+            "type": "string"
+          },
+          "expiresInSeconds": {
+            "type": "number",
+            "example": 600
+          }
+        },
+        "required": [
+          "uploadUrl",
+          "storageKey",
+          "expiresInSeconds"
+        ]
+      },
+      "CompleteTicketAttachmentDto": {
+        "type": "object",
+        "properties": {
+          "storageKey": {
+            "type": "string",
+            "example": "tenants/tenant-id/tickets/ticket-id/uuid-screenshot-issue.png"
+          },
+          "fileName": {
+            "type": "string",
+            "example": "screenshot-issue.png"
+          },
+          "mimeType": {
+            "type": "string",
+            "example": "image/png"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "example": 345612
+          }
+        },
+        "required": [
+          "storageKey",
+          "fileName",
+          "mimeType",
+          "sizeBytes"
+        ]
+      },
+      "TicketAttachmentDownloadResponseDto": {
+        "type": "object",
+        "properties": {
+          "downloadUrl": {
+            "type": "string"
+          },
+          "expiresInSeconds": {
+            "type": "number",
+            "example": 600
+          }
+        },
+        "required": [
+          "downloadUrl",
+          "expiresInSeconds"
         ]
       }
     }

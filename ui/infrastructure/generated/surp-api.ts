@@ -26,14 +26,19 @@ import type {
 
 import type {
   BatchReservationsResponseDto,
+  CompleteTicketAttachmentDto,
   CreateLineDto,
   CreatePassengerDto,
+  CreatePlatformTenantAdminDto,
   CreatePlatformTenantDto,
   CreateReservationDto,
   CreateReservationsBatchDto,
   CreateRideDto,
   CreateRideExceptionDto,
   CreateStationDto,
+  CreateTicketAttachmentPresignDto,
+  CreateTicketCommentDto,
+  CreateTicketDto,
   CreateUserDto,
   LineResponseDto,
   LinesControllerListParams,
@@ -48,6 +53,7 @@ import type {
   PaginatedReservationsResponseDto,
   PaginatedRidesResponseDto,
   PaginatedStationsResponseDto,
+  PaginatedTicketsResponseDto,
   PaginatedUsersResponseDto,
   PassengerResponseDto,
   PassengersControllerListParams,
@@ -74,12 +80,17 @@ import type {
   RidesControllerListParams,
   StationResponseDto,
   StationsControllerListParams,
+  TicketAttachmentDownloadResponseDto,
+  TicketAttachmentPresignResponseDto,
+  TicketResponseDto,
+  TicketsControllerListParams,
   UpdateLineDto,
   UpdatePassengerDto,
   UpdatePlatformTenantDto,
   UpdateReservationDto,
   UpdateRideDto,
   UpdateStationDto,
+  UpdateTicketDto,
   UpdateUserDto,
   UserResponseDto,
   UsersControllerListParams
@@ -4050,6 +4061,117 @@ export function usePlatformTenantsControllerList<TData = Awaited<ReturnType<type
 
 
 /**
+ * @summary Create an ADMIN user in a target tenant from platform scope.
+ */
+export type platformTenantsControllerCreateAdminResponse200 = {
+  data: UserResponseDto
+  status: 200
+}
+
+export type platformTenantsControllerCreateAdminResponse400 = {
+  data: void
+  status: 400
+}
+
+export type platformTenantsControllerCreateAdminResponse401 = {
+  data: void
+  status: 401
+}
+
+export type platformTenantsControllerCreateAdminResponse403 = {
+  data: void
+  status: 403
+}
+
+export type platformTenantsControllerCreateAdminResponse404 = {
+  data: void
+  status: 404
+}
+
+export type platformTenantsControllerCreateAdminResponse409 = {
+  data: void
+  status: 409
+}
+
+export type platformTenantsControllerCreateAdminResponseSuccess = (platformTenantsControllerCreateAdminResponse200) & {
+  headers: Headers;
+};
+export type platformTenantsControllerCreateAdminResponseError = (platformTenantsControllerCreateAdminResponse400 | platformTenantsControllerCreateAdminResponse401 | platformTenantsControllerCreateAdminResponse403 | platformTenantsControllerCreateAdminResponse404 | platformTenantsControllerCreateAdminResponse409) & {
+  headers: Headers;
+};
+
+export type platformTenantsControllerCreateAdminResponse = (platformTenantsControllerCreateAdminResponseSuccess | platformTenantsControllerCreateAdminResponseError)
+
+export const getPlatformTenantsControllerCreateAdminUrl = (tenantId: string,) => {
+
+
+  
+
+  return `/platform/tenants/${tenantId}/create-admin`
+}
+
+export const platformTenantsControllerCreateAdmin = async (tenantId: string,
+    createPlatformTenantAdminDto: CreatePlatformTenantAdminDto, options?: RequestInit): Promise<platformTenantsControllerCreateAdminResponse> => {
+  
+  return customInstance<platformTenantsControllerCreateAdminResponse>(getPlatformTenantsControllerCreateAdminUrl(tenantId),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createPlatformTenantAdminDto,)
+  }
+);}
+  
+
+
+
+export const getPlatformTenantsControllerCreateAdminMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof platformTenantsControllerCreateAdmin>>, TError,{tenantId: string;data: CreatePlatformTenantAdminDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof platformTenantsControllerCreateAdmin>>, TError,{tenantId: string;data: CreatePlatformTenantAdminDto}, TContext> => {
+
+const mutationKey = ['platformTenantsControllerCreateAdmin'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof platformTenantsControllerCreateAdmin>>, {tenantId: string;data: CreatePlatformTenantAdminDto}> = (props) => {
+          const {tenantId,data} = props ?? {};
+
+          return  platformTenantsControllerCreateAdmin(tenantId,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PlatformTenantsControllerCreateAdminMutationResult = NonNullable<Awaited<ReturnType<typeof platformTenantsControllerCreateAdmin>>>
+    export type PlatformTenantsControllerCreateAdminMutationBody = CreatePlatformTenantAdminDto
+    export type PlatformTenantsControllerCreateAdminMutationError = ErrorType<void>
+
+    /**
+ * @summary Create an ADMIN user in a target tenant from platform scope.
+ */
+export const usePlatformTenantsControllerCreateAdmin = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof platformTenantsControllerCreateAdmin>>, TError,{tenantId: string;data: CreatePlatformTenantAdminDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof platformTenantsControllerCreateAdmin>>,
+        TError,
+        {tenantId: string;data: CreatePlatformTenantAdminDto},
+        TContext
+      > => {
+      return useMutation(getPlatformTenantsControllerCreateAdminMutationOptions(options), queryClient);
+    }
+    
+/**
  * @summary List active tenant login options.
  */
 export type platformTenantsControllerListLoginOptionsResponse200 = {
@@ -6906,6 +7028,1047 @@ export function useReportingControllerGetAudit<TData = Awaited<ReturnType<typeof
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getReportingControllerGetAuditQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Create a support ticket in the current tenant.
+ */
+export type ticketsControllerCreateResponse200 = {
+  data: TicketResponseDto
+  status: 200
+}
+
+export type ticketsControllerCreateResponse400 = {
+  data: void
+  status: 400
+}
+
+export type ticketsControllerCreateResponse401 = {
+  data: void
+  status: 401
+}
+
+export type ticketsControllerCreateResponse403 = {
+  data: void
+  status: 403
+}
+
+export type ticketsControllerCreateResponseSuccess = (ticketsControllerCreateResponse200) & {
+  headers: Headers;
+};
+export type ticketsControllerCreateResponseError = (ticketsControllerCreateResponse400 | ticketsControllerCreateResponse401 | ticketsControllerCreateResponse403) & {
+  headers: Headers;
+};
+
+export type ticketsControllerCreateResponse = (ticketsControllerCreateResponseSuccess | ticketsControllerCreateResponseError)
+
+export const getTicketsControllerCreateUrl = () => {
+
+
+  
+
+  return `/tickets`
+}
+
+export const ticketsControllerCreate = async (createTicketDto: CreateTicketDto, options?: RequestInit): Promise<ticketsControllerCreateResponse> => {
+  
+  return customInstance<ticketsControllerCreateResponse>(getTicketsControllerCreateUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createTicketDto,)
+  }
+);}
+  
+
+
+
+export const getTicketsControllerCreateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerCreate>>, TError,{data: CreateTicketDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerCreate>>, TError,{data: CreateTicketDto}, TContext> => {
+
+const mutationKey = ['ticketsControllerCreate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerCreate>>, {data: CreateTicketDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  ticketsControllerCreate(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TicketsControllerCreateMutationResult = NonNullable<Awaited<ReturnType<typeof ticketsControllerCreate>>>
+    export type TicketsControllerCreateMutationBody = CreateTicketDto
+    export type TicketsControllerCreateMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a support ticket in the current tenant.
+ */
+export const useTicketsControllerCreate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerCreate>>, TError,{data: CreateTicketDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof ticketsControllerCreate>>,
+        TError,
+        {data: CreateTicketDto},
+        TContext
+      > => {
+      return useMutation(getTicketsControllerCreateMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary List support tickets in the current tenant.
+ */
+export type ticketsControllerListResponse200 = {
+  data: PaginatedTicketsResponseDto
+  status: 200
+}
+
+export type ticketsControllerListResponse400 = {
+  data: void
+  status: 400
+}
+
+export type ticketsControllerListResponse401 = {
+  data: void
+  status: 401
+}
+
+export type ticketsControllerListResponse403 = {
+  data: void
+  status: 403
+}
+
+export type ticketsControllerListResponseSuccess = (ticketsControllerListResponse200) & {
+  headers: Headers;
+};
+export type ticketsControllerListResponseError = (ticketsControllerListResponse400 | ticketsControllerListResponse401 | ticketsControllerListResponse403) & {
+  headers: Headers;
+};
+
+export type ticketsControllerListResponse = (ticketsControllerListResponseSuccess | ticketsControllerListResponseError)
+
+export const getTicketsControllerListUrl = (params?: TicketsControllerListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/tickets?${stringifiedParams}` : `/tickets`
+}
+
+export const ticketsControllerList = async (params?: TicketsControllerListParams, options?: RequestInit): Promise<ticketsControllerListResponse> => {
+  
+  return customInstance<ticketsControllerListResponse>(getTicketsControllerListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getTicketsControllerListQueryKey = (params?: TicketsControllerListParams,) => {
+    return [
+    `/tickets`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+    
+export const getTicketsControllerListQueryOptions = <TData = Awaited<ReturnType<typeof ticketsControllerList>>, TError = ErrorType<void>>(params?: TicketsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getTicketsControllerListQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof ticketsControllerList>>> = ({ signal }) => ticketsControllerList(params, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type TicketsControllerListQueryResult = NonNullable<Awaited<ReturnType<typeof ticketsControllerList>>>
+export type TicketsControllerListQueryError = ErrorType<void>
+
+
+export function useTicketsControllerList<TData = Awaited<ReturnType<typeof ticketsControllerList>>, TError = ErrorType<void>>(
+ params: undefined |  TicketsControllerListParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerList>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof ticketsControllerList>>,
+          TError,
+          Awaited<ReturnType<typeof ticketsControllerList>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useTicketsControllerList<TData = Awaited<ReturnType<typeof ticketsControllerList>>, TError = ErrorType<void>>(
+ params?: TicketsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerList>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof ticketsControllerList>>,
+          TError,
+          Awaited<ReturnType<typeof ticketsControllerList>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useTicketsControllerList<TData = Awaited<ReturnType<typeof ticketsControllerList>>, TError = ErrorType<void>>(
+ params?: TicketsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List support tickets in the current tenant.
+ */
+
+export function useTicketsControllerList<TData = Awaited<ReturnType<typeof ticketsControllerList>>, TError = ErrorType<void>>(
+ params?: TicketsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getTicketsControllerListQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Get support ticket detail by id in the current tenant.
+ */
+export type ticketsControllerGetByIdResponse200 = {
+  data: TicketResponseDto
+  status: 200
+}
+
+export type ticketsControllerGetByIdResponse401 = {
+  data: void
+  status: 401
+}
+
+export type ticketsControllerGetByIdResponse403 = {
+  data: void
+  status: 403
+}
+
+export type ticketsControllerGetByIdResponse404 = {
+  data: void
+  status: 404
+}
+
+export type ticketsControllerGetByIdResponseSuccess = (ticketsControllerGetByIdResponse200) & {
+  headers: Headers;
+};
+export type ticketsControllerGetByIdResponseError = (ticketsControllerGetByIdResponse401 | ticketsControllerGetByIdResponse403 | ticketsControllerGetByIdResponse404) & {
+  headers: Headers;
+};
+
+export type ticketsControllerGetByIdResponse = (ticketsControllerGetByIdResponseSuccess | ticketsControllerGetByIdResponseError)
+
+export const getTicketsControllerGetByIdUrl = (id: string,) => {
+
+
+  
+
+  return `/tickets/${id}`
+}
+
+export const ticketsControllerGetById = async (id: string, options?: RequestInit): Promise<ticketsControllerGetByIdResponse> => {
+  
+  return customInstance<ticketsControllerGetByIdResponse>(getTicketsControllerGetByIdUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getTicketsControllerGetByIdQueryKey = (id: string,) => {
+    return [
+    `/tickets/${id}`
+    ] as const;
+    }
+
+    
+export const getTicketsControllerGetByIdQueryOptions = <TData = Awaited<ReturnType<typeof ticketsControllerGetById>>, TError = ErrorType<void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getTicketsControllerGetByIdQueryKey(id);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof ticketsControllerGetById>>> = ({ signal }) => ticketsControllerGetById(id, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerGetById>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type TicketsControllerGetByIdQueryResult = NonNullable<Awaited<ReturnType<typeof ticketsControllerGetById>>>
+export type TicketsControllerGetByIdQueryError = ErrorType<void>
+
+
+export function useTicketsControllerGetById<TData = Awaited<ReturnType<typeof ticketsControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerGetById>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof ticketsControllerGetById>>,
+          TError,
+          Awaited<ReturnType<typeof ticketsControllerGetById>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useTicketsControllerGetById<TData = Awaited<ReturnType<typeof ticketsControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerGetById>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof ticketsControllerGetById>>,
+          TError,
+          Awaited<ReturnType<typeof ticketsControllerGetById>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useTicketsControllerGetById<TData = Awaited<ReturnType<typeof ticketsControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get support ticket detail by id in the current tenant.
+ */
+
+export function useTicketsControllerGetById<TData = Awaited<ReturnType<typeof ticketsControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getTicketsControllerGetByIdQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Update support ticket fields in the current tenant.
+ */
+export type ticketsControllerUpdateResponse200 = {
+  data: TicketResponseDto
+  status: 200
+}
+
+export type ticketsControllerUpdateResponse400 = {
+  data: void
+  status: 400
+}
+
+export type ticketsControllerUpdateResponse401 = {
+  data: void
+  status: 401
+}
+
+export type ticketsControllerUpdateResponse403 = {
+  data: void
+  status: 403
+}
+
+export type ticketsControllerUpdateResponse404 = {
+  data: void
+  status: 404
+}
+
+export type ticketsControllerUpdateResponseSuccess = (ticketsControllerUpdateResponse200) & {
+  headers: Headers;
+};
+export type ticketsControllerUpdateResponseError = (ticketsControllerUpdateResponse400 | ticketsControllerUpdateResponse401 | ticketsControllerUpdateResponse403 | ticketsControllerUpdateResponse404) & {
+  headers: Headers;
+};
+
+export type ticketsControllerUpdateResponse = (ticketsControllerUpdateResponseSuccess | ticketsControllerUpdateResponseError)
+
+export const getTicketsControllerUpdateUrl = (id: string,) => {
+
+
+  
+
+  return `/tickets/${id}`
+}
+
+export const ticketsControllerUpdate = async (id: string,
+    updateTicketDto: UpdateTicketDto, options?: RequestInit): Promise<ticketsControllerUpdateResponse> => {
+  
+  return customInstance<ticketsControllerUpdateResponse>(getTicketsControllerUpdateUrl(id),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateTicketDto,)
+  }
+);}
+  
+
+
+
+export const getTicketsControllerUpdateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerUpdate>>, TError,{id: string;data: UpdateTicketDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerUpdate>>, TError,{id: string;data: UpdateTicketDto}, TContext> => {
+
+const mutationKey = ['ticketsControllerUpdate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerUpdate>>, {id: string;data: UpdateTicketDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  ticketsControllerUpdate(id,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TicketsControllerUpdateMutationResult = NonNullable<Awaited<ReturnType<typeof ticketsControllerUpdate>>>
+    export type TicketsControllerUpdateMutationBody = UpdateTicketDto
+    export type TicketsControllerUpdateMutationError = ErrorType<void>
+
+    /**
+ * @summary Update support ticket fields in the current tenant.
+ */
+export const useTicketsControllerUpdate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerUpdate>>, TError,{id: string;data: UpdateTicketDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof ticketsControllerUpdate>>,
+        TError,
+        {id: string;data: UpdateTicketDto},
+        TContext
+      > => {
+      return useMutation(getTicketsControllerUpdateMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Add a ticket comment in the current tenant.
+ */
+export type ticketsControllerAddCommentResponse200 = {
+  data: TicketResponseDto
+  status: 200
+}
+
+export type ticketsControllerAddCommentResponse400 = {
+  data: void
+  status: 400
+}
+
+export type ticketsControllerAddCommentResponse401 = {
+  data: void
+  status: 401
+}
+
+export type ticketsControllerAddCommentResponse403 = {
+  data: void
+  status: 403
+}
+
+export type ticketsControllerAddCommentResponse404 = {
+  data: void
+  status: 404
+}
+
+export type ticketsControllerAddCommentResponseSuccess = (ticketsControllerAddCommentResponse200) & {
+  headers: Headers;
+};
+export type ticketsControllerAddCommentResponseError = (ticketsControllerAddCommentResponse400 | ticketsControllerAddCommentResponse401 | ticketsControllerAddCommentResponse403 | ticketsControllerAddCommentResponse404) & {
+  headers: Headers;
+};
+
+export type ticketsControllerAddCommentResponse = (ticketsControllerAddCommentResponseSuccess | ticketsControllerAddCommentResponseError)
+
+export const getTicketsControllerAddCommentUrl = (id: string,) => {
+
+
+  
+
+  return `/tickets/${id}/comments`
+}
+
+export const ticketsControllerAddComment = async (id: string,
+    createTicketCommentDto: CreateTicketCommentDto, options?: RequestInit): Promise<ticketsControllerAddCommentResponse> => {
+  
+  return customInstance<ticketsControllerAddCommentResponse>(getTicketsControllerAddCommentUrl(id),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createTicketCommentDto,)
+  }
+);}
+  
+
+
+
+export const getTicketsControllerAddCommentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerAddComment>>, TError,{id: string;data: CreateTicketCommentDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerAddComment>>, TError,{id: string;data: CreateTicketCommentDto}, TContext> => {
+
+const mutationKey = ['ticketsControllerAddComment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerAddComment>>, {id: string;data: CreateTicketCommentDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  ticketsControllerAddComment(id,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TicketsControllerAddCommentMutationResult = NonNullable<Awaited<ReturnType<typeof ticketsControllerAddComment>>>
+    export type TicketsControllerAddCommentMutationBody = CreateTicketCommentDto
+    export type TicketsControllerAddCommentMutationError = ErrorType<void>
+
+    /**
+ * @summary Add a ticket comment in the current tenant.
+ */
+export const useTicketsControllerAddComment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerAddComment>>, TError,{id: string;data: CreateTicketCommentDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof ticketsControllerAddComment>>,
+        TError,
+        {id: string;data: CreateTicketCommentDto},
+        TContext
+      > => {
+      return useMutation(getTicketsControllerAddCommentMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Create signed upload URL for a ticket attachment image.
+ */
+export type ticketsControllerPresignUploadResponse200 = {
+  data: TicketAttachmentPresignResponseDto
+  status: 200
+}
+
+export type ticketsControllerPresignUploadResponse400 = {
+  data: void
+  status: 400
+}
+
+export type ticketsControllerPresignUploadResponse401 = {
+  data: void
+  status: 401
+}
+
+export type ticketsControllerPresignUploadResponse403 = {
+  data: void
+  status: 403
+}
+
+export type ticketsControllerPresignUploadResponse404 = {
+  data: void
+  status: 404
+}
+
+export type ticketsControllerPresignUploadResponseSuccess = (ticketsControllerPresignUploadResponse200) & {
+  headers: Headers;
+};
+export type ticketsControllerPresignUploadResponseError = (ticketsControllerPresignUploadResponse400 | ticketsControllerPresignUploadResponse401 | ticketsControllerPresignUploadResponse403 | ticketsControllerPresignUploadResponse404) & {
+  headers: Headers;
+};
+
+export type ticketsControllerPresignUploadResponse = (ticketsControllerPresignUploadResponseSuccess | ticketsControllerPresignUploadResponseError)
+
+export const getTicketsControllerPresignUploadUrl = (id: string,) => {
+
+
+  
+
+  return `/tickets/${id}/attachments/presign-upload`
+}
+
+export const ticketsControllerPresignUpload = async (id: string,
+    createTicketAttachmentPresignDto: CreateTicketAttachmentPresignDto, options?: RequestInit): Promise<ticketsControllerPresignUploadResponse> => {
+  
+  return customInstance<ticketsControllerPresignUploadResponse>(getTicketsControllerPresignUploadUrl(id),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createTicketAttachmentPresignDto,)
+  }
+);}
+  
+
+
+
+export const getTicketsControllerPresignUploadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerPresignUpload>>, TError,{id: string;data: CreateTicketAttachmentPresignDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerPresignUpload>>, TError,{id: string;data: CreateTicketAttachmentPresignDto}, TContext> => {
+
+const mutationKey = ['ticketsControllerPresignUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerPresignUpload>>, {id: string;data: CreateTicketAttachmentPresignDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  ticketsControllerPresignUpload(id,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TicketsControllerPresignUploadMutationResult = NonNullable<Awaited<ReturnType<typeof ticketsControllerPresignUpload>>>
+    export type TicketsControllerPresignUploadMutationBody = CreateTicketAttachmentPresignDto
+    export type TicketsControllerPresignUploadMutationError = ErrorType<void>
+
+    /**
+ * @summary Create signed upload URL for a ticket attachment image.
+ */
+export const useTicketsControllerPresignUpload = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerPresignUpload>>, TError,{id: string;data: CreateTicketAttachmentPresignDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof ticketsControllerPresignUpload>>,
+        TError,
+        {id: string;data: CreateTicketAttachmentPresignDto},
+        TContext
+      > => {
+      return useMutation(getTicketsControllerPresignUploadMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Persist uploaded ticket-level attachment metadata.
+ */
+export type ticketsControllerCompleteAttachmentResponse200 = {
+  data: TicketResponseDto
+  status: 200
+}
+
+export type ticketsControllerCompleteAttachmentResponse400 = {
+  data: void
+  status: 400
+}
+
+export type ticketsControllerCompleteAttachmentResponse401 = {
+  data: void
+  status: 401
+}
+
+export type ticketsControllerCompleteAttachmentResponse403 = {
+  data: void
+  status: 403
+}
+
+export type ticketsControllerCompleteAttachmentResponse404 = {
+  data: void
+  status: 404
+}
+
+export type ticketsControllerCompleteAttachmentResponse409 = {
+  data: void
+  status: 409
+}
+
+export type ticketsControllerCompleteAttachmentResponseSuccess = (ticketsControllerCompleteAttachmentResponse200) & {
+  headers: Headers;
+};
+export type ticketsControllerCompleteAttachmentResponseError = (ticketsControllerCompleteAttachmentResponse400 | ticketsControllerCompleteAttachmentResponse401 | ticketsControllerCompleteAttachmentResponse403 | ticketsControllerCompleteAttachmentResponse404 | ticketsControllerCompleteAttachmentResponse409) & {
+  headers: Headers;
+};
+
+export type ticketsControllerCompleteAttachmentResponse = (ticketsControllerCompleteAttachmentResponseSuccess | ticketsControllerCompleteAttachmentResponseError)
+
+export const getTicketsControllerCompleteAttachmentUrl = (id: string,) => {
+
+
+  
+
+  return `/tickets/${id}/attachments/complete`
+}
+
+export const ticketsControllerCompleteAttachment = async (id: string,
+    completeTicketAttachmentDto: CompleteTicketAttachmentDto, options?: RequestInit): Promise<ticketsControllerCompleteAttachmentResponse> => {
+  
+  return customInstance<ticketsControllerCompleteAttachmentResponse>(getTicketsControllerCompleteAttachmentUrl(id),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      completeTicketAttachmentDto,)
+  }
+);}
+  
+
+
+
+export const getTicketsControllerCompleteAttachmentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerCompleteAttachment>>, TError,{id: string;data: CompleteTicketAttachmentDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerCompleteAttachment>>, TError,{id: string;data: CompleteTicketAttachmentDto}, TContext> => {
+
+const mutationKey = ['ticketsControllerCompleteAttachment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerCompleteAttachment>>, {id: string;data: CompleteTicketAttachmentDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  ticketsControllerCompleteAttachment(id,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TicketsControllerCompleteAttachmentMutationResult = NonNullable<Awaited<ReturnType<typeof ticketsControllerCompleteAttachment>>>
+    export type TicketsControllerCompleteAttachmentMutationBody = CompleteTicketAttachmentDto
+    export type TicketsControllerCompleteAttachmentMutationError = ErrorType<void>
+
+    /**
+ * @summary Persist uploaded ticket-level attachment metadata.
+ */
+export const useTicketsControllerCompleteAttachment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerCompleteAttachment>>, TError,{id: string;data: CompleteTicketAttachmentDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof ticketsControllerCompleteAttachment>>,
+        TError,
+        {id: string;data: CompleteTicketAttachmentDto},
+        TContext
+      > => {
+      return useMutation(getTicketsControllerCompleteAttachmentMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Persist uploaded comment-level attachment metadata.
+ */
+export type ticketsControllerCompleteCommentAttachmentResponse200 = {
+  data: TicketResponseDto
+  status: 200
+}
+
+export type ticketsControllerCompleteCommentAttachmentResponse400 = {
+  data: void
+  status: 400
+}
+
+export type ticketsControllerCompleteCommentAttachmentResponse401 = {
+  data: void
+  status: 401
+}
+
+export type ticketsControllerCompleteCommentAttachmentResponse403 = {
+  data: void
+  status: 403
+}
+
+export type ticketsControllerCompleteCommentAttachmentResponse404 = {
+  data: void
+  status: 404
+}
+
+export type ticketsControllerCompleteCommentAttachmentResponse409 = {
+  data: void
+  status: 409
+}
+
+export type ticketsControllerCompleteCommentAttachmentResponseSuccess = (ticketsControllerCompleteCommentAttachmentResponse200) & {
+  headers: Headers;
+};
+export type ticketsControllerCompleteCommentAttachmentResponseError = (ticketsControllerCompleteCommentAttachmentResponse400 | ticketsControllerCompleteCommentAttachmentResponse401 | ticketsControllerCompleteCommentAttachmentResponse403 | ticketsControllerCompleteCommentAttachmentResponse404 | ticketsControllerCompleteCommentAttachmentResponse409) & {
+  headers: Headers;
+};
+
+export type ticketsControllerCompleteCommentAttachmentResponse = (ticketsControllerCompleteCommentAttachmentResponseSuccess | ticketsControllerCompleteCommentAttachmentResponseError)
+
+export const getTicketsControllerCompleteCommentAttachmentUrl = (id: string,
+    commentId: string,) => {
+
+
+  
+
+  return `/tickets/${id}/comments/${commentId}/attachments/complete`
+}
+
+export const ticketsControllerCompleteCommentAttachment = async (id: string,
+    commentId: string,
+    completeTicketAttachmentDto: CompleteTicketAttachmentDto, options?: RequestInit): Promise<ticketsControllerCompleteCommentAttachmentResponse> => {
+  
+  return customInstance<ticketsControllerCompleteCommentAttachmentResponse>(getTicketsControllerCompleteCommentAttachmentUrl(id,commentId),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      completeTicketAttachmentDto,)
+  }
+);}
+  
+
+
+
+export const getTicketsControllerCompleteCommentAttachmentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerCompleteCommentAttachment>>, TError,{id: string;commentId: string;data: CompleteTicketAttachmentDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerCompleteCommentAttachment>>, TError,{id: string;commentId: string;data: CompleteTicketAttachmentDto}, TContext> => {
+
+const mutationKey = ['ticketsControllerCompleteCommentAttachment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerCompleteCommentAttachment>>, {id: string;commentId: string;data: CompleteTicketAttachmentDto}> = (props) => {
+          const {id,commentId,data} = props ?? {};
+
+          return  ticketsControllerCompleteCommentAttachment(id,commentId,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TicketsControllerCompleteCommentAttachmentMutationResult = NonNullable<Awaited<ReturnType<typeof ticketsControllerCompleteCommentAttachment>>>
+    export type TicketsControllerCompleteCommentAttachmentMutationBody = CompleteTicketAttachmentDto
+    export type TicketsControllerCompleteCommentAttachmentMutationError = ErrorType<void>
+
+    /**
+ * @summary Persist uploaded comment-level attachment metadata.
+ */
+export const useTicketsControllerCompleteCommentAttachment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ticketsControllerCompleteCommentAttachment>>, TError,{id: string;commentId: string;data: CompleteTicketAttachmentDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof ticketsControllerCompleteCommentAttachment>>,
+        TError,
+        {id: string;commentId: string;data: CompleteTicketAttachmentDto},
+        TContext
+      > => {
+      return useMutation(getTicketsControllerCompleteCommentAttachmentMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Create signed download URL for a tenant ticket attachment image.
+ */
+export type ticketsControllerPresignDownloadResponse200 = {
+  data: TicketAttachmentDownloadResponseDto
+  status: 200
+}
+
+export type ticketsControllerPresignDownloadResponse401 = {
+  data: void
+  status: 401
+}
+
+export type ticketsControllerPresignDownloadResponse403 = {
+  data: void
+  status: 403
+}
+
+export type ticketsControllerPresignDownloadResponse404 = {
+  data: void
+  status: 404
+}
+
+export type ticketsControllerPresignDownloadResponseSuccess = (ticketsControllerPresignDownloadResponse200) & {
+  headers: Headers;
+};
+export type ticketsControllerPresignDownloadResponseError = (ticketsControllerPresignDownloadResponse401 | ticketsControllerPresignDownloadResponse403 | ticketsControllerPresignDownloadResponse404) & {
+  headers: Headers;
+};
+
+export type ticketsControllerPresignDownloadResponse = (ticketsControllerPresignDownloadResponseSuccess | ticketsControllerPresignDownloadResponseError)
+
+export const getTicketsControllerPresignDownloadUrl = (id: string,
+    attachmentId: string,) => {
+
+
+  
+
+  return `/tickets/${id}/attachments/${attachmentId}/presign-download`
+}
+
+export const ticketsControllerPresignDownload = async (id: string,
+    attachmentId: string, options?: RequestInit): Promise<ticketsControllerPresignDownloadResponse> => {
+  
+  return customInstance<ticketsControllerPresignDownloadResponse>(getTicketsControllerPresignDownloadUrl(id,attachmentId),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getTicketsControllerPresignDownloadQueryKey = (id: string,
+    attachmentId: string,) => {
+    return [
+    `/tickets/${id}/attachments/${attachmentId}/presign-download`
+    ] as const;
+    }
+
+    
+export const getTicketsControllerPresignDownloadQueryOptions = <TData = Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError = ErrorType<void>>(id: string,
+    attachmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getTicketsControllerPresignDownloadQueryKey(id,attachmentId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>> = ({ signal }) => ticketsControllerPresignDownload(id,attachmentId, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(id && attachmentId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type TicketsControllerPresignDownloadQueryResult = NonNullable<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>>
+export type TicketsControllerPresignDownloadQueryError = ErrorType<void>
+
+
+export function useTicketsControllerPresignDownload<TData = Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError = ErrorType<void>>(
+ id: string,
+    attachmentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof ticketsControllerPresignDownload>>,
+          TError,
+          Awaited<ReturnType<typeof ticketsControllerPresignDownload>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useTicketsControllerPresignDownload<TData = Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError = ErrorType<void>>(
+ id: string,
+    attachmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof ticketsControllerPresignDownload>>,
+          TError,
+          Awaited<ReturnType<typeof ticketsControllerPresignDownload>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useTicketsControllerPresignDownload<TData = Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError = ErrorType<void>>(
+ id: string,
+    attachmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Create signed download URL for a tenant ticket attachment image.
+ */
+
+export function useTicketsControllerPresignDownload<TData = Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError = ErrorType<void>>(
+ id: string,
+    attachmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getTicketsControllerPresignDownloadQueryOptions(id,attachmentId,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

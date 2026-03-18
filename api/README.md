@@ -108,6 +108,29 @@ Environment checklist:
 5. `JWT_ACCESS_TOKEN_TTL_SECONDS`
 6. `JWT_REFRESH_TOKEN_TTL_SECONDS`
 7. `CORS_ALLOWED_ORIGINS` including the deployed UI domain
+8. `AWS_ENDPOINT_URL` (Railway object storage/S3 endpoint)
+9. `AWS_DEFAULT_REGION` (recommended `us-east-1` for Railway object storage)
+10. `AWS_S3_BUCKET_NAME`
+11. `AWS_ACCESS_KEY_ID`
+12. `AWS_SECRET_ACCESS_KEY`
+13. `TICKETS_MAX_IMAGE_BYTES` (default `5242880`)
+14. `TICKETS_UPLOAD_URL_TTL_SECONDS` (default `600`)
+15. `TICKETS_DOWNLOAD_URL_TTL_SECONDS` (default `600`)
+
+For browser uploads/downloads with presigned URLs, configure bucket CORS to allow your UI origin(s).
+Example S3-compatible CORS policy:
+
+```json
+[
+  {
+    "AllowedOrigins": ["http://localhost:3000", "https://your-ui-domain.com"],
+    "AllowedMethods": ["GET", "PUT", "HEAD", "OPTIONS"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
 
 ## Available Scripts
 

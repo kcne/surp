@@ -61,6 +61,21 @@ enum AuditEventType {
   PASSWORD_RESET_ADMIN
 }
 
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketCategory {
+  BUG
+  IDEA
+  FEATURE
+  QUESTION
+  OTHER
+}
+
 model HealthCheckLog {
   id        String   @id @default(cuid())
   message   String
@@ -87,8 +102,75 @@ model Tenant {
   rideExceptions  RideException[]
   reservations    Reservation[]
   auditEvents     AuditEvent[]
+  tickets         Ticket[]
+  ticketComments  TicketComment[]
+  ticketAttachments TicketAttachment[]
 
   @@index([isActive])
+}
+
+model Ticket {
+  id          String         @id @default(cuid())
+  tenantId    String
+  createdById String?
+  updatedById String?
+  title       String
+  description String
+  status      TicketStatus   @default(OPEN)
+  category    TicketCategory @default(QUESTION)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  comments    TicketComment[]
+  attachments TicketAttachment[]
+
+  @@index([tenantId])
+  @@index([tenantId, status, updatedAt])
+  @@index([tenantId, category, updatedAt])
+  @@index([tenantId, createdAt])
+  @@index([updatedById])
+}
+
+model TicketComment {
+  id           String   @id @default(cuid())
+  tenantId     String
+  ticketId     String
+  authorUserId String
+  content      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  attachments  TicketAttachment[]
+
+  @@index([tenantId])
+  @@index([ticketId])
+  @@index([tenantId, ticketId, createdAt])
+  @@index([authorUserId])
+}
+
+model TicketAttachment {
+  id         String        @id @default(cuid())
+  tenantId   String
+  ticketId   String
+  commentId  String?
+  createdById String?
+  updatedById String?
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String        @unique
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ticket     Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  comment    TicketComment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([ticketId])
+  @@index([commentId])
+  @@index([tenantId, ticketId, createdAt])
+  @@index([updatedById])
 }
 
 model User {
