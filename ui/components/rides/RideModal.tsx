@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { rideSchema } from "@/utils/validators"
-import type { Ride, RideFormData } from "@/types"
+import type { DayScheduleStationTime, Ride, RideFormData } from "@/types"
 import { useLinesListQuery } from "@/infrastructure/hooks/queries/useLinesListQuery"
 import { DialogFooter } from "@/components/ui/dialog"
 import { FormModalShell } from "@/components/forms/FormModalShell"
@@ -36,12 +36,6 @@ import { format } from "date-fns"
 import { srLatn } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { formatDateToISO } from "@/utils/dateHelpers"
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion"
 import { BusFront, Save, X } from "lucide-react"
 
 interface RideModalProps {
@@ -63,6 +57,38 @@ const DAYS_OF_WEEK = [
   { value: 6, label: "Subota" },
 ]
 
+type RouteStation = {
+  stationId: string
+  stationName: string
+  orderIndex: number
+}
+
+function toRouteStations(line?: Ride["line"]): RouteStation[] {
+  if (!line) {
+    return []
+  }
+
+  return [
+    {
+      stationId: line.departureStation.id,
+      stationName: line.departureStation.name,
+      orderIndex: 0,
+    },
+    ...line.intermediateStations
+      .sort((left, right) => left.order - right.order)
+      .map((station, index) => ({
+        stationId: station.stationId,
+        stationName: station.stationName,
+        orderIndex: index + 1,
+      })),
+    {
+      stationId: line.arrivalStation.id,
+      stationName: line.arrivalStation.name,
+      orderIndex: line.intermediateStations.length + 1,
+    },
+  ]
+}
+
 export function RideModal({
   open,
   onOpenChange,
@@ -72,7 +98,7 @@ export function RideModal({
   onUpdate,
 }: RideModalProps) {
   const linesQuery = useLinesListQuery()
-  const lines = linesQuery.data || []
+  const lines = useMemo(() => linesQuery.data ?? [], [linesQuery.data])
   const isEdit = !!ride
   const todayIso = formatDateToISO(new Date())
 
@@ -86,9 +112,7 @@ export function RideModal({
       startDate: todayIso,
       endDate: undefined,
       daysOfWeek: [],
-      departureTime: "",
-      arrivalTime: "",
-      dayTimes: {},
+      daySchedules: {},
       exceptions: [],
       date: undefined,
       oneTimeDepartureTime: "",
@@ -97,55 +121,52 @@ export function RideModal({
   })
 
   const rideType = form.watch("type")
+  const lineId = form.watch("lineId")
   const watchedDaysOfWeek = form.watch("daysOfWeek")
   const daysOfWeek = useMemo(() => watchedDaysOfWeek ?? [], [watchedDaysOfWeek])
-  const dayTimes = form.watch("dayTimes") || {}
+  const daySchedules = form.watch("daySchedules") || {}
+  const selectedLine = useMemo(() => lines.find((line) => line.id === lineId), [lineId, lines])
+  const routeStations = useMemo(() => toRouteStations(selectedLine), [selectedLine])
 
-  // Ensure dayTimes structure exists for all selected days
+  // Ensure daySchedules contain station rows for all selected days and current line
   useEffect(() => {
-    if (rideType === "recurring" && daysOfWeek.length > 0) {
-      const currentDayTimes = form.getValues("dayTimes") || {}
-      const updatedDayTimes = { ...currentDayTimes }
-      let hasChanges = false
-
-      daysOfWeek.forEach((day) => {
-        if (!updatedDayTimes[day]) {
-          updatedDayTimes[day] = { departureTime: "", arrivalTime: "" }
-          hasChanges = true
-        }
-      })
-
-      // Remove times for unselected days
-      Object.keys(updatedDayTimes).forEach((dayStr) => {
-        const day = parseInt(dayStr)
-        if (!daysOfWeek.includes(day)) {
-          delete updatedDayTimes[day]
-          hasChanges = true
-        }
-      })
-
-      if (hasChanges) {
-        form.setValue("dayTimes", updatedDayTimes as any, { shouldValidate: false })
-      }
+    if (rideType !== "recurring") {
+      return
     }
-  }, [daysOfWeek, rideType, form])
+
+    const currentSchedules = form.getValues("daySchedules") || {}
+    const nextSchedules: Record<string, DayScheduleStationTime[]> = {}
+
+    daysOfWeek.forEach((day) => {
+      const existing =
+        currentSchedules[day] ||
+        (currentSchedules as Record<string, DayScheduleStationTime[]>)[String(day)] ||
+        []
+      const existingByStationId = new Map(existing.map((item) => [item.stationId, item.time || ""]))
+
+      nextSchedules[String(day)] = routeStations.map((station) => ({
+        stationId: station.stationId,
+        stationName: station.stationName,
+        orderIndex: station.orderIndex,
+        time: existingByStationId.get(station.stationId) || "",
+      }))
+    })
+
+    const currentSelected = daysOfWeek.reduce<Record<string, DayScheduleStationTime[]>>((acc, day) => {
+      acc[String(day)] =
+        currentSchedules[day] ||
+        (currentSchedules as Record<string, DayScheduleStationTime[]>)[String(day)] ||
+        []
+      return acc
+    }, {})
+
+    if (JSON.stringify(currentSelected) !== JSON.stringify(nextSchedules)) {
+      form.setValue("daySchedules", nextSchedules as any, { shouldValidate: false })
+    }
+  }, [daysOfWeek, form, rideType, routeStations])
 
   useEffect(() => {
     if (ride) {
-      // Convert old format (departureTime/arrivalTime) to new format (dayTimes) if needed
-      let dayTimes: Record<number, { departureTime: string; arrivalTime: string }> = {}
-      if (ride.dayTimes) {
-        dayTimes = ride.dayTimes
-      } else if (ride.departureTime && ride.arrivalTime && ride.daysOfWeek) {
-        // Migrate old format to new format
-        ride.daysOfWeek.forEach((day) => {
-          dayTimes[day] = {
-            departureTime: ride.departureTime!,
-            arrivalTime: ride.arrivalTime!,
-          }
-        })
-      }
-
       form.reset({
         lineId: ride.line.id,
         busCapacity: ride.busCapacity,
@@ -154,9 +175,7 @@ export function RideModal({
         startDate: ride.startDate,
         endDate: ride.endDate,
         daysOfWeek: ride.daysOfWeek || [],
-        departureTime: ride.departureTime || "",
-        arrivalTime: ride.arrivalTime || "",
-        dayTimes,
+        daySchedules: ride.daySchedules || {},
         exceptions: ride.exceptions || [],
         date: ride.date,
         oneTimeDepartureTime: ride.oneTimeDepartureTime || "",
@@ -171,9 +190,7 @@ export function RideModal({
         startDate: todayIso,
         endDate: undefined,
         daysOfWeek: [],
-        departureTime: "",
-        arrivalTime: "",
-        dayTimes: {},
+        daySchedules: {},
         exceptions: [],
         date: undefined,
         oneTimeDepartureTime: "",
@@ -184,20 +201,26 @@ export function RideModal({
 
   const onSubmit = async (data: RideFormData) => {
     try {
-      // Ensure dayTimes structure is correct before submission
-      // Convert string keys to numbers for storage
-      if (data.type === "recurring" && data.daysOfWeek && data.daysOfWeek.length > 0 && data.dayTimes) {
-        const dayTimes = data.dayTimes || {}
-        // Convert string keys to number keys
-        const updatedDayTimes: Record<number, { departureTime: string; arrivalTime: string }> = {}
-        data.daysOfWeek.forEach((day) => {
-          // React Hook Form uses string keys, so convert day to string for lookup
-          const dayTime = (dayTimes as any)[String(day)] || (dayTimes as any)[day]
-          if (dayTime && dayTime.departureTime && dayTime.arrivalTime) {
-            updatedDayTimes[day] = dayTime
-          }
+      if (data.type === "recurring") {
+        const normalizedDaySchedules: Record<string, DayScheduleStationTime[]> = {}
+
+        ;(data.daysOfWeek || []).forEach((day) => {
+          const stationTimes =
+            data.daySchedules?.[day] ||
+            (data.daySchedules as Record<string, DayScheduleStationTime[]> | undefined)?.[String(day)] ||
+            []
+
+          normalizedDaySchedules[String(day)] = stationTimes
+            .map((stationTime) => ({
+              stationId: stationTime.stationId,
+              stationName: stationTime.stationName,
+              orderIndex: stationTime.orderIndex,
+              time: stationTime.time || "",
+            }))
+            .sort((left, right) => left.orderIndex - right.orderIndex)
         })
-        data.dayTimes = updatedDayTimes as any
+
+        data.daySchedules = normalizedDaySchedules as any
       }
 
       if (isEdit && ride) {
@@ -443,34 +466,7 @@ export function RideModal({
                                       const newDays = checked
                                         ? [...(field.value || []), day.value]
                                         : field.value?.filter((value) => value !== day.value) || []
-                                      
                                       field.onChange(newDays)
-                                      
-                                      // Update dayTimes when days change
-                                      const currentDayTimes = form.getValues("dayTimes") || {}
-                                      if (checked) {
-                                        // Add default times for new day if not exists
-                                        if (!currentDayTimes[day.value]) {
-                                          // Try to copy from first existing day, or use empty strings
-                                          const firstDayKey = Object.keys(currentDayTimes)[0]
-                                          const defaultTimes = firstDayKey
-                                            ? currentDayTimes[parseInt(firstDayKey)]
-                                            : { departureTime: "", arrivalTime: "" }
-                                          
-                                          const updatedDayTimes = {
-                                            ...currentDayTimes,
-                                            [day.value]: {
-                                              departureTime: defaultTimes?.departureTime || "",
-                                              arrivalTime: defaultTimes?.arrivalTime || "",
-                                            }
-                                          }
-                                          form.setValue("dayTimes", updatedDayTimes as any, { shouldValidate: false })
-                                        }
-                                      } else {
-                                        // Remove times for unselected day
-                                        const { [day.value]: removed, ...rest } = currentDayTimes
-                                        form.setValue("dayTimes", rest as any, { shouldValidate: false })
-                                      }
                                     }}
                                   />
                                 </FormControl>
@@ -491,88 +487,80 @@ export function RideModal({
                 {daysOfWeek.length > 0 && (
                   <div className="space-y-4">
                     <div>
-                      <Label className="text-base">Vremena za Svaki Dan *</Label>
+                      <Label className="text-base">Vremena po Stanicama za Svaki Dan *</Label>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Unesite vreme polaska i dolaska za svaki selektovani dan
+                        Unesite vreme za svaku stanicu na liniji za svaki selektovani dan
                       </p>
                     </div>
+
+                    {!selectedLine && (
+                      <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                        Prvo izaberite liniju da bi se prikazale stanice za unos vremena.
+                      </div>
+                    )}
+
                     {daysOfWeek.map((dayValue) => {
                       const day = DAYS_OF_WEEK.find((d) => d.value === dayValue)
                       if (!day) return null
+
+                      const stationTimes =
+                        daySchedules[dayValue] ||
+                        (daySchedules as Record<string, DayScheduleStationTime[]>)[String(dayValue)] ||
+                        []
                       
                       return (
-                        <div key={dayValue} className="space-y-2 p-4 border rounded-lg">
+                        <div key={dayValue} className="space-y-3 p-4 border rounded-lg">
                           <Label className="font-semibold">{day.label}</Label>
-                          <div className="grid grid-cols-2 gap-4">
-                            <FormField
-                              control={form.control}
-                              name={`dayTimes.${dayValue}.departureTime` as any}
-                              render={({ field }) => {
-                                const dayTimes = form.watch("dayTimes") || {}
-                                const dayTime = dayTimes[dayValue] || { departureTime: "", arrivalTime: "" }
-                                const value = dayTime.departureTime || field.value || ""
-                                
-                                return (
-                                  <FormItem>
-                                    <FormLabel>Vreme Polaska *</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="time"
-                                        value={value}
-                                        onChange={(e) => {
-                                          const updatedDayTimes = {
-                                            ...dayTimes,
-                                            [dayValue]: {
-                                              ...dayTime,
-                                              departureTime: e.target.value,
-                                            },
-                                          }
-                                          form.setValue("dayTimes", updatedDayTimes as any, { shouldValidate: true })
-                                          field.onChange(e.target.value)
-                                        }}
-                                        onBlur={field.onBlur}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )
-                              }}
-                            />
-
-                            <FormField
-                              control={form.control}
-                              name={`dayTimes.${dayValue}.arrivalTime` as any}
-                              render={({ field }) => {
-                                const dayTimes = form.watch("dayTimes") || {}
-                                const dayTime = dayTimes[dayValue] || { departureTime: "", arrivalTime: "" }
-                                const value = dayTime.arrivalTime || field.value || ""
-                                
-                                return (
-                                  <FormItem>
-                                    <FormLabel>Vreme Dolaska *</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="time"
-                                        value={value}
-                                        onChange={(e) => {
-                                          const updatedDayTimes = {
-                                            ...dayTimes,
-                                            [dayValue]: {
-                                              ...dayTime,
-                                              arrivalTime: e.target.value,
-                                            },
-                                          }
-                                          form.setValue("dayTimes", updatedDayTimes as any, { shouldValidate: true })
-                                          field.onChange(e.target.value)
-                                        }}
-                                        onBlur={field.onBlur}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )
-                              }}
-                            />
+                          <div className="space-y-3">
+                            {stationTimes.map((stationTime, stationIndex) => (
+                              <div
+                                key={`${dayValue}-${stationTime.stationId}`}
+                                className="grid grid-cols-[1fr_220px] gap-3 items-center"
+                              >
+                                <div className="text-sm font-medium">
+                                  {stationTime.stationName || stationTime.stationId}
+                                </div>
+                                <FormField
+                                  control={form.control}
+                                  name={`daySchedules.${dayValue}.${stationIndex}.time` as any}
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          type="time"
+                                          value={field.value || stationTime.time || ""}
+                                          onChange={(e) => {
+                                            const currentSchedules = form.getValues("daySchedules") || {}
+                                            const currentDay =
+                                              currentSchedules[dayValue] ||
+                                              (currentSchedules as Record<string, DayScheduleStationTime[]>)[String(dayValue)] ||
+                                              []
+                                            const nextDay = [...currentDay]
+                                            nextDay[stationIndex] = {
+                                              ...nextDay[stationIndex],
+                                              stationId: stationTime.stationId,
+                                              stationName: stationTime.stationName,
+                                              orderIndex: stationTime.orderIndex,
+                                              time: e.target.value,
+                                            }
+                                            form.setValue(
+                                              "daySchedules",
+                                              {
+                                                ...currentSchedules,
+                                                [dayValue]: nextDay,
+                                              } as any,
+                                              { shouldValidate: true }
+                                            )
+                                            field.onChange(e.target.value)
+                                          }}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            ))}
                           </div>
                         </div>
                       )

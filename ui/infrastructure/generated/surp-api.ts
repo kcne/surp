@@ -42,6 +42,7 @@ import type {
   CreateUserDto,
   LineResponseDto,
   LinesControllerListParams,
+  LinesControllerRemoveParams,
   LoginDto,
   LoginResponseDto,
   LoginUserDto,
@@ -63,7 +64,7 @@ import type {
   PlatformTenantsControllerListParams,
   RefreshTokenDto,
   ReplaceLineStopsDto,
-  ReplaceRideDayTimesDto,
+  ReplaceRideDaySchedulesDto,
   ReportingAuditResponseDto,
   ReportingControllerGetAuditParams,
   ReportingControllerGetDashboardParams,
@@ -78,6 +79,7 @@ import type {
   RideResponseDto,
   RidesControllerListInstancesByDateParams,
   RidesControllerListParams,
+  RidesControllerRemoveParams,
   StationResponseDto,
   StationsControllerListParams,
   TicketAttachmentDownloadResponseDto,
@@ -2725,26 +2727,40 @@ export type linesControllerRemoveResponse404 = {
   status: 404
 }
 
+export type linesControllerRemoveResponse409 = {
+  data: void
+  status: 409
+}
+
 export type linesControllerRemoveResponseSuccess = (linesControllerRemoveResponse200) & {
   headers: Headers;
 };
-export type linesControllerRemoveResponseError = (linesControllerRemoveResponse401 | linesControllerRemoveResponse403 | linesControllerRemoveResponse404) & {
+export type linesControllerRemoveResponseError = (linesControllerRemoveResponse401 | linesControllerRemoveResponse403 | linesControllerRemoveResponse404 | linesControllerRemoveResponse409) & {
   headers: Headers;
 };
 
 export type linesControllerRemoveResponse = (linesControllerRemoveResponseSuccess | linesControllerRemoveResponseError)
 
-export const getLinesControllerRemoveUrl = (id: string,) => {
+export const getLinesControllerRemoveUrl = (id: string,
+    params?: LinesControllerRemoveParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
-  
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/lines/${id}`
+  return stringifiedParams.length > 0 ? `/lines/${id}?${stringifiedParams}` : `/lines/${id}`
 }
 
-export const linesControllerRemove = async (id: string, options?: RequestInit): Promise<linesControllerRemoveResponse> => {
+export const linesControllerRemove = async (id: string,
+    params?: LinesControllerRemoveParams, options?: RequestInit): Promise<linesControllerRemoveResponse> => {
   
-  return customInstance<linesControllerRemoveResponse>(getLinesControllerRemoveUrl(id),
+  return customInstance<linesControllerRemoveResponse>(getLinesControllerRemoveUrl(id,params),
   {      
     ...options,
     method: 'DELETE'
@@ -2757,8 +2773,8 @@ export const linesControllerRemove = async (id: string, options?: RequestInit): 
 
 
 export const getLinesControllerRemoveMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linesControllerRemove>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof linesControllerRemove>>, TError,{id: string}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linesControllerRemove>>, TError,{id: string;params?: LinesControllerRemoveParams}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof linesControllerRemove>>, TError,{id: string;params?: LinesControllerRemoveParams}, TContext> => {
 
 const mutationKey = ['linesControllerRemove'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -2770,10 +2786,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linesControllerRemove>>, {id: string}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linesControllerRemove>>, {id: string;params?: LinesControllerRemoveParams}> = (props) => {
+          const {id,params} = props ?? {};
 
-          return  linesControllerRemove(id,requestOptions)
+          return  linesControllerRemove(id,params,requestOptions)
         }
 
 
@@ -2791,11 +2807,11 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
  * @summary Delete a line in the current tenant.
  */
 export const useLinesControllerRemove = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linesControllerRemove>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customInstance>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linesControllerRemove>>, TError,{id: string;params?: LinesControllerRemoveParams}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof linesControllerRemove>>,
         TError,
-        {id: string},
+        {id: string;params?: LinesControllerRemoveParams},
         TContext
       > => {
       return useMutation(getLinesControllerRemoveMutationOptions(options), queryClient);
@@ -5452,26 +5468,40 @@ export type ridesControllerRemoveResponse404 = {
   status: 404
 }
 
+export type ridesControllerRemoveResponse409 = {
+  data: void
+  status: 409
+}
+
 export type ridesControllerRemoveResponseSuccess = (ridesControllerRemoveResponse200) & {
   headers: Headers;
 };
-export type ridesControllerRemoveResponseError = (ridesControllerRemoveResponse401 | ridesControllerRemoveResponse403 | ridesControllerRemoveResponse404) & {
+export type ridesControllerRemoveResponseError = (ridesControllerRemoveResponse401 | ridesControllerRemoveResponse403 | ridesControllerRemoveResponse404 | ridesControllerRemoveResponse409) & {
   headers: Headers;
 };
 
 export type ridesControllerRemoveResponse = (ridesControllerRemoveResponseSuccess | ridesControllerRemoveResponseError)
 
-export const getRidesControllerRemoveUrl = (id: string,) => {
+export const getRidesControllerRemoveUrl = (id: string,
+    params?: RidesControllerRemoveParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
-  
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/rides/${id}`
+  return stringifiedParams.length > 0 ? `/rides/${id}?${stringifiedParams}` : `/rides/${id}`
 }
 
-export const ridesControllerRemove = async (id: string, options?: RequestInit): Promise<ridesControllerRemoveResponse> => {
+export const ridesControllerRemove = async (id: string,
+    params?: RidesControllerRemoveParams, options?: RequestInit): Promise<ridesControllerRemoveResponse> => {
   
-  return customInstance<ridesControllerRemoveResponse>(getRidesControllerRemoveUrl(id),
+  return customInstance<ridesControllerRemoveResponse>(getRidesControllerRemoveUrl(id,params),
   {      
     ...options,
     method: 'DELETE'
@@ -5484,8 +5514,8 @@ export const ridesControllerRemove = async (id: string, options?: RequestInit): 
 
 
 export const getRidesControllerRemoveMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerRemove>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof ridesControllerRemove>>, TError,{id: string}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerRemove>>, TError,{id: string;params?: RidesControllerRemoveParams}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof ridesControllerRemove>>, TError,{id: string;params?: RidesControllerRemoveParams}, TContext> => {
 
 const mutationKey = ['ridesControllerRemove'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -5497,10 +5527,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerRemove>>, {id: string}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerRemove>>, {id: string;params?: RidesControllerRemoveParams}> = (props) => {
+          const {id,params} = props ?? {};
 
-          return  ridesControllerRemove(id,requestOptions)
+          return  ridesControllerRemove(id,params,requestOptions)
         }
 
 
@@ -5518,18 +5548,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
  * @summary Delete a ride template in the current tenant.
  */
 export const useRidesControllerRemove = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerRemove>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customInstance>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerRemove>>, TError,{id: string;params?: RidesControllerRemoveParams}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof ridesControllerRemove>>,
         TError,
-        {id: string},
+        {id: string;params?: RidesControllerRemoveParams},
         TContext
       > => {
       return useMutation(getRidesControllerRemoveMutationOptions(options), queryClient);
     }
     
 /**
- * @summary Replace recurring ride day-times in the current tenant.
+ * @summary Replace recurring ride day schedules in the current tenant.
  */
 export type ridesControllerReplaceDayTimesResponse200 = {
   data: RideResponseDto
@@ -5574,7 +5604,7 @@ export const getRidesControllerReplaceDayTimesUrl = (id: string,) => {
 }
 
 export const ridesControllerReplaceDayTimes = async (id: string,
-    replaceRideDayTimesDto: ReplaceRideDayTimesDto, options?: RequestInit): Promise<ridesControllerReplaceDayTimesResponse> => {
+    replaceRideDaySchedulesDto: ReplaceRideDaySchedulesDto, options?: RequestInit): Promise<ridesControllerReplaceDayTimesResponse> => {
   
   return customInstance<ridesControllerReplaceDayTimesResponse>(getRidesControllerReplaceDayTimesUrl(id),
   {      
@@ -5582,7 +5612,7 @@ export const ridesControllerReplaceDayTimes = async (id: string,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      replaceRideDayTimesDto,)
+      replaceRideDaySchedulesDto,)
   }
 );}
   
@@ -5590,8 +5620,8 @@ export const ridesControllerReplaceDayTimes = async (id: string,
 
 
 export const getRidesControllerReplaceDayTimesMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerReplaceDayTimes>>, TError,{id: string;data: ReplaceRideDayTimesDto}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof ridesControllerReplaceDayTimes>>, TError,{id: string;data: ReplaceRideDayTimesDto}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerReplaceDayTimes>>, TError,{id: string;data: ReplaceRideDaySchedulesDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof ridesControllerReplaceDayTimes>>, TError,{id: string;data: ReplaceRideDaySchedulesDto}, TContext> => {
 
 const mutationKey = ['ridesControllerReplaceDayTimes'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -5603,7 +5633,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerReplaceDayTimes>>, {id: string;data: ReplaceRideDayTimesDto}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerReplaceDayTimes>>, {id: string;data: ReplaceRideDaySchedulesDto}> = (props) => {
           const {id,data} = props ?? {};
 
           return  ridesControllerReplaceDayTimes(id,data,requestOptions)
@@ -5617,18 +5647,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type RidesControllerReplaceDayTimesMutationResult = NonNullable<Awaited<ReturnType<typeof ridesControllerReplaceDayTimes>>>
-    export type RidesControllerReplaceDayTimesMutationBody = ReplaceRideDayTimesDto
+    export type RidesControllerReplaceDayTimesMutationBody = ReplaceRideDaySchedulesDto
     export type RidesControllerReplaceDayTimesMutationError = ErrorType<void>
 
     /**
- * @summary Replace recurring ride day-times in the current tenant.
+ * @summary Replace recurring ride day schedules in the current tenant.
  */
 export const useRidesControllerReplaceDayTimes = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerReplaceDayTimes>>, TError,{id: string;data: ReplaceRideDayTimesDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerReplaceDayTimes>>, TError,{id: string;data: ReplaceRideDaySchedulesDto}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof ridesControllerReplaceDayTimes>>,
         TError,
-        {id: string;data: ReplaceRideDayTimesDto},
+        {id: string;data: ReplaceRideDaySchedulesDto},
         TContext
       > => {
       return useMutation(getRidesControllerReplaceDayTimesMutationOptions(options), queryClient);

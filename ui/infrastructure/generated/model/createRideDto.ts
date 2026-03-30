@@ -7,7 +7,7 @@
  */
 import type { CreateRideDtoStatus } from './createRideDtoStatus';
 import type { CreateRideDtoType } from './createRideDtoType';
-import type { RideDayTimeInputDto } from './rideDayTimeInputDto';
+import type { RideDayScheduleInputDto } from './rideDayScheduleInputDto';
 
 export interface CreateRideDto {
   name?: string;
@@ -24,5 +24,5 @@ export interface CreateRideDto {
   oneTimeDate?: string;
   oneTimeDepartureTime?: string;
   oneTimeArrivalTime?: string;
-  dayTimes?: RideDayTimeInputDto[];
+  daySchedules?: RideDayScheduleInputDto[];
 }

@@ -5,7 +5,7 @@
  * Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.
  * OpenAPI spec version: 0.1.0
  */
-import type { RideDayTimeResponseDto } from './rideDayTimeResponseDto';
+import type { RideDayScheduleResponseDto } from './rideDayScheduleResponseDto';
 import type { RideExceptionResponseDto } from './rideExceptionResponseDto';
 import type { RideLineSummaryDto } from './rideLineSummaryDto';
 import type { RideResponseDtoCreatedById } from './rideResponseDtoCreatedById';
@@ -41,7 +41,7 @@ export interface RideResponseDto {
   oneTimeDepartureTime: RideResponseDtoOneTimeDepartureTime;
   /** @nullable */
   oneTimeArrivalTime: RideResponseDtoOneTimeArrivalTime;
-  dayTimes: RideDayTimeResponseDto[];
+  daySchedules: RideDayScheduleResponseDto[];
   exceptions: RideExceptionResponseDto[];
   line: RideLineSummaryDto;
   createdAt: string;

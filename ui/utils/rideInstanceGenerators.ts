@@ -35,9 +35,12 @@ export function generateRideInstancesForRide(ride: Ride): RideInstance[] {
       if (exception?.type === "additional") {
         departureTime = exception.departureTime
         arrivalTime = exception.arrivalTime
-      } else if (ride.dayTimes && ride.dayTimes[dayOfWeek]) {
-        departureTime = ride.dayTimes[dayOfWeek].departureTime
-        arrivalTime = ride.dayTimes[dayOfWeek].arrivalTime
+      } else if (ride.daySchedules && ride.daySchedules[dayOfWeek]) {
+        const stationTimes = [...ride.daySchedules[dayOfWeek]].sort(
+          (left, right) => left.orderIndex - right.orderIndex
+        )
+        departureTime = stationTimes[0]?.time
+        arrivalTime = stationTimes[stationTimes.length - 1]?.time
       } else if (ride.departureTime && ride.arrivalTime) {
         departureTime = ride.departureTime
         arrivalTime = ride.arrivalTime

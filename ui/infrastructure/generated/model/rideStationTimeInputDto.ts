@@ -6,13 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface RideDayTimeInputDto {
-  /**
-   * 0=Sunday ... 6=Saturday
-   * @minimum 0
-   * @maximum 6
-   */
-  dayOfWeek: number;
-  departureTime: string;
-  arrivalTime: string;
+export interface RideStationTimeInputDto {
+  stationId: string;
+  /** @minimum 0 */
+  orderIndex: number;
+  time?: string;
 }

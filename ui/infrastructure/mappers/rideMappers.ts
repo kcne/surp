@@ -1,15 +1,22 @@
 import type {
   CreateRideDto,
   CreateRideExceptionDto,
-  RideDayTimeInputDto,
+  RideDayScheduleInputDto,
   RideExceptionResponseDto,
   RideInstanceResponseDto,
   RideLineSummaryDto,
   RideResponseDto,
-  ReplaceRideDayTimesDto,
+  ReplaceRideDaySchedulesDto,
   UpdateRideDto,
 } from "@/infrastructure/generated/model"
-import type { DayTime, Line, Ride, RideException, RideFormData, RideInstance } from "@/types"
+import type {
+  DayScheduleStationTime,
+  Line,
+  Ride,
+  RideException,
+  RideFormData,
+  RideInstance,
+} from "@/types"
 
 function pad(value: number): string {
   return String(value).padStart(2, "0")
@@ -120,14 +127,37 @@ function toApiExceptionType(type: RideException["type"]): "SKIP" | "ADDITIONAL" 
   return type === "additional" ? "ADDITIONAL" : "SKIP"
 }
 
-function toUiDayTimes(dayTimes: RideResponseDto["dayTimes"]): Record<number, DayTime> {
-  const mapped: Record<number, DayTime> = {}
+function buildStationNameLookup(line?: Line): Map<string, string> {
+  const stationNameById = new Map<string, string>()
+  if (!line) {
+    return stationNameById
+  }
 
-  dayTimes.forEach((dayTime) => {
-    mapped[dayTime.dayOfWeek] = {
-      departureTime: normalizeTime(dayTime.departureTime) ?? "",
-      arrivalTime: normalizeTime(dayTime.arrivalTime) ?? "",
-    }
+  stationNameById.set(line.departureStation.id, line.departureStation.name)
+  line.intermediateStations.forEach((station) => {
+    stationNameById.set(station.stationId, station.stationName)
+  })
+  stationNameById.set(line.arrivalStation.id, line.arrivalStation.name)
+
+  return stationNameById
+}
+
+function toUiDaySchedules(
+  daySchedules: RideResponseDto["daySchedules"],
+  resolvedLine?: Line
+): Record<number, DayScheduleStationTime[]> {
+  const mapped: Record<number, DayScheduleStationTime[]> = {}
+  const stationNameById = buildStationNameLookup(resolvedLine)
+
+  daySchedules.forEach((schedule) => {
+    mapped[schedule.dayOfWeek] = schedule.stationTimes
+      .map((stationTime) => ({
+        stationId: stationTime.stationId,
+        orderIndex: stationTime.orderIndex,
+        stationName: stationNameById.get(stationTime.stationId) ?? stationTime.stationId,
+        time: normalizeTime(stationTime.time) ?? "",
+      }))
+      .sort((left, right) => left.orderIndex - right.orderIndex)
   })
 
   return mapped
@@ -174,43 +204,42 @@ function pickLine(summary: RideLineSummaryDto, resolvedLine?: Line): Line {
   }
 }
 
-function toApiDayTimes(dayTimes: RideFormData["dayTimes"]): RideDayTimeInputDto[] | undefined {
-  if (!dayTimes) {
+function toApiDaySchedules(
+  daySchedules: RideFormData["daySchedules"]
+): RideDayScheduleInputDto[] | undefined {
+  if (!daySchedules) {
     return undefined
   }
 
-  return Object.entries(dayTimes)
-    .map(([day, time]) => ({
+  return Object.entries(daySchedules)
+    .map(([day, stationTimes]) => ({
       dayOfWeek: Number(day),
-      departureTime: time.departureTime,
-      arrivalTime: time.arrivalTime,
+      stationTimes: stationTimes
+        .map((stationTime) => ({
+          stationId: stationTime.stationId,
+          orderIndex: stationTime.orderIndex,
+          time: stationTime.time || "",
+        }))
+        .sort((left, right) => left.orderIndex - right.orderIndex),
     }))
-    .filter((item) => item.departureTime && item.arrivalTime)
+    .filter((item) => item.stationTimes.length > 0)
     .sort((left, right) => left.dayOfWeek - right.dayOfWeek)
 }
 
-function inferApiDayTimes(data: RideFormData | Partial<RideFormData>): RideDayTimeInputDto[] | undefined {
-  const explicitDayTimes = toApiDayTimes(data.dayTimes)
-  if (explicitDayTimes && explicitDayTimes.length > 0) {
-    return explicitDayTimes
-  }
-
-  if (data.type === "recurring" && data.daysOfWeek?.length && data.departureTime && data.arrivalTime) {
-    return data.daysOfWeek
-      .map((dayOfWeek) => ({
-        dayOfWeek,
-        departureTime: data.departureTime as string,
-        arrivalTime: data.arrivalTime as string,
-      }))
-      .sort((left, right) => left.dayOfWeek - right.dayOfWeek)
+function inferApiDaySchedules(
+  data: RideFormData | Partial<RideFormData>
+): RideDayScheduleInputDto[] | undefined {
+  const explicitDaySchedules = toApiDaySchedules(data.daySchedules)
+  if (explicitDaySchedules && explicitDaySchedules.length > 0) {
+    return explicitDaySchedules
   }
 
   return undefined
 }
 
 export function toRide(dto: RideResponseDto, resolvedLine?: Line): Ride {
-  const dayTimes = toUiDayTimes(dto.dayTimes)
-  const daysOfWeek = Object.keys(dayTimes)
+  const daySchedules = toUiDaySchedules(dto.daySchedules, resolvedLine)
+  const daysOfWeek = Object.keys(daySchedules)
     .map((day) => Number(day))
     .sort((left, right) => left - right)
 
@@ -220,8 +249,12 @@ export function toRide(dto: RideResponseDto, resolvedLine?: Line): Ride {
   const oneTimeDepartureTime = normalizeTime(dto.oneTimeDepartureTime)
   const oneTimeArrivalTime = normalizeTime(dto.oneTimeArrivalTime)
 
-  const legacyDepartureTime = dayTimes[daysOfWeek[0]]?.departureTime
-  const legacyArrivalTime = dayTimes[daysOfWeek[0]]?.arrivalTime
+  const firstSchedule = daySchedules[daysOfWeek[0]]
+  const sortedFirstSchedule = firstSchedule
+    ? [...firstSchedule].sort((left, right) => left.orderIndex - right.orderIndex)
+    : []
+  const legacyDepartureTime = sortedFirstSchedule[0]?.time
+  const legacyArrivalTime = sortedFirstSchedule[sortedFirstSchedule.length - 1]?.time
 
   return {
     id: dto.id,
@@ -235,7 +268,7 @@ export function toRide(dto: RideResponseDto, resolvedLine?: Line): Ride {
     daysOfWeek,
     departureTime: legacyDepartureTime,
     arrivalTime: legacyArrivalTime,
-    dayTimes,
+    daySchedules,
     exceptions: toUiExceptions(dto.exceptions),
     date: oneTimeDate,
     oneTimeDepartureTime,
@@ -259,7 +292,7 @@ export function toRideInstance(dto: RideInstanceResponseDto, ride?: Ride): RideI
       busCapacity: dto.availability.capacity,
       type: dto.rideType === "ONE_TIME" ? "one-time" : "recurring",
       status: toUiRideStatus(dto.status),
-      dayTimes: {},
+      daySchedules: {},
       exceptions: [],
     }
 
@@ -287,7 +320,7 @@ export function toCreateRideDto(data: RideFormData): CreateRideDto {
     oneTimeDate: data.type === "one-time" ? data.date : undefined,
     oneTimeDepartureTime: data.type === "one-time" ? data.oneTimeDepartureTime : undefined,
     oneTimeArrivalTime: data.type === "one-time" ? data.oneTimeArrivalTime : undefined,
-    dayTimes: inferApiDayTimes(data),
+    daySchedules: inferApiDaySchedules(data),
   }
 }
 
@@ -316,13 +349,15 @@ export function toUpdateRideDto(data: Partial<RideFormData>): UpdateRideDto {
       apiType === "ONE_TIME" || apiType === undefined
         ? data.oneTimeArrivalTime
         : undefined,
-    dayTimes: inferApiDayTimes(data),
+    daySchedules: inferApiDaySchedules(data),
   }
 }
 
-export function toReplaceRideDayTimesDto(dayTimes: RideFormData["dayTimes"]): ReplaceRideDayTimesDto {
+export function toReplaceRideDaySchedulesDto(
+  daySchedules: RideFormData["daySchedules"]
+): ReplaceRideDaySchedulesDto {
   return {
-    dayTimes: toApiDayTimes(dayTimes) ?? [],
+    daySchedules: toApiDaySchedules(daySchedules) ?? [],
   }
 }
 

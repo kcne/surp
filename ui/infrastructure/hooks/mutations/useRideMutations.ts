@@ -19,7 +19,7 @@ import {
 import {
   toCreateRideDto,
   toCreateRideExceptionDto,
-  toReplaceRideDayTimesDto,
+  toReplaceRideDaySchedulesDto,
   toUpdateRideDto,
 } from "@/infrastructure/mappers/rideMappers"
 import { ridesListQueryKey } from "@/infrastructure/hooks/queries/useRidesListQuery"
@@ -123,25 +123,25 @@ export function useUpdateRideMutation() {
   return useMutation({
     mutationFn: async ({ id, payload }: { id: string; payload: Partial<RideFormData> }) => {
       const hasExceptionsUpdate = Array.isArray(payload.exceptions)
-      const hasDayTimesUpdate = payload.dayTimes !== undefined
+      const hasDaySchedulesUpdate = payload.daySchedules !== undefined
 
-      if (hasDayTimesUpdate) {
-        const dayTimesResponse = await ridesControllerReplaceDayTimes(
+      if (hasDaySchedulesUpdate) {
+        const daySchedulesResponse = await ridesControllerReplaceDayTimes(
           id,
-          toReplaceRideDayTimesDto(payload.dayTimes)
+          toReplaceRideDaySchedulesDto(payload.daySchedules)
         )
 
-        if (!isReplaceDayTimesSuccess(dayTimesResponse)) {
+        if (!isReplaceDayTimesSuccess(daySchedulesResponse)) {
           throw new Error("Neuspesno azuriranje rasporeda vremena voznje")
         }
       }
 
       if (hasPatchableFields(payload)) {
         const updatePayload = toUpdateRideDto(
-          hasDayTimesUpdate
+          hasDaySchedulesUpdate
             ? {
                 ...payload,
-                dayTimes: undefined,
+                daySchedules: undefined,
               }
             : payload
         )
@@ -212,7 +212,7 @@ export function useDeleteRideMutation() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const response = await ridesControllerRemove(id)
+      const response = await ridesControllerRemove(id, { cascade: "true" })
       if (!isRideMutationSuccess(response)) {
         throw new Error("Neuspesno brisanje voznje")
       }

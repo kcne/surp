@@ -33,8 +33,12 @@ function getTypeBadge(type: Ride["type"]) {
 
 function getDepartureForDay(ride: Ride, dayValue: number) {
   if (ride.type === "recurring") {
-    if (ride.dayTimes?.[dayValue]?.departureTime) {
-      return formatTime(ride.dayTimes[dayValue].departureTime)
+    const stationTimes = ride.daySchedules?.[dayValue]
+    if (stationTimes && stationTimes.length > 0) {
+      const departure = [...stationTimes].sort((left, right) => left.orderIndex - right.orderIndex)[0]?.time
+      if (departure) {
+        return formatTime(departure)
+      }
     }
 
     if (ride.daysOfWeek?.includes(dayValue) && ride.departureTime) {

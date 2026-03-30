@@ -75,9 +75,11 @@ export interface RideException {
   arrivalTime?: string // HH:MM
 }
 
-export interface DayTime {
-  departureTime: string // HH:MM
-  arrivalTime: string // HH:MM
+export interface DayScheduleStationTime {
+  stationId: string
+  orderIndex: number
+  stationName?: string
+  time: string // HH:MM
 }
 
 export interface Ride {
@@ -92,9 +94,9 @@ export interface Ride {
   startDate?: string // YYYY-MM-DD
   endDate?: string // YYYY-MM-DD (optional)
   daysOfWeek?: number[] // 0 = Sunday, 1 = Monday, etc.
-  departureTime?: string // HH:MM (deprecated, use dayTimes instead)
-  arrivalTime?: string // HH:MM (deprecated, use dayTimes instead)
-  dayTimes?: Record<number, DayTime> // Map of day number (0-6) to times
+  departureTime?: string // HH:MM (deprecated)
+  arrivalTime?: string // HH:MM (deprecated)
+  daySchedules?: Record<string, DayScheduleStationTime[]> // Map day number (0-6) to station time list
   exceptions?: RideException[]
   
   // One-time ride fields
@@ -115,9 +117,9 @@ export type RideFormData = {
   startDate?: string
   endDate?: string
   daysOfWeek?: number[]
-  departureTime?: string // Deprecated, use dayTimes instead
-  arrivalTime?: string // Deprecated, use dayTimes instead
-  dayTimes?: Record<number, DayTime> // Map of day number (0-6) to times
+  departureTime?: string // Deprecated
+  arrivalTime?: string // Deprecated
+  daySchedules?: Record<string, DayScheduleStationTime[]> // Map day number (0-6) to station time list
   exceptions?: RideException[]
   // One-time fields
   date?: string

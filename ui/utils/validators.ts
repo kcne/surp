@@ -33,9 +33,11 @@ export const lineSchema = z.object({
 )
 
 // Ride validators
-const dayTimeSchema = z.object({
-  departureTime: z.string().min(1, "Vreme polaska je obavezno"),
-  arrivalTime: z.string().min(1, "Vreme dolaska je obavezno"),
+const stationTimeSchema = z.object({
+  stationId: z.string().min(1),
+  orderIndex: z.number().int().min(0),
+  stationName: z.string().optional(),
+  time: z.string().min(1, "Vreme stanice je obavezno"),
 })
 
 export const rideSchema = z.object({
@@ -47,10 +49,9 @@ export const rideSchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   daysOfWeek: z.array(z.number().min(0).max(6)).optional(),
-  departureTime: z.string().optional(), // Deprecated, kept for backward compatibility
-  arrivalTime: z.string().optional(), // Deprecated, kept for backward compatibility
-  // dayTimes uses string keys (React Hook Form converts numbers to strings in object keys)
-  dayTimes: z.record(z.string(), dayTimeSchema).optional(),
+  departureTime: z.string().optional(), // Deprecated
+  arrivalTime: z.string().optional(), // Deprecated
+  daySchedules: z.record(z.string(), z.array(stationTimeSchema)).optional(),
   // One-time fields
   date: z.string().optional(),
   oneTimeDepartureTime: z.string().optional(),
@@ -62,34 +63,31 @@ export const rideSchema = z.object({
         return false
       }
       
-      // Check if dayTimes is provided and has entries for all selected days
-      if (data.dayTimes && Object.keys(data.dayTimes).length > 0) {
-        // Validate that all selected days have times
-        // Convert day to string for lookup (React Hook Form uses string keys)
+      if (data.daySchedules && Object.keys(data.daySchedules).length > 0) {
         const allDaysHaveTimes = data.daysOfWeek.every((day) => {
-          // Try both string and number key
-          const dayTime = data.dayTimes?.[day] || data.dayTimes?.[String(day)]
-          return dayTime?.departureTime && dayTime?.departureTime.trim() !== "" && 
-                 dayTime?.arrivalTime && dayTime?.arrivalTime.trim() !== ""
+          const stationTimes = data.daySchedules?.[day] || data.daySchedules?.[String(day)]
+          if (!stationTimes || stationTimes.length === 0) {
+            return false
+          }
+
+          return stationTimes.every(
+            (stationTime) =>
+              Boolean(stationTime.time) && stationTime.time.trim() !== ""
+          )
         })
         if (!allDaysHaveTimes) {
           return false
         }
         return true
       }
-      
-      // Fallback to old format (departureTime/arrivalTime) for backward compatibility
-      if (data.departureTime && data.arrivalTime) {
-        return true
-      }
-      
+
       return false
     } else {
       return data.date && data.oneTimeDepartureTime && data.oneTimeArrivalTime
     }
   },
   {
-    message: "Sva obavezna polja moraju biti popunjena za izabrani tip vožnje. Za ponavljajuće vožnje, unesite vreme za svaki selektovani dan.",
+    message: "Sva obavezna polja moraju biti popunjena. Za ponavljajuće vožnje unesite vreme za svaku stanicu svakog selektovanog dana.",
   }
 )
 

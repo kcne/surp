@@ -83,9 +83,12 @@ export function RideInstancesView({
         if (exception?.type === "additional") {
           departureTime = exception.departureTime
           arrivalTime = exception.arrivalTime
-        } else if (activeRide.dayTimes && activeRide.dayTimes[dayOfWeek]) {
-          departureTime = activeRide.dayTimes[dayOfWeek].departureTime
-          arrivalTime = activeRide.dayTimes[dayOfWeek].arrivalTime
+        } else if (activeRide.daySchedules && activeRide.daySchedules[dayOfWeek]) {
+          const stationTimes = [...activeRide.daySchedules[dayOfWeek]].sort(
+            (left, right) => left.orderIndex - right.orderIndex
+          )
+          departureTime = stationTimes[0]?.time
+          arrivalTime = stationTimes[stationTimes.length - 1]?.time
         } else if (activeRide.departureTime && activeRide.arrivalTime) {
           departureTime = activeRide.departureTime
           arrivalTime = activeRide.arrivalTime

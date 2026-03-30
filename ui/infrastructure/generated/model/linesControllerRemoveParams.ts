@@ -6,12 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface RideDayTimeResponseDto {
-  /**
-   * @minimum 0
-   * @maximum 6
-   */
-  dayOfWeek: number;
-  departureTime: string;
-  arrivalTime: string;
-}
+export type LinesControllerRemoveParams = {
+/**
+ * When true, also deactivates related rides and cancels active reservations.
+ */
+cascade?: string;
+};
