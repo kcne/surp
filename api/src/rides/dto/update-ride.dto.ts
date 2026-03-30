@@ -14,7 +14,7 @@ import {
   ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { RideDayTimeInputDto } from './ride-day-time.dto';
+import { RideDayScheduleInputDto } from './ride-day-time.dto';
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -75,10 +75,10 @@ export class UpdateRideDto {
   @Matches(TIME_PATTERN, { message: 'oneTimeArrivalTime must be in HH:mm format' })
   oneTimeArrivalTime?: string;
 
-  @ApiPropertyOptional({ type: [RideDayTimeInputDto] })
+  @ApiPropertyOptional({ type: [RideDayScheduleInputDto] })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => RideDayTimeInputDto)
-  dayTimes?: RideDayTimeInputDto[];
+  @Type(() => RideDayScheduleInputDto)
+  daySchedules?: RideDayScheduleInputDto[];
 }

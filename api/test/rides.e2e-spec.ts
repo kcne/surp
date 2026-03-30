@@ -30,9 +30,18 @@ describe('RidesController (e2e)', () => {
       id: 'line-1',
       name: 'Central - North',
       departureStationId: 'station-a',
-      arrivalStationId: 'station-b'
+      arrivalStationId: 'station-b',
+      intermediateStops: []
     },
-    dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+    daySchedules: [
+      {
+        dayOfWeek: 1,
+        stationTimes: [
+          { stationId: 'station-a', orderIndex: 0, time: '09:00' },
+          { stationId: 'station-b', orderIndex: 1, time: '10:30' }
+        ]
+      }
+    ],
     exceptions: [] as Array<{
       id: string;
       exceptionDate: Date;
@@ -66,8 +75,8 @@ describe('RidesController (e2e)', () => {
       update: jest.fn(),
       delete: jest.fn()
     },
-    rideDayTime: {
-      createMany: jest.fn(),
+    rideDaySchedule: {
+      create: jest.fn(),
       deleteMany: jest.fn()
     },
     rideException: {
@@ -77,7 +86,8 @@ describe('RidesController (e2e)', () => {
       delete: jest.fn()
     },
     reservation: {
-      groupBy: jest.fn()
+      groupBy: jest.fn(),
+      count: jest.fn()
     }
   };
 
@@ -131,7 +141,13 @@ describe('RidesController (e2e)', () => {
       throw new Error('invalid token');
     });
 
-    prismaMock.line.findFirst.mockResolvedValue({ id: 'line-1', name: 'Central - North' });
+    prismaMock.line.findFirst.mockResolvedValue({
+      id: 'line-1',
+      name: 'Central - North',
+      departureStationId: 'station-a',
+      arrivalStationId: 'station-b',
+      intermediateStops: []
+    });
 
     prismaMock.ride.create.mockResolvedValue({ id: 'ride-1' });
     prismaMock.ride.findFirst.mockResolvedValue({ ...baseRide });
@@ -140,8 +156,8 @@ describe('RidesController (e2e)', () => {
     prismaMock.ride.update.mockResolvedValue({ ...baseRide });
     prismaMock.ride.delete.mockResolvedValue({ ...baseRide });
 
-    prismaMock.rideDayTime.createMany.mockResolvedValue({ count: 1 });
-    prismaMock.rideDayTime.deleteMany.mockResolvedValue({ count: 1 });
+    prismaMock.rideDaySchedule.create.mockResolvedValue({ id: 'schedule-1' });
+    prismaMock.rideDaySchedule.deleteMany.mockResolvedValue({ count: 1 });
 
     prismaMock.rideException.findMany.mockResolvedValue([]);
     prismaMock.rideException.findFirst.mockResolvedValue({ id: 'exception-1' });
@@ -169,12 +185,13 @@ describe('RidesController (e2e)', () => {
     });
 
     prismaMock.reservation.groupBy.mockResolvedValue([]);
+    prismaMock.reservation.count.mockResolvedValue(0);
 
     prismaMock.$transaction.mockImplementation(async (arg: unknown) => {
       if (typeof arg === 'function') {
         return arg({
           ride: prismaMock.ride,
-          rideDayTime: prismaMock.rideDayTime
+          rideDaySchedule: prismaMock.rideDaySchedule
         });
       }
 
@@ -217,7 +234,7 @@ describe('RidesController (e2e)', () => {
     expect(response.body.message).toBe('Tenant mismatch between token and request context');
   });
 
-  it('requires day-times for recurring rides', async () => {
+  it('requires day schedules for recurring rides', async () => {
     const response = await request(app.getHttpServer())
       .post('/rides')
       .set('X-Tenant-Slug', 'demo-tenant')
@@ -230,7 +247,7 @@ describe('RidesController (e2e)', () => {
       })
       .expect(400);
 
-    expect(response.body.message).toBe('Recurring rides require at least one day-time definition');
+    expect(response.body.message).toBe('Recurring rides require at least one day schedule definition');
   });
 
   it('requires date and times for one-time rides', async () => {
@@ -251,7 +268,7 @@ describe('RidesController (e2e)', () => {
     );
   });
 
-  it('allows overnight recurring day-times', async () => {
+  it('allows overnight recurring day schedules', async () => {
     const response = await request(app.getHttpServer())
       .post('/rides')
       .set('X-Tenant-Slug', 'demo-tenant')
@@ -262,7 +279,15 @@ describe('RidesController (e2e)', () => {
         type: RideType.RECURRING,
         status: RideStatus.ACTIVE,
         recurringStartDate: '2026-03-20',
-        dayTimes: [{ dayOfWeek: 1, departureTime: '12:00', arrivalTime: '00:00' }]
+        daySchedules: [
+          {
+            dayOfWeek: 1,
+            stationTimes: [
+              { stationId: 'station-a', orderIndex: 0, time: '12:00' },
+              { stationId: 'station-b', orderIndex: 1, time: '00:00' }
+            ]
+          }
+        ]
       })
       .expect(201);
 
@@ -305,7 +330,15 @@ describe('RidesController (e2e)', () => {
         type: RideType.RECURRING,
         status: RideStatus.DRAFT,
         recurringStartDate: '2026-03-20',
-        dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }]
+        daySchedules: [
+          {
+            dayOfWeek: 1,
+            stationTimes: [
+              { stationId: 'station-a', orderIndex: 0, time: '09:00' },
+              { stationId: 'station-b', orderIndex: 1, time: '10:30' }
+            ]
+          }
+        ]
       })
       .expect(201);
 
@@ -366,9 +399,18 @@ describe('RidesController (e2e)', () => {
           id: 'line-1',
           name: 'Central - North',
           departureStationId: 'station-a',
-          arrivalStationId: 'station-b'
+          arrivalStationId: 'station-b',
+          intermediateStops: []
         },
-        dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+        daySchedules: [
+          {
+            dayOfWeek: 1,
+            stationTimes: [
+              { stationId: 'station-a', orderIndex: 0, time: '09:00' },
+              { stationId: 'station-b', orderIndex: 1, time: '10:30' }
+            ]
+          }
+        ],
         exceptions: []
       }
     ]);

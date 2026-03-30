@@ -1397,6 +1397,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "cascade",
+            "required": false,
+            "in": "query",
+            "description": "When true, also deactivates related rides and cancels active reservations.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1418,6 +1427,9 @@
           },
           "404": {
             "description": "Line not found in current tenant."
+          },
+          "409": {
+            "description": "Line has active rides and cascade override is not enabled."
           }
         },
         "security": [
@@ -2838,6 +2850,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "cascade",
+            "required": false,
+            "in": "query",
+            "description": "When true, cancels active reservations and deactivates the ride.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2859,6 +2880,9 @@
           },
           "404": {
             "description": "Ride not found in current tenant."
+          },
+          "409": {
+            "description": "Ride has active reservations and cascade override is not enabled."
           }
         },
         "security": [
@@ -2899,7 +2923,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReplaceRideDayTimesDto"
+                "$ref": "#/components/schemas/ReplaceRideDaySchedulesDto"
               }
             }
           }
@@ -2933,7 +2957,7 @@
             "access-token": []
           }
         ],
-        "summary": "Replace recurring ride day-times in the current tenant.",
+        "summary": "Replace recurring ride day schedules in the current tenant.",
         "tags": [
           "Rides"
         ]
@@ -5495,7 +5519,29 @@
           }
         }
       },
-      "RideDayTimeInputDto": {
+      "RideStationTimeInputDto": {
+        "type": "object",
+        "properties": {
+          "stationId": {
+            "type": "string",
+            "example": "station-intermediate-id"
+          },
+          "orderIndex": {
+            "type": "number",
+            "example": 2,
+            "minimum": 0
+          },
+          "time": {
+            "type": "string",
+            "example": "08:30"
+          }
+        },
+        "required": [
+          "stationId",
+          "orderIndex"
+        ]
+      },
+      "RideDayScheduleInputDto": {
         "type": "object",
         "properties": {
           "dayOfWeek": {
@@ -5505,19 +5551,16 @@
             "maximum": 6,
             "description": "0=Sunday ... 6=Saturday"
           },
-          "departureTime": {
-            "type": "string",
-            "example": "08:30"
-          },
-          "arrivalTime": {
-            "type": "string",
-            "example": "10:00"
+          "stationTimes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RideStationTimeInputDto"
+            }
           }
         },
         "required": [
           "dayOfWeek",
-          "departureTime",
-          "arrivalTime"
+          "stationTimes"
         ]
       },
       "CreateRideDto": {
@@ -5573,10 +5616,10 @@
             "type": "string",
             "example": "10:30"
           },
-          "dayTimes": {
+          "daySchedules": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/RideDayTimeInputDto"
+              "$ref": "#/components/schemas/RideDayScheduleInputDto"
             }
           }
         },
@@ -5586,7 +5629,29 @@
           "type"
         ]
       },
-      "RideDayTimeResponseDto": {
+      "RideStationTimeResponseDto": {
+        "type": "object",
+        "properties": {
+          "stationId": {
+            "type": "string"
+          },
+          "orderIndex": {
+            "type": "number",
+            "minimum": 0
+          },
+          "time": {
+            "type": "string",
+            "nullable": true,
+            "example": "08:30"
+          }
+        },
+        "required": [
+          "stationId",
+          "orderIndex",
+          "time"
+        ]
+      },
+      "RideDayScheduleResponseDto": {
         "type": "object",
         "properties": {
           "dayOfWeek": {
@@ -5594,19 +5659,16 @@
             "minimum": 0,
             "maximum": 6
           },
-          "departureTime": {
-            "type": "string",
-            "example": "08:30"
-          },
-          "arrivalTime": {
-            "type": "string",
-            "example": "10:00"
+          "stationTimes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RideStationTimeResponseDto"
+            }
           }
         },
         "required": [
           "dayOfWeek",
-          "departureTime",
-          "arrivalTime"
+          "stationTimes"
         ]
       },
       "RideExceptionResponseDto": {
@@ -5751,10 +5813,10 @@
             "type": "object",
             "nullable": true
           },
-          "dayTimes": {
+          "daySchedules": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/RideDayTimeResponseDto"
+              "$ref": "#/components/schemas/RideDayScheduleResponseDto"
             }
           },
           "exceptions": {
@@ -5790,7 +5852,7 @@
           "oneTimeDate",
           "oneTimeDepartureTime",
           "oneTimeArrivalTime",
-          "dayTimes",
+          "daySchedules",
           "exceptions",
           "line",
           "createdAt",
@@ -6027,26 +6089,26 @@
             "type": "string",
             "example": "10:30"
           },
-          "dayTimes": {
+          "daySchedules": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/RideDayTimeInputDto"
+              "$ref": "#/components/schemas/RideDayScheduleInputDto"
             }
           }
         }
       },
-      "ReplaceRideDayTimesDto": {
+      "ReplaceRideDaySchedulesDto": {
         "type": "object",
         "properties": {
-          "dayTimes": {
+          "daySchedules": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/RideDayTimeInputDto"
+              "$ref": "#/components/schemas/RideDayScheduleInputDto"
             }
           }
         },
         "required": [
-          "dayTimes"
+          "daySchedules"
         ]
       },
       "CreateRideExceptionDto": {

@@ -21,8 +21,8 @@ describe('RidesService', () => {
       update: jest.fn(),
       delete: jest.fn()
     },
-    rideDayTime: {
-      createMany: jest.fn(),
+    rideDaySchedule: {
+      create: jest.fn(),
       deleteMany: jest.fn()
     },
     rideException: {
@@ -49,7 +49,8 @@ describe('RidesService', () => {
   });
 
   it('requires day-times for recurring rides', async () => {
-    prismaMock.line.findFirst.mockResolvedValue({ id: 'line-1', name: 'Central - North' });
+    prismaMock.line.findFirst.mockResolvedValue({ id: 'line-1', name: 'Central - North', departureStationId: 'station-a', arrivalStationId: 'station-b',
+        intermediateStops: [] });
 
     await expect(
       service.create(auth, {
@@ -58,23 +59,24 @@ describe('RidesService', () => {
         capacity: 38,
         type: RideType.RECURRING,
         recurringStartDate: '2026-03-20',
-        dayTimes: []
+        daySchedules: []
       })
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('allows overnight day-times for recurring rides', () => {
     const validator = service as unknown as {
-      validateDayTimes: (dayTimes: Array<{ dayOfWeek: number; departureTime: string; arrivalTime: string }>) => void;
+      validateDaySchedules: (daySchedules: Array<{ dayOfWeek: number; stationTimes: Array<{ stationId: string; orderIndex: number; time?: string }> }>, routeStationIds: string[]) => void;
     };
 
     expect(() =>
-      validator.validateDayTimes([{ dayOfWeek: 1, departureTime: '12:00', arrivalTime: '00:00' }])
+      validator.validateDaySchedules([{ dayOfWeek: 1, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '12:00' }, { stationId: 'station-b', orderIndex: 1, time: '00:00' }] }], ['station-a','station-b'])
     ).not.toThrow();
   });
 
   it('requires date and times for one-time rides', async () => {
-    prismaMock.line.findFirst.mockResolvedValue({ id: 'line-1', name: 'Central - North' });
+    prismaMock.line.findFirst.mockResolvedValue({ id: 'line-1', name: 'Central - North', departureStationId: 'station-a', arrivalStationId: 'station-b',
+        intermediateStops: [] });
 
     await expect(
       service.create(auth, {
@@ -88,7 +90,8 @@ describe('RidesService', () => {
   });
 
   it('rejects zero-duration one-time rides', async () => {
-    prismaMock.line.findFirst.mockResolvedValue({ id: 'line-1', name: 'Central - North' });
+    prismaMock.line.findFirst.mockResolvedValue({ id: 'line-1', name: 'Central - North', departureStationId: 'station-a', arrivalStationId: 'station-b',
+        intermediateStops: [] });
 
     await expect(
       service.create(auth, {
@@ -125,9 +128,10 @@ describe('RidesService', () => {
         id: 'line-1',
         name: 'Line 1',
         departureStationId: 'station-a',
-        arrivalStationId: 'station-b'
+        arrivalStationId: 'station-b',
+        intermediateStops: []
       },
-      dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+      daySchedules: [{ dayOfWeek: 1, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '09:00' }, { stationId: 'station-b', orderIndex: 1, time: '10:30' }] }],
       exceptions: []
     });
 
@@ -160,9 +164,10 @@ describe('RidesService', () => {
         id: 'line-1',
         name: 'Line 1',
         departureStationId: 'station-a',
-        arrivalStationId: 'station-b'
+        arrivalStationId: 'station-b',
+        intermediateStops: []
       },
-      dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+      daySchedules: [{ dayOfWeek: 1, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '09:00' }, { stationId: 'station-b', orderIndex: 1, time: '10:30' }] }],
       exceptions: []
     });
 
@@ -210,9 +215,10 @@ describe('RidesService', () => {
           id: 'line-1',
           name: 'Line 1',
           departureStationId: 'station-a',
-          arrivalStationId: 'station-b'
+          arrivalStationId: 'station-b',
+        intermediateStops: []
         },
-        dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+        daySchedules: [{ dayOfWeek: 1, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '09:00' }, { stationId: 'station-b', orderIndex: 1, time: '10:30' }] }],
         exceptions: []
       }
     ]);
@@ -247,9 +253,10 @@ describe('RidesService', () => {
           id: 'line-1',
           name: 'Line 1',
           departureStationId: 'station-a',
-          arrivalStationId: 'station-b'
+          arrivalStationId: 'station-b',
+        intermediateStops: []
         },
-        dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+        daySchedules: [{ dayOfWeek: 1, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '09:00' }, { stationId: 'station-b', orderIndex: 1, time: '10:30' }] }],
         exceptions: [
           {
             exceptionDate: new Date('2026-03-30T00:00:00.000Z'),
@@ -287,9 +294,10 @@ describe('RidesService', () => {
           id: 'line-1',
           name: 'Line 1',
           departureStationId: 'station-a',
-          arrivalStationId: 'station-b'
+          arrivalStationId: 'station-b',
+        intermediateStops: []
         },
-        dayTimes: [{ dayOfWeek: 2, departureTime: '09:00', arrivalTime: '10:30' }],
+        daySchedules: [{ dayOfWeek: 2, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '09:00' }, { stationId: 'station-b', orderIndex: 1, time: '10:30' }] }],
         exceptions: [
           {
             exceptionDate: new Date('2026-03-30T00:00:00.000Z'),
@@ -331,9 +339,10 @@ describe('RidesService', () => {
           id: 'line-1',
           name: 'Line 1',
           departureStationId: 'station-a',
-          arrivalStationId: 'station-b'
+          arrivalStationId: 'station-b',
+        intermediateStops: []
         },
-        dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+        daySchedules: [{ dayOfWeek: 1, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '09:00' }, { stationId: 'station-b', orderIndex: 1, time: '10:30' }] }],
         exceptions: []
       }
     ]);
@@ -387,9 +396,10 @@ describe('RidesService', () => {
         id: 'line-1',
         name: 'Line 1',
         departureStationId: 'station-a',
-        arrivalStationId: 'station-b'
+        arrivalStationId: 'station-b',
+        intermediateStops: []
       },
-      dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+      daySchedules: [{ dayOfWeek: 1, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '09:00' }, { stationId: 'station-b', orderIndex: 1, time: '10:30' }] }],
       exceptions: []
     });
     prismaMock.reservation.count.mockResolvedValue(1);
@@ -420,9 +430,10 @@ describe('RidesService', () => {
         id: 'line-1',
         name: 'Line 1',
         departureStationId: 'station-a',
-        arrivalStationId: 'station-b'
+        arrivalStationId: 'station-b',
+        intermediateStops: []
       },
-      dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+      daySchedules: [{ dayOfWeek: 1, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '09:00' }, { stationId: 'station-b', orderIndex: 1, time: '10:30' }] }],
       exceptions: []
     });
     prismaMock.reservation.count.mockResolvedValue(0);
@@ -447,9 +458,10 @@ describe('RidesService', () => {
         id: 'line-1',
         name: 'Line 1',
         departureStationId: 'station-a',
-        arrivalStationId: 'station-b'
+        arrivalStationId: 'station-b',
+        intermediateStops: []
       },
-      dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+      daySchedules: [{ dayOfWeek: 1, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '09:00' }, { stationId: 'station-b', orderIndex: 1, time: '10:30' }] }],
       exceptions: []
     });
 
@@ -489,9 +501,10 @@ describe('RidesService', () => {
         id: 'line-1',
         name: 'Line 1',
         departureStationId: 'station-a',
-        arrivalStationId: 'station-b'
+        arrivalStationId: 'station-b',
+        intermediateStops: []
       },
-      dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+      daySchedules: [{ dayOfWeek: 1, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '09:00' }, { stationId: 'station-b', orderIndex: 1, time: '10:30' }] }],
       exceptions: []
     });
 
@@ -521,9 +534,10 @@ describe('RidesService', () => {
             id: 'line-1',
             name: 'Line 1',
             departureStationId: 'station-a',
-            arrivalStationId: 'station-b'
+            arrivalStationId: 'station-b',
+        intermediateStops: []
           },
-          dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+          daySchedules: [{ dayOfWeek: 1, stationTimes: [{ stationId: 'station-a', orderIndex: 0, time: '09:00' }, { stationId: 'station-b', orderIndex: 1, time: '10:30' }] }],
           exceptions: []
         })
       }

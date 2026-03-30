@@ -19,7 +19,7 @@ import { CreateRideDto } from './dto/create-ride.dto';
 import { ListRideInstancesQueryDto } from './dto/ride-instances.query.dto';
 import { ListRidesQueryDto } from './dto/list-rides.query.dto';
 import { CreateRideExceptionDto } from './dto/ride-exception.dto';
-import { ReplaceRideDayTimesDto } from './dto/ride-day-time.dto';
+import { ReplaceRideDaySchedulesDto } from './dto/ride-day-time.dto';
 import {
   RideInstancesByDateResponseDto,
   PaginatedRidesResponseDto,
@@ -124,7 +124,7 @@ export class RidesController {
 
   @Put(':id/day-times')
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Replace recurring ride day-times in the current tenant.' })
+  @ApiOperation({ summary: 'Replace recurring ride day schedules in the current tenant.' })
   @ApiOkResponse({ type: RideResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure or scheduling rule violation.' })
   @ApiNotFoundResponse({ description: 'Ride not found in current tenant.' })
@@ -133,9 +133,9 @@ export class RidesController {
   replaceDayTimes(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,
-    @Body() dto: ReplaceRideDayTimesDto
+    @Body() dto: ReplaceRideDaySchedulesDto
   ): Promise<RideResponseDto> {
-    return this.ridesService.replaceDayTimes(request.auth!, id, dto.dayTimes);
+    return this.ridesService.replaceDayTimes(request.auth!, id, dto.daySchedules);
   }
 
   @Post(':id/exceptions')

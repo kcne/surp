@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateRideDto } from './dto/create-ride.dto';
 import { ListRideInstancesQueryDto } from './dto/ride-instances.query.dto';
 import { ListRidesQueryDto } from './dto/list-rides.query.dto';
-import { RideDayTimeInputDto } from './dto/ride-day-time.dto';
+import { RideDayScheduleInputDto } from './dto/ride-day-time.dto';
 import { CreateRideExceptionDto } from './dto/ride-exception.dto';
 import {
   PaginatedRidesResponseDto,
@@ -45,14 +45,31 @@ const SAFE_RIDE_SELECT = Prisma.validator<Prisma.RideSelect>()({
       id: true,
       name: true,
       departureStationId: true,
-      arrivalStationId: true
+      arrivalStationId: true,
+      intermediateStops: {
+        select: {
+          stationId: true,
+          orderIndex: true
+        },
+        orderBy: {
+          orderIndex: 'asc' as const
+        }
+      }
     }
   },
-  dayTimes: {
+  daySchedules: {
     select: {
       dayOfWeek: true,
-      departureTime: true,
-      arrivalTime: true
+      stationTimes: {
+        select: {
+          stationId: true,
+          orderIndex: true,
+          time: true
+        },
+        orderBy: {
+          orderIndex: 'asc' as const
+        }
+      }
     },
     orderBy: {
       dayOfWeek: 'asc' as const
@@ -116,13 +133,30 @@ type RideWithInstanceMaterialization = Prisma.RideGetPayload<{
         name: true;
         departureStationId: true;
         arrivalStationId: true;
+        intermediateStops: {
+          select: {
+            stationId: true;
+            orderIndex: true;
+          };
+          orderBy: {
+            orderIndex: 'asc';
+          };
+        };
       };
     };
-    dayTimes: {
+    daySchedules: {
       select: {
         dayOfWeek: true;
-        departureTime: true;
-        arrivalTime: true;
+        stationTimes: {
+          select: {
+            stationId: true;
+            orderIndex: true;
+            time: true;
+          };
+          orderBy: {
+            orderIndex: 'asc';
+          };
+        };
       };
       orderBy: {
         dayOfWeek: 'asc';
@@ -164,12 +198,13 @@ type MaterializedRideInstance = {
 
 type RideScheduleInput = {
   type: RideType;
+  routeStationIds: string[];
   recurringStartDate: string | undefined;
   recurringEndDate: string | undefined;
   oneTimeDate: string | undefined;
   oneTimeDepartureTime: string | undefined;
   oneTimeArrivalTime: string | undefined;
-  dayTimes: RideDayTimeInputDto[] | undefined;
+  daySchedules: RideDayScheduleInputDto[] | undefined;
 };
 
 type RideScheduleNormalized = {
@@ -179,7 +214,7 @@ type RideScheduleNormalized = {
   oneTimeDate: Date | null;
   oneTimeDepartureTime: string | null;
   oneTimeArrivalTime: string | null;
-  dayTimes: RideDayTimeInputDto[];
+  daySchedules: RideDayScheduleInputDto[];
 };
 
 @Injectable()
@@ -191,12 +226,13 @@ export class RidesService {
 
     const normalizedSchedule = this.normalizeAndValidateSchedule({
       type: dto.type,
+      routeStationIds: line.routeStationIds,
       recurringStartDate: dto.recurringStartDate,
       recurringEndDate: dto.recurringEndDate,
       oneTimeDate: dto.oneTimeDate,
       oneTimeDepartureTime: dto.oneTimeDepartureTime,
       oneTimeArrivalTime: dto.oneTimeArrivalTime,
-      dayTimes: dto.dayTimes
+      daySchedules: dto.daySchedules
     });
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -222,13 +258,13 @@ export class RidesService {
         }
       });
 
-      if (normalizedSchedule.dayTimes.length > 0) {
-        await this.replaceRideDayTimesTx(
+      if (normalizedSchedule.daySchedules.length > 0) {
+        await this.replaceRideDaySchedulesTx(
           tx,
           auth.tenantId,
           createdRide.id,
           auth.sub,
-          normalizedSchedule.dayTimes,
+          normalizedSchedule.daySchedules,
           false
         );
       }
@@ -318,14 +354,31 @@ export class RidesService {
             id: true,
             name: true,
             departureStationId: true,
-            arrivalStationId: true
+            arrivalStationId: true,
+            intermediateStops: {
+              select: {
+                stationId: true,
+                orderIndex: true
+              },
+              orderBy: {
+                orderIndex: 'asc'
+              }
+            }
           }
         },
-        dayTimes: {
+        daySchedules: {
           select: {
             dayOfWeek: true,
-            departureTime: true,
-            arrivalTime: true
+            stationTimes: {
+              select: {
+                stationId: true,
+                orderIndex: true,
+                time: true
+              },
+              orderBy: {
+                orderIndex: 'asc'
+              }
+            }
           },
           orderBy: {
             dayOfWeek: 'asc'
@@ -439,22 +492,32 @@ export class RidesService {
     const nextLineId = dto.lineId ?? existing.lineId;
 
     let nextLineName = existing.line.name;
+    let nextRouteStationIds = [
+      existing.line.departureStationId,
+      ...existing.line.intermediateStops.map((item) => item.stationId),
+      existing.line.arrivalStationId
+    ];
     if (nextLineId !== existing.lineId) {
       const line = await this.ensureLineInTenant(auth.tenantId, nextLineId);
       nextLineName = line.name;
+      nextRouteStationIds = line.routeStationIds;
     }
 
-    const nextDayTimes =
-      dto.dayTimes !== undefined
-        ? dto.dayTimes
-        : existing.dayTimes.map((item) => ({
+    const nextDaySchedules =
+      dto.daySchedules !== undefined
+        ? dto.daySchedules
+        : existing.daySchedules.map((item) => ({
             dayOfWeek: item.dayOfWeek,
-            departureTime: item.departureTime,
-            arrivalTime: item.arrivalTime
+            stationTimes: item.stationTimes.map((stationTime) => ({
+              stationId: stationTime.stationId,
+              orderIndex: stationTime.orderIndex,
+              time: stationTime.time ?? undefined
+            }))
           }));
 
     const normalizedSchedule = this.normalizeAndValidateSchedule({
       type: nextType,
+      routeStationIds: nextRouteStationIds,
       recurringStartDate:
         dto.recurringStartDate !== undefined
           ? dto.recurringStartDate
@@ -470,7 +533,7 @@ export class RidesService {
         dto.oneTimeArrivalTime !== undefined
           ? dto.oneTimeArrivalTime
           : (existing.oneTimeArrivalTime ?? undefined),
-      dayTimes: nextDayTimes
+      daySchedules: nextDaySchedules
     });
 
     const nextStatus = dto.status ?? existing.status;
@@ -498,12 +561,12 @@ export class RidesService {
         )
       });
 
-      await this.replaceRideDayTimesTx(
+      await this.replaceRideDaySchedulesTx(
         tx,
         auth.tenantId,
         id,
         auth.sub,
-        normalizedSchedule.dayTimes,
+        normalizedSchedule.daySchedules,
         true
       );
 
@@ -526,7 +589,7 @@ export class RidesService {
   async replaceDayTimes(
     auth: AccessTokenPayload,
     id: string,
-    dayTimes: RideDayTimeInputDto[]
+    daySchedules: RideDayScheduleInputDto[]
   ): Promise<RideResponseDto> {
     const ride = await this.getRideOrThrow(auth.tenantId, id);
 
@@ -534,10 +597,16 @@ export class RidesService {
       throw new BadRequestException('Day-times can only be managed for recurring rides');
     }
 
-    this.validateDayTimes(dayTimes);
+    const routeStationIds = [
+      ride.line.departureStationId,
+      ...ride.line.intermediateStops.map((item) => item.stationId),
+      ride.line.arrivalStationId
+    ];
+
+    this.validateDaySchedules(daySchedules, routeStationIds);
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      await this.replaceRideDayTimesTx(tx, auth.tenantId, id, auth.sub, dayTimes, true);
+      await this.replaceRideDaySchedulesTx(tx, auth.tenantId, id, auth.sub, daySchedules, true);
 
       await tx.ride.update({
         where: { id },
@@ -757,7 +826,7 @@ export class RidesService {
   private async ensureLineInTenant(
     tenantId: string,
     lineId: string
-  ): Promise<{ id: string; name: string }> {
+  ): Promise<{ id: string; name: string; routeStationIds: string[] }> {
     const line = await this.prisma.line.findFirst({
       where: {
         id: lineId,
@@ -765,7 +834,18 @@ export class RidesService {
       },
       select: {
         id: true,
-        name: true
+        name: true,
+        departureStationId: true,
+        arrivalStationId: true,
+        intermediateStops: {
+          select: {
+            stationId: true,
+            orderIndex: true
+          },
+          orderBy: {
+            orderIndex: 'asc'
+          }
+        }
       }
     });
 
@@ -773,12 +853,20 @@ export class RidesService {
       throw new BadRequestException('Line must exist in the current tenant');
     }
 
-    return line;
+    return {
+      id: line.id,
+      name: line.name,
+      routeStationIds: [
+        line.departureStationId,
+        ...line.intermediateStops.map((item) => item.stationId),
+        line.arrivalStationId
+      ]
+    };
   }
 
   private normalizeAndValidateSchedule(input: RideScheduleInput): RideScheduleNormalized {
-    const dayTimes = input.dayTimes ?? [];
-    this.validateDayTimes(dayTimes);
+    const daySchedules = input.daySchedules ?? [];
+    this.validateDaySchedules(daySchedules, input.routeStationIds);
 
     const normalized: RideScheduleNormalized = {
       type: input.type,
@@ -787,7 +875,7 @@ export class RidesService {
       oneTimeDate: input.oneTimeDate ? this.parseDateOnly(input.oneTimeDate) : null,
       oneTimeDepartureTime: input.oneTimeDepartureTime?.trim() || null,
       oneTimeArrivalTime: input.oneTimeArrivalTime?.trim() || null,
-      dayTimes
+      daySchedules
     };
 
     if (
@@ -803,8 +891,8 @@ export class RidesService {
         throw new BadRequestException('Recurring rides require recurringStartDate');
       }
 
-      if (normalized.dayTimes.length === 0) {
-        throw new BadRequestException('Recurring rides require at least one day-time definition');
+      if (normalized.daySchedules.length === 0) {
+        throw new BadRequestException('Recurring rides require at least one day schedule definition');
       }
 
       if (
@@ -830,8 +918,8 @@ export class RidesService {
       );
     }
 
-    if (normalized.dayTimes.length > 0) {
-      throw new BadRequestException('One-time rides cannot include recurring day-times');
+      if (normalized.daySchedules.length > 0) {
+        throw new BadRequestException('One-time rides cannot include recurring day schedules');
     }
 
     if (normalized.recurringStartDate || normalized.recurringEndDate) {
@@ -841,21 +929,53 @@ export class RidesService {
     return normalized;
   }
 
-  private validateDayTimes(dayTimes: RideDayTimeInputDto[]): void {
+  private validateDaySchedules(daySchedules: RideDayScheduleInputDto[], routeStationIds: string[]): void {
     const daySet = new Set<number>();
+    const stationSet = new Set(routeStationIds);
+    const expectedOrderPairs = routeStationIds.map((stationId, index) => `${index}:${stationId}`);
 
-    for (const dayTime of dayTimes) {
-      if (daySet.has(dayTime.dayOfWeek)) {
-        throw new BadRequestException('Duplicate dayOfWeek in day-times is not allowed');
+    for (const schedule of daySchedules) {
+      if (daySet.has(schedule.dayOfWeek)) {
+        throw new BadRequestException('Duplicate dayOfWeek in day schedules is not allowed');
       }
 
-      if (this.isZeroDurationTimeRange(dayTime.departureTime, dayTime.arrivalTime)) {
-        throw new BadRequestException(
-          'day-time departureTime and arrivalTime cannot be equal (overnight rides are allowed)'
-        );
+      const sortedStationTimes = [...schedule.stationTimes].sort(
+        (left, right) => left.orderIndex - right.orderIndex
+      );
+
+      if (sortedStationTimes.length > 0) {
+        const routePairs = sortedStationTimes.map((item) => `${item.orderIndex}:${item.stationId}`);
+        if (
+          sortedStationTimes.length !== expectedOrderPairs.length ||
+          routePairs.some((pair, index) => pair !== expectedOrderPairs[index])
+        ) {
+          throw new BadRequestException('Day schedule station order must match the selected line route');
+        }
+
+        const scheduleStationIds = new Set<string>();
+        for (const stationTime of sortedStationTimes) {
+          if (!stationSet.has(stationTime.stationId)) {
+            throw new BadRequestException('Day schedule contains station outside of selected line route');
+          }
+
+          if (scheduleStationIds.has(stationTime.stationId)) {
+            throw new BadRequestException('Duplicate stationId in day schedule is not allowed');
+          }
+
+          scheduleStationIds.add(stationTime.stationId);
+        }
+
+        const departureTime = sortedStationTimes[0].time?.trim();
+        const arrivalTime = sortedStationTimes[sortedStationTimes.length - 1].time?.trim();
+
+        if (departureTime && arrivalTime && this.isZeroDurationTimeRange(departureTime, arrivalTime)) {
+          throw new BadRequestException(
+            'day schedule departure and arrival times cannot be equal (overnight rides are allowed)'
+          );
+        }
       }
 
-      daySet.add(dayTime.dayOfWeek);
+      daySet.add(schedule.dayOfWeek);
     }
   }
 
@@ -905,16 +1025,16 @@ export class RidesService {
     return departureTime.trim() === arrivalTime.trim();
   }
 
-  private async replaceRideDayTimesTx(
+  private async replaceRideDaySchedulesTx(
     tx: Prisma.TransactionClient,
     tenantId: string,
     rideId: string,
     actorId: string,
-    dayTimes: RideDayTimeInputDto[],
+    daySchedules: RideDayScheduleInputDto[],
     deleteExisting: boolean
   ): Promise<void> {
     if (deleteExisting) {
-      await tx.rideDayTime.deleteMany({
+      await tx.rideDaySchedule.deleteMany({
         where: {
           rideId,
           tenantId
@@ -922,24 +1042,35 @@ export class RidesService {
       });
     }
 
-    if (!dayTimes.length) {
+    if (!daySchedules.length) {
       return;
     }
 
-    await tx.rideDayTime.createMany({
-      data: dayTimes.map((dayTime) =>
-        withCreateAudit(
+    for (const schedule of daySchedules) {
+      await tx.rideDaySchedule.create({
+        data: withCreateAudit(
           {
             tenantId,
             rideId,
-            dayOfWeek: dayTime.dayOfWeek,
-            departureTime: dayTime.departureTime.trim(),
-            arrivalTime: dayTime.arrivalTime.trim()
+            dayOfWeek: schedule.dayOfWeek,
+            stationTimes: {
+              create: schedule.stationTimes.map((stationTime) =>
+                withCreateAudit(
+                  {
+                    tenantId,
+                    stationId: stationTime.stationId,
+                    orderIndex: stationTime.orderIndex,
+                    time: stationTime.time?.trim() || null
+                  },
+                  actorId
+                )
+              )
+            }
           },
           actorId
         )
-      )
-    });
+      });
+    }
   }
 
   private parseDateOnly(value: string): Date {
@@ -977,14 +1108,19 @@ export class RidesService {
       const endDate = ride.recurringEndDate ? this.formatDate(ride.recurringEndDate)! : null;
 
       const dateInRange = targetDate >= startDate && (!endDate || targetDate <= endDate);
-      const dayTime = ride.dayTimes.find((entry) => entry.dayOfWeek === targetDayOfWeek);
+      const daySchedule = ride.daySchedules.find((entry) => entry.dayOfWeek === targetDayOfWeek);
+      const orderedStationTimes = daySchedule
+        ? [...daySchedule.stationTimes].sort((left, right) => left.orderIndex - right.orderIndex)
+        : [];
+      const departureTime = orderedStationTimes[0]?.time ?? null;
+      const arrivalTime = orderedStationTimes[orderedStationTimes.length - 1]?.time ?? null;
 
-      if (dateInRange && dayTime) {
+      if (dateInRange && departureTime && arrivalTime) {
         baseInstances.push({
           rideId: ride.id,
           date: targetDate,
-          departureTime: dayTime.departureTime,
-          arrivalTime: dayTime.arrivalTime,
+          departureTime,
+          arrivalTime,
           source: 'BASE',
           rideType: ride.type,
           status: ride.status,
@@ -1066,10 +1202,13 @@ export class RidesService {
       recurringStartDate: this.formatDate(ride.recurringStartDate) ?? null,
       recurringEndDate: this.formatDate(ride.recurringEndDate) ?? null,
       oneTimeDate: this.formatDate(ride.oneTimeDate) ?? null,
-      dayTimes: ride.dayTimes.map((item) => ({
+      daySchedules: ride.daySchedules.map((item) => ({
         dayOfWeek: item.dayOfWeek,
-        departureTime: item.departureTime,
-        arrivalTime: item.arrivalTime
+        stationTimes: item.stationTimes.map((stationTime) => ({
+          stationId: stationTime.stationId,
+          orderIndex: stationTime.orderIndex,
+          time: stationTime.time
+        }))
       })),
       exceptions: ride.exceptions.map((item) => this.toExceptionResponse(item))
     };

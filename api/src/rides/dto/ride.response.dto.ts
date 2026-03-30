@@ -15,15 +15,23 @@ export class RideLineSummaryDto {
   arrivalStationId!: string;
 }
 
-export class RideDayTimeResponseDto {
+export class RideStationTimeResponseDto {
+  @ApiProperty()
+  stationId!: string;
+
+  @ApiProperty({ minimum: 0 })
+  orderIndex!: number;
+
+  @ApiProperty({ type: String, nullable: true, example: '08:30' })
+  time!: string | null;
+}
+
+export class RideDayScheduleResponseDto {
   @ApiProperty({ minimum: 0, maximum: 6 })
   dayOfWeek!: number;
 
-  @ApiProperty({ example: '08:30' })
-  departureTime!: string;
-
-  @ApiProperty({ example: '10:00' })
-  arrivalTime!: string;
+  @ApiProperty({ type: [RideStationTimeResponseDto] })
+  stationTimes!: RideStationTimeResponseDto[];
 }
 
 export class RideExceptionResponseDto {
@@ -98,8 +106,8 @@ export class RideResponseDto {
   @ApiProperty({ nullable: true })
   oneTimeArrivalTime!: string | null;
 
-  @ApiProperty({ type: [RideDayTimeResponseDto] })
-  dayTimes!: RideDayTimeResponseDto[];
+  @ApiProperty({ type: [RideDayScheduleResponseDto] })
+  daySchedules!: RideDayScheduleResponseDto[];
 
   @ApiProperty({ type: [RideExceptionResponseDto] })
   exceptions!: RideExceptionResponseDto[];

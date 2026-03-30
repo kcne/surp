@@ -2457,7 +2457,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Slice12 Recurring {{$timestamp}}\",\n  \"lineId\": \"{{rideLineId}}\",\n  \"capacity\": 38,\n  \"type\": \"RECURRING\",\n  \"status\": \"DRAFT\",\n  \"recurringStartDate\": \"2026-03-20\",\n  \"dayTimes\": [\n    {\n      \"dayOfWeek\": 1,\n      \"departureTime\": \"09:00\",\n      \"arrivalTime\": \"10:30\"\n    },\n    {\n      \"dayOfWeek\": 3,\n      \"departureTime\": \"23:00\",\n      \"arrivalTime\": \"00:20\"\n    }\n  ]\n}"
+              "raw": "{\n  \"name\": \"Slice12 Recurring {{$timestamp}}\",\n  \"lineId\": \"{{rideLineId}}\",\n  \"capacity\": 38,\n  \"type\": \"RECURRING\",\n  \"status\": \"DRAFT\",\n  \"recurringStartDate\": \"2026-03-20\",\n  \"daySchedules\": [\n    {\n      \"dayOfWeek\": 1,\n      \"stationTimes\": [\n        {\n          \"stationId\": \"{{rideDepartureStationId}}\",\n          \"orderIndex\": 0,\n          \"time\": \"09:00\"\n        },\n        {\n          \"stationId\": \"{{rideArrivalStationId}}\",\n          \"orderIndex\": 1,\n          \"time\": \"10:30\"\n        }\n      ]\n    },\n    {\n      \"dayOfWeek\": 3,\n      \"stationTimes\": [\n        {\n          \"stationId\": \"{{rideDepartureStationId}}\",\n          \"orderIndex\": 0,\n          \"time\": \"23:00\"\n        },\n        {\n          \"stationId\": \"{{rideArrivalStationId}}\",\n          \"orderIndex\": 1,\n          \"time\": \"00:20\"\n        }\n      ]\n    }\n  ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/rides",
@@ -2481,8 +2481,8 @@
                   "});",
                   "",
                   "const body = pm.response.json();",
-                  "pm.test('Recurring ride has day-times', function () {",
-                  "  pm.expect(body.dayTimes || []).to.have.length.above(0);",
+                  "pm.test('Recurring ride has day schedules', function () {",
+                  "  pm.expect(body.daySchedules || []).to.have.length.above(0);",
                   "});",
                   "",
                   "if (body.id) {",
@@ -3219,7 +3219,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Slice14 Ride {{$timestamp}}\",\n  \"lineId\": \"{{reservationLineId}}\",\n  \"capacity\": 38,\n  \"type\": \"RECURRING\",\n  \"status\": \"ACTIVE\",\n  \"recurringStartDate\": \"2026-03-20\",\n  \"dayTimes\": [\n    {\n      \"dayOfWeek\": 1,\n      \"departureTime\": \"09:00\",\n      \"arrivalTime\": \"10:30\"\n    }\n  ]\n}"
+              "raw": "{\n  \"name\": \"Slice14 Ride {{$timestamp}}\",\n  \"lineId\": \"{{reservationLineId}}\",\n  \"capacity\": 38,\n  \"type\": \"RECURRING\",\n  \"status\": \"ACTIVE\",\n  \"recurringStartDate\": \"2026-03-20\",\n  \"daySchedules\": [\n    {\n      \"dayOfWeek\": 1,\n      \"stationTimes\": [\n        {\n          \"stationId\": \"{{reservationDepartureStationId}}\",\n          \"orderIndex\": 0,\n          \"time\": \"09:00\"\n        },\n        {\n          \"stationId\": \"{{reservationMidStationId}}\",\n          \"orderIndex\": 1,\n          \"time\": \"09:45\"\n        },\n        {\n          \"stationId\": \"{{reservationArrivalStationId}}\",\n          \"orderIndex\": 2,\n          \"time\": \"10:30\"\n        }\n      ]\n    }\n  ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/rides",
