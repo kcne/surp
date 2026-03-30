@@ -8,6 +8,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse
 } from '@nestjs/swagger';
@@ -172,11 +173,21 @@ export class RidesController {
   @Delete(':id')
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Delete a ride template in the current tenant.' })
+  @ApiQuery({
+    name: 'cascade',
+    required: false,
+    description: 'When true, cancels active reservations and deactivates the ride.'
+  })
   @ApiOkResponse({ type: RideResponseDto })
+  @ApiConflictResponse({ description: 'Ride has active reservations and cascade override is not enabled.' })
   @ApiNotFoundResponse({ description: 'Ride not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
-  remove(@Req() request: RequestWithAuth, @Param('id') id: string): Promise<RideResponseDto> {
-    return this.ridesService.remove(request.auth!, id);
+  remove(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string,
+    @Query('cascade') cascade?: string
+  ): Promise<RideResponseDto> {
+    return this.ridesService.remove(request.auth!, id, cascade === 'true' || cascade === '1');
   }
 }

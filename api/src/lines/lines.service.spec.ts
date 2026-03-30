@@ -3,7 +3,7 @@ import {
   ConflictException,
   NotFoundException
 } from '@nestjs/common';
-import { LineDirection, LineDirectionMode, UserRole } from '@prisma/client';
+import { LineDirection, LineDirectionMode, ReservationStatus, RideStatus, UserRole } from '@prisma/client';
 import { LinesService } from './lines.service';
 
 describe('LinesService', () => {
@@ -16,6 +16,14 @@ describe('LinesService', () => {
       findFirst: jest.fn(),
       update: jest.fn(),
       delete: jest.fn()
+    },
+    ride: {
+      count: jest.fn(),
+      findMany: jest.fn(),
+      updateMany: jest.fn()
+    },
+    reservation: {
+      updateMany: jest.fn()
     },
     lineStop: {
       createMany: jest.fn(),
@@ -157,5 +165,87 @@ describe('LinesService', () => {
         })
       })
     );
+  });
+
+  it('prevents deleting a line with active rides when cascade is disabled', async () => {
+    prismaMock.line.findFirst.mockResolvedValue(baseLine);
+    prismaMock.ride.count.mockResolvedValue(2);
+
+    await expect(service.remove(auth, 'line-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(prismaMock.line.delete).not.toHaveBeenCalled();
+  });
+
+  it('soft deletes a line when no active rides exist', async () => {
+    prismaMock.line.findFirst.mockResolvedValue(baseLine);
+    prismaMock.ride.count.mockResolvedValue(0);
+    prismaMock.line.update.mockResolvedValue({
+      ...baseLine,
+      isActive: false
+    });
+
+    const result = await service.remove(auth, 'line-1');
+
+    expect(prismaMock.line.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'line-1' },
+        data: expect.objectContaining({
+          isActive: false,
+          updatedById: 'admin-1'
+        })
+      })
+    );
+    expect(result.isActive).toBe(false);
+  });
+
+  it('cascade soft deletes rides and cancels reservations for line removal', async () => {
+    prismaMock.line.findFirst.mockResolvedValue(baseLine);
+
+    const tx = {
+      ride: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'ride-1' }]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 })
+      },
+      reservation: {
+        updateMany: jest.fn().mockResolvedValue({ count: 3 })
+      },
+      line: {
+        update: jest.fn().mockResolvedValue({
+          ...baseLine,
+          isActive: false
+        })
+      }
+    };
+
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+
+    const result = await service.remove(auth, 'line-1', true);
+
+    expect(tx.reservation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: 'tenant-1',
+          status: ReservationStatus.ACTIVE
+        }),
+        data: expect.objectContaining({
+          status: ReservationStatus.CANCELLED,
+          updatedById: 'admin-1'
+        })
+      })
+    );
+
+    expect(tx.ride.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: 'tenant-1',
+          lineId: 'line-1',
+          status: { not: RideStatus.INACTIVE }
+        }),
+        data: {
+          status: RideStatus.INACTIVE,
+          updatedById: 'admin-1'
+        }
+      })
+    );
+    expect(result.isActive).toBe(false);
   });
 });

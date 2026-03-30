@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
-import { LineDirection, LineDirectionMode, Prisma } from '@prisma/client';
+import { LineDirection, LineDirectionMode, Prisma, ReservationStatus, RideStatus } from '@prisma/client';
 import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
@@ -412,17 +412,100 @@ export class LinesService {
       }));
   }
 
-  async remove(auth: AccessTokenPayload, id: string): Promise<LineResponseDto> {
+  async remove(auth: AccessTokenPayload, id: string, cascade: boolean = false): Promise<LineResponseDto> {
     await this.getLineOrThrow(auth.tenantId, id);
 
-    const deleted = await this.prisma.line.delete({
+    if (cascade) {
+      return this.prisma.$transaction(async (tx) => {
+        const now = new Date();
+        const rides = await tx.ride.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            lineId: id
+          },
+          select: {
+            id: true
+          }
+        });
+
+        if (rides.length > 0) {
+          const rideIds = rides.map((ride) => ride.id);
+
+          await tx.reservation.updateMany({
+            where: {
+              tenantId: auth.tenantId,
+              rideId: {
+                in: rideIds
+              },
+              status: ReservationStatus.ACTIVE
+            },
+            data: {
+              status: ReservationStatus.CANCELLED,
+              cancelledAt: now,
+              updatedById: auth.sub
+            }
+          });
+
+          await tx.ride.updateMany({
+            where: {
+              tenantId: auth.tenantId,
+              lineId: id,
+              status: {
+                not: RideStatus.INACTIVE
+              }
+            },
+            data: {
+              status: RideStatus.INACTIVE,
+              updatedById: auth.sub
+            }
+          });
+        }
+
+        const deactivated = await tx.line.update({
+          where: {
+            id
+          },
+          data: withUpdateAudit(
+            {
+              isActive: false
+            },
+            auth.sub
+          ),
+          select: SAFE_LINE_SELECT
+        });
+
+        return this.toLineResponse(deactivated);
+      });
+    }
+
+    const activeRideReferenceCount = await this.prisma.ride.count({
+      where: {
+        tenantId: auth.tenantId,
+        lineId: id,
+        status: RideStatus.ACTIVE
+      }
+    });
+
+    if (activeRideReferenceCount > 0) {
+      throw new ConflictException(
+        'Line cannot be deleted because it has active rides. Use cascade=true to deactivate rides and cancel reservations.'
+      );
+    }
+
+    const deactivated = await this.prisma.line.update({
       where: {
         id
       },
+      data: withUpdateAudit(
+        {
+          isActive: false
+        },
+        auth.sub
+      ),
       select: SAFE_LINE_SELECT
     });
 
-    return this.toLineResponse(deleted);
+    return this.toLineResponse(deactivated);
   }
 
   private async getLineOrThrow(tenantId: string, id: string): Promise<LineWithStops & SelectedLine> {

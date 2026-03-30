@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { RideExceptionType, RideStatus, RideType, UserRole } from '@prisma/client';
+import { ReservationStatus, RideExceptionType, RideStatus, RideType, UserRole } from '@prisma/client';
 import { RidesService } from './rides.service';
 
 describe('RidesService', () => {
@@ -9,7 +9,9 @@ describe('RidesService', () => {
       findFirst: jest.fn()
     },
     reservation: {
-      groupBy: jest.fn()
+      groupBy: jest.fn(),
+      count: jest.fn(),
+      updateMany: jest.fn()
     },
     ride: {
       create: jest.fn(),
@@ -361,5 +363,189 @@ describe('RidesService', () => {
         })
       })
     );
+  });
+
+  it('prevents deleting a ride with active reservations when cascade is disabled', async () => {
+    prismaMock.ride.findFirst.mockResolvedValue({
+      id: 'ride-1',
+      tenantId: 'tenant-1',
+      lineId: 'line-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      name: 'Ride',
+      capacity: 38,
+      type: RideType.RECURRING,
+      status: RideStatus.ACTIVE,
+      recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      line: {
+        id: 'line-1',
+        name: 'Line 1',
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b'
+      },
+      dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+      exceptions: []
+    });
+    prismaMock.reservation.count.mockResolvedValue(1);
+
+    await expect(service.remove(auth, 'ride-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(prismaMock.ride.delete).not.toHaveBeenCalled();
+  });
+
+  it('soft deletes ride when no active reservations exist', async () => {
+    prismaMock.ride.findFirst.mockResolvedValue({
+      id: 'ride-1',
+      tenantId: 'tenant-1',
+      lineId: 'line-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      name: 'Ride',
+      capacity: 38,
+      type: RideType.RECURRING,
+      status: RideStatus.ACTIVE,
+      recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      line: {
+        id: 'line-1',
+        name: 'Line 1',
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b'
+      },
+      dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+      exceptions: []
+    });
+    prismaMock.reservation.count.mockResolvedValue(0);
+    prismaMock.ride.update.mockResolvedValue({
+      id: 'ride-1',
+      tenantId: 'tenant-1',
+      lineId: 'line-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      name: 'Ride',
+      capacity: 38,
+      type: RideType.RECURRING,
+      status: RideStatus.INACTIVE,
+      recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      line: {
+        id: 'line-1',
+        name: 'Line 1',
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b'
+      },
+      dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+      exceptions: []
+    });
+
+    const result = await service.remove(auth, 'ride-1');
+
+    expect(prismaMock.ride.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'ride-1' },
+        data: expect.objectContaining({
+          status: RideStatus.INACTIVE,
+          updatedById: 'admin-1'
+        })
+      })
+    );
+    expect(result.status).toBe(RideStatus.INACTIVE);
+  });
+
+  it('cascade cancels reservations and soft deletes ride', async () => {
+    prismaMock.ride.findFirst.mockResolvedValue({
+      id: 'ride-1',
+      tenantId: 'tenant-1',
+      lineId: 'line-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      name: 'Ride',
+      capacity: 38,
+      type: RideType.RECURRING,
+      status: RideStatus.ACTIVE,
+      recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      line: {
+        id: 'line-1',
+        name: 'Line 1',
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b'
+      },
+      dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+      exceptions: []
+    });
+
+    const tx = {
+      reservation: {
+        updateMany: jest.fn().mockResolvedValue({ count: 2 })
+      },
+      ride: {
+        update: jest.fn().mockResolvedValue({
+          id: 'ride-1',
+          tenantId: 'tenant-1',
+          lineId: 'line-1',
+          createdById: 'admin-1',
+          updatedById: 'admin-1',
+          name: 'Ride',
+          capacity: 38,
+          type: RideType.RECURRING,
+          status: RideStatus.INACTIVE,
+          recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+          recurringEndDate: null,
+          oneTimeDate: null,
+          oneTimeDepartureTime: null,
+          oneTimeArrivalTime: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          line: {
+            id: 'line-1',
+            name: 'Line 1',
+            departureStationId: 'station-a',
+            arrivalStationId: 'station-b'
+          },
+          dayTimes: [{ dayOfWeek: 1, departureTime: '09:00', arrivalTime: '10:30' }],
+          exceptions: []
+        })
+      }
+    };
+
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+
+    const result = await service.remove(auth, 'ride-1', true);
+
+    expect(tx.reservation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: 'tenant-1',
+          rideId: 'ride-1',
+          status: ReservationStatus.ACTIVE
+        }),
+        data: expect.objectContaining({
+          status: ReservationStatus.CANCELLED,
+          updatedById: 'admin-1'
+        })
+      })
+    );
+    expect(result.status).toBe(RideStatus.INACTIVE);
   });
 });

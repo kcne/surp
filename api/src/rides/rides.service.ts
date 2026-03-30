@@ -671,17 +671,71 @@ export class RidesService {
     return this.toExceptionResponse(deleted);
   }
 
-  async remove(auth: AccessTokenPayload, id: string): Promise<RideResponseDto> {
+  async remove(auth: AccessTokenPayload, id: string, cascade: boolean = false): Promise<RideResponseDto> {
     await this.getRideOrThrow(auth.tenantId, id);
 
-    const deleted = await this.prisma.ride.delete({
+    if (cascade) {
+      return this.prisma.$transaction(async (tx) => {
+        const now = new Date();
+
+        await tx.reservation.updateMany({
+          where: {
+            tenantId: auth.tenantId,
+            rideId: id,
+            status: ReservationStatus.ACTIVE
+          },
+          data: {
+            status: ReservationStatus.CANCELLED,
+            cancelledAt: now,
+            updatedById: auth.sub
+          }
+        });
+
+        const deactivated = await tx.ride.update({
+          where: {
+            id
+          },
+          data: withUpdateAudit(
+            {
+              status: RideStatus.INACTIVE
+            },
+            auth.sub
+          ),
+          select: SAFE_RIDE_SELECT
+        });
+
+        return this.toRideResponse(deactivated);
+      });
+    }
+
+    const activeReservationReferenceCount = await this.prisma.reservation.count({
+      where: {
+        tenantId: auth.tenantId,
+        rideId: id,
+        status: ReservationStatus.ACTIVE
+      }
+    });
+
+    if (activeReservationReferenceCount > 0) {
+      throw new ConflictException(
+        'Ride cannot be deleted because it has active reservations. Use cascade=true to cancel reservations and deactivate ride.'
+      );
+    }
+
+    const deactivated = await this.prisma.ride.update({
       where: {
         id
       },
+      data: withUpdateAudit(
+        {
+          status: RideStatus.INACTIVE
+        },
+        auth.sub
+      ),
       select: SAFE_RIDE_SELECT
     });
 
-    return this.toRideResponse(deleted);
+    return this.toRideResponse(deactivated);
   }
 
   private async getRideOrThrow(tenantId: string, id: string): Promise<SelectedRide> {

@@ -2,11 +2,13 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req } fr
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiForbiddenResponse,
   ApiHeader,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse
 } from '@nestjs/swagger';
@@ -130,11 +132,21 @@ export class LinesController {
   @Delete(':id')
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Delete a line in the current tenant.' })
+  @ApiQuery({
+    name: 'cascade',
+    required: false,
+    description: 'When true, also deactivates related rides and cancels active reservations.'
+  })
   @ApiOkResponse({ type: LineResponseDto })
+  @ApiConflictResponse({ description: 'Line has active rides and cascade override is not enabled.' })
   @ApiNotFoundResponse({ description: 'Line not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
-  remove(@Req() request: RequestWithAuth, @Param('id') id: string): Promise<LineResponseDto> {
-    return this.linesService.remove(request.auth!, id);
+  remove(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string,
+    @Query('cascade') cascade?: string
+  ): Promise<LineResponseDto> {
+    return this.linesService.remove(request.auth!, id, cascade === 'true' || cascade === '1');
   }
 }
