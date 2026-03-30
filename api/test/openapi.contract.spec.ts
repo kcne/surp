@@ -27,7 +27,7 @@ describe('OpenAPI contract', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
   it('uses a stable OpenAPI version tag', () => {
