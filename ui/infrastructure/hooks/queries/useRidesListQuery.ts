@@ -49,7 +49,7 @@ async function fetchAllLines() {
   let total = 0
 
   do {
-    const response = await linesControllerList({ page, pageSize: MAX_PAGE_SIZE })
+    const response = await linesControllerList({ page, pageSize: MAX_PAGE_SIZE, isActive: true })
     if (!isLinesListSuccess(response)) {
       throw new Error("Neuspesno ucitavanje linija")
     }
