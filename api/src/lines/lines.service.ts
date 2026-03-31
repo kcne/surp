@@ -305,8 +305,10 @@ export class LinesService {
           )
         });
 
-        // Keep paired directions aligned when only the line name is edited.
+        // Keep paired directions aligned with route direction labels.
         if (hasNameUpdate && existing.directionMode === LineDirectionMode.BOTH && existing.pairKey) {
+          const reverseDirectionalName = `${stations.arrival.name} - ${stations.departure.name}`;
+
           await tx.line.updateMany({
             where: {
               tenantId: auth.tenantId,
@@ -317,7 +319,7 @@ export class LinesService {
             },
             data: withUpdateAudit(
               {
-                name: resolvedName
+                name: reverseDirectionalName
               },
               auth.sub
             )
