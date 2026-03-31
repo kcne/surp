@@ -11,6 +11,7 @@ import {
 } from "@/infrastructure/generated/surp-api"
 import type { CreateLineDto, UpdateLineDto } from "@/infrastructure/generated/model"
 import { linesListQueryKey } from "@/infrastructure/hooks/queries/useLinesListQuery"
+import { ridesListQueryKey } from "@/infrastructure/hooks/queries/useRidesListQuery"
 
 function isLineMutationSuccess<TResponse extends { status: number }>(
   response: TResponse,
@@ -46,6 +47,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 function invalidateLinesList(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: linesListQueryKey })
+  queryClient.invalidateQueries({ queryKey: ridesListQueryKey })
 }
 
 export function useCreateLineMutation() {

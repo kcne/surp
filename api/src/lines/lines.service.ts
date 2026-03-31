@@ -250,6 +250,9 @@ export class LinesService {
 
   async update(auth: AccessTokenPayload, id: string, dto: UpdateLineDto): Promise<LineResponseDto> {
     const existing = await this.getLineOrThrow(auth.tenantId, id);
+    const nextNameInput = dto.name;
+    const hasNameUpdate = typeof nextNameInput === 'string';
+    const resolvedName = hasNameUpdate ? nextNameInput.trim() || existing.name : existing.name;
 
     const departureStationId = dto.departureStationId ?? existing.departureStationId;
     const arrivalStationId = dto.arrivalStationId ?? existing.arrivalStationId;
@@ -287,7 +290,7 @@ export class LinesService {
           },
           data: withUpdateAudit(
             {
-              ...(typeof dto.name === 'string' ? { name: dto.name.trim() || existing.name } : {}),
+              ...(hasNameUpdate ? { name: resolvedName } : {}),
               ...(dto.departureStationId ? { departureStationId: dto.departureStationId } : {}),
               ...(dto.arrivalStationId ? { arrivalStationId: dto.arrivalStationId } : {}),
               ...(dto.directionMode ? { directionMode: dto.directionMode } : {}),
@@ -301,6 +304,25 @@ export class LinesService {
             auth.sub
           )
         });
+
+        // Keep paired directions aligned when only the line name is edited.
+        if (hasNameUpdate && existing.directionMode === LineDirectionMode.BOTH && existing.pairKey) {
+          await tx.line.updateMany({
+            where: {
+              tenantId: auth.tenantId,
+              pairKey: existing.pairKey,
+              id: {
+                not: id
+              }
+            },
+            data: withUpdateAudit(
+              {
+                name: resolvedName
+              },
+              auth.sub
+            )
+          });
+        }
 
         if (dto.intermediateStops !== undefined) {
           await this.replaceLineStopsTx(tx, auth.tenantId, id, auth.sub, nextStops, true);
