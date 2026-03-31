@@ -9,6 +9,7 @@ import type {
 } from "@/infrastructure/generated/model"
 
 export const stationsListQueryKey = ["stations", "list"] as const
+const MAX_PAGE_SIZE = 100
 
 export type StationListItem = {
   id: string
@@ -53,13 +54,28 @@ function isStationsListSuccess(
 
 export function useStationsListQuery() {
   return useQuery({
-    queryKey: stationsListQueryKey,
+    queryKey: [...stationsListQueryKey, MAX_PAGE_SIZE],
     queryFn: async (): Promise<StationResponseDto[]> => {
-      const response = await stationsControllerList()
-      if (!isStationsListSuccess(response)) {
-        throw new Error("Neuspesno ucitavanje stanica")
-      }
-      return response.data.items
+      let currentPage = 1
+      let total = 0
+      const items: StationResponseDto[] = []
+
+      do {
+        const response = await stationsControllerList({
+          page: currentPage,
+          pageSize: MAX_PAGE_SIZE,
+        })
+
+        if (!isStationsListSuccess(response)) {
+          throw new Error("Neuspesno ucitavanje stanica")
+        }
+
+        total = response.data.total
+        items.push(...response.data.items)
+        currentPage += 1
+      } while (items.length < total)
+
+      return items
     },
     select: (items): StationListItem[] => items.map(toStationListItem),
     staleTime: 60_000,
