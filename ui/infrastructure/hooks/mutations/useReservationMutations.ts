@@ -38,6 +38,21 @@ function isCancelReservationSuccess(
   return response.status === 200
 }
 
+function getCancelReservationErrorMessage(response: reservationsControllerCancelResponse): string {
+  switch (response.status) {
+    case 401:
+      return "Nemate autorizaciju da otkažete rezervaciju"
+    case 403:
+      return "Nemate dozvolu za otkazivanje ove rezervacije"
+    case 404:
+      return "Rezervacija nije pronađena"
+    case 400:
+      return "Neispravan zahtev za otkazivanje rezervacije"
+    default:
+      return "Neuspesno otkazivanje rezervacije"
+  }
+}
+
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) {
     return error.message
@@ -158,17 +173,26 @@ export function useCancelReservationMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, rideInstanceId }: { id: string; rideInstanceId?: string }) => {
       const response = await reservationsControllerCancel(id)
 
       if (!isCancelReservationSuccess(response)) {
-        throw new Error("Neuspesno otkazivanje rezervacije")
+        throw new Error(getCancelReservationErrorMessage(response))
       }
 
-      return response.data
+      return {
+        reservation: response.data,
+        rideInstanceId,
+      }
     },
-    onSuccess: () => {
+    onSuccess: ({ rideInstanceId }) => {
       toast.success("Rezervacija je uspesno otkazana")
+
+      if (rideInstanceId) {
+        invalidateReservations(queryClient, [rideInstanceId])
+        return
+      }
+
       queryClient.invalidateQueries({ queryKey: ["reservations"] })
     },
     onError: (error) => {

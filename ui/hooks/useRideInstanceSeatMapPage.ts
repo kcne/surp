@@ -206,6 +206,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     handleSeatClick,
     handleExport,
     handleSingleReservationOpenChange,
+    refetchReservations: reservationsQuery.refetch,
     setIsMultiReservationModalOpen,
   }
 }

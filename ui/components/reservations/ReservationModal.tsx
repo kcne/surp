@@ -133,18 +133,32 @@ export function ReservationModal({
     }
 
     const currentLine = selectedRideInstance.ride.line
-    if (!currentLine.pairKey) {
-      return []
-    }
 
     return rides
       .filter(
-        (ride) =>
-          ride.status !== "cancelled" &&
-          ride.line.pairKey === currentLine.pairKey &&
-          ride.line.id !== currentLine.id &&
-          ride.line.departureStation.id === currentLine.arrivalStation.id &&
-          ride.line.arrivalStation.id === currentLine.departureStation.id
+        (ride) => {
+          if (ride.status === "cancelled") {
+            return false
+          }
+
+          if (ride.line.id === currentLine.id) {
+            return false
+          }
+
+          const isReverseDirection =
+            ride.line.departureStation.id === currentLine.arrivalStation.id &&
+            ride.line.arrivalStation.id === currentLine.departureStation.id
+
+          if (!isReverseDirection) {
+            return false
+          }
+
+          if (currentLine.pairKey && ride.line.pairKey) {
+            return ride.line.pairKey === currentLine.pairKey
+          }
+
+          return true
+        }
       )
       .flatMap((ride) => generateRideInstancesForRide(ride))
       .filter((instance) => instance.date >= selectedRideInstance.date)
@@ -416,7 +430,11 @@ export function ReservationModal({
                 }
 
                 try {
-                  await cancelReservationMutation.mutateAsync(reservation.id)
+                  await cancelReservationMutation.mutateAsync({
+                    id: reservation.id,
+                    rideInstanceId: reservation.rideInstanceId,
+                  })
+                  onComplete?.()
                   closeReservationModal()
                 } catch (error) {
                   // Error is handled in mutation hook

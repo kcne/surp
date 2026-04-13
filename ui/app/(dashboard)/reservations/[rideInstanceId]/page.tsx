@@ -40,6 +40,7 @@ export default function SeatMapPage() {
     handleSeatClick,
     handleExport,
     handleSingleReservationOpenChange,
+    refetchReservations,
     setIsMultiReservationModalOpen,
   } = useRideInstanceSeatMapPage({ rideInstanceId })
 
@@ -107,6 +108,9 @@ export default function SeatMapPage() {
           reservations={reservations}
           seatNumber={selectedSeat}
           reservation={reservationToEdit}
+          onComplete={() => {
+            void refetchReservations()
+          }}
         />
 
         <ReservationModal
@@ -120,6 +124,7 @@ export default function SeatMapPage() {
           multipleSelectionMode
           onComplete={() => {
             setIsMultiReservationModalOpen(false)
+            void refetchReservations()
           }}
         />
       </div>

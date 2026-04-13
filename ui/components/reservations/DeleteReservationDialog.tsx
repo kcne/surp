@@ -25,7 +25,10 @@ export function DeleteReservationDialog({
     if (!reservation) return
 
     try {
-      await cancelReservationMutation.mutateAsync(reservation.id)
+      await cancelReservationMutation.mutateAsync({
+        id: reservation.id,
+        rideInstanceId: reservation.rideInstanceId,
+      })
       onOpenChange(false)
     } catch (error) {
       // Error is handled in mutation hook
