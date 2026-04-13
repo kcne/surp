@@ -145,19 +145,15 @@ export function ReservationModal({
             return false
           }
 
-          const isReverseDirection =
-            ride.line.departureStation.id === currentLine.arrivalStation.id &&
-            ride.line.arrivalStation.id === currentLine.departureStation.id
-
-          if (!isReverseDirection) {
-            return false
-          }
-
           if (currentLine.pairKey && ride.line.pairKey) {
             return ride.line.pairKey === currentLine.pairKey
           }
 
-          return true
+          const isReverseDirection =
+            ride.line.departureStation.id === currentLine.arrivalStation.id &&
+            ride.line.arrivalStation.id === currentLine.departureStation.id
+
+          return isReverseDirection
         }
       )
       .flatMap((ride) => generateRideInstancesForRide(ride))
