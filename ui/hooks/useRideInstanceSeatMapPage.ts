@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import ExcelJS from "exceljs"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/useRidesInstancesByDateQuery"
 import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
@@ -10,7 +11,13 @@ interface UseRideInstanceSeatMapPageParams {
   rideInstanceId: string
 }
 
-const CSV_BOM = "\uFEFF"
+function sanitizeFileNamePart(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[^\w\s.-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+}
 
 function extractDateFromRideInstanceId(rideInstanceId: string): Date | null {
   const parts = rideInstanceId.split(":")
@@ -105,7 +112,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     toggleSelectedSeat(seatNumber)
   }
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!selectedRideInstance) return
 
     const rideReservations = reservations
@@ -115,13 +122,11 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       )
       .sort((left, right) => left.seatNumber - right.seatNumber)
 
-    const escapeCsv = (value: string | number | undefined) => {
-      const stringValue = String(value ?? "")
-      if (stringValue.includes(",") || stringValue.includes("\"") || stringValue.includes("\n")) {
-        return `"${stringValue.replace(/"/g, '""')}"`
-      }
-      return stringValue
-    }
+    const fromName = selectedRideInstance.ride.line.departureStation?.name ?? ""
+    const toName = selectedRideInstance.ride.line.arrivalStation?.name ?? ""
+    const dateStr = selectedRideInstance.date
+    const timeStr = selectedRideInstance.departureTime
+    const passengerCount = rideReservations.length
 
     const headers = [
       "Sedište",
@@ -149,13 +154,71 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       selectedRideInstance.departureTime,
     ])
 
-    const csvContent = CSV_BOM + [headers, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n")
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet("Putnici")
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const columnCount = headers.length
+    const lastColumnLetter = worksheet.getColumn(columnCount).letter
+
+    const headingText = `${fromName} - ${toName} - ${dateStr} - ${timeStr} - ${passengerCount}`
+    worksheet.mergeCells(`A1:${lastColumnLetter}1`)
+    const headingCell = worksheet.getCell("A1")
+    headingCell.value = headingText
+    headingCell.font = { bold: true, size: 14 }
+    headingCell.alignment = { horizontal: "center", vertical: "middle" }
+    worksheet.getRow(1).height = 24
+
+    worksheet.addRow([])
+
+    const headerRow = worksheet.addRow(headers)
+    headerRow.font = { bold: true }
+    headerRow.alignment = { horizontal: "center", vertical: "middle" }
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE5E7EB" },
+      }
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      }
+    })
+
+    rows.forEach((row) => {
+      const addedRow = worksheet.addRow(row)
+      addedRow.eachCell((cell) => {
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        }
+      })
+    })
+
+    worksheet.columns.forEach((column) => {
+      let maxLength = 10
+      column.eachCell?.({ includeEmpty: false }, (cell) => {
+        const value = cell.value == null ? "" : String(cell.value)
+        if (value.length > maxLength) {
+          maxLength = value.length
+        }
+      })
+      column.width = Math.min(maxLength + 2, 40)
+    })
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement("a")
     anchor.href = url
-    anchor.download = `putnici-${selectedRideInstance.id}.csv`
+    const fileName = `${sanitizeFileNamePart(fromName)}-${sanitizeFileNamePart(toName)}-${dateStr}-${timeStr.replace(":", "-")}.xlsx`
+    anchor.download = fileName
     document.body.appendChild(anchor)
     anchor.click()
     document.body.removeChild(anchor)
