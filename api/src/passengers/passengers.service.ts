@@ -11,6 +11,20 @@ import {
 } from './dto/passenger.response.dto';
 import { UpdatePassengerDto } from './dto/update-passenger.dto';
 
+function capitalizeName(value: string): string {
+  return value
+    .trim()
+    .split(/(\s+|-)/)
+    .map((part) => {
+      if (part.length === 0 || /^\s+$/.test(part) || part === '-') {
+        return part;
+      }
+      const lower = part.toLocaleLowerCase();
+      return lower.charAt(0).toLocaleUpperCase() + lower.slice(1);
+    })
+    .join('');
+}
+
 type SafePassengerSelect = {
   id: true;
   tenantId: true;
@@ -52,8 +66,8 @@ export class PassengersService {
       data: withCreateAudit(
         {
           tenantId: auth.tenantId,
-          firstName: dto.firstName.trim(),
-          lastName: dto.lastName.trim(),
+          firstName: capitalizeName(dto.firstName),
+          lastName: capitalizeName(dto.lastName),
           phone: dto.phone.trim(),
           email: dto.email?.trim(),
           passengerType: dto.passengerType,
@@ -143,8 +157,8 @@ export class PassengersService {
       },
       data: withUpdateAudit(
         {
-          ...(typeof dto.firstName === 'string' ? { firstName: dto.firstName.trim() } : {}),
-          ...(typeof dto.lastName === 'string' ? { lastName: dto.lastName.trim() } : {}),
+          ...(typeof dto.firstName === 'string' ? { firstName: capitalizeName(dto.firstName) } : {}),
+          ...(typeof dto.lastName === 'string' ? { lastName: capitalizeName(dto.lastName) } : {}),
           ...(typeof dto.phone === 'string' ? { phone: dto.phone.trim() } : {}),
           ...(typeof dto.email === 'string' ? { email: dto.email.trim() } : {}),
           ...(dto.passengerType !== undefined ? { passengerType: dto.passengerType } : {}),

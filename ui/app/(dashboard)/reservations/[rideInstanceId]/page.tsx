@@ -1,10 +1,12 @@
 "use client"
 
+import { useState } from "react"
 import { useParams } from "next/navigation"
 import { Layout } from "@/components/layout/Layout"
 import { SeatMap } from "@/components/reservations/SeatMap"
 import { ReservationModal } from "@/components/reservations/ReservationModal"
 import { RideInstanceSummaryCard } from "@/components/reservations/RideInstanceSummaryCard"
+import { ExportPassengersDialog } from "@/components/reservations/ExportPassengersDialog"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -39,10 +41,13 @@ export default function SeatMapPage() {
     clearSelectedSeats,
     handleSeatClick,
     handleExport,
+    buildDefaultExportFileName,
     handleSingleReservationOpenChange,
     refetchReservations,
     setIsMultiReservationModalOpen,
   } = useRideInstanceSeatMapPage({ rideInstanceId })
+
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
 
   if (!selectedRideInstance) {
     return (
@@ -85,7 +90,7 @@ export default function SeatMapPage() {
           selectedSeats={selectedSeats}
           onClearSelectedSeats={clearSelectedSeats}
           onReserveSelectedSeats={() => setIsMultiReservationModalOpen(true)}
-          onExport={handleExport}
+          onExport={() => setIsExportDialogOpen(true)}
         />
 
         {/* Seat Map */}
@@ -126,6 +131,13 @@ export default function SeatMapPage() {
             setIsMultiReservationModalOpen(false)
             void refetchReservations()
           }}
+        />
+
+        <ExportPassengersDialog
+          open={isExportDialogOpen}
+          onOpenChange={setIsExportDialogOpen}
+          defaultFileName={buildDefaultExportFileName()}
+          onExport={handleExport}
         />
       </div>
     </Layout>

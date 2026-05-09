@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import ExcelJS from "exceljs"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/useRidesInstancesByDateQuery"
 import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
@@ -167,7 +169,21 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     toggleSelectedSeat(seatNumber)
   }
 
-  const handleExport = async () => {
+  const buildDefaultExportFileName = (): string => {
+    if (!selectedRideInstance) return "putnici"
+    const fromName = selectedRideInstance.ride.line.departureStation?.name ?? ""
+    const toName = selectedRideInstance.ride.line.arrivalStation?.name ?? ""
+    const dateStr = selectedRideInstance.date
+    const timeStr = selectedRideInstance.departureTime
+    return `${sanitizeFileNamePart(fromName)}-${sanitizeFileNamePart(toName)}-${dateStr}-${timeStr.replace(":", "-")}`
+  }
+
+  const handleExport = async (
+    options: { fileName: string; format: "xlsx" | "pdf" } = {
+      fileName: buildDefaultExportFileName(),
+      format: "xlsx",
+    }
+  ) => {
     if (!selectedRideInstance) return
 
     const rideReservations = reservations
@@ -216,13 +232,31 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       returnDates[index],
     ])
 
+    const safeBaseName = sanitizeFileNamePart(options.fileName) || buildDefaultExportFileName()
+    const headingText = `${fromName} - ${toName} - ${dateStr} - ${timeStr} - ${passengerCount}`
+
+    if (options.format === "pdf") {
+      const doc = new jsPDF({ orientation: "landscape" })
+      doc.setFontSize(14)
+      doc.text(headingText, doc.internal.pageSize.getWidth() / 2, 14, { align: "center" })
+      autoTable(doc, {
+        startY: 22,
+        head: [headers],
+        body: rows.map((row) => row.map((cell) => (cell == null ? "" : String(cell)))),
+        styles: { fontSize: 9, cellPadding: 2 },
+        headStyles: { fillColor: [229, 231, 235], textColor: 20, halign: "center" },
+        theme: "grid",
+      })
+      doc.save(`${safeBaseName}.pdf`)
+      return
+    }
+
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet("Putnici")
 
     const columnCount = headers.length
     const lastColumnLetter = worksheet.getColumn(columnCount).letter
 
-    const headingText = `${fromName} - ${toName} - ${dateStr} - ${timeStr} - ${passengerCount}`
     worksheet.mergeCells(`A1:${lastColumnLetter}1`)
     const headingCell = worksheet.getCell("A1")
     headingCell.value = headingText
@@ -283,7 +317,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement("a")
     anchor.href = url
-    const fileName = `${sanitizeFileNamePart(fromName)}-${sanitizeFileNamePart(toName)}-${dateStr}-${timeStr.replace(":", "-")}.xlsx`
+    const fileName = `${safeBaseName}.xlsx`
     anchor.download = fileName
     document.body.appendChild(anchor)
     anchor.click()
@@ -334,6 +368,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     clearSelectedSeats,
     handleSeatClick,
     handleExport,
+    buildDefaultExportFileName,
     handleSingleReservationOpenChange,
     refetchReservations: reservationsQuery.refetch,
     setIsMultiReservationModalOpen,

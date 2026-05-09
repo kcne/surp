@@ -20,13 +20,13 @@ export function RideInstanceInfoDialog({
 }: RideInstanceInfoDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Više informacija</DialogTitle>
           <DialogDescription>{selectedInstance?.ride.line.name}</DialogDescription>
         </DialogHeader>
         {selectedInstance && (
-          <div className="space-y-4">
+          <div className="-mr-2 flex-1 space-y-4 overflow-y-auto pr-2">
             <div className="grid gap-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-2">
               <p className="text-sm">
                 Datum: <span className="font-medium">{formatDateDisplay(selectedInstance.date)}</span>
