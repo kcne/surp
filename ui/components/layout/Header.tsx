@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import { useState } from "react"
 import { useAuthStore } from "@/stores/authStore"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,13 +12,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { User, LogOut } from "lucide-react"
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import { User, LogOut, Menu } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { SidebarNav } from "./Sidebar"
 
 export function Header() {
   const router = useRouter()
   const { user, logout } = useAuthStore()
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   const handleLogout = () => {
     logout()
@@ -29,6 +38,24 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="flex h-16 items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-3">
+          <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                aria-label="Otvori meni"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 p-0">
+              <SheetTitle className="sr-only">Navigacija</SheetTitle>
+              <div className="flex h-full flex-col pt-4">
+                <SidebarNav onNavigate={() => setMobileNavOpen(false)} />
+              </div>
+            </SheetContent>
+          </Sheet>
           <div className="flex h-10 items-center justify-center">
             <Image
               src="/logo.jpg"
