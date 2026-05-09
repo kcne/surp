@@ -110,6 +110,7 @@ export class ReservationsController {
   }
 
   @Post(':id/cancel')
+  @HttpCode(200)
   @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
   @ApiOperation({ summary: 'Cancel reservation in the current tenant.' })
   @ApiOkResponse({ type: ReservationResponseDto })
