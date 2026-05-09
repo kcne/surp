@@ -4,8 +4,63 @@ import ExcelJS from "exceljs"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/useRidesInstancesByDateQuery"
 import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
+import { reservationsControllerList } from "@/infrastructure/generated/surp-api"
 import { buildSeatMap } from "@/utils/seatHelpers"
 import type { Reservation } from "@/types"
+
+function normalizeDate(value: string): string {
+  return value.includes("T") ? value.split("T")[0] : value
+}
+
+function formatLocalDate(value: string): string {
+  const date = new Date(`${normalizeDate(value)}T00:00:00`)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return date.toLocaleDateString("sr-Latn-RS", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
+}
+
+async function fetchReturnDateForPassenger(
+  passengerId: string,
+  outboundReservationId: string,
+  outboundRideId: string,
+  outboundDate: string
+): Promise<string> {
+  try {
+    const response = await reservationsControllerList({
+      passengerId,
+      status: "ACTIVE",
+      pageSize: 100,
+    })
+    if (response.status !== 200) {
+      return ""
+    }
+    const outboundDateOnly = normalizeDate(outboundDate)
+    const candidates = response.data.items
+      .filter(
+        (item) =>
+          item.id !== outboundReservationId &&
+          item.rideId !== outboundRideId &&
+          normalizeDate(item.travelDate) >= outboundDateOnly
+      )
+      .sort((left, right) => {
+        const leftKey = `${normalizeDate(left.travelDate)}T${left.rideDepartureTime}`
+        const rightKey = `${normalizeDate(right.travelDate)}T${right.rideDepartureTime}`
+        return leftKey.localeCompare(rightKey)
+      })
+    const returnReservation = candidates[0]
+    if (!returnReservation) {
+      return ""
+    }
+    return formatLocalDate(returnReservation.travelDate)
+  } catch {
+    return ""
+  }
+}
 
 interface UseRideInstanceSeatMapPageParams {
   rideInstanceId: string
@@ -130,28 +185,35 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
 
     const headers = [
       "Sedište",
-      "Ime",
-      "Prezime",
+      "Ime i prezime",
       "Telefon",
-      "Email",
-      "Tip putnika",
       "Polazna stanica",
       "Dolazna stanica",
       "Datum polaska",
       "Vreme polaska",
+      "Datum povratka",
     ]
 
-    const rows = rideReservations.map((reservation) => [
+    const returnDates = await Promise.all(
+      rideReservations.map((reservation) =>
+        fetchReturnDateForPassenger(
+          reservation.passengerId,
+          reservation.id,
+          selectedRideInstance.ride.id,
+          selectedRideInstance.date
+        )
+      )
+    )
+
+    const rows = rideReservations.map((reservation, index) => [
       reservation.seatNumber,
-      reservation.passenger.firstName,
-      reservation.passenger.lastName,
+      `${reservation.passenger.firstName} ${reservation.passenger.lastName}`.trim(),
       reservation.passenger.phone,
-      reservation.passenger.email || "",
-      reservation.passenger.passengerType,
       reservation.departureStation.name,
       reservation.arrivalStation.name,
-      selectedRideInstance.date,
+      formatLocalDate(selectedRideInstance.date),
       selectedRideInstance.departureTime,
+      returnDates[index],
     ])
 
     const workbook = new ExcelJS.Workbook()
@@ -200,8 +262,12 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     })
 
     worksheet.columns.forEach((column) => {
-      let maxLength = 10
+      let maxLength = 4
       column.eachCell?.({ includeEmpty: false }, (cell) => {
+        const rowNumber = typeof cell.row === "number" ? cell.row : Number(cell.row)
+        if (rowNumber <= 2) {
+          return
+        }
         const value = cell.value == null ? "" : String(cell.value)
         if (value.length > maxLength) {
           maxLength = value.length
