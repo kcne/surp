@@ -4432,6 +4432,238 @@
           "Tickets"
         ]
       }
+    },
+    "/api/public/agencies/{slug}": {
+      "get": {
+        "operationId": "PublicStorefrontController_getAgencyBySlug",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicAgencyStorefrontResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Published active agency storefront not found."
+          },
+          "429": {
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "Get a published public agency storefront by slug.",
+        "tags": [
+          "Public · Agencies"
+        ]
+      }
+    },
+    "/api/storefront": {
+      "get": {
+        "operationId": "StorefrontAdminController_getCurrent",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontAdminResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role or inactive tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get storefront configuration for the current tenant.",
+        "tags": [
+          "Storefront Admin"
+        ]
+      },
+      "put": {
+        "operationId": "StorefrontAdminController_upsert",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertStorefrontDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontAdminResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role or inactive tenant."
+          },
+          "422": {
+            "description": "Semantic validation failure."
+          },
+          "429": {
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Upsert storefront configuration for the current tenant.",
+        "tags": [
+          "Storefront Admin"
+        ]
+      }
+    },
+    "/api/storefront/publish": {
+      "post": {
+        "operationId": "StorefrontAdminController_publish",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontAdminResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role or inactive tenant."
+          },
+          "404": {
+            "description": "Storefront configuration not found."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Publish the current tenant storefront.",
+        "tags": [
+          "Storefront Admin"
+        ]
+      }
+    },
+    "/api/storefront/unpublish": {
+      "post": {
+        "operationId": "StorefrontAdminController_unpublish",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontAdminResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role or inactive tenant."
+          },
+          "404": {
+            "description": "Storefront configuration not found."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Unpublish the current tenant storefront.",
+        "tags": [
+          "Storefront Admin"
+        ]
+      }
     }
   },
   "info": {
@@ -5384,6 +5616,10 @@
           "name": {
             "type": "string",
             "example": "Acme Transit"
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Belgrade"
           }
         },
         "required": [
@@ -5402,6 +5638,10 @@
           },
           "name": {
             "type": "string"
+          },
+          "timezone": {
+            "type": "object",
+            "nullable": true
           },
           "isActive": {
             "type": "boolean"
@@ -5427,6 +5667,7 @@
           "id",
           "slug",
           "name",
+          "timezone",
           "isActive",
           "deactivatedAt",
           "deactivatedById",
@@ -5516,6 +5757,10 @@
           "name": {
             "type": "string",
             "example": "Acme Transit"
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Belgrade"
           }
         }
       },
@@ -7264,6 +7509,383 @@
           "downloadUrl",
           "expiresInSeconds"
         ]
+      },
+      "StorefrontSectionsDto": {
+        "type": "object",
+        "properties": {
+          "hero": {
+            "type": "boolean"
+          },
+          "rides": {
+            "type": "boolean"
+          },
+          "about": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "hero",
+          "rides",
+          "about"
+        ]
+      },
+      "StorefrontSocialLinksDto": {
+        "type": "object",
+        "properties": {
+          "facebookUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "instagramUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "twitterUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "linkedinUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "websiteUrl": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "facebookUrl",
+          "instagramUrl",
+          "twitterUrl",
+          "linkedinUrl",
+          "websiteUrl"
+        ]
+      },
+      "PublicStorefrontRideSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "lineName": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "departureTimes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "days": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "lineName",
+          "origin",
+          "destination",
+          "departureTimes",
+          "days"
+        ]
+      },
+      "PublicAgencyStorefrontResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PUBLISHED"
+            ]
+          },
+          "publishedAt": {
+            "type": "object",
+            "nullable": true
+          },
+          "heroTitle": {
+            "type": "object",
+            "nullable": true
+          },
+          "heroSubtitle": {
+            "type": "object",
+            "nullable": true
+          },
+          "heroImageUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "heroImageAlt": {
+            "type": "object",
+            "nullable": true
+          },
+          "aboutMarkdown": {
+            "type": "object",
+            "nullable": true
+          },
+          "footerText": {
+            "type": "object",
+            "nullable": true
+          },
+          "logoUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "logoAlt": {
+            "type": "object",
+            "nullable": true
+          },
+          "primaryColor": {
+            "type": "object",
+            "nullable": true
+          },
+          "sectionsEnabled": {
+            "$ref": "#/components/schemas/StorefrontSectionsDto"
+          },
+          "seoTitle": {
+            "type": "object",
+            "nullable": true
+          },
+          "seoDescription": {
+            "type": "object",
+            "nullable": true
+          },
+          "ogImageUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "socialLinks": {
+            "$ref": "#/components/schemas/StorefrontSocialLinksDto"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "object",
+            "nullable": true
+          },
+          "rides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicStorefrontRideSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "publishedAt",
+          "heroTitle",
+          "heroSubtitle",
+          "heroImageUrl",
+          "heroImageAlt",
+          "aboutMarkdown",
+          "footerText",
+          "logoUrl",
+          "logoAlt",
+          "primaryColor",
+          "sectionsEnabled",
+          "seoTitle",
+          "seoDescription",
+          "ogImageUrl",
+          "socialLinks",
+          "updatedAt",
+          "slug",
+          "name",
+          "timezone",
+          "rides"
+        ]
+      },
+      "StorefrontAdminResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PUBLISHED"
+            ]
+          },
+          "publishedAt": {
+            "type": "object",
+            "nullable": true
+          },
+          "heroTitle": {
+            "type": "object",
+            "nullable": true
+          },
+          "heroSubtitle": {
+            "type": "object",
+            "nullable": true
+          },
+          "heroImageUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "heroImageAlt": {
+            "type": "object",
+            "nullable": true
+          },
+          "aboutMarkdown": {
+            "type": "object",
+            "nullable": true
+          },
+          "footerText": {
+            "type": "object",
+            "nullable": true
+          },
+          "logoUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "logoAlt": {
+            "type": "object",
+            "nullable": true
+          },
+          "primaryColor": {
+            "type": "object",
+            "nullable": true
+          },
+          "sectionsEnabled": {
+            "$ref": "#/components/schemas/StorefrontSectionsDto"
+          },
+          "seoTitle": {
+            "type": "object",
+            "nullable": true
+          },
+          "seoDescription": {
+            "type": "object",
+            "nullable": true
+          },
+          "ogImageUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "socialLinks": {
+            "$ref": "#/components/schemas/StorefrontSocialLinksDto"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "tenantSlug": {
+            "type": "string"
+          },
+          "tenantName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "publishedAt",
+          "heroTitle",
+          "heroSubtitle",
+          "heroImageUrl",
+          "heroImageAlt",
+          "aboutMarkdown",
+          "footerText",
+          "logoUrl",
+          "logoAlt",
+          "primaryColor",
+          "sectionsEnabled",
+          "seoTitle",
+          "seoDescription",
+          "ogImageUrl",
+          "socialLinks",
+          "updatedAt",
+          "tenantId",
+          "tenantSlug",
+          "tenantName"
+        ]
+      },
+      "StorefrontSectionsInputDto": {
+        "type": "object",
+        "properties": {
+          "hero": {
+            "type": "boolean"
+          },
+          "rides": {
+            "type": "boolean"
+          },
+          "about": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpsertStorefrontDto": {
+        "type": "object",
+        "properties": {
+          "heroTitle": {
+            "type": "string"
+          },
+          "heroSubtitle": {
+            "type": "string"
+          },
+          "heroImageUrl": {
+            "type": "string"
+          },
+          "heroImageAlt": {
+            "type": "string"
+          },
+          "aboutMarkdown": {
+            "type": "string"
+          },
+          "footerText": {
+            "type": "string"
+          },
+          "logoUrl": {
+            "type": "string"
+          },
+          "logoAlt": {
+            "type": "string"
+          },
+          "primaryColor": {
+            "type": "string",
+            "example": "#1D4ED8"
+          },
+          "sectionsEnabled": {
+            "$ref": "#/components/schemas/StorefrontSectionsInputDto"
+          },
+          "seoTitle": {
+            "type": "string"
+          },
+          "seoDescription": {
+            "type": "string"
+          },
+          "ogImageUrl": {
+            "type": "string"
+          },
+          "facebookUrl": {
+            "type": "string"
+          },
+          "instagramUrl": {
+            "type": "string"
+          },
+          "twitterUrl": {
+            "type": "string"
+          },
+          "linkedinUrl": {
+            "type": "string"
+          },
+          "websiteUrl": {
+            "type": "string"
+          }
+        }
       }
     }
   }

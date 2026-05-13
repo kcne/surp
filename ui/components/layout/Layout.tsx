@@ -15,7 +15,9 @@ export function Layout({ children }: LayoutProps) {
         <Sidebar />
         <main className="flex-1 min-w-0 md:ml-60 p-6">{children}</main>
       </div>
+      <footer className="border-t bg-background/95 px-4 py-3 text-center text-sm text-muted-foreground md:ml-60 md:px-6">
+        © 2026 Copyright Gradient Labs
+      </footer>
     </div>
   )
 }
-

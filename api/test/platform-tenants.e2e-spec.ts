@@ -206,6 +206,17 @@ describe('PlatformTenantsController (e2e)', () => {
     expect(response.body.isActive).toBe(true);
   });
 
+  it('rejects reserved storefront slugs when creating tenants', async () => {
+    await request(app.getHttpServer())
+      .post('/platform/tenants')
+      .set('Authorization', 'Bearer access-token-superadmin')
+      .send({
+        slug: 'login',
+        name: 'Login'
+      })
+      .expect(422);
+  });
+
   it('non-superadmin cannot manage platform tenants', async () => {
     await request(app.getHttpServer())
       .post('/platform/tenants')

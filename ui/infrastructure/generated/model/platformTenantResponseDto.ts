@@ -7,11 +7,14 @@
  */
 import type { PlatformTenantResponseDtoDeactivatedAt } from './platformTenantResponseDtoDeactivatedAt';
 import type { PlatformTenantResponseDtoDeactivatedById } from './platformTenantResponseDtoDeactivatedById';
+import type { PlatformTenantResponseDtoTimezone } from './platformTenantResponseDtoTimezone';
 
 export interface PlatformTenantResponseDto {
   id: string;
   slug: string;
   name: string;
+  /** @nullable */
+  timezone: PlatformTenantResponseDtoTimezone;
   isActive: boolean;
   /** @nullable */
   deactivatedAt: PlatformTenantResponseDtoDeactivatedAt;

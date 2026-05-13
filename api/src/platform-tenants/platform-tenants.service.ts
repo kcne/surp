@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { Prisma, UserRole } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { AccessTokenPayload } from '../auth/auth.types';
@@ -19,6 +19,7 @@ import {
   PlatformTenantLoginOptionResponseDto,
   PlatformTenantResponseDto
 } from './dto/platform-tenant.response.dto';
+import { RESERVED_TENANT_SLUGS } from './reserved-slugs';
 import { UpdatePlatformTenantDto } from './dto/update-platform-tenant.dto';
 
 @Injectable()
@@ -41,6 +42,7 @@ export class PlatformTenantsService {
     id: true,
     slug: true,
     name: true,
+    timezone: true,
     isActive: true,
     deactivatedAt: true,
     deactivatedById: true,
@@ -64,6 +66,7 @@ export class PlatformTenantsService {
         data: {
           slug: this.normalizeSlug(dto.slug),
           name: dto.name.trim(),
+          timezone: this.normalizeOptionalString(dto.timezone),
           isActive: true,
           deactivatedAt: null,
           deactivatedById: null
@@ -172,6 +175,10 @@ export class PlatformTenantsService {
       data.name = dto.name.trim();
     }
 
+    if (typeof dto.timezone === 'string') {
+      data.timezone = this.normalizeOptionalString(dto.timezone);
+    }
+
     try {
       return await this.prisma.tenant.update({
         where: { id },
@@ -213,7 +220,21 @@ export class PlatformTenantsService {
   }
 
   private normalizeSlug(value: string): string {
-    return value.trim().toLowerCase();
+    const slug = value.trim().toLowerCase();
+    if (RESERVED_TENANT_SLUGS.has(slug)) {
+      throw new UnprocessableEntityException('Tenant slug is reserved');
+    }
+
+    return slug;
+  }
+
+  private normalizeOptionalString(value: string | undefined): string | null | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
   }
 
   private async assertTenantExists(id: string): Promise<void> {

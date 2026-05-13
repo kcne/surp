@@ -28,6 +28,7 @@ const config = {
 					DEFAULT: 'hsl(var(--primary))',
 					foreground: 'hsl(var(--primary-foreground))'
   			},
+			'brand-primary': 'var(--brand-primary)',
   			secondary: {
 					DEFAULT: 'hsl(var(--secondary))',
 					foreground: 'hsl(var(--secondary-foreground))'
@@ -108,4 +109,3 @@ const config = {
 } satisfies Config
 
 export default config
-

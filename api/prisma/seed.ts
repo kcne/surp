@@ -24,9 +24,12 @@ async function main() {
   }
 
   const tenantSlug = 'demo-tenant';
+  const testAgencySlug = 'test-agency';
   const platformTenantSlug = 'platform';
   const adminUsername = 'demo-admin';
   const adminPassword = 'demo-admin-pass';
+  const testAgencyAdminUsername = 'test-agency-admin';
+  const testAgencyAdminPassword = 'test-agency-admin-pass';
   const inactiveUsername = 'demo-inactive';
   const superadminUsername = 'platform-superadmin';
   const superadminPassword = 'platform-superadmin-pass';
@@ -61,7 +64,23 @@ async function main() {
     }
   });
 
+  const testAgencyTenant = await prisma.tenant.upsert({
+    where: { slug: testAgencySlug },
+    update: {
+      name: 'Test Agency',
+      timezone: 'Europe/Belgrade',
+      isActive: true
+    },
+    create: {
+      slug: testAgencySlug,
+      name: 'Test Agency',
+      timezone: 'Europe/Belgrade',
+      isActive: true
+    }
+  });
+
   const adminPasswordHash = await hash(adminPassword, 10);
+  const testAgencyAdminPasswordHash = await hash(testAgencyAdminPassword, 10);
   const inactivePasswordHash = await hash('demo-inactive-pass', 10);
   const superadminPasswordHash = await hash(superadminPassword, 10);
 
@@ -108,6 +127,56 @@ async function main() {
       passwordHash: inactivePasswordHash,
       role: 'STAFF',
       isActive: false
+    }
+  });
+
+  await prisma.user.upsert({
+    where: {
+      tenantId_username: {
+        tenantId: testAgencyTenant.id,
+        username: testAgencyAdminUsername
+      }
+    },
+    update: {
+      email: 'admin@test-agency.local',
+      passwordHash: testAgencyAdminPasswordHash,
+      role: 'ADMIN',
+      isActive: true
+    },
+    create: {
+      tenantId: testAgencyTenant.id,
+      username: testAgencyAdminUsername,
+      email: 'admin@test-agency.local',
+      passwordHash: testAgencyAdminPasswordHash,
+      role: 'ADMIN',
+      isActive: true
+    }
+  });
+
+  await prisma.agencyStorefront.upsert({
+    where: {
+      tenantId: testAgencyTenant.id
+    },
+    update: {
+      status: 'DRAFT',
+      heroTitle: 'Test Agency',
+      heroSubtitle: 'Comfortable rides across the region',
+      aboutMarkdown: '## About Test Agency\n\nPublish this storefront from the dashboard to preview the public page.',
+      footerText: 'Safe, reliable, and on time.',
+      primaryColor: '#1D4ED8',
+      seoTitle: 'Test Agency rides',
+      seoDescription: 'Public storefront for Test Agency.'
+    },
+    create: {
+      tenantId: testAgencyTenant.id,
+      status: 'DRAFT',
+      heroTitle: 'Test Agency',
+      heroSubtitle: 'Comfortable rides across the region',
+      aboutMarkdown: '## About Test Agency\n\nPublish this storefront from the dashboard to preview the public page.',
+      footerText: 'Safe, reliable, and on time.',
+      primaryColor: '#1D4ED8',
+      seoTitle: 'Test Agency rides',
+      seoDescription: 'Public storefront for Test Agency.'
     }
   });
 

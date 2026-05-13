@@ -1,6 +1,6 @@
 import axios from "axios"
 
-const DEFAULT_API_URL = "http://localhost:3001"
+const DEFAULT_API_URL = "http://127.0.0.1:3001"
 
 // Create axios instance with base configuration
 export const apiClient = axios.create({
@@ -47,7 +47,6 @@ apiClient.interceptors.response.use(
 )
 
 export default apiClient
-
 
 
 

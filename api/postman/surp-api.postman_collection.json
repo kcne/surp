@@ -5178,6 +5178,417 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Public · Agencies",
+      "item": [
+        {
+          "name": "Get Published Agency",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/public/agencies/{{publicAgencySlug}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "agencies",
+                "{{publicAgencySlug}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Missing Agency - 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/public/agencies/missing-agency",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "agencies",
+                "missing-agency"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', function () {",
+                  "  pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Public Rate Limit Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/public/agencies/{{publicAgencySlug}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "agencies",
+                "{{publicAgencySlug}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request is accepted or rate limited', function () {",
+                  "  pm.expect([200, 429]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Storefront Admin",
+      "item": [
+        {
+          "name": "Get Current Storefront",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/storefront",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "storefront"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Save Storefront",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"heroTitle\": \"Test Agency\",\n  \"heroSubtitle\": \"Comfortable rides across the region\",\n  \"primaryColor\": \"#1D4ED8\",\n  \"sectionsEnabled\": {\n    \"hero\": true,\n    \"rides\": true,\n    \"gallery\": true,\n    \"about\": true,\n    \"blog\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/storefront",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "storefront"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Publish Storefront",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/storefront/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "storefront",
+                "publish"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unpublish Storefront",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/storefront/unpublish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "storefront",
+                "unpublish"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Storefront - 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/storefront",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "storefront"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Save Invalid Color - 422",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"primaryColor\": \"#FFFF00\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/storefront",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "storefront"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 422', function () {",
+                  "  pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Save Storefront Rate Limit Probe",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Slug",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"heroTitle\": \"Rate Limit Probe\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/storefront",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "storefront"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request is accepted or rate limited', function () {",
+                  "  pm.expect([200, 429]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [

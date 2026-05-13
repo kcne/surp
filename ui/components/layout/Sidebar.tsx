@@ -11,6 +11,7 @@ import {
   Info,
   MapPin,
   Route,
+  Store,
   Ticket,
   Users,
 } from "lucide-react"
@@ -47,6 +48,11 @@ const lineItems = [
 ]
 
 const supportItems = [
+  {
+    title: "Javni izlog",
+    href: "/storefront",
+    icon: Store,
+  },
   {
     title: "Tiketi",
     href: "/tickets",

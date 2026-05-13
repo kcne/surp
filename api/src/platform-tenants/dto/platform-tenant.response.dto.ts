@@ -18,6 +18,9 @@ export class PlatformTenantResponseDto {
   @ApiProperty()
   name!: string;
 
+  @ApiProperty({ nullable: true })
+  timezone!: string | null;
+
   @ApiProperty()
   isActive!: boolean;
 

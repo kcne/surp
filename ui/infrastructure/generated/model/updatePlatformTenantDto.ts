@@ -9,4 +9,5 @@
 export interface UpdatePlatformTenantDto {
   slug?: string;
   name?: string;
+  timezone?: string;
 }

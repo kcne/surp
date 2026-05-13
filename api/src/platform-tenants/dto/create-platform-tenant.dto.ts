@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class CreatePlatformTenantDto {
   @ApiProperty({ example: 'acme-transit' })
@@ -14,4 +14,10 @@ export class CreatePlatformTenantDto {
   @IsNotEmpty()
   @MaxLength(120)
   name!: string;
+
+  @ApiPropertyOptional({ example: 'Europe/Belgrade' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  timezone?: string;
 }

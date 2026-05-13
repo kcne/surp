@@ -14,4 +14,10 @@ export class UpdatePlatformTenantDto {
   @IsString()
   @MaxLength(120)
   name?: string;
+
+  @ApiPropertyOptional({ example: 'Europe/Belgrade' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  timezone?: string;
 }

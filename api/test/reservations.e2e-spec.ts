@@ -373,7 +373,7 @@ describe('ReservationsController (e2e)', () => {
       .post('/reservations/reservation-1/cancel')
       .set('X-Tenant-Slug', 'demo-tenant')
       .set('Authorization', 'Bearer access-token-admin')
-      .expect(201);
+      .expect(200);
 
     expect(response.body.status).toBe(ReservationStatus.CANCELLED);
     expect(prismaMock.reservation.update).toHaveBeenCalledWith(

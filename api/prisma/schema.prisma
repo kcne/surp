@@ -76,6 +76,11 @@ enum TicketCategory {
   OTHER
 }
 
+enum StorefrontStatus {
+  DRAFT
+  PUBLISHED
+}
+
 model HealthCheckLog {
   id        String   @id @default(cuid())
   message   String
@@ -86,6 +91,7 @@ model Tenant {
   id              String           @id @default(cuid())
   slug            String           @unique
   name            String
+  timezone        String?
   isActive        Boolean          @default(true)
   deactivatedAt   DateTime?
   deactivatedById String?
@@ -106,8 +112,35 @@ model Tenant {
   tickets         Ticket[]
   ticketComments  TicketComment[]
   ticketAttachments TicketAttachment[]
+  storefront      AgencyStorefront?
 
   @@index([isActive])
+}
+
+model AgencyStorefront {
+  tenantId        String           @id
+  status          StorefrontStatus @default(DRAFT)
+  publishedAt     DateTime?
+  heroTitle       String?
+  heroSubtitle    String?
+  heroImageUrl    String?
+  heroImageAlt    String?
+  aboutMarkdown   String?          @db.Text
+  footerText      String?
+  logoUrl         String?
+  logoAlt         String?
+  primaryColor    String?
+  sectionsEnabled Json             @default("{\"hero\":true,\"rides\":true,\"about\":true}")
+  seoTitle        String?
+  seoDescription  String?
+  ogImageUrl      String?
+  facebookUrl     String?
+  instagramUrl    String?
+  twitterUrl      String?
+  linkedinUrl     String?
+  websiteUrl      String?
+  updatedAt       DateTime         @updatedAt
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model Ticket {
