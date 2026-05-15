@@ -129,6 +129,7 @@ export default function SeatMapPage() {
           multipleSelectionMode
           onComplete={() => {
             setIsMultiReservationModalOpen(false)
+            clearSelectedSeats()
             void refetchReservations()
           }}
         />
