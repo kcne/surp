@@ -11,6 +11,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { UserRole } from '@prisma/client';
 import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
@@ -68,6 +69,7 @@ export class ReservationsController {
   }
 
   @Get()
+  @Throttle({ default: { limit: 1000, ttl: 60000 } })
   @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
   @ApiOperation({ summary: 'List reservations in the current tenant.' })
   @ApiOkResponse({ type: PaginatedReservationsResponseDto })

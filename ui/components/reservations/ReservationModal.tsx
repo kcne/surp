@@ -186,7 +186,10 @@ export function ReservationModal({
     (instance) => instance.id === selectedReturnRideInstanceId
   ) ?? null
 
-  const returnReservationsQuery = useReservationsByRideInstancesQuery(returnRideInstances)
+  const returnReservationsQuery = useReservationsByRideInstancesQuery(
+    returnRideInstances,
+    { enabled: open && (!!reservation || isReturnTicket) }
+  )
 
   const allReservations = useMemo(
     () => ({

@@ -63,12 +63,17 @@ export function useReservationsByRideInstanceQuery(
   })
 }
 
-export function useReservationsByRideInstancesQuery(rideInstances: RideInstance[]) {
+export function useReservationsByRideInstancesQuery(
+  rideInstances: RideInstance[],
+  options?: { enabled?: boolean }
+) {
+  const enabled = options?.enabled ?? true
   const queries = useQueries({
     queries: rideInstances.map((rideInstance) => ({
       queryKey: reservationsByRideInstanceQueryKey(rideInstance.id),
       queryFn: async () => fetchReservationsForRideInstance(rideInstance),
       staleTime: 30_000,
+      enabled,
     })),
   })
 
