@@ -1567,6 +1567,44 @@
         ]
       }
     },
+    "/api/public/marketing/leads": {
+      "post": {
+        "operationId": "MarketingLeadsController_createLead",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMarketingLeadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingLeadResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "429": {
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "Create a marketing demo lead.",
+        "tags": [
+          "Public · Marketing Leads"
+        ]
+      }
+    },
     "/passengers": {
       "post": {
         "operationId": "PassengersController_create",
@@ -5421,6 +5459,69 @@
         },
         "required": [
           "intermediateStops"
+        ]
+      },
+      "CreateMarketingLeadDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Petar Petrovic"
+          },
+          "email": {
+            "type": "string",
+            "example": "petar@example.com"
+          },
+          "agencyName": {
+            "type": "string",
+            "example": "Drina Bus"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+381 64 123 4567"
+          },
+          "departuresPerDay": {
+            "type": "string",
+            "enum": [
+              "1-5",
+              "6-20",
+              "21-50",
+              "50+"
+            ],
+            "example": "6-20",
+            "description": "Approximate number of departures per day."
+          },
+          "message": {
+            "type": "string",
+            "example": "Zelimo online rezervacije za sezonske polaske."
+          },
+          "website": {
+            "type": "string",
+            "description": "Honeypot anti-spam field. Must be empty for real users."
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "agencyName",
+          "departuresPerDay"
+        ]
+      },
+      "MarketingLeadResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "mlead_1715860000000_ab12cd34"
+          },
+          "message": {
+            "type": "string",
+            "example": "Marketing lead received."
+          }
+        },
+        "required": [
+          "id",
+          "message"
         ]
       },
       "CreatePassengerDto": {

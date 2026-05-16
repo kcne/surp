@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Inter, Space_Grotesk } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/ui/toaster"
 import { Toaster as SonnerToaster } from "sonner"
@@ -10,9 +10,22 @@ const inter = Inter({
   variable: "--font-inter",
 })
 
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+})
+
 export const metadata: Metadata = {
-  title: "Sistem za Rezervaciju Autobuskih Karata",
-  description: "Interna web aplikacija za rezervaciju autobuskih karata",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  title: {
+    default: "SURP - Sistem za autobuske agencije",
+    template: "%s - SURP",
+  },
+  description: "SURP objedinjuje linije, vozne redove, rezervacije, putnike i javni sajt autobuske agencije.",
+  icons: {
+    icon: "/marketing/favicon.svg",
+    apple: "/marketing/apple-icon.svg",
+  },
 }
 
 export default function RootLayout({
@@ -21,8 +34,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="sr" className={inter.variable}>
-      <body className="min-h-screen flex flex-col">
+    <html lang="sr-Latn" className={`${inter.variable} ${spaceGrotesk.variable}`}>
+      <body className="min-h-screen flex flex-col antialiased">
         <QueryProvider>
           <div className="flex-1">{children}</div>
           <Toaster />

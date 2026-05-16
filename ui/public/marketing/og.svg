@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="SURP - sistem za autobuske agencije">
+  <defs>
+    <radialGradient id="glow" cx="72%" cy="12%" r="52%">
+      <stop offset="0" stop-color="#4F46E5" stop-opacity=".6"/>
+      <stop offset="1" stop-color="#0B1220" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#fff" opacity=".08"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="#0B1220"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect x="72" y="72" width="72" height="72" rx="22" fill="#fff"/>
+  <text x="108" y="121" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="36" font-weight="800" fill="#0B1220">S</text>
+  <text x="166" y="119" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="800" fill="#fff">SURP</text>
+  <text x="72" y="330" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="800" letter-spacing="4" fill="#A5B4FC">SISTEM ZA AUTOBUSKE AGENCIJE</text>
+  <text x="72" y="420" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="800" letter-spacing="-3" fill="#fff">Sve operacije vase</text>
+  <text x="72" y="506" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="800" letter-spacing="-3" fill="#fff">agencije na jednom mestu.</text>
+</svg>

@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { envValidationSchema } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { LinesModule } from './lines/lines.module';
+import { MarketingLeadsModule } from './marketing-leads/marketing-leads.module';
 import { PassengersModule } from './passengers/passengers.module';
 import { PlatformTenantsModule } from './platform-tenants/platform-tenants.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -36,6 +37,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     StationsModule,
     LinesModule,
+    MarketingLeadsModule,
     PassengersModule,
     PlatformTenantsModule,
     RidesModule,
