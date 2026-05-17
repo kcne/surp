@@ -29,10 +29,10 @@ export function MarketingHero() {
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <span className="mk-gradient-ring animate-gradient-border inline-flex rounded-full p-[1px] motion-reduce:animate-none">
+            <span className="mk-gradient-ring animate-gradient-border inline-flex w-full rounded-full p-[1px] motion-reduce:animate-none sm:w-auto">
               <Link
                 href="/kontakt"
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[color:var(--mk-indigo-600)] px-6 py-3 text-sm font-semibold text-white shadow-mk-glow transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--mk-indigo-600)] focus-visible:ring-offset-2"
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[color:var(--mk-indigo-600)] px-6 py-3 text-sm font-semibold text-white shadow-mk-glow transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--mk-indigo-600)] focus-visible:ring-offset-2 sm:w-auto"
               >
                 Zakazite demo
                 <ArrowRight className="h-4 w-4" />

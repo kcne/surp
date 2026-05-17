@@ -32,10 +32,10 @@ export default function MarketingNotFound() {
         </p>
 
         <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
-          <span className="mk-gradient-ring animate-gradient-border inline-flex rounded-full p-[1px] motion-reduce:animate-none">
+          <span className="mk-gradient-ring animate-gradient-border inline-flex w-full rounded-full p-[1px] motion-reduce:animate-none sm:w-auto">
             <Link
               href="/"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[color:var(--mk-indigo-600)] px-6 py-3 text-sm font-semibold text-white shadow-mk-glow"
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[color:var(--mk-indigo-600)] px-6 py-3 text-sm font-semibold text-white shadow-mk-glow sm:w-auto"
             >
               Nazad na pocetnu
               <ArrowRight className="h-4 w-4" />

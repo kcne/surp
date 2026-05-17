@@ -19,10 +19,10 @@ export function CtaBand() {
           SURP odgovara vasem modelu rada.
         </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-          <span className="mk-gradient-ring animate-gradient-border inline-flex rounded-full p-[1px] motion-reduce:animate-none">
+          <span className="mk-gradient-ring animate-gradient-border inline-flex w-full rounded-full p-[1px] motion-reduce:animate-none sm:w-auto">
             <Link
               href="/kontakt"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-[color:var(--mk-navy-900)] shadow-mk-glow transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--mk-navy-900)]"
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-[color:var(--mk-navy-900)] shadow-mk-glow transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--mk-navy-900)] sm:w-auto"
             >
               Zakazite demo
               <ArrowRight className="h-4 w-4" />
