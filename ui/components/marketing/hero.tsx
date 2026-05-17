@@ -12,8 +12,8 @@ export function MarketingHero() {
         <div className="absolute inset-0 opacity-[0.05] [background-image:radial-gradient(#0B1220_1px,transparent_1px)] [background-size:24px_24px]" />
       </div>
 
-      <div className="mx-auto grid w-full max-w-7xl items-center gap-12 px-6 pb-20 md:px-8 md:pb-28 lg:grid-cols-[1.05fr_0.95fr] lg:px-12">
-        <div className="max-w-3xl">
+      <div className="mx-auto flex w-full max-w-7xl flex-col items-center px-6 pb-20 md:px-8 md:pb-28 lg:px-12">
+        <div className="mx-auto max-w-4xl text-center">
           <div className="mb-6 inline-flex items-center rounded-full border border-[color:var(--mk-indigo-100)] bg-white/80 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)] shadow-mk-sm">
             Platforma za autobuske agencije
           </div>
@@ -23,12 +23,12 @@ export function MarketingHero() {
               jednom mestu.
             </span>
           </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-[color:var(--mk-text-muted)] md:text-xl">
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-[color:var(--mk-text-muted)] md:text-xl">
             Linije, vozni redovi, rezervacije, putnici i agencijski sajt - SURP
             zamenjuje pet alata jednim sistemom.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
             <span className="mk-gradient-ring animate-gradient-border inline-flex w-full rounded-full p-[1px] motion-reduce:animate-none sm:w-auto">
               <Link
                 href="/kontakt"
@@ -46,7 +46,7 @@ export function MarketingHero() {
             </Link>
           </div>
 
-          <ul className="mt-6 flex flex-col gap-3 text-sm text-[color:var(--mk-text-muted)] sm:flex-row sm:flex-wrap">
+          <ul className="mt-6 flex flex-col justify-center gap-3 text-sm text-[color:var(--mk-text-muted)] sm:flex-row sm:flex-wrap">
             <li className="flex items-center gap-2 rounded-full bg-white/70 pr-3">
               <span className="relative flex h-3 w-3">
                 <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-pulse-soft motion-reduce:animate-none" />
@@ -63,61 +63,18 @@ export function MarketingHero() {
           </ul>
         </div>
 
-        <div className="relative">
+        <div className="relative mt-14 w-full max-w-6xl">
           <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-br from-[color:var(--mk-indigo-600)]/20 via-[color:var(--mk-sky-500)]/10 to-transparent blur-2xl" />
-          <div className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/85 p-3 shadow-mk-glow backdrop-blur">
-            <div className="mb-3 flex items-center justify-between rounded-2xl border border-[color:var(--mk-border)] bg-white/70 px-4 py-2">
-              <div className="flex gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-red-300" />
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
-              </div>
-              <span className="rounded-full bg-[color:var(--mk-bg-alt)] px-3 py-1 text-[11px] font-semibold text-[color:var(--mk-text-muted)]">
-                surp.app/dashboard
-              </span>
-            </div>
-            <div className="rounded-[1.35rem] border border-[color:var(--mk-border)] bg-[color:var(--mk-bg-alt)] p-4 shadow-mk-lg">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--mk-text-subtle)]">
-                    Dashboard
-                  </p>
-                  <p className="mt-1 font-display text-2xl font-semibold text-[color:var(--mk-navy-900)]">
-                    Danasnji polasci
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="rounded-full bg-[color:var(--mk-indigo-100)] px-3 py-1 text-xs font-semibold text-[color:var(--mk-indigo-600)]">
-                    Live
-                  </span>
-                  <div className="mt-2 flex h-7 items-end gap-1">
-                    {[30, 44, 38, 58, 46, 70].map((height) => (
-                      <span key={height} className="w-1.5 rounded-full bg-[color:var(--mk-indigo-600)]/70" style={{ height: `${height}%` }} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {[
-                  ["Beograd - Novi Sad", "08:30", "41/52"],
-                  ["Nis - Beograd", "10:15", "37/48"],
-                  ["Subotica - Beograd", "13:00", "29/52"],
-                ].map(([line, time, seats]) => (
-                  <div key={line} className="grid grid-cols-1 gap-3 rounded-2xl border border-[color:var(--mk-border)] bg-white p-4 shadow-mk-sm sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-4">
-                    <div>
-                      <p className="font-semibold text-[color:var(--mk-navy-900)]">{line}</p>
-                      <p className="text-sm text-[color:var(--mk-text-muted)]">Rezervacije i putnici sinhronizovani</p>
-                    </div>
-                    <p className="font-mono text-sm font-semibold tabular-nums text-[color:var(--mk-navy-900)]">{time}</p>
-                    <p className="rounded-full bg-[color:var(--mk-bg-alt)] px-3 py-1 text-sm font-semibold tabular-nums text-[color:var(--mk-text-muted)]">
-                      {seats}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <video
+            className="aspect-video w-full overflow-hidden rounded-2xl bg-[color:var(--mk-navy-900)] object-contain shadow-mk-glow sm:rounded-3xl"
+            src="/marketing/demo.mp4"
+            aria-label="Demo video SURP platforme"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+          />
         </div>
       </div>
     </section>

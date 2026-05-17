@@ -40,11 +40,11 @@ export function ProblemFraming() {
           const Icon = problem.icon
 
           return (
-            <article key={problem.title} className="rounded-3xl border border-[color:var(--mk-border)] bg-white p-6 shadow-mk-sm">
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-[color:var(--mk-navy-700)]">
-                <Icon className="h-6 w-6" />
-              </div>
-              <h3 className="font-display text-xl font-semibold tracking-[-0.015em] text-[color:var(--mk-navy-900)]">
+              <article key={problem.title} className="rounded-3xl border border-[color:var(--mk-border)] bg-white p-6 shadow-mk-sm">
+                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+                  <Icon className="h-6 w-6" />
+                </div>
+              <h3 className="font-display text-xl font-semibold tracking-[-0.015em] text-red-950">
                 {problem.title}
               </h3>
               <p className="mt-3 text-sm leading-6 text-[color:var(--mk-text-muted)]">{problem.description}</p>
