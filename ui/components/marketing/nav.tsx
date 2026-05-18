@@ -3,7 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { useState } from "react"
-import { ArrowRight, Menu, X } from "lucide-react"
+import { ArrowRight, Menu, PlayCircle, X } from "lucide-react"
 import { siteConfig } from "@/lib/seo"
 
 export function MarketingNav() {
@@ -44,6 +44,13 @@ export function MarketingNav() {
 
         <div className="flex items-center gap-3">
           <Link
+            href="/sandbox-demo"
+            className="hidden min-h-10 items-center gap-2 rounded-full border border-[color:var(--mk-indigo-100)] bg-[color:var(--mk-indigo-50)] px-4 text-sm font-semibold text-[color:var(--mk-indigo-600)] transition-colors hover:bg-[color:var(--mk-indigo-100)] lg:inline-flex"
+          >
+            <PlayCircle className="h-4 w-4" />
+            Sandbox demo
+          </Link>
+          <Link
             href="/login"
             className="inline-flex min-h-10 items-center rounded-full border border-[color:var(--mk-border)] bg-white px-4 text-sm font-semibold text-[color:var(--mk-navy-900)] shadow-mk-sm transition-colors hover:border-[color:var(--mk-indigo-100)] hover:text-[color:var(--mk-indigo-600)]"
           >
@@ -83,8 +90,16 @@ export function MarketingNav() {
                 </Link>
               ))}
               <Link
+                href="/sandbox-demo"
+                className="mt-2 inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[color:var(--mk-indigo-100)] bg-[color:var(--mk-indigo-50)] px-5 py-3 text-sm font-semibold text-[color:var(--mk-indigo-600)]"
+                onClick={() => setIsOpen(false)}
+              >
+                <PlayCircle className="h-4 w-4" />
+                Isprobajte sandbox demo
+              </Link>
+              <Link
                 href="/kontakt"
-                className="mt-2 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[color:var(--mk-indigo-600)] px-5 py-3 text-sm font-semibold text-white shadow-mk-glow"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[color:var(--mk-indigo-600)] px-5 py-3 text-sm font-semibold text-white shadow-mk-glow"
                 onClick={() => setIsOpen(false)}
               >
                 Zakazite demo

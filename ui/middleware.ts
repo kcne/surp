@@ -13,6 +13,7 @@ const privateRoutePrefixes = [
   "/stations",
   "/storefront",
   "/tickets",
+  "/sandbox-demo",
 ]
 
 export function middleware(request: NextRequest) {
@@ -32,6 +33,7 @@ export const config = {
     "/dashboard/:path*",
     "/lines/:path*",
     "/login",
+    "/sandbox-demo",
     "/passengers/:path*",
     "/reservations/:path*",
     "/schedule/:path*",

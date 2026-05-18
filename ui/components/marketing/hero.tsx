@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, CheckCircle2 } from "lucide-react"
+import { ArrowRight, CheckCircle2, PlayCircle } from "lucide-react"
 import { HeroVideo } from "@/components/marketing/hero-video"
 
 const trustItems = ["Bez kreditne kartice", "Demo traje 30 min", "Implementacija do 14 dana"]
@@ -40,10 +40,11 @@ export function MarketingHero() {
               </Link>
             </span>
             <Link
-              href="#funkcije"
+              href="/sandbox-demo"
               className="inline-flex min-h-12 items-center justify-center rounded-full border border-[color:var(--mk-border)] bg-white px-6 py-3 text-sm font-semibold text-[color:var(--mk-navy-900)] shadow-mk-sm transition-colors hover:border-[color:var(--mk-indigo-100)] hover:text-[color:var(--mk-indigo-600)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--mk-indigo-600)] focus-visible:ring-offset-2"
             >
-              Pogledajte funkcije
+              Isprobajte sandbox demo
+              <PlayCircle className="ml-2 h-4 w-4" />
             </Link>
           </div>
 
@@ -53,7 +54,7 @@ export function MarketingHero() {
                 <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-pulse-soft motion-reduce:animate-none" />
                 <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
               </span>
-              Live demo flow
+              Sandbox spreman za probu
             </li>
             {trustItems.map((item) => (
               <li key={item} className="flex items-center gap-2">

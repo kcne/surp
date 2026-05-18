@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { envValidationSchema } from './config/env.validation';
 import { HealthModule } from './health/health.module';
+import { InternalSandboxModule } from './internal-sandbox/internal-sandbox.module';
 import { LinesModule } from './lines/lines.module';
 import { MarketingLeadsModule } from './marketing-leads/marketing-leads.module';
 import { PassengersModule } from './passengers/passengers.module';
@@ -33,6 +34,7 @@ import { UsersModule } from './users/users.module';
     ]),
     PrismaModule,
     HealthModule,
+    InternalSandboxModule,
     AuthModule,
     UsersModule,
     StationsModule,

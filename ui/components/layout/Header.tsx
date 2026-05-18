@@ -3,6 +3,7 @@
 import Image from "next/image"
 import { useState } from "react"
 import { useAuthStore } from "@/stores/authStore"
+import { getTenantSlug } from "@/infrastructure/utils/storage"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -27,6 +28,7 @@ export function Header() {
   const router = useRouter()
   const { user, logout } = useAuthStore()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const isSandboxDemo = getTenantSlug() === "sandbox-demo"
 
   const handleLogout = () => {
     logout()
@@ -72,6 +74,11 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-4">
+          {isSandboxDemo ? (
+            <div className="hidden rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 sm:block">
+              Sandbox demo
+            </div>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2">
@@ -102,4 +109,3 @@ export function Header() {
     </header>
   )
 }
-

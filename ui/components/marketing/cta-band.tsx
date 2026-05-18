@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, Mail } from "lucide-react"
+import { ArrowRight, PlayCircle } from "lucide-react"
 import { MarketingSection } from "@/components/marketing/section"
 
 export function CtaBand() {
@@ -29,11 +29,11 @@ export function CtaBand() {
             </Link>
           </span>
           <Link
-            href="mailto:hello@surp.local"
+            href="/sandbox-demo"
             className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/15 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--mk-navy-900)]"
           >
-            Posaljite pitanje
-            <Mail className="h-4 w-4" />
+            Isprobajte sandbox
+            <PlayCircle className="h-4 w-4" />
           </Link>
         </div>
       </div>

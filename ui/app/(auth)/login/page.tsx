@@ -29,9 +29,16 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
+const sandboxTenantSlug = process.env.NEXT_PUBLIC_SANDBOX_TENANT_SLUG ?? "sandbox-demo"
+const sandboxTenantName = process.env.NEXT_PUBLIC_SANDBOX_TENANT_NAME ?? "SURP Sandbox Demo"
+const sandboxLoginIdentifier = process.env.NEXT_PUBLIC_SANDBOX_LOGIN_IDENTIFIER ?? "demo@surp.rs"
+const sandboxPassword = process.env.NEXT_PUBLIC_SANDBOX_PASSWORD ?? "demo-password"
+
 export default function LoginPage() {
   const router = useRouter()
   const { login, loading, error, clearError, hasHydrated, isAuthenticated } = useAuthStore()
+  const isSandboxLogin =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("sandbox") === "1"
   const {
     data: tenantOptions = [],
     isLoading: isTenantOptionsLoading,
@@ -59,12 +66,24 @@ export default function LoginPage() {
 
   const selectedTenantSlug = watch("tenantSlug")
   const selectedTenant = tenantOptions.find((tenant) => tenant.slug === selectedTenantSlug)
+  const selectedTenantName =
+    selectedTenant?.name ?? (isSandboxLogin && selectedTenantSlug === sandboxTenantSlug ? sandboxTenantName : null)
 
   useEffect(() => {
-    if (hasHydrated && isAuthenticated) {
+    if (hasHydrated && isAuthenticated && !isSandboxLogin) {
       router.replace("/reservations")
     }
-  }, [hasHydrated, isAuthenticated, router])
+  }, [hasHydrated, isAuthenticated, isSandboxLogin, router])
+
+  useEffect(() => {
+    if (!isSandboxLogin) {
+      return
+    }
+
+    setValue("tenantSlug", sandboxTenantSlug, { shouldValidate: true })
+    setValue("email", sandboxLoginIdentifier, { shouldValidate: true })
+    setValue("password", sandboxPassword, { shouldValidate: true })
+  }, [isSandboxLogin, setValue])
 
   const filteredTenantOptions = tenantOptions.filter((tenant) => {
     const query = agencySearchQuery.toLowerCase()
@@ -82,7 +101,7 @@ export default function LoginPage() {
     }
   }
 
-  if (!hasHydrated || isAuthenticated) {
+  if (!hasHydrated || (isAuthenticated && !isSandboxLogin)) {
     return null
   }
 
@@ -101,7 +120,9 @@ export default function LoginPage() {
             />
           </div>
           <CardTitle className="text-2xl font-bold">Sistem za upravljanje i rezervacije</CardTitle>
-          <CardDescription>Prijavite se na svoj nalog</CardDescription>
+          <CardDescription>
+            {isSandboxLogin ? "Demo podaci su prepopunjeni za sandbox okruženje" : "Prijavite se na svoj nalog"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -142,7 +163,7 @@ export default function LoginPage() {
                   >
                     {isTenantOptionsLoading
                       ? "Učitavanje agencija..."
-                      : selectedTenant?.name || "Izaberite agenciju"}
+                      : selectedTenantName || "Izaberite agenciju"}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
@@ -243,7 +264,6 @@ export default function LoginPage() {
     </div>
   )
 }
-
 
 
 
