@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { absoluteUrl, jsonLd, siteConfig } from "@/lib/seo"
 
 interface StorefrontPageProps {
   params: {
@@ -42,14 +43,32 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
   const title = storefrontDisplayTitle(agency)
   const description = agency.seoDescription || agency.heroSubtitle || `Javni izlog za ${agency.name}`
   const image = agency.ogImageUrl || agency.heroImageUrl || agency.logoUrl || undefined
+  const url = absoluteUrl(`/${agency.slug}`)
 
   return {
     title,
     description,
+    alternates: {
+      canonical: url,
+    },
     openGraph: {
       title,
       description,
+      url,
+      siteName: siteConfig.name,
+      locale: "sr_RS",
+      type: "website",
       images: image ? [{ url: image }] : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: image ? [image] : undefined,
+    },
+    robots: {
+      index: true,
+      follow: true,
     },
   }
 }
@@ -70,9 +89,62 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
   const brandStyle = {
     "--brand-primary": agency.primaryColor || DEFAULT_BRAND_COLOR,
   } as CSSProperties
+  const url = absoluteUrl(`/${agency.slug}`)
+  const sameAs = Object.values(agency.socialLinks).filter((href): href is string => Boolean(href))
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": `${url}#webpage`,
+        url,
+        name: storefrontDisplayTitle(agency),
+        description: agency.seoDescription || agency.heroSubtitle || agency.footerText || undefined,
+        isPartOf: {
+          "@id": `${absoluteUrl("/")}#website`,
+        },
+        mainEntity: {
+          "@id": `${url}#agency`,
+        },
+      },
+      {
+        "@type": "TravelAgency",
+        "@id": `${url}#agency`,
+        name: agency.name,
+        url,
+        description: agency.seoDescription || agency.heroSubtitle || agency.footerText || undefined,
+        logo: agency.logoUrl || undefined,
+        image: agency.ogImageUrl || agency.heroImageUrl || undefined,
+        sameAs: sameAs.length > 0 ? sameAs : undefined,
+      },
+      ...(agency.rides.length > 0
+        ? [
+            {
+              "@type": "ItemList",
+              "@id": `${url}#routes`,
+              name: `Linije - ${agency.name}`,
+              itemListElement: agency.rides.map((ride, index) => ({
+                "@type": "ListItem",
+                position: index + 1,
+                item: {
+                  "@type": "Service",
+                  name: ride.lineName,
+                  serviceType: "Autobuski prevoz",
+                  description: `${ride.origin} - ${ride.destination}. Polasci: ${ride.departureTimes.join(", ")}. Dani: ${ride.days}.`,
+                  provider: {
+                    "@id": `${url}#agency`,
+                  },
+                },
+              })),
+            },
+          ]
+        : []),
+    ],
+  }
 
   return (
     <div className="min-h-screen bg-[#fbfaf8] text-slate-950 antialiased" style={brandStyle}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(structuredData) }} />
       {canRenderHero ? (
         <HeroSection agency={agency} canRenderRides={canRenderRides} canRenderAbout={canRenderAbout} />
       ) : null}

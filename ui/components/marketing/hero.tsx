@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { ArrowRight, CheckCircle2 } from "lucide-react"
+import { HeroVideo } from "@/components/marketing/hero-video"
 
 const trustItems = ["Bez kreditne kartice", "Demo traje 30 min", "Implementacija do 14 dana"]
 
@@ -65,16 +66,7 @@ export function MarketingHero() {
 
         <div className="relative mt-14 w-full max-w-6xl">
           <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-br from-[color:var(--mk-indigo-600)]/20 via-[color:var(--mk-sky-500)]/10 to-transparent blur-2xl" />
-          <video
-            className="aspect-video w-full overflow-hidden rounded-2xl bg-[color:var(--mk-navy-900)] object-contain shadow-mk-glow sm:rounded-3xl"
-            src="/marketing/demo.mp4"
-            aria-label="Demo video SURP platforme"
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="metadata"
-          />
+          <HeroVideo />
         </div>
       </div>
     </section>

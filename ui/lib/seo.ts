@@ -5,6 +5,14 @@ export const siteConfig = {
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
   description:
     "SURP objedinjuje linije, vozne redove, rezervacije, putnike i javni sajt autobuske agencije.",
+  keywords: [
+    "softver za autobuske agencije",
+    "online rezervacije autobuskih karata",
+    "sistem za rezervacije autobusa",
+    "vozni red autobuske agencije",
+    "upravljanje autobuskim linijama",
+    "prodaja autobuskih karata",
+  ],
   nav: [
     { href: "/funkcije", label: "Funkcije" },
     { href: "/za-agencije", label: "Za agencije" },
@@ -18,20 +26,40 @@ type BuildMetadataInput = {
   title: string
   description: string
   path?: string
+  image?: string
+  type?: "website" | "article"
 }
 
 export function absoluteUrl(path = "/") {
   return new URL(path, siteConfig.url).toString()
 }
 
-export function buildMetadata({ title, description, path = "/" }: BuildMetadataInput): Metadata {
+export function buildMetadata({ title, description, path = "/", image = "/marketing/og.svg", type = "website" }: BuildMetadataInput): Metadata {
   const url = absoluteUrl(path)
+  const imageUrl = absoluteUrl(image)
 
   return {
     title,
     description,
+    applicationName: siteConfig.name,
+    authors: [{ name: siteConfig.name, url: siteConfig.url }],
+    creator: siteConfig.name,
+    publisher: siteConfig.name,
+    category: "business software",
+    keywords: [...siteConfig.keywords],
     alternates: {
       canonical: url,
+    },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
     },
     openGraph: {
       title,
@@ -39,10 +67,10 @@ export function buildMetadata({ title, description, path = "/" }: BuildMetadataI
       url,
       siteName: siteConfig.name,
       locale: "sr_RS",
-      type: "website",
+      type,
       images: [
         {
-          url: absoluteUrl("/marketing/og.svg"),
+          url: imageUrl,
           width: 1200,
           height: 630,
           alt: "SURP - sistem za autobuske agencije",
@@ -53,6 +81,7 @@ export function buildMetadata({ title, description, path = "/" }: BuildMetadataI
       card: "summary_large_image",
       title,
       description,
+      images: [imageUrl],
     },
   }
 }

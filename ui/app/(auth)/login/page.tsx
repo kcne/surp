@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
@@ -31,7 +31,7 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, loading, error, clearError } = useAuthStore()
+  const { login, loading, error, clearError, hasHydrated, isAuthenticated } = useAuthStore()
   const {
     data: tenantOptions = [],
     isLoading: isTenantOptionsLoading,
@@ -60,6 +60,12 @@ export default function LoginPage() {
   const selectedTenantSlug = watch("tenantSlug")
   const selectedTenant = tenantOptions.find((tenant) => tenant.slug === selectedTenantSlug)
 
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated) {
+      router.replace("/reservations")
+    }
+  }, [hasHydrated, isAuthenticated, router])
+
   const filteredTenantOptions = tenantOptions.filter((tenant) => {
     const query = agencySearchQuery.toLowerCase()
     return tenant.name.toLowerCase().includes(query) || tenant.slug.toLowerCase().includes(query)
@@ -74,6 +80,10 @@ export default function LoginPage() {
     } catch (err) {
       toast.error("Greška pri prijavljivanju. Molimo pokušajte ponovo.")
     }
+  }
+
+  if (!hasHydrated || isAuthenticated) {
+    return null
   }
 
   return (
@@ -233,7 +243,6 @@ export default function LoginPage() {
     </div>
   )
 }
-
 
 
 

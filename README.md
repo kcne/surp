@@ -136,6 +136,11 @@ Required environment variable:
 
 1. `NEXT_PUBLIC_API_URL=https://<your-api-domain>`
 
+Optional SEO and analytics environment variables:
+
+1. `NEXT_PUBLIC_SITE_URL=https://<your-ui-domain>`
+2. `NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX`
+
 ### Railway-native CI/CD model
 
 Use GitHub Actions for verification and Railway for deployment orchestration:
@@ -166,4 +171,3 @@ This keeps deployment logic in Railway while preserving strict merge-time qualit
 ## License
 
 Add your license information here.
-
