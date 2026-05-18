@@ -6,7 +6,7 @@ import { useReservationsDashboardPage } from "@/hooks/useReservationsDashboardPa
 import { Ticket } from "lucide-react"
 
 export default function ReservationsPage() {
-  const { rides, rideInstances, selectedDate, loading, setSelectedDate } =
+  const { rides, rideInstances, rideIconUrl, selectedDate, loading, setSelectedDate } =
     useReservationsDashboardPage()
 
   return (
@@ -26,6 +26,7 @@ export default function ReservationsPage() {
           rides={rides}
           selectedDate={selectedDate}
           rideInstances={rideInstances}
+          rideIconUrl={rideIconUrl}
           loading={loading}
           onDateSelect={setSelectedDate}
         />

@@ -1,4 +1,4 @@
-import Image from "next/image"
+/* eslint-disable @next/next/no-img-element */
 import { Armchair, Clock3, Info, Route, Ticket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { RideInstance } from "@/types"
@@ -6,6 +6,7 @@ import { formatTimeDisplay } from "@/utils/dateHelpers"
 
 interface RideInstanceCardProps {
   instance: RideInstance
+  rideIconUrl?: string | null
   isPastRide: boolean
   durationLabel: string | null
   onViewInfo: (instance: RideInstance) => void
@@ -14,6 +15,7 @@ interface RideInstanceCardProps {
 
 export function RideInstanceCard({
   instance,
+  rideIconUrl,
   isPastRide,
   durationLabel,
   onViewInfo,
@@ -23,17 +25,16 @@ export function RideInstanceCard({
   const reserved = instance.reservationCount || 0
   const available = capacity - reserved
   const availableTextClass = available > 0 ? "text-green-600" : "text-red-600"
+  const iconSrc = rideIconUrl || "/reservations/ride-card-icon.svg"
 
   return (
     <div className="w-full rounded-lg border bg-background p-4 shadow-sm md:p-5">
       <div className="grid gap-4 md:grid-cols-[auto_1.6fr_1.8fr_auto] md:items-center md:gap-6">
         <div className="flex justify-start">
-          <Image
-            src="/reservations/ride-card-icon.svg"
+          <img
+            src={iconSrc}
             alt="Ikonica rezervacije vožnje"
-            width={132}
-            height={64}
-            className="h-14 w-auto"
+            className="h-14 w-auto max-w-[132px] object-contain"
           />
         </div>
 

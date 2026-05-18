@@ -48,6 +48,7 @@ interface RidesListPanelProps {
   rides: Ride[]
   selectedDate: Date | undefined
   rideInstances: RideInstance[]
+  rideIconUrl?: string | null
   loading: boolean
   onDateSelect: (date: Date) => void
 }
@@ -130,6 +131,7 @@ export function RidesListPanel({
   rides,
   selectedDate,
   rideInstances,
+  rideIconUrl,
   loading,
   onDateSelect,
 }: RidesListPanelProps) {
@@ -510,6 +512,7 @@ export function RidesListPanel({
               <RideInstanceCard
                 key={row.id}
                 instance={instance}
+                rideIconUrl={rideIconUrl}
                 isPastRide={isPastRide}
                 durationLabel={durationLabel}
                 onViewInfo={(value) => {

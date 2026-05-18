@@ -125,4 +125,5 @@ export class StorefrontAdminController {
   ): Promise<StorefrontAdminResponseDto> {
     return this.storefrontAdminService.completeRideIconUpload(request.auth!, dto);
   }
+
 }

@@ -654,7 +654,7 @@ function RideIconUploadField({
         </div>
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-medium">Upload slike za kartice vožnji</p>
-          <p className="text-xs text-muted-foreground">PNG, JPG, WebP ili GIF do 1 MB.</p>
+          <p className="text-xs text-muted-foreground">SVG, PNG, JPG, WebP ili GIF do 1 MB.</p>
           {progress !== null ? <p className="text-xs text-primary">Upload {progress}%</p> : null}
         </div>
         <Button asChild variant="outline" size="sm" disabled={progress !== null}>
@@ -666,7 +666,7 @@ function RideIconUploadField({
         <Input
           id="rideIconUpload"
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
+          accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif"
           className="hidden"
           disabled={progress !== null}
           onChange={(event) => {

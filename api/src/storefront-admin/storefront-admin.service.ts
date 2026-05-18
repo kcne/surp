@@ -19,7 +19,13 @@ import {
 } from './dto/storefront-asset.dto';
 import { UpsertStorefrontDto } from './dto/upsert-storefront.dto';
 
-const ALLOWED_STOREFRONT_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const ALLOWED_STOREFRONT_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/svg+xml'
+]);
 
 type StorefrontTextField =
   | 'heroTitle'
