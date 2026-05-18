@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
@@ -13,13 +14,20 @@ import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { getAccessToken, getTenantSlug } from "@/infrastructure/utils/storage"
-import type { StorefrontAdminResponse, StorefrontSections, StorefrontUpdatePayload } from "@/lib/storefront"
+import {
+  resolveStorefrontImageUrl,
+  type StorefrontAdminResponse,
+  type StorefrontSections,
+  type StorefrontUpdatePayload,
+} from "@/lib/storefront"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/stores/authStore"
-import { Eye, Globe2, ImageIcon, Link2, Palette, PowerOff, Save, Send, Share2, Sparkles, Store } from "lucide-react"
+import { Eye, Globe2, ImageIcon, Link2, Palette, PowerOff, Save, Send, Share2, Sparkles, Store, Upload } from "lucide-react"
 import { toast } from "sonner"
 import {
   getStorefrontAction,
+  completeRideIconUploadAction,
+  presignRideIconUploadAction,
   publishStorefrontAction,
   saveStorefrontAction,
   unpublishStorefrontAction,
@@ -34,6 +42,7 @@ type TextField =
   | "footerText"
   | "logoUrl"
   | "logoAlt"
+  | "rideIconUrl"
   | "primaryColor"
   | "seoTitle"
   | "seoDescription"
@@ -63,6 +72,7 @@ const EMPTY_FORM: StorefrontFormState = {
   footerText: "",
   logoUrl: "",
   logoAlt: "",
+  rideIconUrl: "",
   primaryColor: "#1D4ED8",
   seoTitle: "",
   seoDescription: "",
@@ -94,6 +104,7 @@ export default function StorefrontDashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingAction, setSavingAction] = useState<"save" | "publish" | "unpublish" | null>(null)
+  const [rideIconUploadProgress, setRideIconUploadProgress] = useState<number | null>(null)
 
   const auth = useMemo(() => {
     if (!hasHydrated || !isAuthenticated) {
@@ -200,6 +211,46 @@ export default function StorefrontDashboardPage() {
       toast.error(message)
     } finally {
       setSavingAction(null)
+    }
+  }
+
+  const handleRideIconUpload = async (file: File | null) => {
+    if (!file) {
+      return
+    }
+
+    if (!auth) {
+      toast.error("Nedostaje sesija za prijavu")
+      return
+    }
+
+    setRideIconUploadProgress(0)
+    setError(null)
+    try {
+      const presign = await presignRideIconUploadAction(auth, {
+        fileName: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+      })
+
+      await uploadFileToSignedUrl(presign.uploadUrl, file, setRideIconUploadProgress)
+
+      const response = await completeRideIconUploadAction(auth, {
+        storageKey: presign.storageKey,
+        fileName: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+      })
+
+      setStorefront(response)
+      setForm(mapStorefrontToForm(response))
+      toast.success("Ikonica za vožnje je uploadovana")
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : "Upload ikonice nije uspeo"
+      setError(message)
+      toast.error(message)
+    } finally {
+      setRideIconUploadProgress(null)
     }
   }
 
@@ -368,6 +419,11 @@ export default function StorefrontDashboardPage() {
                   label="Opis logotipa"
                   value={form.logoAlt}
                   onChange={(value) => updateField("logoAlt", value)}
+                />
+                <RideIconUploadField
+                  value={form.rideIconUrl}
+                  progress={rideIconUploadProgress}
+                  onUpload={handleRideIconUpload}
                 />
               </div>
               <div className="grid gap-3 rounded-xl border bg-muted/30 p-4 md:grid-cols-[auto_1fr] md:items-center">
@@ -574,19 +630,114 @@ function StorefrontPreview({
   )
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function RideIconUploadField({
+  value,
+  progress,
+  onUpload,
+}: {
+  value: string
+  progress: number | null
+  onUpload: (file: File | null) => void
+}) {
+  const previewUrl = value ? resolveStorefrontImageUrl(value) : null
+
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor="rideIconUpload">Ikonica za vožnje</Label>
+      <div className="flex items-center gap-4 rounded-xl border bg-background p-3">
+        <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-muted">
+          {previewUrl ? (
+            <img src={previewUrl} alt="" className="max-h-12 max-w-12 object-contain" />
+          ) : (
+            <ImageIcon className="h-6 w-6 text-muted-foreground" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-sm font-medium">Upload slike za kartice vožnji</p>
+          <p className="text-xs text-muted-foreground">PNG, JPG, WebP ili GIF do 1 MB.</p>
+          {progress !== null ? <p className="text-xs text-primary">Upload {progress}%</p> : null}
+        </div>
+        <Button asChild variant="outline" size="sm" disabled={progress !== null}>
+          <Label htmlFor="rideIconUpload" className="cursor-pointer gap-2">
+            <Upload className="h-4 w-4" />
+            Upload
+          </Label>
+        </Button>
+        <Input
+          id="rideIconUpload"
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          disabled={progress !== null}
+          onChange={(event) => {
+            onUpload(event.target.files?.[0] ?? null)
+            event.currentTarget.value = ""
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
   const id = label.toLowerCase().replaceAll(" ", "-")
 
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} value={value} onChange={(event) => onChange(event.target.value)} />
+      <Input id={id} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
     </div>
   )
 }
 
 function translateStatus(status: StorefrontAdminResponse["status"]): string {
   return status === "PUBLISHED" ? "Objavljeno" : "Nacrt"
+}
+
+async function uploadFileToSignedUrl(
+  uploadUrl: string,
+  file: File,
+  onProgress?: (progressPercent: number) => void
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    request.open("PUT", uploadUrl)
+    request.setRequestHeader("Content-Type", file.type)
+
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        return
+      }
+
+      const progressPercent = Math.round((event.loaded / event.total) * 100)
+      onProgress?.(Math.min(100, Math.max(0, progressPercent)))
+    }
+
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        resolve()
+        return
+      }
+
+      reject(new Error("Upload slike nije uspeo"))
+    }
+
+    request.onerror = () => {
+      reject(new Error("Upload slike nije uspeo"))
+    }
+
+    request.send(file)
+  })
 }
 
 function stripMarkdown(value: string): string {
@@ -607,6 +758,7 @@ function mapStorefrontToForm(storefront: StorefrontAdminResponse): StorefrontFor
     footerText: storefront.footerText || "",
     logoUrl: storefront.logoUrl || "",
     logoAlt: storefront.logoAlt || "",
+    rideIconUrl: storefront.rideIconUrl || "",
     primaryColor: storefront.primaryColor || "#1D4ED8",
     seoTitle: storefront.seoTitle || "",
     seoDescription: storefront.seoDescription || "",
@@ -621,6 +773,8 @@ function mapStorefrontToForm(storefront: StorefrontAdminResponse): StorefrontFor
 }
 
 function mapFormToPayload(form: StorefrontFormState): StorefrontUpdatePayload {
+  const rideIconUrl = form.rideIconUrl.trim()
+
   return {
     heroTitle: form.heroTitle,
     heroSubtitle: form.heroSubtitle,
@@ -630,6 +784,7 @@ function mapFormToPayload(form: StorefrontFormState): StorefrontUpdatePayload {
     footerText: form.footerText,
     logoUrl: form.logoUrl || undefined,
     logoAlt: form.logoAlt,
+    rideIconUrl: rideIconUrl && !rideIconUrl.startsWith("/api/") ? rideIconUrl : undefined,
     primaryColor: form.primaryColor || undefined,
     sectionsEnabled: form.sectionsEnabled,
     seoTitle: form.seoTitle,

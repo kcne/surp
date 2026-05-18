@@ -80,6 +80,15 @@ export class UpsertStorefrontDto {
   @MaxLength(160)
   logoAlt?: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== '')
+  @Matches(/^(https?:\/\/|\/).+/, {
+    message: 'rideIconUrl must be an absolute URL or root-relative path'
+  })
+  @MaxLength(500)
+  rideIconUrl?: string;
+
   @ApiPropertyOptional({ example: '#1D4ED8' })
   @IsOptional()
   @ValidateIf((_object, value) => value !== '')

@@ -29,11 +29,11 @@ export function RideInstanceCard({
       <div className="grid gap-4 md:grid-cols-[auto_1.6fr_1.8fr_auto] md:items-center md:gap-6">
         <div className="flex justify-start">
           <Image
-            src="/uvs-logo.svg"
-            alt="Company logo"
+            src="/reservations/ride-card-icon.svg"
+            alt="Ikonica rezervacije vožnje"
             width={132}
-            height={32}
-            className="h-8 w-auto"
+            height={64}
+            className="h-14 w-auto"
           />
         </div>
 

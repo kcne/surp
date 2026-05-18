@@ -6,6 +6,7 @@ import {
 } from "@/infrastructure/generated/surp-api"
 import type { TopLineMetricResponseDto } from "@/infrastructure/generated/model"
 import { getApiErrorMessage } from "@/infrastructure/utils/errors"
+import { getTenantSlug } from "@/infrastructure/utils/storage"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const DEFAULT_TOP_LINES_LIMIT = 6
@@ -19,18 +20,20 @@ function toDateInputValue(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
-function getDefaultDateRange() {
+function getDefaultDateRange(isSandboxDemo: boolean) {
   const today = new Date()
-  const from = new Date(today.getTime() - 13 * DAY_MS)
+  const from = isSandboxDemo ? today : new Date(today.getTime() - 13 * DAY_MS)
+  const to = isSandboxDemo ? new Date(today.getTime() + 13 * DAY_MS) : today
 
   return {
     fromDate: toDateInputValue(from),
-    toDate: toDateInputValue(today),
+    toDate: toDateInputValue(to),
   }
 }
 
 export function useDashboardAnalyticsPage() {
-  const defaults = useMemo(getDefaultDateRange, [])
+  const isSandboxDemo = getTenantSlug() === "sandbox-demo"
+  const defaults = useMemo(() => getDefaultDateRange(isSandboxDemo), [isSandboxDemo])
   const fromDate = defaults.fromDate
   const toDate = defaults.toDate
 

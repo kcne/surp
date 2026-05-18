@@ -16,6 +16,8 @@ export const envValidationSchema = Joi.object({
   TICKETS_MAX_IMAGE_BYTES: Joi.number().integer().positive().default(5242880),
   TICKETS_UPLOAD_URL_TTL_SECONDS: Joi.number().integer().min(60).max(3600).default(600),
   TICKETS_DOWNLOAD_URL_TTL_SECONDS: Joi.number().integer().min(60).max(3600).default(600),
+  STOREFRONT_MAX_IMAGE_BYTES: Joi.number().integer().positive().default(1048576),
+  STOREFRONT_UPLOAD_URL_TTL_SECONDS: Joi.number().integer().min(60).max(3600).default(600),
   SANDBOX_RESET_TOKEN: Joi.string().trim().min(32).optional(),
   SANDBOX_DEMO_PASSWORD: Joi.string().trim().min(8).optional()
 });

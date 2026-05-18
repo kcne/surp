@@ -9,6 +9,7 @@ import {
   RideStatus,
   RideType,
   StationCategory,
+  StorefrontStatus,
   UserRole
 } from '@prisma/client';
 import { hash } from 'bcryptjs';
@@ -162,6 +163,7 @@ export class InternalSandboxService {
     seeded.rides = await this.createRides(tx, tenantId, user.id);
     seeded.passengers = await this.createPassengers(tx, tenantId, user.id);
     seeded.reservations = await this.createReservations(tx, tenantId, user.id);
+    seeded.storefront = await this.createStorefront(tx, tenantId);
 
     return seeded;
   }
@@ -305,45 +307,121 @@ export class InternalSandboxService {
   ): Promise<number> {
     const rides = this.demoRides();
     const linesById = new Map(this.demoLines().map((line) => [line.id, line]));
+    const passengers = this.demoPassengers();
     const reservations: Prisma.ReservationCreateManyInput[] = [];
+    let reservationIndex = 0;
 
-    rides.forEach((ride, rideIndex) => {
+    rides.forEach((ride) => {
       const line = linesById.get(ride.lineId);
       if (!line) {
         return;
       }
 
-      const firstDeparture = ride.departures[0];
-      const travelDate = this.dateFromNow(rideIndex + 1);
       const departureStationId = line.route[0];
       const arrivalStationId = line.route[line.route.length - 1];
+      const activeSeatCount = Math.floor(ride.capacity * 0.5);
+      const cancelledSeatCount = Math.max(2, Math.floor(ride.capacity * 0.06));
 
-      for (let seatNumber = 1; seatNumber <= 10; seatNumber += 1) {
-        const passengerIndex = ((rideIndex * 10 + seatNumber - 1) % this.demoPassengers().length) + 1;
-        const isCancelled = seatNumber % 7 === 0;
+      for (let dayOffset = 0; dayOffset < 14; dayOffset += 1) {
+        const travelDate = this.dateFromNow(dayOffset);
+        const dayOfWeek = travelDate.getUTCDay();
+        const departure = ride.departures.find((item) => item.dayOfWeek === dayOfWeek);
 
-        reservations.push({
-          id: `sandbox-reservation-${rideIndex + 1}-${seatNumber}`,
-          tenantId,
-          rideId: ride.id,
-          passengerId: `sandbox-passenger-${passengerIndex}`,
-          travelDate,
-          rideDepartureTime: firstDeparture.times[0],
-          rideArrivalTime: firstDeparture.times[firstDeparture.times.length - 1],
-          seatNumber,
-          status: isCancelled ? ReservationStatus.CANCELLED : ReservationStatus.ACTIVE,
-          cancelledAt: isCancelled ? new Date() : null,
-          departureStationId,
-          arrivalStationId,
-          createdById: userId,
-          updatedById: userId
-        });
+        if (!departure) {
+          continue;
+        }
+
+        for (let seatNumber = 1; seatNumber <= activeSeatCount; seatNumber += 1) {
+          reservationIndex += 1;
+          const passengerIndex = ((reservationIndex - 1) % passengers.length) + 1;
+
+          reservations.push({
+            id: `sandbox-reservation-active-${reservationIndex}`,
+            tenantId,
+            rideId: ride.id,
+            passengerId: `sandbox-passenger-${passengerIndex}`,
+            travelDate,
+            rideDepartureTime: departure.times[0],
+            rideArrivalTime: departure.times[departure.times.length - 1],
+            seatNumber,
+            status: ReservationStatus.ACTIVE,
+            cancelledAt: null,
+            departureStationId,
+            arrivalStationId,
+            createdById: userId,
+            updatedById: userId
+          });
+        }
+
+        for (let index = 0; index < cancelledSeatCount; index += 1) {
+          reservationIndex += 1;
+          const seatNumber = activeSeatCount + index + 1;
+          const passengerIndex = ((reservationIndex - 1) % passengers.length) + 1;
+
+          reservations.push({
+            id: `sandbox-reservation-cancelled-${reservationIndex}`,
+            tenantId,
+            rideId: ride.id,
+            passengerId: `sandbox-passenger-${passengerIndex}`,
+            travelDate,
+            rideDepartureTime: departure.times[0],
+            rideArrivalTime: departure.times[departure.times.length - 1],
+            seatNumber,
+            status: ReservationStatus.CANCELLED,
+            cancelledAt: new Date(),
+            departureStationId,
+            arrivalStationId,
+            createdById: userId,
+            updatedById: userId
+          });
+        }
       }
     });
 
     const result = await tx.reservation.createMany({ data: reservations });
 
     return result.count;
+  }
+
+  private async createStorefront(
+    tx: Prisma.TransactionClient,
+    tenantId: string
+  ): Promise<number> {
+    await tx.agencyStorefront.create({
+      data: {
+        tenantId,
+        status: StorefrontStatus.PUBLISHED,
+        publishedAt: new Date(),
+        heroTitle: 'Pouzdane autobuske linije kroz region',
+        heroSubtitle:
+          'SURP Sandbox prevoz povezuje Novi Pazar, Beograd, Sarajevo, Novi Sad i Niš sa jasnim polascima i online rezervacijama.',
+        heroImageUrl: null,
+        heroImageAlt: 'Autobuska linija kroz region',
+        aboutMarkdown:
+          '## O sandbox agenciji\n\nOvaj izlog prikazuje kako javna stranica autobuske agencije može da izgleda kada su linije, polasci i kontakt informacije povezani sa SURP sistemom.\n\n- online pregled aktivnih linija\n- jasni termini polazaka\n- brendirana prezentacija agencije\n- SEO osnova za lokalne i regionalne pretrage',
+        footerText: 'Demo javni izlog za SURP sandbox okruženje.',
+        logoUrl: '/uvs-logo.svg',
+        logoAlt: 'SURP Sandbox logo',
+        rideIconUrl: '/reservations/ride-card-icon.svg',
+        primaryColor: '#4f46e5',
+        sectionsEnabled: {
+          hero: true,
+          rides: true,
+          about: true
+        },
+        seoTitle: 'SURP Sandbox Demo - autobuske linije i online rezervacije',
+        seoDescription:
+          'Demo izlog autobuske agencije sa aktivnim linijama, rasporedom polazaka i online rezervacijama.',
+        ogImageUrl: null,
+        facebookUrl: 'https://facebook.com/surp',
+        instagramUrl: 'https://instagram.com/surp',
+        twitterUrl: null,
+        linkedinUrl: 'https://linkedin.com/company/surp',
+        websiteUrl: 'https://surp.rs'
+      }
+    });
+
+    return 1;
   }
 
   private demoStations(): DemoStation[] {
@@ -471,23 +549,14 @@ export class InternalSandboxService {
         lineId: 'sandbox-line-np-sarajevo',
         name: 'Jutarnji polazak za Sarajevo',
         capacity: 49,
-        departures: [
-          { dayOfWeek: 1, times: ['07:30', '08:25', '09:05', '09:50', '12:15'] },
-          { dayOfWeek: 3, times: ['07:30', '08:25', '09:05', '09:50', '12:15'] },
-          { dayOfWeek: 5, times: ['07:30', '08:25', '09:05', '09:50', '12:15'] }
-        ]
+        departures: this.dailyDepartures(['07:30', '08:25', '09:05', '09:50', '12:15'])
       },
       {
         id: 'sandbox-ride-np-beograd-express',
         lineId: 'sandbox-line-np-beograd',
         name: 'Novi Pazar - Beograd Express',
         capacity: 55,
-        departures: [
-          { dayOfWeek: 1, times: ['06:00', '08:20', '09:35', '11:15'] },
-          { dayOfWeek: 2, times: ['06:00', '08:20', '09:35', '11:15'] },
-          { dayOfWeek: 4, times: ['14:30', '16:50', '18:05', '19:45'] },
-          { dayOfWeek: 6, times: ['08:00', '10:20', '11:35', '13:15'] }
-        ]
+        departures: this.dailyDepartures(['06:00', '08:20', '09:35', '11:15'])
       },
       {
         id: 'sandbox-ride-bg-subotica',
@@ -582,5 +651,12 @@ export class InternalSandboxService {
     date.setUTCHours(0, 0, 0, 0);
     date.setUTCDate(date.getUTCDate() + days);
     return date;
+  }
+
+  private dailyDepartures(times: string[]): Array<{ dayOfWeek: number; times: string[] }> {
+    return Array.from({ length: 7 }, (_, dayOfWeek) => ({
+      dayOfWeek,
+      times
+    }));
   }
 }

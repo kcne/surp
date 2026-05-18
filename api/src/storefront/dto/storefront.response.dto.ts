@@ -61,6 +61,9 @@ export class StorefrontContentDto {
   logoAlt!: string | null;
 
   @ApiProperty({ nullable: true })
+  rideIconUrl!: string | null;
+
+  @ApiProperty({ nullable: true })
   primaryColor!: string | null;
 
   @ApiProperty({ type: StorefrontSectionsDto })

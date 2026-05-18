@@ -26,7 +26,7 @@ import {
   TicketResponseDto
 } from './dto/ticket.response.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
-import { TicketStorageService } from './ticket-storage.service';
+import { ObjectStorageService } from '../storage/object-storage.service';
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
@@ -111,7 +111,7 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-    private readonly ticketStorageService: TicketStorageService
+    private readonly objectStorageService: ObjectStorageService
   ) {
     this.maxImageBytes = this.configService.get<number>('TICKETS_MAX_IMAGE_BYTES', 5 * 1024 * 1024);
     this.uploadUrlTtlSeconds = this.configService.get<number>('TICKETS_UPLOAD_URL_TTL_SECONDS', 600);
@@ -251,7 +251,7 @@ export class TicketsService {
 
     const sanitizedFileName = this.sanitizeFileName(fileName);
     const storageKey = `tenants/${auth.tenantId}/tickets/${ticketId}/${randomUUID()}-${sanitizedFileName}`;
-    const uploadUrl = await this.ticketStorageService.createUploadUrl(
+    const uploadUrl = await this.objectStorageService.createUploadUrl(
       storageKey,
       mimeType,
       this.uploadUrlTtlSeconds
@@ -274,7 +274,7 @@ export class TicketsService {
     this.assertImageUploadAllowed(dto.fileName, dto.mimeType, dto.sizeBytes);
     this.assertStorageKeyBelongsToTicket(auth.tenantId, ticketId, dto.storageKey);
 
-    const objectExists = await this.ticketStorageService.objectExists(dto.storageKey);
+    const objectExists = await this.objectStorageService.objectExists(dto.storageKey);
     if (!objectExists) {
       throw new BadRequestException('Uploaded file not found in bucket for provided storageKey');
     }
@@ -350,12 +350,12 @@ export class TicketsService {
       throw new NotFoundException('Ticket attachment not found');
     }
 
-    const objectExists = await this.ticketStorageService.objectExists(attachment.storageKey);
+    const objectExists = await this.objectStorageService.objectExists(attachment.storageKey);
     if (!objectExists) {
       throw new InternalServerErrorException('Attachment object is missing in bucket storage');
     }
 
-    const downloadUrl = await this.ticketStorageService.createDownloadUrl(
+    const downloadUrl = await this.objectStorageService.createDownloadUrl(
       attachment.storageKey,
       this.downloadUrlTtlSeconds
     );

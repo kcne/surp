@@ -35,6 +35,7 @@ export interface PublicAgencyStorefront {
   footerText: string | null
   logoUrl: string | null
   logoAlt: string | null
+  rideIconUrl: string | null
   primaryColor: string | null
   sectionsEnabled: StorefrontSections
   seoTitle: string | null
@@ -63,6 +64,7 @@ export type StorefrontUpdatePayload = Partial<
     | "footerText"
     | "logoUrl"
     | "logoAlt"
+    | "rideIconUrl"
     | "primaryColor"
     | "sectionsEnabled"
     | "seoTitle"
@@ -72,10 +74,24 @@ export type StorefrontUpdatePayload = Partial<
 > &
   Partial<StorefrontSocialLinks>
 
+export interface StorefrontAssetPresignResponse {
+  uploadUrl: string
+  storageKey: string
+  expiresInSeconds: number
+}
+
 const DEFAULT_API_URL = "http://127.0.0.1:3001"
 
 export function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL
+}
+
+export function resolveStorefrontImageUrl(url: string): string {
+  if (url.startsWith("/api/")) {
+    return `${getApiBaseUrl()}${url}`
+  }
+
+  return url
 }
 
 export async function fetchPublicAgencyStorefront(slug: string): Promise<PublicAgencyStorefront | null> {

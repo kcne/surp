@@ -17,6 +17,11 @@ import { UserRole } from '@prisma/client';
 import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
 import { StorefrontAdminResponseDto } from '../storefront/dto/storefront.response.dto';
+import {
+  CompleteStorefrontAssetUploadDto,
+  CreateStorefrontAssetPresignDto,
+  StorefrontAssetPresignResponseDto
+} from './dto/storefront-asset.dto';
 import { UpsertStorefrontDto } from './dto/upsert-storefront.dto';
 import { StorefrontAdminService } from './storefront-admin.service';
 
@@ -80,5 +85,44 @@ export class StorefrontAdminController {
   @ApiForbiddenResponse({ description: 'Insufficient role or inactive tenant.' })
   unpublish(@Req() request: RequestWithAuth): Promise<StorefrontAdminResponseDto> {
     return this.storefrontAdminService.unpublish(request.auth!);
+  }
+
+  @Post('assets/ride-icon/presign-upload')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Create signed upload URL for the storefront ride icon.' })
+  @ApiOkResponse({ type: StorefrontAssetPresignResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failure.' })
+  @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role or inactive tenant.' })
+  presignRideIconUpload(
+    @Req() request: RequestWithAuth,
+    @Body() dto: CreateStorefrontAssetPresignDto
+  ): Promise<StorefrontAssetPresignResponseDto> {
+    return this.storefrontAdminService.presignRideIconUpload(
+      request.auth!,
+      dto.fileName,
+      dto.mimeType,
+      dto.sizeBytes
+    );
+  }
+
+  @Post('assets/ride-icon/complete')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Persist uploaded storefront ride icon metadata.' })
+  @ApiOkResponse({ type: StorefrontAdminResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failure.' })
+  @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role or inactive tenant.' })
+  completeRideIconUpload(
+    @Req() request: RequestWithAuth,
+    @Body() dto: CompleteStorefrontAssetUploadDto
+  ): Promise<StorefrontAdminResponseDto> {
+    return this.storefrontAdminService.completeRideIconUpload(request.auth!, dto);
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, RideStatus, StorefrontStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ObjectStorageService } from '../storage/object-storage.service';
 import {
   PublicAgencyStorefrontResponseDto,
   PublicStorefrontRideSummaryDto
@@ -52,7 +53,10 @@ type PublicRideRecord = Prisma.RideGetPayload<{ select: typeof PUBLIC_RIDE_SELEC
 
 @Injectable()
 export class PublicStorefrontService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly objectStorageService: ObjectStorageService
+  ) {}
 
   async getAgencyBySlug(slug: string): Promise<PublicAgencyStorefrontResponseDto> {
     const normalizedSlug = slug.trim().toLowerCase();
@@ -74,6 +78,30 @@ export class PublicStorefrontService {
     const rides = await this.getPublicRideSummaries(storefront.tenantId);
 
     return mapStorefrontToPublicDto(storefront, rides);
+  }
+
+  async getRideIconDownloadUrl(slug: string): Promise<string> {
+    const normalizedSlug = slug.trim().toLowerCase();
+    const storefront = await this.prisma.agencyStorefront.findFirst({
+      where: {
+        rideIconStorageKey: {
+          not: null
+        },
+        tenant: {
+          slug: normalizedSlug,
+          isActive: true
+        }
+      },
+      select: {
+        rideIconStorageKey: true
+      }
+    });
+
+    if (!storefront?.rideIconStorageKey) {
+      throw new NotFoundException('Storefront ride icon not found');
+    }
+
+    return this.objectStorageService.createDownloadUrl(storefront.rideIconStorageKey, 3600);
   }
 
   private async getPublicRideSummaries(tenantId: string): Promise<PublicStorefrontRideSummaryDto[]> {

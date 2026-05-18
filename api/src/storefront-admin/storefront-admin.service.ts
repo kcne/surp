@@ -1,7 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma, StorefrontStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { AccessTokenPayload } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { ObjectStorageService } from '../storage/object-storage.service';
 import { normalizePrimaryColor } from '../storefront/color-validation';
 import {
   STOREFRONT_SELECT,
@@ -10,7 +13,13 @@ import {
   normalizeSectionsInput
 } from '../storefront/storefront.mapper';
 import { StorefrontAdminResponseDto } from '../storefront/dto/storefront.response.dto';
+import {
+  CompleteStorefrontAssetUploadDto,
+  StorefrontAssetPresignResponseDto
+} from './dto/storefront-asset.dto';
 import { UpsertStorefrontDto } from './dto/upsert-storefront.dto';
+
+const ALLOWED_STOREFRONT_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 type StorefrontTextField =
   | 'heroTitle'
@@ -21,6 +30,7 @@ type StorefrontTextField =
   | 'footerText'
   | 'logoUrl'
   | 'logoAlt'
+  | 'rideIconUrl'
   | 'primaryColor'
   | 'seoTitle'
   | 'seoDescription'
@@ -33,11 +43,22 @@ type StorefrontTextField =
 
 type StorefrontWriteData = Partial<Record<StorefrontTextField, string | null>> & {
   sectionsEnabled?: Prisma.InputJsonValue;
+  rideIconStorageKey?: string | null;
 };
 
 @Injectable()
 export class StorefrontAdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly maxImageBytes: number;
+  private readonly uploadUrlTtlSeconds: number;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+    private readonly objectStorageService: ObjectStorageService
+  ) {
+    this.maxImageBytes = this.configService.get<number>('STOREFRONT_MAX_IMAGE_BYTES', 1024 * 1024);
+    this.uploadUrlTtlSeconds = this.configService.get<number>('STOREFRONT_UPLOAD_URL_TTL_SECONDS', 600);
+  }
 
   async getCurrent(auth: AccessTokenPayload): Promise<StorefrontAdminResponseDto> {
     const storefront = await this.prisma.agencyStorefront.findUnique({
@@ -106,6 +127,69 @@ export class StorefrontAdminService {
     return mapStorefrontToAdminDto(storefront);
   }
 
+  async presignRideIconUpload(
+    auth: AccessTokenPayload,
+    fileName: string,
+    mimeType: string,
+    sizeBytes: number
+  ): Promise<StorefrontAssetPresignResponseDto> {
+    this.assertImageUploadAllowed(fileName, mimeType, sizeBytes);
+
+    const sanitizedFileName = this.sanitizeFileName(fileName);
+    const storageKey = `tenants/${auth.tenantId}/storefront/ride-icon/${randomUUID()}-${sanitizedFileName}`;
+    const uploadUrl = await this.objectStorageService.createUploadUrl(
+      storageKey,
+      mimeType,
+      this.uploadUrlTtlSeconds
+    );
+
+    return {
+      uploadUrl,
+      storageKey,
+      expiresInSeconds: this.uploadUrlTtlSeconds
+    };
+  }
+
+  async completeRideIconUpload(
+    auth: AccessTokenPayload,
+    dto: CompleteStorefrontAssetUploadDto
+  ): Promise<StorefrontAdminResponseDto> {
+    this.assertImageUploadAllowed(dto.fileName, dto.mimeType, dto.sizeBytes);
+    this.assertStorageKeyBelongsToRideIcon(auth.tenantId, dto.storageKey);
+
+    const objectExists = await this.objectStorageService.objectExists(dto.storageKey);
+    if (!objectExists) {
+      throw new BadRequestException('Uploaded file not found in bucket for provided storageKey');
+    }
+
+    const metadata = await this.objectStorageService.headObject(dto.storageKey);
+    if (metadata.contentLength !== null && metadata.contentLength > this.maxImageBytes) {
+      throw new BadRequestException(`Image exceeds maximum allowed size of ${this.maxImageBytes} bytes`);
+    }
+
+    if (metadata.contentType && !ALLOWED_STOREFRONT_IMAGE_MIME_TYPES.has(metadata.contentType)) {
+      throw new BadRequestException('Unsupported uploaded image type');
+    }
+
+    const storefront = await this.prisma.agencyStorefront.upsert({
+      where: {
+        tenantId: auth.tenantId
+      },
+      create: {
+        tenantId: auth.tenantId,
+        rideIconUrl: null,
+        rideIconStorageKey: dto.storageKey
+      },
+      update: {
+        rideIconUrl: null,
+        rideIconStorageKey: dto.storageKey
+      },
+      select: STOREFRONT_SELECT
+    });
+
+    return mapStorefrontToAdminDto(storefront);
+  }
+
   private async updateStorefrontStatusOrThrow(
     tenantId: string,
     data: Pick<Prisma.AgencyStorefrontUncheckedUpdateInput, 'status' | 'publishedAt'>
@@ -138,6 +222,10 @@ export class StorefrontAdminService {
     this.assignOptionalText(data, 'footerText', dto.footerText);
     this.assignOptionalText(data, 'logoUrl', dto.logoUrl);
     this.assignOptionalText(data, 'logoAlt', dto.logoAlt);
+    this.assignOptionalText(data, 'rideIconUrl', dto.rideIconUrl);
+    if (typeof dto.rideIconUrl === 'string') {
+      data.rideIconStorageKey = null;
+    }
     this.assignOptionalText(data, 'seoTitle', dto.seoTitle);
     this.assignOptionalText(data, 'seoDescription', dto.seoDescription);
     this.assignOptionalText(data, 'ogImageUrl', dto.ogImageUrl);
@@ -169,5 +257,40 @@ export class StorefrontAdminService {
     }
 
     data[field] = value.trim() || null;
+  }
+
+  private assertImageUploadAllowed(fileName: string, mimeType: string, sizeBytes: number): void {
+    if (!fileName.trim()) {
+      throw new BadRequestException('fileName is required');
+    }
+
+    if (!ALLOWED_STOREFRONT_IMAGE_MIME_TYPES.has(mimeType)) {
+      throw new BadRequestException('Unsupported image type');
+    }
+
+    if (sizeBytes <= 0) {
+      throw new BadRequestException('sizeBytes must be greater than zero');
+    }
+
+    if (sizeBytes > this.maxImageBytes) {
+      throw new BadRequestException(`Image exceeds maximum allowed size of ${this.maxImageBytes} bytes`);
+    }
+  }
+
+  private sanitizeFileName(fileName: string): string {
+    const normalized = fileName.trim().toLowerCase();
+    const sanitized = normalized.replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-');
+    return sanitized.slice(0, 120) || 'image';
+  }
+
+  private assertStorageKeyBelongsToRideIcon(tenantId: string, storageKey: string): void {
+    if (storageKey.includes('..')) {
+      throw new BadRequestException('storageKey contains invalid path traversal segments');
+    }
+
+    const expectedPrefix = `tenants/${tenantId}/storefront/ride-icon/`;
+    if (!storageKey.startsWith(expectedPrefix)) {
+      throw new BadRequestException('storageKey does not belong to the current tenant storefront context');
+    }
   }
 }

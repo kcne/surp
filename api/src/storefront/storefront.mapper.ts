@@ -19,6 +19,8 @@ export const STOREFRONT_SELECT = Prisma.validator<Prisma.AgencyStorefrontSelect>
   footerText: true,
   logoUrl: true,
   logoAlt: true,
+  rideIconUrl: true,
+  rideIconStorageKey: true,
   primaryColor: true,
   sectionsEnabled: true,
   seoTitle: true,
@@ -85,6 +87,7 @@ export function buildDraftStorefrontDto(tenant: {
     footerText: null,
     logoUrl: null,
     logoAlt: null,
+    rideIconUrl: null,
     primaryColor: null,
     sectionsEnabled: { ...DEFAULT_STOREFRONT_SECTIONS },
     seoTitle: null,
@@ -113,6 +116,7 @@ function mapCommonStorefrontFields(storefront: SelectedStorefront) {
     footerText: storefront.footerText,
     logoUrl: storefront.logoUrl,
     logoAlt: storefront.logoAlt,
+    rideIconUrl: resolveRideIconUrl(storefront),
     primaryColor: storefront.primaryColor,
     sectionsEnabled: normalizeSections(storefront.sectionsEnabled),
     seoTitle: storefront.seoTitle,
@@ -127,6 +131,14 @@ function mapCommonStorefrontFields(storefront: SelectedStorefront) {
     },
     updatedAt: storefront.updatedAt
   };
+}
+
+function resolveRideIconUrl(storefront: SelectedStorefront): string | null {
+  if (storefront.rideIconStorageKey) {
+    return `/api/public/agencies/${encodeURIComponent(storefront.tenant.slug)}/assets/ride-icon`;
+  }
+
+  return storefront.rideIconUrl;
 }
 
 export function normalizeSections(value: Prisma.JsonValue): StorefrontSectionsDto {

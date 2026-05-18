@@ -4508,6 +4508,33 @@
         ]
       }
     },
+    "/api/public/agencies/{slug}/assets/ride-icon": {
+      "get": {
+        "operationId": "PublicStorefrontController_redirectRideIcon",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Storefront ride icon not found."
+          },
+          "429": {
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "Redirect to a signed storefront ride icon image URL.",
+        "tags": [
+          "Public · Agencies"
+        ]
+      }
+    },
     "/api/storefront": {
       "get": {
         "operationId": "StorefrontAdminController_getCurrent",
@@ -4698,6 +4725,124 @@
           }
         ],
         "summary": "Unpublish the current tenant storefront.",
+        "tags": [
+          "Storefront Admin"
+        ]
+      }
+    },
+    "/api/storefront/assets/ride-icon/presign-upload": {
+      "post": {
+        "operationId": "StorefrontAdminController_presignRideIconUpload",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStorefrontAssetPresignDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontAssetPresignResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role or inactive tenant."
+          },
+          "429": {
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create signed upload URL for the storefront ride icon.",
+        "tags": [
+          "Storefront Admin"
+        ]
+      }
+    },
+    "/api/storefront/assets/ride-icon/complete": {
+      "post": {
+        "operationId": "StorefrontAdminController_completeRideIconUpload",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteStorefrontAssetUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontAdminResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role or inactive tenant."
+          },
+          "429": {
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Persist uploaded storefront ride icon metadata.",
         "tags": [
           "Storefront Admin"
         ]
@@ -7742,6 +7887,10 @@
             "type": "object",
             "nullable": true
           },
+          "rideIconUrl": {
+            "type": "object",
+            "nullable": true
+          },
           "primaryColor": {
             "type": "object",
             "nullable": true
@@ -7796,6 +7945,7 @@
           "footerText",
           "logoUrl",
           "logoAlt",
+          "rideIconUrl",
           "primaryColor",
           "sectionsEnabled",
           "seoTitle",
@@ -7855,6 +8005,10 @@
             "type": "object",
             "nullable": true
           },
+          "rideIconUrl": {
+            "type": "object",
+            "nullable": true
+          },
           "primaryColor": {
             "type": "object",
             "nullable": true
@@ -7902,6 +8056,7 @@
           "footerText",
           "logoUrl",
           "logoAlt",
+          "rideIconUrl",
           "primaryColor",
           "sectionsEnabled",
           "seoTitle",
@@ -7955,6 +8110,9 @@
           "logoAlt": {
             "type": "string"
           },
+          "rideIconUrl": {
+            "type": "string"
+          },
           "primaryColor": {
             "type": "string",
             "example": "#1D4ED8"
@@ -7987,6 +8145,75 @@
             "type": "string"
           }
         }
+      },
+      "CreateStorefrontAssetPresignDto": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "example": "ride-icon.png"
+          },
+          "mimeType": {
+            "type": "string",
+            "example": "image/png"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "example": 24576
+          }
+        },
+        "required": [
+          "fileName",
+          "mimeType",
+          "sizeBytes"
+        ]
+      },
+      "StorefrontAssetPresignResponseDto": {
+        "type": "object",
+        "properties": {
+          "uploadUrl": {
+            "type": "string"
+          },
+          "storageKey": {
+            "type": "string"
+          },
+          "expiresInSeconds": {
+            "type": "number",
+            "example": 600
+          }
+        },
+        "required": [
+          "uploadUrl",
+          "storageKey",
+          "expiresInSeconds"
+        ]
+      },
+      "CompleteStorefrontAssetUploadDto": {
+        "type": "object",
+        "properties": {
+          "storageKey": {
+            "type": "string",
+            "example": "tenants/tenant-id/storefront/ride-icon/uuid-ride-icon.png"
+          },
+          "fileName": {
+            "type": "string",
+            "example": "ride-icon.png"
+          },
+          "mimeType": {
+            "type": "string",
+            "example": "image/png"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "example": 24576
+          }
+        },
+        "required": [
+          "storageKey",
+          "fileName",
+          "mimeType",
+          "sizeBytes"
+        ]
       }
     }
   }

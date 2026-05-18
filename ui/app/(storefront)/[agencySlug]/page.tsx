@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { PublicAgencyStorefront } from "@/lib/storefront"
-import { fetchPublicAgencyStorefront, storefrontDisplayTitle } from "@/lib/storefront"
+import { fetchPublicAgencyStorefront, resolveStorefrontImageUrl, storefrontDisplayTitle } from "@/lib/storefront"
 import {
   ArrowRight,
   Calendar,
@@ -294,6 +294,16 @@ function RidesSection({ agency }: { agency: PublicAgencyStorefront }) {
               key={ride.id}
               className="group rounded-xl border bg-white p-6 shadow-sm transition duration-200 hover:scale-[1.02] hover:border-brand-primary hover:shadow-lg motion-reduce:hover:scale-100"
             >
+              {agency.rideIconUrl ? (
+                <div className="mb-5 flex justify-center">
+                  <img
+                    src={resolveStorefrontImageUrl(agency.rideIconUrl)}
+                    alt=""
+                    aria-hidden="true"
+                    className="h-14 w-auto rounded-xl object-contain"
+                  />
+                </div>
+              ) : null}
               <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3">
                 <p className="text-sm font-semibold">{ride.origin}</p>
                 <div className="mb-1 flex w-20 items-center">

@@ -88,73 +88,75 @@ model HealthCheckLog {
 }
 
 model Tenant {
-  id              String           @id @default(cuid())
-  slug            String           @unique
-  name            String
-  timezone        String?
-  isActive        Boolean          @default(true)
-  deactivatedAt   DateTime?
-  deactivatedById String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  users           User[]
-  refreshSessions RefreshSession[]
-  stations        Station[]
-  lines           Line[]
-  lineStops       LineStop[]
-  passengers      Passenger[]
-  rides           Ride[]
-  rideDaySchedules RideDaySchedule[]
+  id                          String                       @id @default(cuid())
+  slug                        String                       @unique
+  name                        String
+  timezone                    String?
+  isActive                    Boolean                      @default(true)
+  deactivatedAt               DateTime?
+  deactivatedById             String?
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  users                       User[]
+  refreshSessions             RefreshSession[]
+  stations                    Station[]
+  lines                       Line[]
+  lineStops                   LineStop[]
+  passengers                  Passenger[]
+  rides                       Ride[]
+  rideDaySchedules            RideDaySchedule[]
   rideDayScheduleStationTimes RideDayScheduleStationTime[]
-  rideExceptions  RideException[]
-  reservations    Reservation[]
-  auditEvents     AuditEvent[]
-  tickets         Ticket[]
-  ticketComments  TicketComment[]
-  ticketAttachments TicketAttachment[]
-  storefront      AgencyStorefront?
+  rideExceptions              RideException[]
+  reservations                Reservation[]
+  auditEvents                 AuditEvent[]
+  tickets                     Ticket[]
+  ticketComments              TicketComment[]
+  ticketAttachments           TicketAttachment[]
+  storefront                  AgencyStorefront?
 
   @@index([isActive])
 }
 
 model AgencyStorefront {
-  tenantId        String           @id
-  status          StorefrontStatus @default(DRAFT)
-  publishedAt     DateTime?
-  heroTitle       String?
-  heroSubtitle    String?
-  heroImageUrl    String?
-  heroImageAlt    String?
-  aboutMarkdown   String?          @db.Text
-  footerText      String?
-  logoUrl         String?
-  logoAlt         String?
-  primaryColor    String?
-  sectionsEnabled Json             @default("{\"hero\":true,\"rides\":true,\"about\":true}")
-  seoTitle        String?
-  seoDescription  String?
-  ogImageUrl      String?
-  facebookUrl     String?
-  instagramUrl    String?
-  twitterUrl      String?
-  linkedinUrl     String?
-  websiteUrl      String?
-  updatedAt       DateTime         @updatedAt
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId           String           @id
+  status             StorefrontStatus @default(DRAFT)
+  publishedAt        DateTime?
+  heroTitle          String?
+  heroSubtitle       String?
+  heroImageUrl       String?
+  heroImageAlt       String?
+  aboutMarkdown      String?          @db.Text
+  footerText         String?
+  logoUrl            String?
+  logoAlt            String?
+  rideIconUrl        String?
+  rideIconStorageKey String?
+  primaryColor       String?
+  sectionsEnabled    Json             @default("{\"hero\":true,\"rides\":true,\"about\":true}")
+  seoTitle           String?
+  seoDescription     String?
+  ogImageUrl         String?
+  facebookUrl        String?
+  instagramUrl       String?
+  twitterUrl         String?
+  linkedinUrl        String?
+  websiteUrl         String?
+  updatedAt          DateTime         @updatedAt
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model Ticket {
-  id          String         @id @default(cuid())
+  id          String             @id @default(cuid())
   tenantId    String
   createdById String?
   updatedById String?
   title       String
   description String
-  status      TicketStatus   @default(OPEN)
-  category    TicketCategory @default(QUESTION)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  status      TicketStatus       @default(OPEN)
+  category    TicketCategory     @default(QUESTION)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   comments    TicketComment[]
   attachments TicketAttachment[]
 
@@ -166,15 +168,15 @@ model Ticket {
 }
 
 model TicketComment {
-  id           String   @id @default(cuid())
+  id           String             @id @default(cuid())
   tenantId     String
   ticketId     String
   authorUserId String
   content      String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ticket       Ticket             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   attachments  TicketAttachment[]
 
   @@index([tenantId])
@@ -184,21 +186,21 @@ model TicketComment {
 }
 
 model TicketAttachment {
-  id         String        @id @default(cuid())
-  tenantId   String
-  ticketId   String
-  commentId  String?
+  id          String         @id @default(cuid())
+  tenantId    String
+  ticketId    String
+  commentId   String?
   createdById String?
   updatedById String?
-  fileName   String
-  mimeType   String
-  sizeBytes  Int
-  storageKey String        @unique
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  ticket     Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  comment    TicketComment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  storageKey  String         @unique
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ticket      Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  comment     TicketComment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([ticketId])
@@ -208,20 +210,20 @@ model TicketAttachment {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  tenantId        String
-  createdById     String?
-  updatedById     String?
-  username        String
-  email           String
-  passwordHash    String
-  requirePasswordChange Boolean    @default(false)
-  role            UserRole         @default(STAFF)
-  isActive        Boolean          @default(true)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  refreshSessions RefreshSession[]
+  id                    String           @id @default(cuid())
+  tenantId              String
+  createdById           String?
+  updatedById           String?
+  username              String
+  email                 String
+  passwordHash          String
+  requirePasswordChange Boolean          @default(false)
+  role                  UserRole         @default(STAFF)
+  isActive              Boolean          @default(true)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  tenant                Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  refreshSessions       RefreshSession[]
 
   @@unique([tenantId, username])
   @@unique([tenantId, email])
@@ -230,43 +232,43 @@ model User {
 }
 
 model RefreshSession {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   tenantId         String
   userId           String
   createdById      String?
   updatedById      String?
-  refreshTokenHash String   @unique
+  refreshTokenHash String    @unique
   expiresAt        DateTime
   revokedAt        DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user             User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, userId])
   @@index([updatedById])
 }
 
 model Station {
-  id           String           @id @default(cuid())
-  tenantId     String
-  createdById  String?
-  updatedById  String?
-  name         String
-  address      String
-  category     StationCategory?
-  contactPhone String?
-  notes        String?
-  isActive     Boolean          @default(true)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  departureFor Line[]           @relation("LineDepartureStation")
-  arrivalFor   Line[]           @relation("LineArrivalStation")
-  intermediateFor LineStop[]
+  id                          String                       @id @default(cuid())
+  tenantId                    String
+  createdById                 String?
+  updatedById                 String?
+  name                        String
+  address                     String
+  category                    StationCategory?
+  contactPhone                String?
+  notes                       String?
+  isActive                    Boolean                      @default(true)
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  tenant                      Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  departureFor                Line[]                       @relation("LineDepartureStation")
+  arrivalFor                  Line[]                       @relation("LineArrivalStation")
+  intermediateFor             LineStop[]
   rideDayScheduleStationTimes RideDayScheduleStationTime[]
-  departureForReservation Reservation[] @relation("ReservationDepartureStation")
-  arrivalForReservation   Reservation[] @relation("ReservationArrivalStation")
+  departureForReservation     Reservation[]                @relation("ReservationDepartureStation")
+  arrivalForReservation       Reservation[]                @relation("ReservationArrivalStation")
 
   @@index([tenantId])
   @@index([tenantId, name])
@@ -274,7 +276,7 @@ model Station {
 }
 
 model Line {
-  id                 String   @id @default(cuid())
+  id                 String            @id @default(cuid())
   tenantId           String
   createdById        String?
   updatedById        String?
@@ -282,14 +284,14 @@ model Line {
   departureStationId String
   arrivalStationId   String
   directionMode      LineDirectionMode @default(BOTH)
-  direction          LineDirection @default(OUTBOUND)
+  direction          LineDirection     @default(OUTBOUND)
   pairKey            String?
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  departureStation   Station  @relation("LineDepartureStation", fields: [departureStationId], references: [id], onDelete: Restrict)
-  arrivalStation     Station  @relation("LineArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
+  isActive           Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  departureStation   Station           @relation("LineDepartureStation", fields: [departureStationId], references: [id], onDelete: Restrict)
+  arrivalStation     Station           @relation("LineArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
   intermediateStops  LineStop[]
   rides              Ride[]
 
@@ -324,13 +326,13 @@ model LineStop {
 }
 
 model Reservation {
-  id                 String   @id @default(cuid())
+  id                 String            @id @default(cuid())
   tenantId           String
   rideId             String
   passengerId        String
   createdById        String?
   updatedById        String?
-  travelDate         DateTime @db.Date
+  travelDate         DateTime          @db.Date
   rideDepartureTime  String
   rideArrivalTime    String
   seatNumber         Int
@@ -338,13 +340,13 @@ model Reservation {
   cancelledAt        DateTime?
   departureStationId String
   arrivalStationId   String
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  ride               Ride     @relation(fields: [rideId], references: [id], onDelete: Restrict)
-  passenger          Passenger @relation(fields: [passengerId], references: [id], onDelete: Restrict)
-  departureStation   Station  @relation("ReservationDepartureStation", fields: [departureStationId], references: [id], onDelete: Restrict)
-  arrivalStation     Station  @relation("ReservationArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ride               Ride              @relation(fields: [rideId], references: [id], onDelete: Restrict)
+  passenger          Passenger         @relation(fields: [passengerId], references: [id], onDelete: Restrict)
+  departureStation   Station           @relation("ReservationDepartureStation", fields: [departureStationId], references: [id], onDelete: Restrict)
+  arrivalStation     Station           @relation("ReservationArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
 
   @@index([tenantId])
   @@index([rideId])
@@ -384,27 +386,27 @@ model Passenger {
 }
 
 model Ride {
-  id                  String          @id @default(cuid())
-  tenantId            String
-  lineId              String
-  createdById         String?
-  updatedById         String?
-  name                String
-  capacity            Int
-  type                RideType
-  status              RideStatus      @default(DRAFT)
-  recurringStartDate  DateTime?       @db.Date
-  recurringEndDate    DateTime?       @db.Date
-  oneTimeDate         DateTime?       @db.Date
+  id                   String            @id @default(cuid())
+  tenantId             String
+  lineId               String
+  createdById          String?
+  updatedById          String?
+  name                 String
+  capacity             Int
+  type                 RideType
+  status               RideStatus        @default(DRAFT)
+  recurringStartDate   DateTime?         @db.Date
+  recurringEndDate     DateTime?         @db.Date
+  oneTimeDate          DateTime?         @db.Date
   oneTimeDepartureTime String?
-  oneTimeArrivalTime  String?
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-  tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  line                Line            @relation(fields: [lineId], references: [id], onDelete: Restrict)
-  daySchedules        RideDaySchedule[]
-  exceptions          RideException[]
-  reservations        Reservation[]
+  oneTimeArrivalTime   String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  tenant               Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  line                 Line              @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  daySchedules         RideDaySchedule[]
+  exceptions           RideException[]
+  reservations         Reservation[]
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -413,17 +415,17 @@ model Ride {
 }
 
 model RideDaySchedule {
-  id            String   @id @default(cuid())
-  tenantId      String
-  rideId        String
-  dayOfWeek     Int
-  createdById   String?
-  updatedById   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  ride          Ride     @relation(fields: [rideId], references: [id], onDelete: Cascade)
-  stationTimes  RideDayScheduleStationTime[]
+  id           String                       @id @default(cuid())
+  tenantId     String
+  rideId       String
+  dayOfWeek    Int
+  createdById  String?
+  updatedById  String?
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+  tenant       Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ride         Ride                         @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  stationTimes RideDayScheduleStationTime[]
 
   @@unique([rideId, dayOfWeek])
   @@index([tenantId])
@@ -476,14 +478,14 @@ model RideException {
 }
 
 model AuditEvent {
-  id          String        @id @default(cuid())
-  tenantId    String
-  actorUserId String
+  id           String         @id @default(cuid())
+  tenantId     String
+  actorUserId  String
   targetUserId String?
-  type        AuditEventType
-  metadata    Json?
-  createdAt   DateTime      @default(now())
-  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  type         AuditEventType
+  metadata     Json?
+  createdAt    DateTime       @default(now())
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, type])
   @@index([actorUserId])
