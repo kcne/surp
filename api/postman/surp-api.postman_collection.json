@@ -5284,6 +5284,100 @@
       ]
     },
     {
+      "name": "Public · Marketing Leads",
+      "item": [
+        {
+          "name": "Create Demo Lead - Success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Petar Petrovic\",\n  \"email\": \"petar@example.com\",\n  \"agencyName\": \"Drina Bus\",\n  \"phone\": \"+381 64 123 4567\",\n  \"departuresPerDay\": \"6-20\",\n  \"message\": \"Zelimo online rezervacije.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/public/marketing/leads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "marketing",
+                "leads"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('Response has marketing lead id and message', function () {",
+                  "  pm.expect(body.id).to.match(/^mlead_/);",
+                  "  pm.expect(body).to.have.property('message', 'Marketing lead received.');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Demo Lead - Honeypot Fails",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Spam Bot\",\n  \"email\": \"spam@example.com\",\n  \"agencyName\": \"Spam Agency\",\n  \"departuresPerDay\": \"1-5\",\n  \"website\": \"https://spam.example\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/public/marketing/leads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "marketing",
+                "leads"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Storefront Admin",
       "item": [
         {

@@ -26,8 +26,10 @@ import type {
 
 import type {
   BatchReservationsResponseDto,
+  CompleteStorefrontAssetUploadDto,
   CompleteTicketAttachmentDto,
   CreateLineDto,
+  CreateMarketingLeadDto,
   CreatePassengerDto,
   CreatePlatformTenantAdminDto,
   CreatePlatformTenantDto,
@@ -36,6 +38,7 @@ import type {
   CreateRideDto,
   CreateRideExceptionDto,
   CreateStationDto,
+  CreateStorefrontAssetPresignDto,
   CreateTicketAttachmentPresignDto,
   CreateTicketCommentDto,
   CreateTicketDto,
@@ -48,6 +51,7 @@ import type {
   LoginUserDto,
   LogoutDto,
   LogoutResponseDto,
+  MarketingLeadResponseDto,
   PaginatedLinesResponseDto,
   PaginatedPassengersResponseDto,
   PaginatedPlatformTenantsResponseDto,
@@ -84,6 +88,7 @@ import type {
   StationResponseDto,
   StationsControllerListParams,
   StorefrontAdminResponseDto,
+  StorefrontAssetPresignResponseDto,
   TicketAttachmentDownloadResponseDto,
   TicketAttachmentPresignResponseDto,
   TicketResponseDto,
@@ -132,22 +137,22 @@ export type healthControllerHealthResponse = (healthControllerHealthResponseSucc
 export const getHealthControllerHealthUrl = () => {
 
 
-
+  
 
   return `/health`
 }
 
 export const healthControllerHealth = async ( options?: RequestInit): Promise<healthControllerHealthResponse> => {
-
+  
   return customInstance<healthControllerHealthResponse>(getHealthControllerHealthUrl(),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -158,7 +163,7 @@ export const getHealthControllerHealthQueryKey = () => {
     ] as const;
     }
 
-
+    
 export const getHealthControllerHealthQueryOptions = <TData = Awaited<ReturnType<typeof healthControllerHealth>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof healthControllerHealth>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -166,13 +171,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getHealthControllerHealthQueryKey();
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof healthControllerHealth>>> = ({ signal }) => healthControllerHealth({ signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof healthControllerHealth>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -211,7 +216,7 @@ export function useHealthControllerHealth<TData = Awaited<ReturnType<typeof heal
 
 export function useHealthControllerHealth<TData = Awaited<ReturnType<typeof healthControllerHealth>>, TError = ErrorType<void>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof healthControllerHealth>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getHealthControllerHealthQueryOptions(options)
@@ -250,22 +255,22 @@ export type healthControllerReadinessResponse = (healthControllerReadinessRespon
 export const getHealthControllerReadinessUrl = () => {
 
 
-
+  
 
   return `/health/readiness`
 }
 
 export const healthControllerReadiness = async ( options?: RequestInit): Promise<healthControllerReadinessResponse> => {
-
+  
   return customInstance<healthControllerReadinessResponse>(getHealthControllerReadinessUrl(),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -276,7 +281,7 @@ export const getHealthControllerReadinessQueryKey = () => {
     ] as const;
     }
 
-
+    
 export const getHealthControllerReadinessQueryOptions = <TData = Awaited<ReturnType<typeof healthControllerReadiness>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof healthControllerReadiness>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -284,13 +289,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getHealthControllerReadinessQueryKey();
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof healthControllerReadiness>>> = ({ signal }) => healthControllerReadiness({ signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof healthControllerReadiness>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -329,7 +334,7 @@ export function useHealthControllerReadiness<TData = Awaited<ReturnType<typeof h
 
 export function useHealthControllerReadiness<TData = Awaited<ReturnType<typeof healthControllerReadiness>>, TError = ErrorType<void>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof healthControllerReadiness>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getHealthControllerReadinessQueryOptions(options)
@@ -383,15 +388,15 @@ export type authControllerLoginResponse = (authControllerLoginResponseSuccess | 
 export const getAuthControllerLoginUrl = () => {
 
 
-
+  
 
   return `/auth/login`
 }
 
 export const authControllerLogin = async (loginDto: LoginDto, options?: RequestInit): Promise<authControllerLoginResponse> => {
-
+  
   return customInstance<authControllerLoginResponse>(getAuthControllerLoginUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -399,7 +404,7 @@ export const authControllerLogin = async (loginDto: LoginDto, options?: RequestI
       loginDto,)
   }
 );}
-
+  
 
 
 
@@ -414,7 +419,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof authControllerLogin>>, {data: LoginDto}> = (props) => {
@@ -425,7 +430,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -447,7 +452,7 @@ export const useAuthControllerLogin = <TError = ErrorType<void>,
       > => {
       return useMutation(getAuthControllerLoginMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Rotate refresh token and issue a new token pair.
  */
@@ -488,15 +493,15 @@ export type authControllerRefreshResponse = (authControllerRefreshResponseSucces
 export const getAuthControllerRefreshUrl = () => {
 
 
-
+  
 
   return `/auth/refresh`
 }
 
 export const authControllerRefresh = async (refreshTokenDto: RefreshTokenDto, options?: RequestInit): Promise<authControllerRefreshResponse> => {
-
+  
   return customInstance<authControllerRefreshResponse>(getAuthControllerRefreshUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -504,7 +509,7 @@ export const authControllerRefresh = async (refreshTokenDto: RefreshTokenDto, op
       refreshTokenDto,)
   }
 );}
-
+  
 
 
 
@@ -519,7 +524,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof authControllerRefresh>>, {data: RefreshTokenDto}> = (props) => {
@@ -530,7 +535,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -552,7 +557,7 @@ export const useAuthControllerRefresh = <TError = ErrorType<void>,
       > => {
       return useMutation(getAuthControllerRefreshMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Revoke the current refresh session.
  */
@@ -593,15 +598,15 @@ export type authControllerLogoutResponse = (authControllerLogoutResponseSuccess 
 export const getAuthControllerLogoutUrl = () => {
 
 
-
+  
 
   return `/auth/logout`
 }
 
 export const authControllerLogout = async (logoutDto: LogoutDto, options?: RequestInit): Promise<authControllerLogoutResponse> => {
-
+  
   return customInstance<authControllerLogoutResponse>(getAuthControllerLogoutUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -609,7 +614,7 @@ export const authControllerLogout = async (logoutDto: LogoutDto, options?: Reque
       logoutDto,)
   }
 );}
-
+  
 
 
 
@@ -624,7 +629,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof authControllerLogout>>, {data: LogoutDto}> = (props) => {
@@ -635,7 +640,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -657,7 +662,7 @@ export const useAuthControllerLogout = <TError = ErrorType<void>,
       > => {
       return useMutation(getAuthControllerLogoutMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Get the current authenticated user profile.
  */
@@ -693,22 +698,22 @@ export type authControllerMeResponse = (authControllerMeResponseSuccess | authCo
 export const getAuthControllerMeUrl = () => {
 
 
-
+  
 
   return `/auth/me`
 }
 
 export const authControllerMe = async ( options?: RequestInit): Promise<authControllerMeResponse> => {
-
+  
   return customInstance<authControllerMeResponse>(getAuthControllerMeUrl(),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -719,7 +724,7 @@ export const getAuthControllerMeQueryKey = () => {
     ] as const;
     }
 
-
+    
 export const getAuthControllerMeQueryOptions = <TData = Awaited<ReturnType<typeof authControllerMe>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof authControllerMe>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -727,13 +732,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getAuthControllerMeQueryKey();
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof authControllerMe>>> = ({ signal }) => authControllerMe({ signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof authControllerMe>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -772,7 +777,7 @@ export function useAuthControllerMe<TData = Awaited<ReturnType<typeof authContro
 
 export function useAuthControllerMe<TData = Awaited<ReturnType<typeof authControllerMe>>, TError = ErrorType<void>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof authControllerMe>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getAuthControllerMeQueryOptions(options)
@@ -826,15 +831,15 @@ export type usersControllerCreateResponse = (usersControllerCreateResponseSucces
 export const getUsersControllerCreateUrl = () => {
 
 
-
+  
 
   return `/users`
 }
 
 export const usersControllerCreate = async (createUserDto: CreateUserDto, options?: RequestInit): Promise<usersControllerCreateResponse> => {
-
+  
   return customInstance<usersControllerCreateResponse>(getUsersControllerCreateUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -842,7 +847,7 @@ export const usersControllerCreate = async (createUserDto: CreateUserDto, option
       createUserDto,)
   }
 );}
-
+  
 
 
 
@@ -857,7 +862,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof usersControllerCreate>>, {data: CreateUserDto}> = (props) => {
@@ -868,7 +873,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -890,7 +895,7 @@ export const useUsersControllerCreate = <TError = ErrorType<void>,
       > => {
       return useMutation(getUsersControllerCreateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary List users inside the current tenant.
  */
@@ -927,7 +932,7 @@ export const getUsersControllerListUrl = (params?: UsersControllerListParams,) =
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -939,16 +944,16 @@ export const getUsersControllerListUrl = (params?: UsersControllerListParams,) =
 }
 
 export const usersControllerList = async (params?: UsersControllerListParams, options?: RequestInit): Promise<usersControllerListResponse> => {
-
+  
   return customInstance<usersControllerListResponse>(getUsersControllerListUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -959,7 +964,7 @@ export const getUsersControllerListQueryKey = (params?: UsersControllerListParam
     ] as const;
     }
 
-
+    
 export const getUsersControllerListQueryOptions = <TData = Awaited<ReturnType<typeof usersControllerList>>, TError = ErrorType<void>>(params?: UsersControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof usersControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -967,13 +972,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getUsersControllerListQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof usersControllerList>>> = ({ signal }) => usersControllerList(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof usersControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -1012,7 +1017,7 @@ export function useUsersControllerList<TData = Awaited<ReturnType<typeof usersCo
 
 export function useUsersControllerList<TData = Awaited<ReturnType<typeof usersControllerList>>, TError = ErrorType<void>>(
  params?: UsersControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof usersControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getUsersControllerListQueryOptions(params,options)
@@ -1071,16 +1076,16 @@ export type usersControllerUpdateResponse = (usersControllerUpdateResponseSucces
 export const getUsersControllerUpdateUrl = (id: string,) => {
 
 
-
+  
 
   return `/users/${id}`
 }
 
 export const usersControllerUpdate = async (id: string,
     updateUserDto: UpdateUserDto, options?: RequestInit): Promise<usersControllerUpdateResponse> => {
-
+  
   return customInstance<usersControllerUpdateResponse>(getUsersControllerUpdateUrl(id),
-  {
+  {      
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1088,7 +1093,7 @@ export const usersControllerUpdate = async (id: string,
       updateUserDto,)
   }
 );}
-
+  
 
 
 
@@ -1103,7 +1108,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof usersControllerUpdate>>, {id: string;data: UpdateUserDto}> = (props) => {
@@ -1114,7 +1119,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -1136,7 +1141,7 @@ export const useUsersControllerUpdate = <TError = ErrorType<void>,
       > => {
       return useMutation(getUsersControllerUpdateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Replace user role, status, and profile fields in current tenant.
  */
@@ -1182,16 +1187,16 @@ export type usersControllerReplaceResponse = (usersControllerReplaceResponseSucc
 export const getUsersControllerReplaceUrl = (id: string,) => {
 
 
-
+  
 
   return `/users/${id}`
 }
 
 export const usersControllerReplace = async (id: string,
     updateUserDto: UpdateUserDto, options?: RequestInit): Promise<usersControllerReplaceResponse> => {
-
+  
   return customInstance<usersControllerReplaceResponse>(getUsersControllerReplaceUrl(id),
-  {
+  {      
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1199,7 +1204,7 @@ export const usersControllerReplace = async (id: string,
       updateUserDto,)
   }
 );}
-
+  
 
 
 
@@ -1214,7 +1219,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof usersControllerReplace>>, {id: string;data: UpdateUserDto}> = (props) => {
@@ -1225,7 +1230,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -1247,7 +1252,7 @@ export const useUsersControllerReplace = <TError = ErrorType<void>,
       > => {
       return useMutation(getUsersControllerReplaceMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Soft delete a user in current tenant by deactivating the account.
  */
@@ -1283,22 +1288,22 @@ export type usersControllerRemoveResponse = (usersControllerRemoveResponseSucces
 export const getUsersControllerRemoveUrl = (id: string,) => {
 
 
-
+  
 
   return `/users/${id}`
 }
 
 export const usersControllerRemove = async (id: string, options?: RequestInit): Promise<usersControllerRemoveResponse> => {
-
+  
   return customInstance<usersControllerRemoveResponse>(getUsersControllerRemoveUrl(id),
-  {
+  {      
     ...options,
     method: 'DELETE'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -1313,7 +1318,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof usersControllerRemove>>, {id: string}> = (props) => {
@@ -1324,13 +1329,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type UsersControllerRemoveMutationResult = NonNullable<Awaited<ReturnType<typeof usersControllerRemove>>>
-
+    
     export type UsersControllerRemoveMutationError = ErrorType<void>
 
     /**
@@ -1346,7 +1351,7 @@ export const useUsersControllerRemove = <TError = ErrorType<void>,
       > => {
       return useMutation(getUsersControllerRemoveMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Reset a user password in the current tenant and revoke active sessions.
  */
@@ -1387,16 +1392,16 @@ export type usersControllerResetPasswordResponse = (usersControllerResetPassword
 export const getUsersControllerResetPasswordUrl = (id: string,) => {
 
 
-
+  
 
   return `/users/${id}/reset-password`
 }
 
 export const usersControllerResetPassword = async (id: string,
     resetPasswordDto: ResetPasswordDto, options?: RequestInit): Promise<usersControllerResetPasswordResponse> => {
-
+  
   return customInstance<usersControllerResetPasswordResponse>(getUsersControllerResetPasswordUrl(id),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1404,7 +1409,7 @@ export const usersControllerResetPassword = async (id: string,
       resetPasswordDto,)
   }
 );}
-
+  
 
 
 
@@ -1419,7 +1424,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof usersControllerResetPassword>>, {id: string;data: ResetPasswordDto}> = (props) => {
@@ -1430,7 +1435,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -1452,7 +1457,7 @@ export const useUsersControllerResetPassword = <TError = ErrorType<void>,
       > => {
       return useMutation(getUsersControllerResetPasswordMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Create a station in the current tenant.
  */
@@ -1488,15 +1493,15 @@ export type stationsControllerCreateResponse = (stationsControllerCreateResponse
 export const getStationsControllerCreateUrl = () => {
 
 
-
+  
 
   return `/stations`
 }
 
 export const stationsControllerCreate = async (createStationDto: CreateStationDto, options?: RequestInit): Promise<stationsControllerCreateResponse> => {
-
+  
   return customInstance<stationsControllerCreateResponse>(getStationsControllerCreateUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1504,7 +1509,7 @@ export const stationsControllerCreate = async (createStationDto: CreateStationDt
       createStationDto,)
   }
 );}
-
+  
 
 
 
@@ -1519,7 +1524,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof stationsControllerCreate>>, {data: CreateStationDto}> = (props) => {
@@ -1530,7 +1535,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -1552,7 +1557,7 @@ export const useStationsControllerCreate = <TError = ErrorType<void>,
       > => {
       return useMutation(getStationsControllerCreateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary List stations inside the current tenant.
  */
@@ -1589,7 +1594,7 @@ export const getStationsControllerListUrl = (params?: StationsControllerListPara
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -1601,16 +1606,16 @@ export const getStationsControllerListUrl = (params?: StationsControllerListPara
 }
 
 export const stationsControllerList = async (params?: StationsControllerListParams, options?: RequestInit): Promise<stationsControllerListResponse> => {
-
+  
   return customInstance<stationsControllerListResponse>(getStationsControllerListUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -1621,7 +1626,7 @@ export const getStationsControllerListQueryKey = (params?: StationsControllerLis
     ] as const;
     }
 
-
+    
 export const getStationsControllerListQueryOptions = <TData = Awaited<ReturnType<typeof stationsControllerList>>, TError = ErrorType<void>>(params?: StationsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof stationsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -1629,13 +1634,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getStationsControllerListQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof stationsControllerList>>> = ({ signal }) => stationsControllerList(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof stationsControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -1674,7 +1679,7 @@ export function useStationsControllerList<TData = Awaited<ReturnType<typeof stat
 
 export function useStationsControllerList<TData = Awaited<ReturnType<typeof stationsControllerList>>, TError = ErrorType<void>>(
  params?: StationsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof stationsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getStationsControllerListQueryOptions(params,options)
@@ -1723,22 +1728,22 @@ export type stationsControllerGetByIdResponse = (stationsControllerGetByIdRespon
 export const getStationsControllerGetByIdUrl = (id: string,) => {
 
 
-
+  
 
   return `/stations/${id}`
 }
 
 export const stationsControllerGetById = async (id: string, options?: RequestInit): Promise<stationsControllerGetByIdResponse> => {
-
+  
   return customInstance<stationsControllerGetByIdResponse>(getStationsControllerGetByIdUrl(id),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -1749,7 +1754,7 @@ export const getStationsControllerGetByIdQueryKey = (id: string,) => {
     ] as const;
     }
 
-
+    
 export const getStationsControllerGetByIdQueryOptions = <TData = Awaited<ReturnType<typeof stationsControllerGetById>>, TError = ErrorType<void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof stationsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -1757,13 +1762,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getStationsControllerGetByIdQueryKey(id);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof stationsControllerGetById>>> = ({ signal }) => stationsControllerGetById(id, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof stationsControllerGetById>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -1802,7 +1807,7 @@ export function useStationsControllerGetById<TData = Awaited<ReturnType<typeof s
 
 export function useStationsControllerGetById<TData = Awaited<ReturnType<typeof stationsControllerGetById>>, TError = ErrorType<void>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof stationsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getStationsControllerGetByIdQueryOptions(id,options)
@@ -1856,16 +1861,16 @@ export type stationsControllerUpdateResponse = (stationsControllerUpdateResponse
 export const getStationsControllerUpdateUrl = (id: string,) => {
 
 
-
+  
 
   return `/stations/${id}`
 }
 
 export const stationsControllerUpdate = async (id: string,
     updateStationDto: UpdateStationDto, options?: RequestInit): Promise<stationsControllerUpdateResponse> => {
-
+  
   return customInstance<stationsControllerUpdateResponse>(getStationsControllerUpdateUrl(id),
-  {
+  {      
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1873,7 +1878,7 @@ export const stationsControllerUpdate = async (id: string,
       updateStationDto,)
   }
 );}
-
+  
 
 
 
@@ -1888,7 +1893,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof stationsControllerUpdate>>, {id: string;data: UpdateStationDto}> = (props) => {
@@ -1899,7 +1904,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -1921,7 +1926,7 @@ export const useStationsControllerUpdate = <TError = ErrorType<void>,
       > => {
       return useMutation(getStationsControllerUpdateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Replace station fields in the current tenant.
  */
@@ -1962,16 +1967,16 @@ export type stationsControllerReplaceResponse = (stationsControllerReplaceRespon
 export const getStationsControllerReplaceUrl = (id: string,) => {
 
 
-
+  
 
   return `/stations/${id}`
 }
 
 export const stationsControllerReplace = async (id: string,
     updateStationDto: UpdateStationDto, options?: RequestInit): Promise<stationsControllerReplaceResponse> => {
-
+  
   return customInstance<stationsControllerReplaceResponse>(getStationsControllerReplaceUrl(id),
-  {
+  {      
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1979,7 +1984,7 @@ export const stationsControllerReplace = async (id: string,
       updateStationDto,)
   }
 );}
-
+  
 
 
 
@@ -1994,7 +1999,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof stationsControllerReplace>>, {id: string;data: UpdateStationDto}> = (props) => {
@@ -2005,7 +2010,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -2027,7 +2032,7 @@ export const useStationsControllerReplace = <TError = ErrorType<void>,
       > => {
       return useMutation(getStationsControllerReplaceMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Delete a station in the current tenant if no references exist.
  */
@@ -2068,22 +2073,22 @@ export type stationsControllerRemoveResponse = (stationsControllerRemoveResponse
 export const getStationsControllerRemoveUrl = (id: string,) => {
 
 
-
+  
 
   return `/stations/${id}`
 }
 
 export const stationsControllerRemove = async (id: string, options?: RequestInit): Promise<stationsControllerRemoveResponse> => {
-
+  
   return customInstance<stationsControllerRemoveResponse>(getStationsControllerRemoveUrl(id),
-  {
+  {      
     ...options,
     method: 'DELETE'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -2098,7 +2103,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof stationsControllerRemove>>, {id: string}> = (props) => {
@@ -2109,13 +2114,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type StationsControllerRemoveMutationResult = NonNullable<Awaited<ReturnType<typeof stationsControllerRemove>>>
-
+    
     export type StationsControllerRemoveMutationError = ErrorType<void>
 
     /**
@@ -2131,7 +2136,7 @@ export const useStationsControllerRemove = <TError = ErrorType<void>,
       > => {
       return useMutation(getStationsControllerRemoveMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Create a line in the current tenant.
  */
@@ -2167,15 +2172,15 @@ export type linesControllerCreateResponse = (linesControllerCreateResponseSucces
 export const getLinesControllerCreateUrl = () => {
 
 
-
+  
 
   return `/lines`
 }
 
 export const linesControllerCreate = async (createLineDto: CreateLineDto, options?: RequestInit): Promise<linesControllerCreateResponse> => {
-
+  
   return customInstance<linesControllerCreateResponse>(getLinesControllerCreateUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -2183,7 +2188,7 @@ export const linesControllerCreate = async (createLineDto: CreateLineDto, option
       createLineDto,)
   }
 );}
-
+  
 
 
 
@@ -2198,7 +2203,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof linesControllerCreate>>, {data: CreateLineDto}> = (props) => {
@@ -2209,7 +2214,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -2231,7 +2236,7 @@ export const useLinesControllerCreate = <TError = ErrorType<void>,
       > => {
       return useMutation(getLinesControllerCreateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary List lines in the current tenant.
  */
@@ -2268,7 +2273,7 @@ export const getLinesControllerListUrl = (params?: LinesControllerListParams,) =
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -2280,16 +2285,16 @@ export const getLinesControllerListUrl = (params?: LinesControllerListParams,) =
 }
 
 export const linesControllerList = async (params?: LinesControllerListParams, options?: RequestInit): Promise<linesControllerListResponse> => {
-
+  
   return customInstance<linesControllerListResponse>(getLinesControllerListUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -2300,7 +2305,7 @@ export const getLinesControllerListQueryKey = (params?: LinesControllerListParam
     ] as const;
     }
 
-
+    
 export const getLinesControllerListQueryOptions = <TData = Awaited<ReturnType<typeof linesControllerList>>, TError = ErrorType<void>>(params?: LinesControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof linesControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -2308,13 +2313,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getLinesControllerListQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof linesControllerList>>> = ({ signal }) => linesControllerList(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof linesControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -2353,7 +2358,7 @@ export function useLinesControllerList<TData = Awaited<ReturnType<typeof linesCo
 
 export function useLinesControllerList<TData = Awaited<ReturnType<typeof linesControllerList>>, TError = ErrorType<void>>(
  params?: LinesControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof linesControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getLinesControllerListQueryOptions(params,options)
@@ -2402,22 +2407,22 @@ export type linesControllerGetByIdResponse = (linesControllerGetByIdResponseSucc
 export const getLinesControllerGetByIdUrl = (id: string,) => {
 
 
-
+  
 
   return `/lines/${id}`
 }
 
 export const linesControllerGetById = async (id: string, options?: RequestInit): Promise<linesControllerGetByIdResponse> => {
-
+  
   return customInstance<linesControllerGetByIdResponse>(getLinesControllerGetByIdUrl(id),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -2428,7 +2433,7 @@ export const getLinesControllerGetByIdQueryKey = (id: string,) => {
     ] as const;
     }
 
-
+    
 export const getLinesControllerGetByIdQueryOptions = <TData = Awaited<ReturnType<typeof linesControllerGetById>>, TError = ErrorType<void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof linesControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -2436,13 +2441,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getLinesControllerGetByIdQueryKey(id);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof linesControllerGetById>>> = ({ signal }) => linesControllerGetById(id, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof linesControllerGetById>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -2481,7 +2486,7 @@ export function useLinesControllerGetById<TData = Awaited<ReturnType<typeof line
 
 export function useLinesControllerGetById<TData = Awaited<ReturnType<typeof linesControllerGetById>>, TError = ErrorType<void>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof linesControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getLinesControllerGetByIdQueryOptions(id,options)
@@ -2535,16 +2540,16 @@ export type linesControllerUpdateResponse = (linesControllerUpdateResponseSucces
 export const getLinesControllerUpdateUrl = (id: string,) => {
 
 
-
+  
 
   return `/lines/${id}`
 }
 
 export const linesControllerUpdate = async (id: string,
     updateLineDto: UpdateLineDto, options?: RequestInit): Promise<linesControllerUpdateResponse> => {
-
+  
   return customInstance<linesControllerUpdateResponse>(getLinesControllerUpdateUrl(id),
-  {
+  {      
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -2552,7 +2557,7 @@ export const linesControllerUpdate = async (id: string,
       updateLineDto,)
   }
 );}
-
+  
 
 
 
@@ -2567,7 +2572,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof linesControllerUpdate>>, {id: string;data: UpdateLineDto}> = (props) => {
@@ -2578,7 +2583,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -2600,7 +2605,7 @@ export const useLinesControllerUpdate = <TError = ErrorType<void>,
       > => {
       return useMutation(getLinesControllerUpdateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Replace line fields in the current tenant.
  */
@@ -2641,16 +2646,16 @@ export type linesControllerReplaceResponse = (linesControllerReplaceResponseSucc
 export const getLinesControllerReplaceUrl = (id: string,) => {
 
 
-
+  
 
   return `/lines/${id}`
 }
 
 export const linesControllerReplace = async (id: string,
     updateLineDto: UpdateLineDto, options?: RequestInit): Promise<linesControllerReplaceResponse> => {
-
+  
   return customInstance<linesControllerReplaceResponse>(getLinesControllerReplaceUrl(id),
-  {
+  {      
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -2658,7 +2663,7 @@ export const linesControllerReplace = async (id: string,
       updateLineDto,)
   }
 );}
-
+  
 
 
 
@@ -2673,7 +2678,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof linesControllerReplace>>, {id: string;data: UpdateLineDto}> = (props) => {
@@ -2684,7 +2689,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -2706,7 +2711,7 @@ export const useLinesControllerReplace = <TError = ErrorType<void>,
       > => {
       return useMutation(getLinesControllerReplaceMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Delete a line in the current tenant.
  */
@@ -2749,7 +2754,7 @@ export const getLinesControllerRemoveUrl = (id: string,
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -2762,16 +2767,16 @@ export const getLinesControllerRemoveUrl = (id: string,
 
 export const linesControllerRemove = async (id: string,
     params?: LinesControllerRemoveParams, options?: RequestInit): Promise<linesControllerRemoveResponse> => {
-
+  
   return customInstance<linesControllerRemoveResponse>(getLinesControllerRemoveUrl(id,params),
-  {
+  {      
     ...options,
     method: 'DELETE'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -2786,7 +2791,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof linesControllerRemove>>, {id: string;params?: LinesControllerRemoveParams}> = (props) => {
@@ -2797,13 +2802,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type LinesControllerRemoveMutationResult = NonNullable<Awaited<ReturnType<typeof linesControllerRemove>>>
-
+    
     export type LinesControllerRemoveMutationError = ErrorType<void>
 
     /**
@@ -2819,7 +2824,7 @@ export const useLinesControllerRemove = <TError = ErrorType<void>,
       > => {
       return useMutation(getLinesControllerRemoveMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Replace ordered intermediate stops for a line in the current tenant.
  */
@@ -2860,16 +2865,16 @@ export type linesControllerReplaceStopsResponse = (linesControllerReplaceStopsRe
 export const getLinesControllerReplaceStopsUrl = (id: string,) => {
 
 
-
+  
 
   return `/lines/${id}/stops`
 }
 
 export const linesControllerReplaceStops = async (id: string,
     replaceLineStopsDto: ReplaceLineStopsDto, options?: RequestInit): Promise<linesControllerReplaceStopsResponse> => {
-
+  
   return customInstance<linesControllerReplaceStopsResponse>(getLinesControllerReplaceStopsUrl(id),
-  {
+  {      
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -2877,7 +2882,7 @@ export const linesControllerReplaceStops = async (id: string,
       replaceLineStopsDto,)
   }
 );}
-
+  
 
 
 
@@ -2892,7 +2897,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof linesControllerReplaceStops>>, {id: string;data: ReplaceLineStopsDto}> = (props) => {
@@ -2903,7 +2908,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -2925,7 +2930,7 @@ export const useLinesControllerReplaceStops = <TError = ErrorType<void>,
       > => {
       return useMutation(getLinesControllerReplaceStopsMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Create a reverse line from an existing line route in the current tenant.
  */
@@ -2966,22 +2971,22 @@ export type linesControllerCreateReverseResponse = (linesControllerCreateReverse
 export const getLinesControllerCreateReverseUrl = (id: string,) => {
 
 
-
+  
 
   return `/lines/${id}/reverse`
 }
 
 export const linesControllerCreateReverse = async (id: string, options?: RequestInit): Promise<linesControllerCreateReverseResponse> => {
-
+  
   return customInstance<linesControllerCreateReverseResponse>(getLinesControllerCreateReverseUrl(id),
-  {
+  {      
     ...options,
     method: 'POST'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -2996,7 +3001,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof linesControllerCreateReverse>>, {id: string}> = (props) => {
@@ -3007,13 +3012,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type LinesControllerCreateReverseMutationResult = NonNullable<Awaited<ReturnType<typeof linesControllerCreateReverse>>>
-
+    
     export type LinesControllerCreateReverseMutationError = ErrorType<void>
 
     /**
@@ -3029,7 +3034,102 @@ export const useLinesControllerCreateReverse = <TError = ErrorType<void>,
       > => {
       return useMutation(getLinesControllerCreateReverseMutationOptions(options), queryClient);
     }
+    
+/**
+ * @summary Create a marketing demo lead.
+ */
+export type marketingLeadsControllerCreateLeadResponse201 = {
+  data: MarketingLeadResponseDto
+  status: 201
+}
 
+export type marketingLeadsControllerCreateLeadResponse400 = {
+  data: void
+  status: 400
+}
+
+export type marketingLeadsControllerCreateLeadResponse429 = {
+  data: void
+  status: 429
+}
+
+export type marketingLeadsControllerCreateLeadResponseSuccess = (marketingLeadsControllerCreateLeadResponse201) & {
+  headers: Headers;
+};
+export type marketingLeadsControllerCreateLeadResponseError = (marketingLeadsControllerCreateLeadResponse400 | marketingLeadsControllerCreateLeadResponse429) & {
+  headers: Headers;
+};
+
+export type marketingLeadsControllerCreateLeadResponse = (marketingLeadsControllerCreateLeadResponseSuccess | marketingLeadsControllerCreateLeadResponseError)
+
+export const getMarketingLeadsControllerCreateLeadUrl = () => {
+
+
+  
+
+  return `/api/public/marketing/leads`
+}
+
+export const marketingLeadsControllerCreateLead = async (createMarketingLeadDto: CreateMarketingLeadDto, options?: RequestInit): Promise<marketingLeadsControllerCreateLeadResponse> => {
+  
+  return customInstance<marketingLeadsControllerCreateLeadResponse>(getMarketingLeadsControllerCreateLeadUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createMarketingLeadDto,)
+  }
+);}
+  
+
+
+
+export const getMarketingLeadsControllerCreateLeadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof marketingLeadsControllerCreateLead>>, TError,{data: CreateMarketingLeadDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof marketingLeadsControllerCreateLead>>, TError,{data: CreateMarketingLeadDto}, TContext> => {
+
+const mutationKey = ['marketingLeadsControllerCreateLead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof marketingLeadsControllerCreateLead>>, {data: CreateMarketingLeadDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  marketingLeadsControllerCreateLead(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarketingLeadsControllerCreateLeadMutationResult = NonNullable<Awaited<ReturnType<typeof marketingLeadsControllerCreateLead>>>
+    export type MarketingLeadsControllerCreateLeadMutationBody = CreateMarketingLeadDto
+    export type MarketingLeadsControllerCreateLeadMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a marketing demo lead.
+ */
+export const useMarketingLeadsControllerCreateLead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof marketingLeadsControllerCreateLead>>, TError,{data: CreateMarketingLeadDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof marketingLeadsControllerCreateLead>>,
+        TError,
+        {data: CreateMarketingLeadDto},
+        TContext
+      > => {
+      return useMutation(getMarketingLeadsControllerCreateLeadMutationOptions(options), queryClient);
+    }
+    
 /**
  * @summary Create a passenger in the current tenant.
  */
@@ -3065,15 +3165,15 @@ export type passengersControllerCreateResponse = (passengersControllerCreateResp
 export const getPassengersControllerCreateUrl = () => {
 
 
-
+  
 
   return `/passengers`
 }
 
 export const passengersControllerCreate = async (createPassengerDto: CreatePassengerDto, options?: RequestInit): Promise<passengersControllerCreateResponse> => {
-
+  
   return customInstance<passengersControllerCreateResponse>(getPassengersControllerCreateUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -3081,7 +3181,7 @@ export const passengersControllerCreate = async (createPassengerDto: CreatePasse
       createPassengerDto,)
   }
 );}
-
+  
 
 
 
@@ -3096,7 +3196,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof passengersControllerCreate>>, {data: CreatePassengerDto}> = (props) => {
@@ -3107,7 +3207,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -3129,7 +3229,7 @@ export const usePassengersControllerCreate = <TError = ErrorType<void>,
       > => {
       return useMutation(getPassengersControllerCreateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary List passengers in the current tenant.
  */
@@ -3166,7 +3266,7 @@ export const getPassengersControllerListUrl = (params?: PassengersControllerList
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -3178,16 +3278,16 @@ export const getPassengersControllerListUrl = (params?: PassengersControllerList
 }
 
 export const passengersControllerList = async (params?: PassengersControllerListParams, options?: RequestInit): Promise<passengersControllerListResponse> => {
-
+  
   return customInstance<passengersControllerListResponse>(getPassengersControllerListUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -3198,7 +3298,7 @@ export const getPassengersControllerListQueryKey = (params?: PassengersControlle
     ] as const;
     }
 
-
+    
 export const getPassengersControllerListQueryOptions = <TData = Awaited<ReturnType<typeof passengersControllerList>>, TError = ErrorType<void>>(params?: PassengersControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof passengersControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -3206,13 +3306,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getPassengersControllerListQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof passengersControllerList>>> = ({ signal }) => passengersControllerList(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof passengersControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -3251,7 +3351,7 @@ export function usePassengersControllerList<TData = Awaited<ReturnType<typeof pa
 
 export function usePassengersControllerList<TData = Awaited<ReturnType<typeof passengersControllerList>>, TError = ErrorType<void>>(
  params?: PassengersControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof passengersControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getPassengersControllerListQueryOptions(params,options)
@@ -3301,7 +3401,7 @@ export const getPassengersControllerSearchUrl = (params?: PassengersControllerSe
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -3313,16 +3413,16 @@ export const getPassengersControllerSearchUrl = (params?: PassengersControllerSe
 }
 
 export const passengersControllerSearch = async (params?: PassengersControllerSearchParams, options?: RequestInit): Promise<passengersControllerSearchResponse> => {
-
+  
   return customInstance<passengersControllerSearchResponse>(getPassengersControllerSearchUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -3333,7 +3433,7 @@ export const getPassengersControllerSearchQueryKey = (params?: PassengersControl
     ] as const;
     }
 
-
+    
 export const getPassengersControllerSearchQueryOptions = <TData = Awaited<ReturnType<typeof passengersControllerSearch>>, TError = ErrorType<void>>(params?: PassengersControllerSearchParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof passengersControllerSearch>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -3341,13 +3441,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getPassengersControllerSearchQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof passengersControllerSearch>>> = ({ signal }) => passengersControllerSearch(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof passengersControllerSearch>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -3386,7 +3486,7 @@ export function usePassengersControllerSearch<TData = Awaited<ReturnType<typeof 
 
 export function usePassengersControllerSearch<TData = Awaited<ReturnType<typeof passengersControllerSearch>>, TError = ErrorType<void>>(
  params?: PassengersControllerSearchParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof passengersControllerSearch>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getPassengersControllerSearchQueryOptions(params,options)
@@ -3435,22 +3535,22 @@ export type passengersControllerGetByIdResponse = (passengersControllerGetByIdRe
 export const getPassengersControllerGetByIdUrl = (id: string,) => {
 
 
-
+  
 
   return `/passengers/${id}`
 }
 
 export const passengersControllerGetById = async (id: string, options?: RequestInit): Promise<passengersControllerGetByIdResponse> => {
-
+  
   return customInstance<passengersControllerGetByIdResponse>(getPassengersControllerGetByIdUrl(id),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -3461,7 +3561,7 @@ export const getPassengersControllerGetByIdQueryKey = (id: string,) => {
     ] as const;
     }
 
-
+    
 export const getPassengersControllerGetByIdQueryOptions = <TData = Awaited<ReturnType<typeof passengersControllerGetById>>, TError = ErrorType<void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof passengersControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -3469,13 +3569,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getPassengersControllerGetByIdQueryKey(id);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof passengersControllerGetById>>> = ({ signal }) => passengersControllerGetById(id, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof passengersControllerGetById>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -3514,7 +3614,7 @@ export function usePassengersControllerGetById<TData = Awaited<ReturnType<typeof
 
 export function usePassengersControllerGetById<TData = Awaited<ReturnType<typeof passengersControllerGetById>>, TError = ErrorType<void>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof passengersControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getPassengersControllerGetByIdQueryOptions(id,options)
@@ -3568,16 +3668,16 @@ export type passengersControllerUpdateResponse = (passengersControllerUpdateResp
 export const getPassengersControllerUpdateUrl = (id: string,) => {
 
 
-
+  
 
   return `/passengers/${id}`
 }
 
 export const passengersControllerUpdate = async (id: string,
     updatePassengerDto: UpdatePassengerDto, options?: RequestInit): Promise<passengersControllerUpdateResponse> => {
-
+  
   return customInstance<passengersControllerUpdateResponse>(getPassengersControllerUpdateUrl(id),
-  {
+  {      
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -3585,7 +3685,7 @@ export const passengersControllerUpdate = async (id: string,
       updatePassengerDto,)
   }
 );}
-
+  
 
 
 
@@ -3600,7 +3700,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof passengersControllerUpdate>>, {id: string;data: UpdatePassengerDto}> = (props) => {
@@ -3611,7 +3711,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -3633,7 +3733,7 @@ export const usePassengersControllerUpdate = <TError = ErrorType<void>,
       > => {
       return useMutation(getPassengersControllerUpdateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Replace passenger fields in the current tenant.
  */
@@ -3674,16 +3774,16 @@ export type passengersControllerReplaceResponse = (passengersControllerReplaceRe
 export const getPassengersControllerReplaceUrl = (id: string,) => {
 
 
-
+  
 
   return `/passengers/${id}`
 }
 
 export const passengersControllerReplace = async (id: string,
     updatePassengerDto: UpdatePassengerDto, options?: RequestInit): Promise<passengersControllerReplaceResponse> => {
-
+  
   return customInstance<passengersControllerReplaceResponse>(getPassengersControllerReplaceUrl(id),
-  {
+  {      
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -3691,7 +3791,7 @@ export const passengersControllerReplace = async (id: string,
       updatePassengerDto,)
   }
 );}
-
+  
 
 
 
@@ -3706,7 +3806,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof passengersControllerReplace>>, {id: string;data: UpdatePassengerDto}> = (props) => {
@@ -3717,7 +3817,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -3739,7 +3839,7 @@ export const usePassengersControllerReplace = <TError = ErrorType<void>,
       > => {
       return useMutation(getPassengersControllerReplaceMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Delete a passenger in the current tenant.
  */
@@ -3775,22 +3875,22 @@ export type passengersControllerRemoveResponse = (passengersControllerRemoveResp
 export const getPassengersControllerRemoveUrl = (id: string,) => {
 
 
-
+  
 
   return `/passengers/${id}`
 }
 
 export const passengersControllerRemove = async (id: string, options?: RequestInit): Promise<passengersControllerRemoveResponse> => {
-
+  
   return customInstance<passengersControllerRemoveResponse>(getPassengersControllerRemoveUrl(id),
-  {
+  {      
     ...options,
     method: 'DELETE'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -3805,7 +3905,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof passengersControllerRemove>>, {id: string}> = (props) => {
@@ -3816,13 +3916,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type PassengersControllerRemoveMutationResult = NonNullable<Awaited<ReturnType<typeof passengersControllerRemove>>>
-
+    
     export type PassengersControllerRemoveMutationError = ErrorType<void>
 
     /**
@@ -3838,7 +3938,7 @@ export const usePassengersControllerRemove = <TError = ErrorType<void>,
       > => {
       return useMutation(getPassengersControllerRemoveMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Create a new tenant in platform scope.
  */
@@ -3879,15 +3979,15 @@ export type platformTenantsControllerCreateResponse = (platformTenantsController
 export const getPlatformTenantsControllerCreateUrl = () => {
 
 
-
+  
 
   return `/platform/tenants`
 }
 
 export const platformTenantsControllerCreate = async (createPlatformTenantDto: CreatePlatformTenantDto, options?: RequestInit): Promise<platformTenantsControllerCreateResponse> => {
-
+  
   return customInstance<platformTenantsControllerCreateResponse>(getPlatformTenantsControllerCreateUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -3895,7 +3995,7 @@ export const platformTenantsControllerCreate = async (createPlatformTenantDto: C
       createPlatformTenantDto,)
   }
 );}
-
+  
 
 
 
@@ -3910,7 +4010,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof platformTenantsControllerCreate>>, {data: CreatePlatformTenantDto}> = (props) => {
@@ -3921,7 +4021,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -3943,7 +4043,7 @@ export const usePlatformTenantsControllerCreate = <TError = ErrorType<void>,
       > => {
       return useMutation(getPlatformTenantsControllerCreateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary List tenants across platform scope.
  */
@@ -3980,7 +4080,7 @@ export const getPlatformTenantsControllerListUrl = (params?: PlatformTenantsCont
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -3992,16 +4092,16 @@ export const getPlatformTenantsControllerListUrl = (params?: PlatformTenantsCont
 }
 
 export const platformTenantsControllerList = async (params?: PlatformTenantsControllerListParams, options?: RequestInit): Promise<platformTenantsControllerListResponse> => {
-
+  
   return customInstance<platformTenantsControllerListResponse>(getPlatformTenantsControllerListUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -4012,7 +4112,7 @@ export const getPlatformTenantsControllerListQueryKey = (params?: PlatformTenant
     ] as const;
     }
 
-
+    
 export const getPlatformTenantsControllerListQueryOptions = <TData = Awaited<ReturnType<typeof platformTenantsControllerList>>, TError = ErrorType<void>>(params?: PlatformTenantsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformTenantsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -4020,13 +4120,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getPlatformTenantsControllerListQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof platformTenantsControllerList>>> = ({ signal }) => platformTenantsControllerList(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof platformTenantsControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -4065,7 +4165,7 @@ export function usePlatformTenantsControllerList<TData = Awaited<ReturnType<type
 
 export function usePlatformTenantsControllerList<TData = Awaited<ReturnType<typeof platformTenantsControllerList>>, TError = ErrorType<void>>(
  params?: PlatformTenantsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformTenantsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getPlatformTenantsControllerListQueryOptions(params,options)
@@ -4124,16 +4224,16 @@ export type platformTenantsControllerCreateAdminResponse = (platformTenantsContr
 export const getPlatformTenantsControllerCreateAdminUrl = (tenantId: string,) => {
 
 
-
+  
 
   return `/platform/tenants/${tenantId}/create-admin`
 }
 
 export const platformTenantsControllerCreateAdmin = async (tenantId: string,
     createPlatformTenantAdminDto: CreatePlatformTenantAdminDto, options?: RequestInit): Promise<platformTenantsControllerCreateAdminResponse> => {
-
+  
   return customInstance<platformTenantsControllerCreateAdminResponse>(getPlatformTenantsControllerCreateAdminUrl(tenantId),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -4141,7 +4241,7 @@ export const platformTenantsControllerCreateAdmin = async (tenantId: string,
       createPlatformTenantAdminDto,)
   }
 );}
-
+  
 
 
 
@@ -4156,7 +4256,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof platformTenantsControllerCreateAdmin>>, {tenantId: string;data: CreatePlatformTenantAdminDto}> = (props) => {
@@ -4167,7 +4267,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -4189,7 +4289,7 @@ export const usePlatformTenantsControllerCreateAdmin = <TError = ErrorType<void>
       > => {
       return useMutation(getPlatformTenantsControllerCreateAdminMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary List active tenant login options.
  */
@@ -4208,22 +4308,22 @@ export type platformTenantsControllerListLoginOptionsResponse = (platformTenants
 export const getPlatformTenantsControllerListLoginOptionsUrl = () => {
 
 
-
+  
 
   return `/platform/tenants/public`
 }
 
 export const platformTenantsControllerListLoginOptions = async ( options?: RequestInit): Promise<platformTenantsControllerListLoginOptionsResponse> => {
-
+  
   return customInstance<platformTenantsControllerListLoginOptionsResponse>(getPlatformTenantsControllerListLoginOptionsUrl(),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -4234,7 +4334,7 @@ export const getPlatformTenantsControllerListLoginOptionsQueryKey = () => {
     ] as const;
     }
 
-
+    
 export const getPlatformTenantsControllerListLoginOptionsQueryOptions = <TData = Awaited<ReturnType<typeof platformTenantsControllerListLoginOptions>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformTenantsControllerListLoginOptions>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -4242,13 +4342,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getPlatformTenantsControllerListLoginOptionsQueryKey();
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof platformTenantsControllerListLoginOptions>>> = ({ signal }) => platformTenantsControllerListLoginOptions({ signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof platformTenantsControllerListLoginOptions>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -4287,7 +4387,7 @@ export function usePlatformTenantsControllerListLoginOptions<TData = Awaited<Ret
 
 export function usePlatformTenantsControllerListLoginOptions<TData = Awaited<ReturnType<typeof platformTenantsControllerListLoginOptions>>, TError = ErrorType<unknown>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformTenantsControllerListLoginOptions>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getPlatformTenantsControllerListLoginOptionsQueryOptions(options)
@@ -4336,22 +4436,22 @@ export type platformTenantsControllerGetByIdResponse = (platformTenantsControlle
 export const getPlatformTenantsControllerGetByIdUrl = (id: string,) => {
 
 
-
+  
 
   return `/platform/tenants/${id}`
 }
 
 export const platformTenantsControllerGetById = async (id: string, options?: RequestInit): Promise<platformTenantsControllerGetByIdResponse> => {
-
+  
   return customInstance<platformTenantsControllerGetByIdResponse>(getPlatformTenantsControllerGetByIdUrl(id),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -4362,7 +4462,7 @@ export const getPlatformTenantsControllerGetByIdQueryKey = (id: string,) => {
     ] as const;
     }
 
-
+    
 export const getPlatformTenantsControllerGetByIdQueryOptions = <TData = Awaited<ReturnType<typeof platformTenantsControllerGetById>>, TError = ErrorType<void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformTenantsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -4370,13 +4470,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getPlatformTenantsControllerGetByIdQueryKey(id);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof platformTenantsControllerGetById>>> = ({ signal }) => platformTenantsControllerGetById(id, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof platformTenantsControllerGetById>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -4415,7 +4515,7 @@ export function usePlatformTenantsControllerGetById<TData = Awaited<ReturnType<t
 
 export function usePlatformTenantsControllerGetById<TData = Awaited<ReturnType<typeof platformTenantsControllerGetById>>, TError = ErrorType<void>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformTenantsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getPlatformTenantsControllerGetByIdQueryOptions(id,options)
@@ -4474,16 +4574,16 @@ export type platformTenantsControllerUpdateResponse = (platformTenantsController
 export const getPlatformTenantsControllerUpdateUrl = (id: string,) => {
 
 
-
+  
 
   return `/platform/tenants/${id}`
 }
 
 export const platformTenantsControllerUpdate = async (id: string,
     updatePlatformTenantDto: UpdatePlatformTenantDto, options?: RequestInit): Promise<platformTenantsControllerUpdateResponse> => {
-
+  
   return customInstance<platformTenantsControllerUpdateResponse>(getPlatformTenantsControllerUpdateUrl(id),
-  {
+  {      
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -4491,7 +4591,7 @@ export const platformTenantsControllerUpdate = async (id: string,
       updatePlatformTenantDto,)
   }
 );}
-
+  
 
 
 
@@ -4506,7 +4606,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof platformTenantsControllerUpdate>>, {id: string;data: UpdatePlatformTenantDto}> = (props) => {
@@ -4517,7 +4617,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -4539,7 +4639,7 @@ export const usePlatformTenantsControllerUpdate = <TError = ErrorType<void>,
       > => {
       return useMutation(getPlatformTenantsControllerUpdateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Activate a tenant.
  */
@@ -4575,22 +4675,22 @@ export type platformTenantsControllerActivateResponse = (platformTenantsControll
 export const getPlatformTenantsControllerActivateUrl = (id: string,) => {
 
 
-
+  
 
   return `/platform/tenants/${id}/activate`
 }
 
 export const platformTenantsControllerActivate = async (id: string, options?: RequestInit): Promise<platformTenantsControllerActivateResponse> => {
-
+  
   return customInstance<platformTenantsControllerActivateResponse>(getPlatformTenantsControllerActivateUrl(id),
-  {
+  {      
     ...options,
     method: 'PATCH'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -4605,7 +4705,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof platformTenantsControllerActivate>>, {id: string}> = (props) => {
@@ -4616,13 +4716,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type PlatformTenantsControllerActivateMutationResult = NonNullable<Awaited<ReturnType<typeof platformTenantsControllerActivate>>>
-
+    
     export type PlatformTenantsControllerActivateMutationError = ErrorType<void>
 
     /**
@@ -4638,7 +4738,7 @@ export const usePlatformTenantsControllerActivate = <TError = ErrorType<void>,
       > => {
       return useMutation(getPlatformTenantsControllerActivateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Deactivate a tenant.
  */
@@ -4674,22 +4774,22 @@ export type platformTenantsControllerDeactivateResponse = (platformTenantsContro
 export const getPlatformTenantsControllerDeactivateUrl = (id: string,) => {
 
 
-
+  
 
   return `/platform/tenants/${id}/deactivate`
 }
 
 export const platformTenantsControllerDeactivate = async (id: string, options?: RequestInit): Promise<platformTenantsControllerDeactivateResponse> => {
-
+  
   return customInstance<platformTenantsControllerDeactivateResponse>(getPlatformTenantsControllerDeactivateUrl(id),
-  {
+  {      
     ...options,
     method: 'PATCH'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -4704,7 +4804,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof platformTenantsControllerDeactivate>>, {id: string}> = (props) => {
@@ -4715,13 +4815,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type PlatformTenantsControllerDeactivateMutationResult = NonNullable<Awaited<ReturnType<typeof platformTenantsControllerDeactivate>>>
-
+    
     export type PlatformTenantsControllerDeactivateMutationError = ErrorType<void>
 
     /**
@@ -4737,7 +4837,7 @@ export const usePlatformTenantsControllerDeactivate = <TError = ErrorType<void>,
       > => {
       return useMutation(getPlatformTenantsControllerDeactivateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Create a ride template in the current tenant.
  */
@@ -4773,15 +4873,15 @@ export type ridesControllerCreateResponse = (ridesControllerCreateResponseSucces
 export const getRidesControllerCreateUrl = () => {
 
 
-
+  
 
   return `/rides`
 }
 
 export const ridesControllerCreate = async (createRideDto: CreateRideDto, options?: RequestInit): Promise<ridesControllerCreateResponse> => {
-
+  
   return customInstance<ridesControllerCreateResponse>(getRidesControllerCreateUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -4789,7 +4889,7 @@ export const ridesControllerCreate = async (createRideDto: CreateRideDto, option
       createRideDto,)
   }
 );}
-
+  
 
 
 
@@ -4804,7 +4904,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerCreate>>, {data: CreateRideDto}> = (props) => {
@@ -4815,7 +4915,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -4837,7 +4937,7 @@ export const useRidesControllerCreate = <TError = ErrorType<void>,
       > => {
       return useMutation(getRidesControllerCreateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary List rides in the current tenant.
  */
@@ -4874,7 +4974,7 @@ export const getRidesControllerListUrl = (params?: RidesControllerListParams,) =
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -4886,16 +4986,16 @@ export const getRidesControllerListUrl = (params?: RidesControllerListParams,) =
 }
 
 export const ridesControllerList = async (params?: RidesControllerListParams, options?: RequestInit): Promise<ridesControllerListResponse> => {
-
+  
   return customInstance<ridesControllerListResponse>(getRidesControllerListUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -4906,7 +5006,7 @@ export const getRidesControllerListQueryKey = (params?: RidesControllerListParam
     ] as const;
     }
 
-
+    
 export const getRidesControllerListQueryOptions = <TData = Awaited<ReturnType<typeof ridesControllerList>>, TError = ErrorType<void>>(params?: RidesControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ridesControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -4914,13 +5014,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getRidesControllerListQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof ridesControllerList>>> = ({ signal }) => ridesControllerList(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof ridesControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -4959,7 +5059,7 @@ export function useRidesControllerList<TData = Awaited<ReturnType<typeof ridesCo
 
 export function useRidesControllerList<TData = Awaited<ReturnType<typeof ridesControllerList>>, TError = ErrorType<void>>(
  params?: RidesControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ridesControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getRidesControllerListQueryOptions(params,options)
@@ -5009,7 +5109,7 @@ export const getRidesControllerListInstancesByDateUrl = (params: RidesController
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -5021,16 +5121,16 @@ export const getRidesControllerListInstancesByDateUrl = (params: RidesController
 }
 
 export const ridesControllerListInstancesByDate = async (params: RidesControllerListInstancesByDateParams, options?: RequestInit): Promise<ridesControllerListInstancesByDateResponse> => {
-
+  
   return customInstance<ridesControllerListInstancesByDateResponse>(getRidesControllerListInstancesByDateUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -5041,7 +5141,7 @@ export const getRidesControllerListInstancesByDateQueryKey = (params?: RidesCont
     ] as const;
     }
 
-
+    
 export const getRidesControllerListInstancesByDateQueryOptions = <TData = Awaited<ReturnType<typeof ridesControllerListInstancesByDate>>, TError = ErrorType<void>>(params: RidesControllerListInstancesByDateParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ridesControllerListInstancesByDate>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -5049,13 +5149,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getRidesControllerListInstancesByDateQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof ridesControllerListInstancesByDate>>> = ({ signal }) => ridesControllerListInstancesByDate(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof ridesControllerListInstancesByDate>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -5094,7 +5194,7 @@ export function useRidesControllerListInstancesByDate<TData = Awaited<ReturnType
 
 export function useRidesControllerListInstancesByDate<TData = Awaited<ReturnType<typeof ridesControllerListInstancesByDate>>, TError = ErrorType<void>>(
  params: RidesControllerListInstancesByDateParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ridesControllerListInstancesByDate>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getRidesControllerListInstancesByDateQueryOptions(params,options)
@@ -5143,22 +5243,22 @@ export type ridesControllerGetByIdResponse = (ridesControllerGetByIdResponseSucc
 export const getRidesControllerGetByIdUrl = (id: string,) => {
 
 
-
+  
 
   return `/rides/${id}`
 }
 
 export const ridesControllerGetById = async (id: string, options?: RequestInit): Promise<ridesControllerGetByIdResponse> => {
-
+  
   return customInstance<ridesControllerGetByIdResponse>(getRidesControllerGetByIdUrl(id),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -5169,7 +5269,7 @@ export const getRidesControllerGetByIdQueryKey = (id: string,) => {
     ] as const;
     }
 
-
+    
 export const getRidesControllerGetByIdQueryOptions = <TData = Awaited<ReturnType<typeof ridesControllerGetById>>, TError = ErrorType<void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ridesControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -5177,13 +5277,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getRidesControllerGetByIdQueryKey(id);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof ridesControllerGetById>>> = ({ signal }) => ridesControllerGetById(id, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof ridesControllerGetById>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -5222,7 +5322,7 @@ export function useRidesControllerGetById<TData = Awaited<ReturnType<typeof ride
 
 export function useRidesControllerGetById<TData = Awaited<ReturnType<typeof ridesControllerGetById>>, TError = ErrorType<void>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ridesControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getRidesControllerGetByIdQueryOptions(id,options)
@@ -5276,16 +5376,16 @@ export type ridesControllerUpdateResponse = (ridesControllerUpdateResponseSucces
 export const getRidesControllerUpdateUrl = (id: string,) => {
 
 
-
+  
 
   return `/rides/${id}`
 }
 
 export const ridesControllerUpdate = async (id: string,
     updateRideDto: UpdateRideDto, options?: RequestInit): Promise<ridesControllerUpdateResponse> => {
-
+  
   return customInstance<ridesControllerUpdateResponse>(getRidesControllerUpdateUrl(id),
-  {
+  {      
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -5293,7 +5393,7 @@ export const ridesControllerUpdate = async (id: string,
       updateRideDto,)
   }
 );}
-
+  
 
 
 
@@ -5308,7 +5408,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerUpdate>>, {id: string;data: UpdateRideDto}> = (props) => {
@@ -5319,7 +5419,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -5341,7 +5441,7 @@ export const useRidesControllerUpdate = <TError = ErrorType<void>,
       > => {
       return useMutation(getRidesControllerUpdateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Replace ride fields in the current tenant.
  */
@@ -5382,16 +5482,16 @@ export type ridesControllerReplaceResponse = (ridesControllerReplaceResponseSucc
 export const getRidesControllerReplaceUrl = (id: string,) => {
 
 
-
+  
 
   return `/rides/${id}`
 }
 
 export const ridesControllerReplace = async (id: string,
     updateRideDto: UpdateRideDto, options?: RequestInit): Promise<ridesControllerReplaceResponse> => {
-
+  
   return customInstance<ridesControllerReplaceResponse>(getRidesControllerReplaceUrl(id),
-  {
+  {      
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -5399,7 +5499,7 @@ export const ridesControllerReplace = async (id: string,
       updateRideDto,)
   }
 );}
-
+  
 
 
 
@@ -5414,7 +5514,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerReplace>>, {id: string;data: UpdateRideDto}> = (props) => {
@@ -5425,7 +5525,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -5447,7 +5547,7 @@ export const useRidesControllerReplace = <TError = ErrorType<void>,
       > => {
       return useMutation(getRidesControllerReplaceMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Delete a ride template in the current tenant.
  */
@@ -5490,7 +5590,7 @@ export const getRidesControllerRemoveUrl = (id: string,
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -5503,16 +5603,16 @@ export const getRidesControllerRemoveUrl = (id: string,
 
 export const ridesControllerRemove = async (id: string,
     params?: RidesControllerRemoveParams, options?: RequestInit): Promise<ridesControllerRemoveResponse> => {
-
+  
   return customInstance<ridesControllerRemoveResponse>(getRidesControllerRemoveUrl(id,params),
-  {
+  {      
     ...options,
     method: 'DELETE'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -5527,7 +5627,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerRemove>>, {id: string;params?: RidesControllerRemoveParams}> = (props) => {
@@ -5538,13 +5638,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type RidesControllerRemoveMutationResult = NonNullable<Awaited<ReturnType<typeof ridesControllerRemove>>>
-
+    
     export type RidesControllerRemoveMutationError = ErrorType<void>
 
     /**
@@ -5560,7 +5660,7 @@ export const useRidesControllerRemove = <TError = ErrorType<void>,
       > => {
       return useMutation(getRidesControllerRemoveMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Replace recurring ride day schedules in the current tenant.
  */
@@ -5601,16 +5701,16 @@ export type ridesControllerReplaceDayTimesResponse = (ridesControllerReplaceDayT
 export const getRidesControllerReplaceDayTimesUrl = (id: string,) => {
 
 
-
+  
 
   return `/rides/${id}/day-times`
 }
 
 export const ridesControllerReplaceDayTimes = async (id: string,
     replaceRideDaySchedulesDto: ReplaceRideDaySchedulesDto, options?: RequestInit): Promise<ridesControllerReplaceDayTimesResponse> => {
-
+  
   return customInstance<ridesControllerReplaceDayTimesResponse>(getRidesControllerReplaceDayTimesUrl(id),
-  {
+  {      
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -5618,7 +5718,7 @@ export const ridesControllerReplaceDayTimes = async (id: string,
       replaceRideDaySchedulesDto,)
   }
 );}
-
+  
 
 
 
@@ -5633,7 +5733,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerReplaceDayTimes>>, {id: string;data: ReplaceRideDaySchedulesDto}> = (props) => {
@@ -5644,7 +5744,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -5666,7 +5766,7 @@ export const useRidesControllerReplaceDayTimes = <TError = ErrorType<void>,
       > => {
       return useMutation(getRidesControllerReplaceDayTimesMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Add a ride exception (skip/additional) in the current tenant.
  */
@@ -5712,16 +5812,16 @@ export type ridesControllerAddExceptionResponse = (ridesControllerAddExceptionRe
 export const getRidesControllerAddExceptionUrl = (id: string,) => {
 
 
-
+  
 
   return `/rides/${id}/exceptions`
 }
 
 export const ridesControllerAddException = async (id: string,
     createRideExceptionDto: CreateRideExceptionDto, options?: RequestInit): Promise<ridesControllerAddExceptionResponse> => {
-
+  
   return customInstance<ridesControllerAddExceptionResponse>(getRidesControllerAddExceptionUrl(id),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -5729,7 +5829,7 @@ export const ridesControllerAddException = async (id: string,
       createRideExceptionDto,)
   }
 );}
-
+  
 
 
 
@@ -5744,7 +5844,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerAddException>>, {id: string;data: CreateRideExceptionDto}> = (props) => {
@@ -5755,7 +5855,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -5777,7 +5877,7 @@ export const useRidesControllerAddException = <TError = ErrorType<void>,
       > => {
       return useMutation(getRidesControllerAddExceptionMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Delete a ride exception in the current tenant.
  */
@@ -5814,23 +5914,23 @@ export const getRidesControllerRemoveExceptionUrl = (id: string,
     exceptionId: string,) => {
 
 
-
+  
 
   return `/rides/${id}/exceptions/${exceptionId}`
 }
 
 export const ridesControllerRemoveException = async (id: string,
     exceptionId: string, options?: RequestInit): Promise<ridesControllerRemoveExceptionResponse> => {
-
+  
   return customInstance<ridesControllerRemoveExceptionResponse>(getRidesControllerRemoveExceptionUrl(id,exceptionId),
-  {
+  {      
     ...options,
     method: 'DELETE'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -5845,7 +5945,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerRemoveException>>, {id: string;exceptionId: string}> = (props) => {
@@ -5856,13 +5956,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type RidesControllerRemoveExceptionMutationResult = NonNullable<Awaited<ReturnType<typeof ridesControllerRemoveException>>>
-
+    
     export type RidesControllerRemoveExceptionMutationError = ErrorType<void>
 
     /**
@@ -5878,7 +5978,7 @@ export const useRidesControllerRemoveException = <TError = ErrorType<void>,
       > => {
       return useMutation(getRidesControllerRemoveExceptionMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Create a single reservation in the current tenant.
  */
@@ -5919,15 +6019,15 @@ export type reservationsControllerCreateResponse = (reservationsControllerCreate
 export const getReservationsControllerCreateUrl = () => {
 
 
-
+  
 
   return `/reservations`
 }
 
 export const reservationsControllerCreate = async (createReservationDto: CreateReservationDto, options?: RequestInit): Promise<reservationsControllerCreateResponse> => {
-
+  
   return customInstance<reservationsControllerCreateResponse>(getReservationsControllerCreateUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -5935,7 +6035,7 @@ export const reservationsControllerCreate = async (createReservationDto: CreateR
       createReservationDto,)
   }
 );}
-
+  
 
 
 
@@ -5950,7 +6050,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof reservationsControllerCreate>>, {data: CreateReservationDto}> = (props) => {
@@ -5961,7 +6061,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -5983,7 +6083,7 @@ export const useReservationsControllerCreate = <TError = ErrorType<void>,
       > => {
       return useMutation(getReservationsControllerCreateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary List reservations in the current tenant.
  */
@@ -6020,7 +6120,7 @@ export const getReservationsControllerListUrl = (params?: ReservationsController
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -6032,16 +6132,16 @@ export const getReservationsControllerListUrl = (params?: ReservationsController
 }
 
 export const reservationsControllerList = async (params?: ReservationsControllerListParams, options?: RequestInit): Promise<reservationsControllerListResponse> => {
-
+  
   return customInstance<reservationsControllerListResponse>(getReservationsControllerListUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -6052,7 +6152,7 @@ export const getReservationsControllerListQueryKey = (params?: ReservationsContr
     ] as const;
     }
 
-
+    
 export const getReservationsControllerListQueryOptions = <TData = Awaited<ReturnType<typeof reservationsControllerList>>, TError = ErrorType<void>>(params?: ReservationsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -6060,13 +6160,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getReservationsControllerListQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof reservationsControllerList>>> = ({ signal }) => reservationsControllerList(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -6105,7 +6205,7 @@ export function useReservationsControllerList<TData = Awaited<ReturnType<typeof 
 
 export function useReservationsControllerList<TData = Awaited<ReturnType<typeof reservationsControllerList>>, TError = ErrorType<void>>(
  params?: ReservationsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getReservationsControllerListQueryOptions(params,options)
@@ -6159,15 +6259,15 @@ export type reservationsControllerCreateBatchResponse = (reservationsControllerC
 export const getReservationsControllerCreateBatchUrl = () => {
 
 
-
+  
 
   return `/reservations/batch`
 }
 
 export const reservationsControllerCreateBatch = async (createReservationsBatchDto: CreateReservationsBatchDto, options?: RequestInit): Promise<reservationsControllerCreateBatchResponse> => {
-
+  
   return customInstance<reservationsControllerCreateBatchResponse>(getReservationsControllerCreateBatchUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -6175,7 +6275,7 @@ export const reservationsControllerCreateBatch = async (createReservationsBatchD
       createReservationsBatchDto,)
   }
 );}
-
+  
 
 
 
@@ -6190,7 +6290,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof reservationsControllerCreateBatch>>, {data: CreateReservationsBatchDto}> = (props) => {
@@ -6201,7 +6301,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -6223,7 +6323,7 @@ export const useReservationsControllerCreateBatch = <TError = ErrorType<void>,
       > => {
       return useMutation(getReservationsControllerCreateBatchMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Get reservation detail by id in the current tenant.
  */
@@ -6259,22 +6359,22 @@ export type reservationsControllerGetByIdResponse = (reservationsControllerGetBy
 export const getReservationsControllerGetByIdUrl = (id: string,) => {
 
 
-
+  
 
   return `/reservations/${id}`
 }
 
 export const reservationsControllerGetById = async (id: string, options?: RequestInit): Promise<reservationsControllerGetByIdResponse> => {
-
+  
   return customInstance<reservationsControllerGetByIdResponse>(getReservationsControllerGetByIdUrl(id),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -6285,7 +6385,7 @@ export const getReservationsControllerGetByIdQueryKey = (id: string,) => {
     ] as const;
     }
 
-
+    
 export const getReservationsControllerGetByIdQueryOptions = <TData = Awaited<ReturnType<typeof reservationsControllerGetById>>, TError = ErrorType<void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -6293,13 +6393,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getReservationsControllerGetByIdQueryKey(id);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof reservationsControllerGetById>>> = ({ signal }) => reservationsControllerGetById(id, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerGetById>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -6338,7 +6438,7 @@ export function useReservationsControllerGetById<TData = Awaited<ReturnType<type
 
 export function useReservationsControllerGetById<TData = Awaited<ReturnType<typeof reservationsControllerGetById>>, TError = ErrorType<void>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getReservationsControllerGetByIdQueryOptions(id,options)
@@ -6397,16 +6497,16 @@ export type reservationsControllerUpdateResponse = (reservationsControllerUpdate
 export const getReservationsControllerUpdateUrl = (id: string,) => {
 
 
-
+  
 
   return `/reservations/${id}`
 }
 
 export const reservationsControllerUpdate = async (id: string,
     updateReservationDto: UpdateReservationDto, options?: RequestInit): Promise<reservationsControllerUpdateResponse> => {
-
+  
   return customInstance<reservationsControllerUpdateResponse>(getReservationsControllerUpdateUrl(id),
-  {
+  {      
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -6414,7 +6514,7 @@ export const reservationsControllerUpdate = async (id: string,
       updateReservationDto,)
   }
 );}
-
+  
 
 
 
@@ -6429,7 +6529,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof reservationsControllerUpdate>>, {id: string;data: UpdateReservationDto}> = (props) => {
@@ -6440,7 +6540,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -6462,7 +6562,7 @@ export const useReservationsControllerUpdate = <TError = ErrorType<void>,
       > => {
       return useMutation(getReservationsControllerUpdateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Soft delete reservation in the current tenant.
  */
@@ -6498,22 +6598,22 @@ export type reservationsControllerRemoveResponse = (reservationsControllerRemove
 export const getReservationsControllerRemoveUrl = (id: string,) => {
 
 
-
+  
 
   return `/reservations/${id}`
 }
 
 export const reservationsControllerRemove = async (id: string, options?: RequestInit): Promise<reservationsControllerRemoveResponse> => {
-
+  
   return customInstance<reservationsControllerRemoveResponse>(getReservationsControllerRemoveUrl(id),
-  {
+  {      
     ...options,
     method: 'DELETE'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -6528,7 +6628,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof reservationsControllerRemove>>, {id: string}> = (props) => {
@@ -6539,13 +6639,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type ReservationsControllerRemoveMutationResult = NonNullable<Awaited<ReturnType<typeof reservationsControllerRemove>>>
-
+    
     export type ReservationsControllerRemoveMutationError = ErrorType<void>
 
     /**
@@ -6561,7 +6661,7 @@ export const useReservationsControllerRemove = <TError = ErrorType<void>,
       > => {
       return useMutation(getReservationsControllerRemoveMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Cancel reservation in the current tenant.
  */
@@ -6602,22 +6702,22 @@ export type reservationsControllerCancelResponse = (reservationsControllerCancel
 export const getReservationsControllerCancelUrl = (id: string,) => {
 
 
-
+  
 
   return `/reservations/${id}/cancel`
 }
 
 export const reservationsControllerCancel = async (id: string, options?: RequestInit): Promise<reservationsControllerCancelResponse> => {
-
+  
   return customInstance<reservationsControllerCancelResponse>(getReservationsControllerCancelUrl(id),
-  {
+  {      
     ...options,
     method: 'POST'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -6632,7 +6732,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof reservationsControllerCancel>>, {id: string}> = (props) => {
@@ -6643,13 +6743,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type ReservationsControllerCancelMutationResult = NonNullable<Awaited<ReturnType<typeof reservationsControllerCancel>>>
-
+    
     export type ReservationsControllerCancelMutationError = ErrorType<void>
 
     /**
@@ -6665,7 +6765,7 @@ export const useReservationsControllerCancel = <TError = ErrorType<void>,
       > => {
       return useMutation(getReservationsControllerCancelMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Get tenant dashboard metrics and top lines for a date range.
  */
@@ -6702,7 +6802,7 @@ export const getReportingControllerGetDashboardUrl = (params?: ReportingControll
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -6714,16 +6814,16 @@ export const getReportingControllerGetDashboardUrl = (params?: ReportingControll
 }
 
 export const reportingControllerGetDashboard = async (params?: ReportingControllerGetDashboardParams, options?: RequestInit): Promise<reportingControllerGetDashboardResponse> => {
-
+  
   return customInstance<reportingControllerGetDashboardResponse>(getReportingControllerGetDashboardUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -6734,7 +6834,7 @@ export const getReportingControllerGetDashboardQueryKey = (params?: ReportingCon
     ] as const;
     }
 
-
+    
 export const getReportingControllerGetDashboardQueryOptions = <TData = Awaited<ReturnType<typeof reportingControllerGetDashboard>>, TError = ErrorType<void>>(params?: ReportingControllerGetDashboardParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reportingControllerGetDashboard>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -6742,13 +6842,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getReportingControllerGetDashboardQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof reportingControllerGetDashboard>>> = ({ signal }) => reportingControllerGetDashboard(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof reportingControllerGetDashboard>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -6787,7 +6887,7 @@ export function useReportingControllerGetDashboard<TData = Awaited<ReturnType<ty
 
 export function useReportingControllerGetDashboard<TData = Awaited<ReturnType<typeof reportingControllerGetDashboard>>, TError = ErrorType<void>>(
  params?: ReportingControllerGetDashboardParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reportingControllerGetDashboard>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getReportingControllerGetDashboardQueryOptions(params,options)
@@ -6837,7 +6937,7 @@ export const getReportingControllerGetOccupancyUrl = (params?: ReportingControll
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -6849,16 +6949,16 @@ export const getReportingControllerGetOccupancyUrl = (params?: ReportingControll
 }
 
 export const reportingControllerGetOccupancy = async (params?: ReportingControllerGetOccupancyParams, options?: RequestInit): Promise<reportingControllerGetOccupancyResponse> => {
-
+  
   return customInstance<reportingControllerGetOccupancyResponse>(getReportingControllerGetOccupancyUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -6869,7 +6969,7 @@ export const getReportingControllerGetOccupancyQueryKey = (params?: ReportingCon
     ] as const;
     }
 
-
+    
 export const getReportingControllerGetOccupancyQueryOptions = <TData = Awaited<ReturnType<typeof reportingControllerGetOccupancy>>, TError = ErrorType<void>>(params?: ReportingControllerGetOccupancyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reportingControllerGetOccupancy>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -6877,13 +6977,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getReportingControllerGetOccupancyQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof reportingControllerGetOccupancy>>> = ({ signal }) => reportingControllerGetOccupancy(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof reportingControllerGetOccupancy>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -6922,7 +7022,7 @@ export function useReportingControllerGetOccupancy<TData = Awaited<ReturnType<ty
 
 export function useReportingControllerGetOccupancy<TData = Awaited<ReturnType<typeof reportingControllerGetOccupancy>>, TError = ErrorType<void>>(
  params?: ReportingControllerGetOccupancyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reportingControllerGetOccupancy>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getReportingControllerGetOccupancyQueryOptions(params,options)
@@ -6972,7 +7072,7 @@ export const getReportingControllerGetAuditUrl = (params?: ReportingControllerGe
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -6984,16 +7084,16 @@ export const getReportingControllerGetAuditUrl = (params?: ReportingControllerGe
 }
 
 export const reportingControllerGetAudit = async (params?: ReportingControllerGetAuditParams, options?: RequestInit): Promise<reportingControllerGetAuditResponse> => {
-
+  
   return customInstance<reportingControllerGetAuditResponse>(getReportingControllerGetAuditUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -7004,7 +7104,7 @@ export const getReportingControllerGetAuditQueryKey = (params?: ReportingControl
     ] as const;
     }
 
-
+    
 export const getReportingControllerGetAuditQueryOptions = <TData = Awaited<ReturnType<typeof reportingControllerGetAudit>>, TError = ErrorType<void>>(params?: ReportingControllerGetAuditParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reportingControllerGetAudit>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -7012,13 +7112,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getReportingControllerGetAuditQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof reportingControllerGetAudit>>> = ({ signal }) => reportingControllerGetAudit(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof reportingControllerGetAudit>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -7057,7 +7157,7 @@ export function useReportingControllerGetAudit<TData = Awaited<ReturnType<typeof
 
 export function useReportingControllerGetAudit<TData = Awaited<ReturnType<typeof reportingControllerGetAudit>>, TError = ErrorType<void>>(
  params?: ReportingControllerGetAuditParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reportingControllerGetAudit>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getReportingControllerGetAuditQueryOptions(params,options)
@@ -7106,15 +7206,15 @@ export type ticketsControllerCreateResponse = (ticketsControllerCreateResponseSu
 export const getTicketsControllerCreateUrl = () => {
 
 
-
+  
 
   return `/tickets`
 }
 
 export const ticketsControllerCreate = async (createTicketDto: CreateTicketDto, options?: RequestInit): Promise<ticketsControllerCreateResponse> => {
-
+  
   return customInstance<ticketsControllerCreateResponse>(getTicketsControllerCreateUrl(),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -7122,7 +7222,7 @@ export const ticketsControllerCreate = async (createTicketDto: CreateTicketDto, 
       createTicketDto,)
   }
 );}
-
+  
 
 
 
@@ -7137,7 +7237,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerCreate>>, {data: CreateTicketDto}> = (props) => {
@@ -7148,7 +7248,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -7170,7 +7270,7 @@ export const useTicketsControllerCreate = <TError = ErrorType<void>,
       > => {
       return useMutation(getTicketsControllerCreateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary List support tickets in the current tenant.
  */
@@ -7207,7 +7307,7 @@ export const getTicketsControllerListUrl = (params?: TicketsControllerListParams
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-
+    
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
@@ -7219,16 +7319,16 @@ export const getTicketsControllerListUrl = (params?: TicketsControllerListParams
 }
 
 export const ticketsControllerList = async (params?: TicketsControllerListParams, options?: RequestInit): Promise<ticketsControllerListResponse> => {
-
+  
   return customInstance<ticketsControllerListResponse>(getTicketsControllerListUrl(params),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -7239,7 +7339,7 @@ export const getTicketsControllerListQueryKey = (params?: TicketsControllerListP
     ] as const;
     }
 
-
+    
 export const getTicketsControllerListQueryOptions = <TData = Awaited<ReturnType<typeof ticketsControllerList>>, TError = ErrorType<void>>(params?: TicketsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -7247,13 +7347,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getTicketsControllerListQueryKey(params);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof ticketsControllerList>>> = ({ signal }) => ticketsControllerList(params, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -7292,7 +7392,7 @@ export function useTicketsControllerList<TData = Awaited<ReturnType<typeof ticke
 
 export function useTicketsControllerList<TData = Awaited<ReturnType<typeof ticketsControllerList>>, TError = ErrorType<void>>(
  params?: TicketsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getTicketsControllerListQueryOptions(params,options)
@@ -7341,22 +7441,22 @@ export type ticketsControllerGetByIdResponse = (ticketsControllerGetByIdResponse
 export const getTicketsControllerGetByIdUrl = (id: string,) => {
 
 
-
+  
 
   return `/tickets/${id}`
 }
 
 export const ticketsControllerGetById = async (id: string, options?: RequestInit): Promise<ticketsControllerGetByIdResponse> => {
-
+  
   return customInstance<ticketsControllerGetByIdResponse>(getTicketsControllerGetByIdUrl(id),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -7367,7 +7467,7 @@ export const getTicketsControllerGetByIdQueryKey = (id: string,) => {
     ] as const;
     }
 
-
+    
 export const getTicketsControllerGetByIdQueryOptions = <TData = Awaited<ReturnType<typeof ticketsControllerGetById>>, TError = ErrorType<void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -7375,13 +7475,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getTicketsControllerGetByIdQueryKey(id);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof ticketsControllerGetById>>> = ({ signal }) => ticketsControllerGetById(id, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerGetById>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -7420,7 +7520,7 @@ export function useTicketsControllerGetById<TData = Awaited<ReturnType<typeof ti
 
 export function useTicketsControllerGetById<TData = Awaited<ReturnType<typeof ticketsControllerGetById>>, TError = ErrorType<void>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getTicketsControllerGetByIdQueryOptions(id,options)
@@ -7474,16 +7574,16 @@ export type ticketsControllerUpdateResponse = (ticketsControllerUpdateResponseSu
 export const getTicketsControllerUpdateUrl = (id: string,) => {
 
 
-
+  
 
   return `/tickets/${id}`
 }
 
 export const ticketsControllerUpdate = async (id: string,
     updateTicketDto: UpdateTicketDto, options?: RequestInit): Promise<ticketsControllerUpdateResponse> => {
-
+  
   return customInstance<ticketsControllerUpdateResponse>(getTicketsControllerUpdateUrl(id),
-  {
+  {      
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -7491,7 +7591,7 @@ export const ticketsControllerUpdate = async (id: string,
       updateTicketDto,)
   }
 );}
-
+  
 
 
 
@@ -7506,7 +7606,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerUpdate>>, {id: string;data: UpdateTicketDto}> = (props) => {
@@ -7517,7 +7617,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -7539,7 +7639,7 @@ export const useTicketsControllerUpdate = <TError = ErrorType<void>,
       > => {
       return useMutation(getTicketsControllerUpdateMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Add a ticket comment in the current tenant.
  */
@@ -7580,16 +7680,16 @@ export type ticketsControllerAddCommentResponse = (ticketsControllerAddCommentRe
 export const getTicketsControllerAddCommentUrl = (id: string,) => {
 
 
-
+  
 
   return `/tickets/${id}/comments`
 }
 
 export const ticketsControllerAddComment = async (id: string,
     createTicketCommentDto: CreateTicketCommentDto, options?: RequestInit): Promise<ticketsControllerAddCommentResponse> => {
-
+  
   return customInstance<ticketsControllerAddCommentResponse>(getTicketsControllerAddCommentUrl(id),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -7597,7 +7697,7 @@ export const ticketsControllerAddComment = async (id: string,
       createTicketCommentDto,)
   }
 );}
-
+  
 
 
 
@@ -7612,7 +7712,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerAddComment>>, {id: string;data: CreateTicketCommentDto}> = (props) => {
@@ -7623,7 +7723,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -7645,7 +7745,7 @@ export const useTicketsControllerAddComment = <TError = ErrorType<void>,
       > => {
       return useMutation(getTicketsControllerAddCommentMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Create signed upload URL for a ticket attachment image.
  */
@@ -7686,16 +7786,16 @@ export type ticketsControllerPresignUploadResponse = (ticketsControllerPresignUp
 export const getTicketsControllerPresignUploadUrl = (id: string,) => {
 
 
-
+  
 
   return `/tickets/${id}/attachments/presign-upload`
 }
 
 export const ticketsControllerPresignUpload = async (id: string,
     createTicketAttachmentPresignDto: CreateTicketAttachmentPresignDto, options?: RequestInit): Promise<ticketsControllerPresignUploadResponse> => {
-
+  
   return customInstance<ticketsControllerPresignUploadResponse>(getTicketsControllerPresignUploadUrl(id),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -7703,7 +7803,7 @@ export const ticketsControllerPresignUpload = async (id: string,
       createTicketAttachmentPresignDto,)
   }
 );}
-
+  
 
 
 
@@ -7718,7 +7818,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerPresignUpload>>, {id: string;data: CreateTicketAttachmentPresignDto}> = (props) => {
@@ -7729,7 +7829,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -7751,7 +7851,7 @@ export const useTicketsControllerPresignUpload = <TError = ErrorType<void>,
       > => {
       return useMutation(getTicketsControllerPresignUploadMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Persist uploaded ticket-level attachment metadata.
  */
@@ -7797,16 +7897,16 @@ export type ticketsControllerCompleteAttachmentResponse = (ticketsControllerComp
 export const getTicketsControllerCompleteAttachmentUrl = (id: string,) => {
 
 
-
+  
 
   return `/tickets/${id}/attachments/complete`
 }
 
 export const ticketsControllerCompleteAttachment = async (id: string,
     completeTicketAttachmentDto: CompleteTicketAttachmentDto, options?: RequestInit): Promise<ticketsControllerCompleteAttachmentResponse> => {
-
+  
   return customInstance<ticketsControllerCompleteAttachmentResponse>(getTicketsControllerCompleteAttachmentUrl(id),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -7814,7 +7914,7 @@ export const ticketsControllerCompleteAttachment = async (id: string,
       completeTicketAttachmentDto,)
   }
 );}
-
+  
 
 
 
@@ -7829,7 +7929,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerCompleteAttachment>>, {id: string;data: CompleteTicketAttachmentDto}> = (props) => {
@@ -7840,7 +7940,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -7862,7 +7962,7 @@ export const useTicketsControllerCompleteAttachment = <TError = ErrorType<void>,
       > => {
       return useMutation(getTicketsControllerCompleteAttachmentMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Persist uploaded comment-level attachment metadata.
  */
@@ -7909,7 +8009,7 @@ export const getTicketsControllerCompleteCommentAttachmentUrl = (id: string,
     commentId: string,) => {
 
 
-
+  
 
   return `/tickets/${id}/comments/${commentId}/attachments/complete`
 }
@@ -7917,9 +8017,9 @@ export const getTicketsControllerCompleteCommentAttachmentUrl = (id: string,
 export const ticketsControllerCompleteCommentAttachment = async (id: string,
     commentId: string,
     completeTicketAttachmentDto: CompleteTicketAttachmentDto, options?: RequestInit): Promise<ticketsControllerCompleteCommentAttachmentResponse> => {
-
+  
   return customInstance<ticketsControllerCompleteCommentAttachmentResponse>(getTicketsControllerCompleteCommentAttachmentUrl(id,commentId),
-  {
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -7927,7 +8027,7 @@ export const ticketsControllerCompleteCommentAttachment = async (id: string,
       completeTicketAttachmentDto,)
   }
 );}
-
+  
 
 
 
@@ -7942,7 +8042,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ticketsControllerCompleteCommentAttachment>>, {id: string;commentId: string;data: CompleteTicketAttachmentDto}> = (props) => {
@@ -7953,7 +8053,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -7975,7 +8075,7 @@ export const useTicketsControllerCompleteCommentAttachment = <TError = ErrorType
       > => {
       return useMutation(getTicketsControllerCompleteCommentAttachmentMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Create signed download URL for a tenant ticket attachment image.
  */
@@ -8012,23 +8112,23 @@ export const getTicketsControllerPresignDownloadUrl = (id: string,
     attachmentId: string,) => {
 
 
-
+  
 
   return `/tickets/${id}/attachments/${attachmentId}/presign-download`
 }
 
 export const ticketsControllerPresignDownload = async (id: string,
     attachmentId: string, options?: RequestInit): Promise<ticketsControllerPresignDownloadResponse> => {
-
+  
   return customInstance<ticketsControllerPresignDownloadResponse>(getTicketsControllerPresignDownloadUrl(id,attachmentId),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -8040,7 +8140,7 @@ export const getTicketsControllerPresignDownloadQueryKey = (id: string,
     ] as const;
     }
 
-
+    
 export const getTicketsControllerPresignDownloadQueryOptions = <TData = Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError = ErrorType<void>>(id: string,
     attachmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
@@ -8049,13 +8149,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getTicketsControllerPresignDownloadQueryKey(id,attachmentId);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>> = ({ signal }) => ticketsControllerPresignDownload(id,attachmentId, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, enabled: !!(id && attachmentId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -8098,7 +8198,7 @@ export function useTicketsControllerPresignDownload<TData = Awaited<ReturnType<t
 export function useTicketsControllerPresignDownload<TData = Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError = ErrorType<void>>(
  id: string,
     attachmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ticketsControllerPresignDownload>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getTicketsControllerPresignDownloadQueryOptions(id,attachmentId,options)
@@ -8142,22 +8242,22 @@ export type publicStorefrontControllerGetAgencyBySlugResponse = (publicStorefron
 export const getPublicStorefrontControllerGetAgencyBySlugUrl = (slug: string,) => {
 
 
-
+  
 
   return `/api/public/agencies/${slug}`
 }
 
 export const publicStorefrontControllerGetAgencyBySlug = async (slug: string, options?: RequestInit): Promise<publicStorefrontControllerGetAgencyBySlugResponse> => {
-
+  
   return customInstance<publicStorefrontControllerGetAgencyBySlugResponse>(getPublicStorefrontControllerGetAgencyBySlugUrl(slug),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -8168,7 +8268,7 @@ export const getPublicStorefrontControllerGetAgencyBySlugQueryKey = (slug: strin
     ] as const;
     }
 
-
+    
 export const getPublicStorefrontControllerGetAgencyBySlugQueryOptions = <TData = Awaited<ReturnType<typeof publicStorefrontControllerGetAgencyBySlug>>, TError = ErrorType<void>>(slug: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicStorefrontControllerGetAgencyBySlug>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -8176,13 +8276,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getPublicStorefrontControllerGetAgencyBySlugQueryKey(slug);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof publicStorefrontControllerGetAgencyBySlug>>> = ({ signal }) => publicStorefrontControllerGetAgencyBySlug(slug, { signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, enabled: !!(slug), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof publicStorefrontControllerGetAgencyBySlug>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -8221,10 +8321,126 @@ export function usePublicStorefrontControllerGetAgencyBySlug<TData = Awaited<Ret
 
 export function usePublicStorefrontControllerGetAgencyBySlug<TData = Awaited<ReturnType<typeof publicStorefrontControllerGetAgencyBySlug>>, TError = ErrorType<void>>(
  slug: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicStorefrontControllerGetAgencyBySlug>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getPublicStorefrontControllerGetAgencyBySlugQueryOptions(slug,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Redirect to a signed storefront ride icon image URL.
+ */
+export type publicStorefrontControllerRedirectRideIconResponse404 = {
+  data: void
+  status: 404
+}
+
+export type publicStorefrontControllerRedirectRideIconResponse429 = {
+  data: void
+  status: 429
+}
+
+;
+export type publicStorefrontControllerRedirectRideIconResponseError = (publicStorefrontControllerRedirectRideIconResponse404 | publicStorefrontControllerRedirectRideIconResponse429) & {
+  headers: Headers;
+};
+
+export type publicStorefrontControllerRedirectRideIconResponse = (publicStorefrontControllerRedirectRideIconResponseError)
+
+export const getPublicStorefrontControllerRedirectRideIconUrl = (slug: string,) => {
+
+
+  
+
+  return `/api/public/agencies/${slug}/assets/ride-icon`
+}
+
+export const publicStorefrontControllerRedirectRideIcon = async (slug: string, options?: RequestInit): Promise<publicStorefrontControllerRedirectRideIconResponse> => {
+  
+  return customInstance<publicStorefrontControllerRedirectRideIconResponse>(getPublicStorefrontControllerRedirectRideIconUrl(slug),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getPublicStorefrontControllerRedirectRideIconQueryKey = (slug: string,) => {
+    return [
+    `/api/public/agencies/${slug}/assets/ride-icon`
+    ] as const;
+    }
+
+    
+export const getPublicStorefrontControllerRedirectRideIconQueryOptions = <TData = Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>, TError = ErrorType<void>>(slug: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPublicStorefrontControllerRedirectRideIconQueryKey(slug);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>> = ({ signal }) => publicStorefrontControllerRedirectRideIcon(slug, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(slug), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type PublicStorefrontControllerRedirectRideIconQueryResult = NonNullable<Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>>
+export type PublicStorefrontControllerRedirectRideIconQueryError = ErrorType<void>
+
+
+export function usePublicStorefrontControllerRedirectRideIcon<TData = Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>, TError = ErrorType<void>>(
+ slug: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>,
+          TError,
+          Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePublicStorefrontControllerRedirectRideIcon<TData = Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>, TError = ErrorType<void>>(
+ slug: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>,
+          TError,
+          Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePublicStorefrontControllerRedirectRideIcon<TData = Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>, TError = ErrorType<void>>(
+ slug: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Redirect to a signed storefront ride icon image URL.
+ */
+
+export function usePublicStorefrontControllerRedirectRideIcon<TData = Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>, TError = ErrorType<void>>(
+ slug: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicStorefrontControllerRedirectRideIcon>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getPublicStorefrontControllerRedirectRideIconQueryOptions(slug,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -8265,22 +8481,22 @@ export type storefrontAdminControllerGetCurrentResponse = (storefrontAdminContro
 export const getStorefrontAdminControllerGetCurrentUrl = () => {
 
 
-
+  
 
   return `/api/storefront`
 }
 
 export const storefrontAdminControllerGetCurrent = async ( options?: RequestInit): Promise<storefrontAdminControllerGetCurrentResponse> => {
-
+  
   return customInstance<storefrontAdminControllerGetCurrentResponse>(getStorefrontAdminControllerGetCurrentUrl(),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -8291,7 +8507,7 @@ export const getStorefrontAdminControllerGetCurrentQueryKey = () => {
     ] as const;
     }
 
-
+    
 export const getStorefrontAdminControllerGetCurrentQueryOptions = <TData = Awaited<ReturnType<typeof storefrontAdminControllerGetCurrent>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof storefrontAdminControllerGetCurrent>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
@@ -8299,13 +8515,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getStorefrontAdminControllerGetCurrentQueryKey();
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof storefrontAdminControllerGetCurrent>>> = ({ signal }) => storefrontAdminControllerGetCurrent({ signal, ...requestOptions });
 
+      
 
-
-
+      
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof storefrontAdminControllerGetCurrent>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -8344,7 +8560,7 @@ export function useStorefrontAdminControllerGetCurrent<TData = Awaited<ReturnTyp
 
 export function useStorefrontAdminControllerGetCurrent<TData = Awaited<ReturnType<typeof storefrontAdminControllerGetCurrent>>, TError = ErrorType<void>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof storefrontAdminControllerGetCurrent>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getStorefrontAdminControllerGetCurrentQueryOptions(options)
@@ -8403,15 +8619,15 @@ export type storefrontAdminControllerUpsertResponse = (storefrontAdminController
 export const getStorefrontAdminControllerUpsertUrl = () => {
 
 
-
+  
 
   return `/api/storefront`
 }
 
 export const storefrontAdminControllerUpsert = async (upsertStorefrontDto: UpsertStorefrontDto, options?: RequestInit): Promise<storefrontAdminControllerUpsertResponse> => {
-
+  
   return customInstance<storefrontAdminControllerUpsertResponse>(getStorefrontAdminControllerUpsertUrl(),
-  {
+  {      
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -8419,7 +8635,7 @@ export const storefrontAdminControllerUpsert = async (upsertStorefrontDto: Upser
       upsertStorefrontDto,)
   }
 );}
-
+  
 
 
 
@@ -8434,7 +8650,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof storefrontAdminControllerUpsert>>, {data: UpsertStorefrontDto}> = (props) => {
@@ -8445,7 +8661,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -8467,7 +8683,7 @@ export const useStorefrontAdminControllerUpsert = <TError = ErrorType<void>,
       > => {
       return useMutation(getStorefrontAdminControllerUpsertMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Publish the current tenant storefront.
  */
@@ -8503,22 +8719,22 @@ export type storefrontAdminControllerPublishResponse = (storefrontAdminControlle
 export const getStorefrontAdminControllerPublishUrl = () => {
 
 
-
+  
 
   return `/api/storefront/publish`
 }
 
 export const storefrontAdminControllerPublish = async ( options?: RequestInit): Promise<storefrontAdminControllerPublishResponse> => {
-
+  
   return customInstance<storefrontAdminControllerPublishResponse>(getStorefrontAdminControllerPublishUrl(),
-  {
+  {      
     ...options,
     method: 'POST'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -8533,24 +8749,24 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof storefrontAdminControllerPublish>>, void> = () => {
-
+          
 
           return  storefrontAdminControllerPublish(requestOptions)
         }
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type StorefrontAdminControllerPublishMutationResult = NonNullable<Awaited<ReturnType<typeof storefrontAdminControllerPublish>>>
-
+    
     export type StorefrontAdminControllerPublishMutationError = ErrorType<void>
 
     /**
@@ -8566,7 +8782,7 @@ export const useStorefrontAdminControllerPublish = <TError = ErrorType<void>,
       > => {
       return useMutation(getStorefrontAdminControllerPublishMutationOptions(options), queryClient);
     }
-
+    
 /**
  * @summary Unpublish the current tenant storefront.
  */
@@ -8602,22 +8818,22 @@ export type storefrontAdminControllerUnpublishResponse = (storefrontAdminControl
 export const getStorefrontAdminControllerUnpublishUrl = () => {
 
 
-
+  
 
   return `/api/storefront/unpublish`
 }
 
 export const storefrontAdminControllerUnpublish = async ( options?: RequestInit): Promise<storefrontAdminControllerUnpublishResponse> => {
-
+  
   return customInstance<storefrontAdminControllerUnpublishResponse>(getStorefrontAdminControllerUnpublishUrl(),
-  {
+  {      
     ...options,
     method: 'POST'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -8632,24 +8848,24 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-
+      
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof storefrontAdminControllerUnpublish>>, void> = () => {
-
+          
 
           return  storefrontAdminControllerUnpublish(requestOptions)
         }
 
 
 
-
+        
 
 
   return  { mutationFn, ...mutationOptions }}
 
     export type StorefrontAdminControllerUnpublishMutationResult = NonNullable<Awaited<ReturnType<typeof storefrontAdminControllerUnpublish>>>
-
+    
     export type StorefrontAdminControllerUnpublishMutationError = ErrorType<void>
 
     /**
@@ -8664,4 +8880,214 @@ export const useStorefrontAdminControllerUnpublish = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getStorefrontAdminControllerUnpublishMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Create signed upload URL for the storefront ride icon.
+ */
+export type storefrontAdminControllerPresignRideIconUploadResponse200 = {
+  data: StorefrontAssetPresignResponseDto
+  status: 200
+}
+
+export type storefrontAdminControllerPresignRideIconUploadResponse400 = {
+  data: void
+  status: 400
+}
+
+export type storefrontAdminControllerPresignRideIconUploadResponse401 = {
+  data: void
+  status: 401
+}
+
+export type storefrontAdminControllerPresignRideIconUploadResponse403 = {
+  data: void
+  status: 403
+}
+
+export type storefrontAdminControllerPresignRideIconUploadResponse429 = {
+  data: void
+  status: 429
+}
+
+export type storefrontAdminControllerPresignRideIconUploadResponseSuccess = (storefrontAdminControllerPresignRideIconUploadResponse200) & {
+  headers: Headers;
+};
+export type storefrontAdminControllerPresignRideIconUploadResponseError = (storefrontAdminControllerPresignRideIconUploadResponse400 | storefrontAdminControllerPresignRideIconUploadResponse401 | storefrontAdminControllerPresignRideIconUploadResponse403 | storefrontAdminControllerPresignRideIconUploadResponse429) & {
+  headers: Headers;
+};
+
+export type storefrontAdminControllerPresignRideIconUploadResponse = (storefrontAdminControllerPresignRideIconUploadResponseSuccess | storefrontAdminControllerPresignRideIconUploadResponseError)
+
+export const getStorefrontAdminControllerPresignRideIconUploadUrl = () => {
+
+
+  
+
+  return `/api/storefront/assets/ride-icon/presign-upload`
+}
+
+export const storefrontAdminControllerPresignRideIconUpload = async (createStorefrontAssetPresignDto: CreateStorefrontAssetPresignDto, options?: RequestInit): Promise<storefrontAdminControllerPresignRideIconUploadResponse> => {
+  
+  return customInstance<storefrontAdminControllerPresignRideIconUploadResponse>(getStorefrontAdminControllerPresignRideIconUploadUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createStorefrontAssetPresignDto,)
+  }
+);}
+  
+
+
+
+export const getStorefrontAdminControllerPresignRideIconUploadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof storefrontAdminControllerPresignRideIconUpload>>, TError,{data: CreateStorefrontAssetPresignDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof storefrontAdminControllerPresignRideIconUpload>>, TError,{data: CreateStorefrontAssetPresignDto}, TContext> => {
+
+const mutationKey = ['storefrontAdminControllerPresignRideIconUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof storefrontAdminControllerPresignRideIconUpload>>, {data: CreateStorefrontAssetPresignDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  storefrontAdminControllerPresignRideIconUpload(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StorefrontAdminControllerPresignRideIconUploadMutationResult = NonNullable<Awaited<ReturnType<typeof storefrontAdminControllerPresignRideIconUpload>>>
+    export type StorefrontAdminControllerPresignRideIconUploadMutationBody = CreateStorefrontAssetPresignDto
+    export type StorefrontAdminControllerPresignRideIconUploadMutationError = ErrorType<void>
+
+    /**
+ * @summary Create signed upload URL for the storefront ride icon.
+ */
+export const useStorefrontAdminControllerPresignRideIconUpload = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof storefrontAdminControllerPresignRideIconUpload>>, TError,{data: CreateStorefrontAssetPresignDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof storefrontAdminControllerPresignRideIconUpload>>,
+        TError,
+        {data: CreateStorefrontAssetPresignDto},
+        TContext
+      > => {
+      return useMutation(getStorefrontAdminControllerPresignRideIconUploadMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Persist uploaded storefront ride icon metadata.
+ */
+export type storefrontAdminControllerCompleteRideIconUploadResponse200 = {
+  data: StorefrontAdminResponseDto
+  status: 200
+}
+
+export type storefrontAdminControllerCompleteRideIconUploadResponse400 = {
+  data: void
+  status: 400
+}
+
+export type storefrontAdminControllerCompleteRideIconUploadResponse401 = {
+  data: void
+  status: 401
+}
+
+export type storefrontAdminControllerCompleteRideIconUploadResponse403 = {
+  data: void
+  status: 403
+}
+
+export type storefrontAdminControllerCompleteRideIconUploadResponse429 = {
+  data: void
+  status: 429
+}
+
+export type storefrontAdminControllerCompleteRideIconUploadResponseSuccess = (storefrontAdminControllerCompleteRideIconUploadResponse200) & {
+  headers: Headers;
+};
+export type storefrontAdminControllerCompleteRideIconUploadResponseError = (storefrontAdminControllerCompleteRideIconUploadResponse400 | storefrontAdminControllerCompleteRideIconUploadResponse401 | storefrontAdminControllerCompleteRideIconUploadResponse403 | storefrontAdminControllerCompleteRideIconUploadResponse429) & {
+  headers: Headers;
+};
+
+export type storefrontAdminControllerCompleteRideIconUploadResponse = (storefrontAdminControllerCompleteRideIconUploadResponseSuccess | storefrontAdminControllerCompleteRideIconUploadResponseError)
+
+export const getStorefrontAdminControllerCompleteRideIconUploadUrl = () => {
+
+
+  
+
+  return `/api/storefront/assets/ride-icon/complete`
+}
+
+export const storefrontAdminControllerCompleteRideIconUpload = async (completeStorefrontAssetUploadDto: CompleteStorefrontAssetUploadDto, options?: RequestInit): Promise<storefrontAdminControllerCompleteRideIconUploadResponse> => {
+  
+  return customInstance<storefrontAdminControllerCompleteRideIconUploadResponse>(getStorefrontAdminControllerCompleteRideIconUploadUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      completeStorefrontAssetUploadDto,)
+  }
+);}
+  
+
+
+
+export const getStorefrontAdminControllerCompleteRideIconUploadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof storefrontAdminControllerCompleteRideIconUpload>>, TError,{data: CompleteStorefrontAssetUploadDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof storefrontAdminControllerCompleteRideIconUpload>>, TError,{data: CompleteStorefrontAssetUploadDto}, TContext> => {
+
+const mutationKey = ['storefrontAdminControllerCompleteRideIconUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof storefrontAdminControllerCompleteRideIconUpload>>, {data: CompleteStorefrontAssetUploadDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  storefrontAdminControllerCompleteRideIconUpload(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StorefrontAdminControllerCompleteRideIconUploadMutationResult = NonNullable<Awaited<ReturnType<typeof storefrontAdminControllerCompleteRideIconUpload>>>
+    export type StorefrontAdminControllerCompleteRideIconUploadMutationBody = CompleteStorefrontAssetUploadDto
+    export type StorefrontAdminControllerCompleteRideIconUploadMutationError = ErrorType<void>
+
+    /**
+ * @summary Persist uploaded storefront ride icon metadata.
+ */
+export const useStorefrontAdminControllerCompleteRideIconUpload = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof storefrontAdminControllerCompleteRideIconUpload>>, TError,{data: CompleteStorefrontAssetUploadDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof storefrontAdminControllerCompleteRideIconUpload>>,
+        TError,
+        {data: CompleteStorefrontAssetUploadDto},
+        TContext
+      > => {
+      return useMutation(getStorefrontAdminControllerCompleteRideIconUploadMutationOptions(options), queryClient);
     }

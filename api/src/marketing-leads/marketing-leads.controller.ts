@@ -28,7 +28,7 @@ export class MarketingLeadsController {
   createLead(
     @Body() dto: CreateMarketingLeadDto,
     @Ip() ipAddress: string | undefined
-  ): MarketingLeadResponseDto {
+  ): Promise<MarketingLeadResponseDto> {
     return this.marketingLeadsService.createLead(dto, ipAddress);
   }
 }

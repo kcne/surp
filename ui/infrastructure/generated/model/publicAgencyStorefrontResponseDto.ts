@@ -16,6 +16,7 @@ import type { PublicAgencyStorefrontResponseDtoLogoUrl } from './publicAgencySto
 import type { PublicAgencyStorefrontResponseDtoOgImageUrl } from './publicAgencyStorefrontResponseDtoOgImageUrl';
 import type { PublicAgencyStorefrontResponseDtoPrimaryColor } from './publicAgencyStorefrontResponseDtoPrimaryColor';
 import type { PublicAgencyStorefrontResponseDtoPublishedAt } from './publicAgencyStorefrontResponseDtoPublishedAt';
+import type { PublicAgencyStorefrontResponseDtoRideIconUrl } from './publicAgencyStorefrontResponseDtoRideIconUrl';
 import type { PublicAgencyStorefrontResponseDtoSeoDescription } from './publicAgencyStorefrontResponseDtoSeoDescription';
 import type { PublicAgencyStorefrontResponseDtoSeoTitle } from './publicAgencyStorefrontResponseDtoSeoTitle';
 import type { PublicAgencyStorefrontResponseDtoStatus } from './publicAgencyStorefrontResponseDtoStatus';
@@ -44,6 +45,8 @@ export interface PublicAgencyStorefrontResponseDto {
   logoUrl: PublicAgencyStorefrontResponseDtoLogoUrl;
   /** @nullable */
   logoAlt: PublicAgencyStorefrontResponseDtoLogoAlt;
+  /** @nullable */
+  rideIconUrl: PublicAgencyStorefrontResponseDtoRideIconUrl;
   /** @nullable */
   primaryColor: PublicAgencyStorefrontResponseDtoPrimaryColor;
   sectionsEnabled: StorefrontSectionsDto;

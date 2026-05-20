@@ -11,6 +11,7 @@ export const metadata: Metadata = buildMetadata({
 })
 
 export default function KontaktPage() {
+  const contactEmail = process.env.NEXT_PUBLIC_MARKETING_CONTACT_EMAIL ?? "contact@surp.rs"
   const breadcrumbs = breadcrumbJsonLd([
     { name: "SURP", path: "/" },
     { name: "Kontakt", path: "/kontakt" },
@@ -66,18 +67,18 @@ export default function KontaktPage() {
                 Direktan kontakt
               </h2>
               <div className="mt-5 space-y-4 text-sm text-[color:var(--mk-text-muted)]">
-                <a href="mailto:hello@surp.local" className="flex items-center gap-3 hover:text-[color:var(--mk-indigo-600)]">
+                <a href={`mailto:${contactEmail}`} className="flex items-center gap-3 hover:text-[color:var(--mk-indigo-600)]">
                   <Mail className="h-5 w-5" />
-                  hello@surp.local
+                  {contactEmail}
                 </a>
-                <a href="tel:+381600000000" className="flex items-center gap-3 hover:text-[color:var(--mk-indigo-600)]">
+                <a href="tel:+381654224233" className="flex items-center gap-3 hover:text-[color:var(--mk-indigo-600)]">
                   <Phone className="h-5 w-5" />
-                  +381 60 000 0000
+                  +381 65 422 4233
                 </a>
               </div>
               <div className="mt-6 rounded-2xl bg-[color:var(--mk-bg-alt)] p-4 text-sm leading-6 text-[color:var(--mk-text-muted)]">
                 Cal.com embed se dodaje cim se zakljuca javni demo link. Forma
-                vec prikuplja isti lead intake i prosledjuje ga API-ju.
+                vec prikuplja isti lead intake i salje ga na email.
               </div>
             </div>
           </div>

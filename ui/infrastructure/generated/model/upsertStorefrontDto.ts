@@ -16,6 +16,7 @@ export interface UpsertStorefrontDto {
   footerText?: string;
   logoUrl?: string;
   logoAlt?: string;
+  rideIconUrl?: string;
   primaryColor?: string;
   sectionsEnabled?: StorefrontSectionsInputDto;
   seoTitle?: string;

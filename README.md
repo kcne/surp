@@ -117,6 +117,13 @@ Required environment variables:
 5. `JWT_ACCESS_TOKEN_TTL_SECONDS=900`
 6. `JWT_REFRESH_TOKEN_TTL_SECONDS=1209600`
 7. `CORS_ALLOWED_ORIGINS=https://<your-ui-domain>`
+8. `SMTP_HOST=smtp.zoho.eu` (or the Zoho SMTP host for your account region)
+9. `SMTP_PORT=465`
+10. `SMTP_SECURE=true`
+11. `SMTP_USER=<your-zoho-email>`
+12. `SMTP_PASSWORD=<your-zoho-app-password>`
+13. `SMTP_FROM="SURP <your-zoho-email>"`
+14. `MARKETING_LEADS_EMAIL_TO=<lead-recipient-email>`
 
 ### UI service settings
 
@@ -140,6 +147,7 @@ Optional SEO and analytics environment variables:
 
 1. `NEXT_PUBLIC_SITE_URL=https://<your-ui-domain>`
 2. `NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX`
+3. `NEXT_PUBLIC_MARKETING_CONTACT_EMAIL=<public-contact-email>`
 
 ### Railway-native CI/CD model
 
