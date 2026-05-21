@@ -120,7 +120,8 @@ Required environment variables:
 8. `RESEND_API_KEY=<resend-api-key>`
 9. `RESEND_FROM="SURP <contact@surp.rs>"`
 10. `EMAIL_TIMEOUT_MS=10000`
-11. `MARKETING_LEADS_EMAIL_TO=<lead-recipient-email>`
+11. `MARKETING_EMAIL_LOGO_URL=https://surp.rs/logo.jpg`
+12. `MARKETING_LEADS_EMAIL_TO=<lead-recipient-email>`
 
 ### UI service settings
 

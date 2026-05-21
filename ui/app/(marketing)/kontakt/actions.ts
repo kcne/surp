@@ -75,6 +75,6 @@ export async function submitDemoLeadAction(
 
   return {
     status: "success",
-    message: "Hvala! Demo zahtev je poslat. Javljamo se sa predlogom termina.",
+    message: "Hvala! Zahtev je poslat. Javljamo se sa odgovorom i narednim koracima.",
   }
 }

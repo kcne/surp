@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef } from "react"
 import { useFormState, useFormStatus } from "react-dom"
 import { CheckCircle2, Send } from "lucide-react"
 import {
@@ -14,18 +15,52 @@ const initialState: DemoLeadActionState = {
 
 export function DemoForm() {
   const [state, formAction] = useFormState(submitDemoLeadAction, initialState)
+  const successPanelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (state.status === "success") {
+      successPanelRef.current?.focus()
+    }
+  }, [state.status])
+
+  if (state.status === "success") {
+    return (
+      <div
+        ref={successPanelRef}
+        className="mk-surface rounded-[2rem] p-6 text-center shadow-mk-lg outline-none md:p-8"
+        role="status"
+        aria-live="polite"
+        tabIndex={-1}
+      >
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-8 ring-emerald-50/60">
+          <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
+        </div>
+        <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)]">
+          Zahtev je poslat
+        </p>
+        <h2 className="mt-3 font-display text-3xl font-semibold tracking-[-0.025em] text-[color:var(--mk-navy-900)]">
+          Hvala na poverenju u SURP.
+        </h2>
+        <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-[color:var(--mk-text-muted)]">
+          Primili smo vas zahtev. Nas tim ce vas kontaktirati u najkracem
+          mogucem roku.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <form action={formAction} className="mk-surface rounded-[2rem] p-6 shadow-mk-lg md:p-8">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)]">
-          Demo zahtev
+          Kontakt zahtev
         </p>
         <h2 className="mt-3 font-display text-3xl font-semibold tracking-[-0.025em] text-[color:var(--mk-navy-900)]">
           Recite nam kako radi vasa agencija.
         </h2>
         <p className="mt-3 text-sm leading-6 text-[color:var(--mk-text-muted)]">
-          Odgovor stize sa predlogom termina i pitanjima za pripremu demo-a.
+          Napisite nam sta vam treba; javicemo se sa odgovorom i predlogom
+          narednih koraka.
         </p>
       </div>
 
@@ -79,16 +114,11 @@ export function DemoForm() {
         </div>
       </div>
 
-      {state.message ? (
+      {state.status === "error" && state.message ? (
         <p
-          className={`mt-5 rounded-2xl px-4 py-3 text-sm ${
-            state.status === "success"
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-red-50 text-red-700"
-          }`}
+          className="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700"
           role="status"
         >
-          {state.status === "success" ? <CheckCircle2 className="mr-2 inline h-4 w-4" /> : null}
           {state.message}
         </p>
       ) : null}

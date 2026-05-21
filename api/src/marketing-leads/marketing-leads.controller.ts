@@ -21,7 +21,7 @@ export class MarketingLeadsController {
   @Post()
   @HttpCode(201)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  @ApiOperation({ summary: 'Create a marketing demo lead.' })
+  @ApiOperation({ summary: 'Create a marketing contact request.' })
   @ApiCreatedResponse({ type: MarketingLeadResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })

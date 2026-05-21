@@ -81,10 +81,48 @@ enum StorefrontStatus {
   PUBLISHED
 }
 
+enum MarketingLeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  FOLLOW_UP
+  CONVERTED
+  NOT_INTERESTED
+  SPAM
+}
+
+enum MarketingLeadDeparturesPerDay {
+  ONE_TO_FIVE
+  SIX_TO_TWENTY
+  TWENTY_ONE_TO_FIFTY
+  FIFTY_PLUS
+}
+
 model HealthCheckLog {
   id        String   @id @default(cuid())
   message   String
   createdAt DateTime @default(now())
+}
+
+model MarketingLead {
+  id                      String                        @id @default(cuid())
+  status                  MarketingLeadStatus           @default(NEW)
+  name                    String
+  email                   String
+  agencyName              String
+  phone                   String?
+  departuresPerDay        MarketingLeadDeparturesPerDay
+  message                 String?                       @db.Text
+  ipAddress               String?
+  internalEmailSentAt     DateTime?
+  confirmationEmailSentAt DateTime?
+  lastEmailError          String?                       @db.Text
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@index([email])
 }
 
 model Tenant {

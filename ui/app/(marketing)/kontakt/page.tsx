@@ -6,7 +6,7 @@ import { breadcrumbJsonLd, buildMetadata, jsonLd } from "@/lib/seo"
 
 export const metadata: Metadata = buildMetadata({
   title: "Kontakt",
-  description: "Zakazite SURP demo i saznajte kako platforma moze da podrzi operacije vase autobuske agencije.",
+  description: "Kontaktirajte SURP tim i posaljite zahtev za razgovor, pitanja ili podrsku oko operacija vase autobuske agencije.",
   path: "/kontakt",
 })
 
@@ -20,17 +20,17 @@ export default function KontaktPage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbs) }} />
-      <MarketingSection className="bg-[color:var(--mk-bg)]">
-        <div className="mx-auto max-w-4xl text-center">
+      <MarketingSection className="bg-[color:var(--mk-bg)] py-12 md:py-16 lg:py-20">
+        <div className="mx-auto max-w-3xl text-center">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)]">
             Kontakt
           </p>
-          <h1 className="mt-4 font-display text-5xl font-bold tracking-[-0.035em] text-[color:var(--mk-navy-900)] md:text-6xl">
-            Zakazite demo za vasu autobusku agenciju.
+          <h1 className="mt-3 font-display text-4xl font-bold tracking-[-0.035em] text-[color:var(--mk-navy-900)] md:text-5xl">
+            Kontaktirajte SURP tim za vasu autobusku agenciju.
           </h1>
-          <p className="mt-6 text-lg leading-8 text-[color:var(--mk-text-muted)] md:text-xl">
-            Pokazujemo SURP kroz vase realne tokove: linije, rezervacije,
-            putnike, storefront i izvestaje.
+          <p className="mt-4 text-base leading-7 text-[color:var(--mk-text-muted)] md:text-lg">
+            Posaljite zahtev, pitanje ili kontekst vase agencije. Javljamo se sa
+            konkretnim predlogom narednih koraka.
           </p>
         </div>
       </MarketingSection>
@@ -45,14 +45,14 @@ export default function KontaktPage() {
                 <CalendarDays className="h-6 w-6" />
               </div>
               <h2 className="font-display text-3xl font-semibold tracking-[-0.025em]">
-                Sta dobijate na demo-u?
+                Kako mozemo da pomognemo?
               </h2>
               <ul className="mt-6 space-y-4">
                 {[
-                  "Pregled kako izgleda operativni dashboard",
-                  "Primer javnog storefront-a za agenciju",
+                  "Odgovor na pitanja o funkcionalnostima i procesu",
                   "Procenu implementacije prema vasem obimu",
-                  "Preporuku Starter / Pro / Enterprise plana",
+                  "Predlog narednih koraka za vasu agenciju",
+                  "Po potrebi, dogovor termina za kratak razgovor",
                 ].map((item) => (
                   <li key={item} className="flex gap-3 text-sm leading-6 text-slate-200">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[color:var(--mk-success)]" />
@@ -77,8 +77,8 @@ export default function KontaktPage() {
                 </a>
               </div>
               <div className="mt-6 rounded-2xl bg-[color:var(--mk-bg-alt)] p-4 text-sm leading-6 text-[color:var(--mk-text-muted)]">
-                Cal.com embed se dodaje cim se zakljuca javni demo link. Forma
-                vec prikuplja isti lead intake i salje ga na email.
+                Forma prikuplja osnovne informacije o zahtevu i salje ih SURP
+                timu na dalju komunikaciju.
               </div>
             </div>
           </div>

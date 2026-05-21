@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class MarketingLeadResponseDto {
-  @ApiProperty({ example: 'mlead_1715860000000_ab12cd34' })
+  @ApiProperty({ example: 'clwm0k6q40000s60m5zg7n3c2' })
   id!: string;
 
   @ApiProperty({ example: 'Marketing lead received.' })

@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.6.3",
   "scripts": {
-    "build": "nest build",
+    "build": "pnpm email:build && nest build",
     "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/src/main.js",
@@ -16,6 +16,7 @@
     "openapi:generate": "ts-node --transpile-only scripts/generate-openapi.ts",
     "openapi:lint": "pnpm openapi:generate && ts-node --transpile-only scripts/lint-openapi.ts",
     "quality:gates": "pnpm lint && pnpm test:contract && pnpm openapi:lint",
+    "email:build": "maizzle build production && ts-node --transpile-only scripts/generate-email-template-modules.ts",
     "postman:run": "npx --yes newman run postman/surp-api.postman_collection.json -e postman/surp-api.local.postman_environment.json",
     "postman:run:negative": "npx --yes newman run postman/surp-api.postman_collection.json -e postman/surp-api.local.postman_environment.json --folder \"Negative Scenarios\"",
     "prisma:generate": "prisma generate",
@@ -45,6 +46,8 @@
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
+    "@maizzle/cli": "2.0.0",
+    "@maizzle/framework": "5.5.0",
     "@nestjs/cli": "^11.0.5",
     "@nestjs/schematics": "^11.0.2",
     "@nestjs/testing": "^11.1.0",

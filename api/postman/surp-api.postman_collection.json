@@ -5325,7 +5325,7 @@
                   "});",
                   "const body = pm.response.json();",
                   "pm.test('Response has marketing lead id and message', function () {",
-                  "  pm.expect(body.id).to.match(/^mlead_/);",
+                  "  pm.expect(body.id).to.be.a('string').and.not.empty;",
                   "  pm.expect(body).to.have.property('message', 'Marketing lead received.');",
                   "});"
                 ]

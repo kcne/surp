@@ -1599,7 +1599,7 @@
             "description": "Rate limit exceeded."
           }
         },
-        "summary": "Create a marketing demo lead.",
+        "summary": "Create a marketing contact request.",
         "tags": [
           "Public · Marketing Leads"
         ]
@@ -5657,7 +5657,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "example": "mlead_1715860000000_ab12cd34"
+            "example": "clwm0k6q40000s60m5zg7n3c2"
           },
           "message": {
             "type": "string",

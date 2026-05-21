@@ -21,6 +21,7 @@ export const envValidationSchema = Joi.object({
   RESEND_API_KEY: Joi.string().trim().min(1).optional(),
   RESEND_FROM: Joi.string().trim().min(1).optional(),
   EMAIL_TIMEOUT_MS: Joi.number().integer().min(1000).max(60000).default(10000),
+  MARKETING_EMAIL_LOGO_URL: Joi.string().uri({ scheme: ['http', 'https'] }).optional(),
   MARKETING_LEADS_EMAIL_TO: Joi.when('NODE_ENV', {
     is: 'production',
     then: Joi.string().email().required(),

@@ -37,6 +37,7 @@ Required variables:
 | JWT_ACCESS_TOKEN_SECRET | Yes | n/a | HMAC secret used to sign access tokens |
 | JWT_ACCESS_TOKEN_TTL_SECONDS | No | 900 | Access token lifetime in seconds |
 | JWT_REFRESH_TOKEN_TTL_SECONDS | No | 1209600 | Refresh session lifetime in seconds |
+| MARKETING_EMAIL_LOGO_URL | No | https://surp.rs/logo.jpg | Public logo URL used in marketing contact emails |
 
 ## Quick Start (Local)
 
