@@ -1,85 +1,123 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import nodemailer, { type Transporter } from 'nodemailer';
 import { CreateMarketingLeadDto } from './dto/create-marketing-lead.dto';
 
-type MarketingLeadsMailConfig = {
-  host: string;
-  port: number;
-  secure: boolean;
-  user: string;
-  password: string;
+type ResendMailConfig = {
+  apiKey: string;
   from: string;
   to: string;
+  timeoutMs: number;
+};
+
+type EmailSendError = Error & {
+  status?: number;
+  body?: string;
 };
 
 @Injectable()
 export class MarketingLeadsEmailService {
   private readonly logger = new Logger(MarketingLeadsEmailService.name);
-  private readonly mailConfig = this.readMailConfig();
-  private readonly transporter: Transporter | null = this.mailConfig
-    ? nodemailer.createTransport({
-        host: this.mailConfig.host,
-        port: this.mailConfig.port,
-        secure: this.mailConfig.secure,
-        auth: {
-          user: this.mailConfig.user,
-          pass: this.mailConfig.password
-        }
-      })
-    : null;
+  private readonly resendConfig: ResendMailConfig | null;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) {
+    this.resendConfig = this.readResendConfig();
+  }
 
   async sendLeadNotification(
     id: string,
     dto: CreateMarketingLeadDto,
     ipAddress: string | undefined
   ): Promise<void> {
-    if (!this.transporter || !this.mailConfig) {
-      this.logger.warn('Marketing lead email is not configured. Lead was logged but no notification email was sent.');
+    const subject = `Novi SURP demo zahtev - ${dto.agencyName}`;
+    const text = this.buildTextBody(id, dto, ipAddress);
+    const html = this.buildHtmlBody(id, dto, ipAddress);
+
+    if (!this.resendConfig) {
+      const message = 'Marketing lead email is not configured. Lead was logged but no notification email was sent.';
+      const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+
+      if (isProduction) {
+        this.logger.error({
+          event: 'marketing_lead_email_not_configured',
+          message
+        });
+        throw new InternalServerErrorException('Demo zahtev nije poslat. Pokusajte ponovo kasnije.');
+      }
+
+      this.logger.warn(message);
       return;
     }
 
-    const subject = `Novi SURP demo zahtev - ${dto.agencyName}`;
-
     try {
-      await this.transporter.sendMail({
-        from: this.mailConfig.from,
-        to: this.mailConfig.to,
-        replyTo: dto.email,
-        subject,
-        text: this.buildTextBody(id, dto, ipAddress),
-        html: this.buildHtmlBody(id, dto, ipAddress)
-      });
+      await this.sendWithResend(this.resendConfig, dto.email, subject, text, html);
     } catch (error) {
-      this.logger.error(
-        'Failed to send marketing lead notification email.',
-        error instanceof Error ? error.stack : String(error)
-      );
+      const emailError = error as EmailSendError;
+      this.logger.error({
+        event: 'marketing_lead_email_failed',
+        provider: 'resend',
+        message: error instanceof Error ? error.message : String(error),
+        status: emailError.status,
+        body: emailError.body,
+        stack: error instanceof Error ? error.stack : undefined
+      });
       throw new InternalServerErrorException('Demo zahtev nije poslat. Pokusajte ponovo kasnije.');
     }
   }
 
-  private readMailConfig(): MarketingLeadsMailConfig | null {
-    const host = this.configService.get<string>('SMTP_HOST');
-    const user = this.configService.get<string>('SMTP_USER');
-    const password = this.configService.get<string>('SMTP_PASSWORD');
-    const from = this.configService.get<string>('SMTP_FROM');
+  private async sendWithResend(
+    config: ResendMailConfig,
+    replyTo: string,
+    subject: string,
+    text: string,
+    html: string
+  ): Promise<void> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: config.from,
+          to: [config.to],
+          reply_to: replyTo,
+          subject,
+          text,
+          html
+        }),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        const error = new Error(`Resend email API request failed with status ${response.status}.`) as EmailSendError;
+        error.status = response.status;
+        error.body = body;
+        throw error;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private readResendConfig(): ResendMailConfig | null {
+    const apiKey = this.configService.get<string>('RESEND_API_KEY');
+    const from = this.configService.get<string>('RESEND_FROM');
     const to = this.configService.get<string>('MARKETING_LEADS_EMAIL_TO');
 
-    if (!host || !user || !password || !from || !to) {
+    if (!apiKey || !from || !to) {
       return null;
     }
 
     return {
-      host,
-      port: this.configService.get<number>('SMTP_PORT') ?? 465,
-      secure: this.configService.get<boolean>('SMTP_SECURE') ?? true,
-      user,
-      password,
+      apiKey,
       from,
-      to
+      to,
+      timeoutMs: this.configService.get<number>('EMAIL_TIMEOUT_MS') ?? 10000
     };
   }
 

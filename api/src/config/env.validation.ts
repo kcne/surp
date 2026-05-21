@@ -18,28 +18,9 @@ export const envValidationSchema = Joi.object({
   TICKETS_DOWNLOAD_URL_TTL_SECONDS: Joi.number().integer().min(60).max(3600).default(600),
   STOREFRONT_MAX_IMAGE_BYTES: Joi.number().integer().positive().default(1048576),
   STOREFRONT_UPLOAD_URL_TTL_SECONDS: Joi.number().integer().min(60).max(3600).default(600),
-  SMTP_HOST: Joi.when('NODE_ENV', {
-    is: 'production',
-    then: Joi.string().hostname().required(),
-    otherwise: Joi.string().hostname().optional()
-  }),
-  SMTP_PORT: Joi.number().port().default(465),
-  SMTP_SECURE: Joi.boolean().default(true),
-  SMTP_USER: Joi.when('NODE_ENV', {
-    is: 'production',
-    then: Joi.string().trim().min(1).required(),
-    otherwise: Joi.string().trim().min(1).optional()
-  }),
-  SMTP_PASSWORD: Joi.when('NODE_ENV', {
-    is: 'production',
-    then: Joi.string().min(1).required(),
-    otherwise: Joi.string().min(1).optional()
-  }),
-  SMTP_FROM: Joi.when('NODE_ENV', {
-    is: 'production',
-    then: Joi.string().trim().min(1).required(),
-    otherwise: Joi.string().trim().min(1).optional()
-  }),
+  RESEND_API_KEY: Joi.string().trim().min(1).optional(),
+  RESEND_FROM: Joi.string().trim().min(1).optional(),
+  EMAIL_TIMEOUT_MS: Joi.number().integer().min(1000).max(60000).default(10000),
   MARKETING_LEADS_EMAIL_TO: Joi.when('NODE_ENV', {
     is: 'production',
     then: Joi.string().email().required(),
