@@ -4,18 +4,18 @@ import { MarketingSection } from "@/components/marketing/section"
 const problems = [
   {
     icon: ClipboardList,
-    title: "Rezervacije su rasute",
-    description: "Excel, WhatsApp, pozivi i papiri ne daju jedan pouzdan pregled zauzeca.",
+    title: "Nema centralizovanog izvora podataka za rezervacije",
+    description: "Tabele, poruke, pozivi i papiri su skloni greskama i teski za sinhronizaciju.",
   },
   {
     icon: TriangleAlert,
-    title: "Rizik dvostruke prodaje",
-    description: "Kada vise ljudi prodaje ista mesta, greske postaju skupe i vidljive putnicima.",
+    title: "Putnici ne prastaju greske",
+    description: "Putnici planiraju polaske unapred, zato greske u rezervacijama brzo postaju skupe i vidljive.",
   },
   {
     icon: PhoneCall,
-    title: "Putnici ocekuju online",
-    description: "Bez javnog sajta i online rezervacije, najvredniji intent odlazi konkurenciji.",
+    title: "Putnici ocekuju online rezervacije",
+    description: "Niko ne zeli da zove, salje poruke ili dolazi u agenciju ako mesto moze da rezervise online za par minuta.",
   },
 ]
 
@@ -23,15 +23,15 @@ export function ProblemFraming() {
   return (
     <MarketingSection>
       <div className="mx-auto max-w-3xl text-center">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)]">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-red-500">
           Problem
         </p>
-        <h2 className="mt-4 font-display text-4xl font-semibold tracking-[-0.025em] text-[color:var(--mk-navy-900)] md:text-5xl">
-          Excel, telefoni i blokcici nisu operativni sistem.
+        <h2 className="mt-4 font-display text-4xl font-semibold tracking-[-0.025em] text-red-950 md:text-5xl">
+          Tabele, poruke i pozivi nisu sistem na koji mozete da se oslonite.
         </h2>
         <p className="mt-4 text-lg leading-8 text-[color:var(--mk-text-muted)]">
-          Tradicionalni procesi rade dok je tim mali. Cim poraste broj linija,
-          sezona ili prodajnih kanala, pregled se gubi.
+          Sta najcesce usporava autobuske agencije kada poraste broj linija,
+          rezervacija i prodajnih kanala?
         </p>
       </div>
 

@@ -1,12 +1,12 @@
 ---
 title: "SEO za autobuske agencije: sta putnici stvarno traze"
-description: "Osnovna SEO mapa za autobuske agencije: linije, destinacije, vozni redovi i lokalni intent putnika."
+description: "Sta putnici traze na Google-u kada biraju autobusku liniju, vozni red ili online rezervaciju karte."
 date: "2026-05-16"
 category: "SEO"
 cover: "SEO"
 ---
 
-SEO za autobuske agencije ne pocinje blogom. Pocinje jasnim stranicama za linije, destinacije i informacije koje putnik trazi pre rezervacije.
+SEO za autobuske agencije ne pocinje blogom. Pocinje jasnim stranicama za linije, destinacije, vozne redove i informacije koje putnik trazi pre rezervacije.
 
 Ako putnik pretrazuje "autobus Beograd Novi Sad", stranica mora brzo da odgovori na tri pitanja: odakle se polazi, kada se polazi i kako se rezervise mesto.
 
@@ -17,14 +17,14 @@ Ako putnik pretrazuje "autobus Beograd Novi Sad", stranica mora brzo da odgovori
 - Kontakt strana sa telefonom, emailom i radnim vremenom.
 - FAQ sekcija za najcesca pitanja putnika.
 
-Ove strane donose vise vrednosti nego genericki tekstovi koji ne odgovaraju na konkretan intent.
+Ove strane donose vise vrednosti nego genericki tekstovi koji ne odgovaraju na konkretno pitanje putnika.
 
-## Tehnicki minimum
+## Osnovno sto sajt treba da ima
 
-Stranice treba da budu server-rendered, brze na mobilnom telefonu i sa jasnim naslovima. Svaka linija treba da ima jedinstven title, description i canonical URL.
+Stranice treba brzo da se otvaraju na telefonu i da imaju jasne naslove. Svaka linija treba da ima poseban naziv, opis i adresu strane.
 
-Slike moraju imati alt tekst, a javni sajt mora raditi bez preteskog JavaScript-a.
+Slike treba da imaju opis, a javni sajt agencije treba da bude brz i jednostavan za koriscenje.
 
-## Gde SURP pomaze
+## Kako softver pomaze
 
-SURP storefront je zamisljen tako da agencija dobije SEO osnovu bez posebnog marketing sajta: naziv, opis, linije, brending i strukturu koja se moze siriti kroz content.
+Softver za autobuske agencije pomaze da javni sajt ima naziv agencije, opis, linije, vozne redove, brending i osnovu koja se vremenom moze siriti novim sadrzajem.

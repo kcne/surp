@@ -9,14 +9,14 @@ export function CtaBand() {
       <div className="pointer-events-none absolute left-1/2 top-0 -z-10 h-72 w-72 -translate-x-1/2 rounded-full bg-[color:var(--mk-indigo-600)]/30 blur-3xl" />
       <div className="mx-auto max-w-3xl text-center">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-100)]">
-          Demo
+          Kontakt
         </p>
         <h2 className="mt-4 font-display text-4xl font-semibold tracking-[-0.025em] md:text-5xl">
-          Spremni da modernizujete svoju agenciju?
+          Spremni da olaksate rad agencije i uvedete vise organizacije?
         </h2>
         <p className="mt-5 text-lg leading-8 text-slate-300">
-          30 minuta demonstracije. Bez obaveze. Sa konkretnim odgovorom da li
-          SURP odgovara vasem modelu rada.
+          Javite nam se da zajedno prodjemo kroz vase trenutne procese i pokazemo
+          kako nas softver za autobuske agencije moze da vam ustedi vreme u svakodnevnom radu.
         </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <span className="mk-gradient-ring animate-gradient-border inline-flex w-full rounded-full p-[1px] motion-reduce:animate-none sm:w-auto">
@@ -24,7 +24,7 @@ export function CtaBand() {
               href="/kontakt"
               className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-[color:var(--mk-navy-900)] shadow-mk-glow transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--mk-navy-900)] sm:w-auto"
             >
-              Zakazite demo
+              Kontaktirajte nas
               <ArrowRight className="h-4 w-4" />
             </Link>
           </span>
@@ -32,7 +32,7 @@ export function CtaBand() {
             href="/sandbox-demo"
             className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/15 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--mk-navy-900)]"
           >
-            Isprobajte sandbox
+            Isprobajte aplikaciju
             <PlayCircle className="h-4 w-4" />
           </Link>
         </div>

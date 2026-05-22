@@ -3,7 +3,7 @@ import { MarketingSection } from "@/components/marketing/section"
 export const faqItems = [
   {
     question: "Koliko traje implementacija?",
-    answer: "Tipicna V1 implementacija traje do 14 dana za osnovne linije, korisnike, rezervacije i javni storefront.",
+    answer: "Prva verzija sa vasim podacima, linijama, korisnicima, rezervacijama i javnim izlogom obicno traje do 14 dana.",
   },
   {
     question: "Da li migrirate podatke iz postojeceg sistema?",
@@ -19,11 +19,11 @@ export const faqItems = [
   },
   {
     question: "Gde se cuvaju podaci?",
-    answer: "Planirana produkcija koristi managed cloud infrastrukturu i tenant-scoped podatke, uz GDPR-friendly pristup.",
+    answer: "Podaci se cuvaju bezbedno u cloudu, a podaci svake agencije su odvojeni od podataka drugih agencija.",
   },
   {
     question: "Sta ako zelimo sopstveni domen za javni sajt?",
-    answer: "Path-based storefront je osnovni model, a sopstveni domen moze biti enterprise opcija kada se zakljuca proces.",
+    answer: "Povezivanje sopstvenog domena za javni sajt uskoro dolazi na platformu.",
   },
 ]
 
@@ -33,14 +33,14 @@ export function FAQ() {
       <div className="mx-auto grid gap-12 lg:grid-cols-[0.8fr_1.2fr]">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)]">
-            FAQ
+            Najcesce postavljana pitanja
           </p>
           <h2 className="mt-4 font-display text-4xl font-semibold tracking-[-0.025em] text-[color:var(--mk-navy-900)] md:text-5xl">
-            Pitanja pre demo razgovora.
+            Odgovori pre nego sto pocnete sa koriscenjem.
           </h2>
           <p className="mt-4 text-lg leading-8 text-[color:var(--mk-text-muted)]">
-            Ako vec znate svoj trenutni proces, demo mozemo odmah vezati za vase
-            linije, rezervacije i prodajne kanale.
+            Saznajte kako funkcionisu implementacija, online rezervacije, podaci,
+            domen i podrska za vasu autobusku agenciju.
           </p>
         </div>
 

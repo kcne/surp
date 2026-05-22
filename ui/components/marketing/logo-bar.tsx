@@ -5,7 +5,7 @@ export function LogoBar() {
     <section className="border-y border-[color:var(--mk-border)] bg-white py-8">
       <div className="mx-auto w-full max-w-7xl px-6 md:px-8 lg:px-12">
         <p className="text-center text-sm font-medium text-[color:var(--mk-text-muted)]">
-          Napravljeno za agencije koje zele manje telefona, manje tabela i vise online rezervacija
+          Za autobuske agencije koje zele manje poziva, manje tabela i vise online rezervacija.
         </p>
         <div className="mt-6 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
           <div className="flex w-max gap-4 animate-marquee hover:[animation-play-state:paused] motion-reduce:animate-none md:gap-6">

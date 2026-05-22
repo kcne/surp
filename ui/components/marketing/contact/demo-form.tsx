@@ -39,11 +39,11 @@ export function DemoForm() {
           Zahtev je poslat
         </p>
         <h2 className="mt-3 font-display text-3xl font-semibold tracking-[-0.025em] text-[color:var(--mk-navy-900)]">
-          Hvala na poverenju u SURP.
+          Hvala, javicemo vam se uskoro.
         </h2>
         <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-[color:var(--mk-text-muted)]">
-          Primili smo vas zahtev. Nas tim ce vas kontaktirati u najkracem
-          mogucem roku.
+          Primili smo vasu poruku i uskoro cemo vam odgovoriti sa predlogom
+          narednih koraka.
         </p>
       </div>
     )
@@ -53,14 +53,14 @@ export function DemoForm() {
     <form action={formAction} className="mk-surface rounded-[2rem] p-6 shadow-mk-lg md:p-8">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)]">
-          Kontakt zahtev
+          Kontakt
         </p>
         <h2 className="mt-3 font-display text-3xl font-semibold tracking-[-0.025em] text-[color:var(--mk-navy-900)]">
-          Recite nam kako radi vasa agencija.
+          Recite nam sta zelite da unapredite.
         </h2>
         <p className="mt-3 text-sm leading-6 text-[color:var(--mk-text-muted)]">
-          Napisite nam sta vam treba; javicemo se sa odgovorom i predlogom
-          narednih koraka.
+          Napisite nam da li zelite bolji pregled rezervacija, online prodaju
+          karata, javni sajt agencije ili pomoc oko organizacije rada.
         </p>
       </div>
 
@@ -72,7 +72,7 @@ export function DemoForm() {
 
         <div>
           <label htmlFor="departuresPerDay" className="text-sm font-semibold text-[color:var(--mk-navy-900)]">
-            Broj polazaka dnevno
+            Koliko polazaka imate dnevno?
           </label>
           <select
             id="departuresPerDay"
@@ -90,13 +90,13 @@ export function DemoForm() {
             <option value="50+">50+</option>
           </select>
           <p className="mt-2 text-xs text-[color:var(--mk-text-subtle)]">
-            Gruba procena je dovoljna za prvi razgovor.
+            Dovoljna je okvirna procena.
           </p>
         </div>
 
         <div>
           <label htmlFor="message" className="text-sm font-semibold text-[color:var(--mk-navy-900)]">
-            Sta zelite da resite prvo?
+            Sta zelite prvo da sredite?
           </label>
           <textarea
             id="message"
@@ -104,7 +104,7 @@ export function DemoForm() {
             rows={5}
             maxLength={1200}
             className="mt-2 w-full rounded-2xl border border-[color:var(--mk-border)] bg-white px-4 py-3 text-sm text-[color:var(--mk-navy-900)] outline-none transition focus:border-[color:var(--mk-indigo-600)] focus:ring-4 focus:ring-[color:var(--mk-indigo-100)]"
-            placeholder="Npr. online rezervacije, bolji pregled polazaka, migracija iz Excel-a..."
+            placeholder="Npr. online rezervacije, bolji pregled polazaka, manje poziva, prelazak sa tabela..."
           />
         </div>
 
@@ -168,7 +168,7 @@ function SubmitButton() {
       aria-busy={pending}
       className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[color:var(--mk-indigo-600)] px-6 py-3 text-sm font-semibold text-white shadow-mk-glow transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--mk-indigo-600)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
     >
-      {pending ? "Slanje..." : "Posaljite zahtev"}
+      {pending ? "Slanje..." : "Posaljite poruku"}
       <Send className="h-4 w-4" />
     </button>
   )

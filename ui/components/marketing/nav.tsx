@@ -19,7 +19,7 @@ export function MarketingNav() {
       </a>
       <nav aria-label="Primarna navigacija" className="mx-auto w-full max-w-7xl px-6 md:px-8 lg:px-12">
         <div className="flex h-16 items-center justify-between">
-        <Link href="/" className="flex items-center" onClick={() => setIsOpen(false)}>
+        <Link href="/" className="flex items-center gap-3" onClick={() => setIsOpen(false)}>
           <Image
             src="/logo.jpg"
             alt="SVR logo"
@@ -28,6 +28,9 @@ export function MarketingNav() {
             className="h-10 w-auto"
             priority
           />
+          <span className="font-display text-xl font-bold tracking-[-0.02em] text-[color:var(--mk-navy-900)]">
+            SURP
+          </span>
         </Link>
 
         <div className="hidden items-center gap-8 md:flex">
@@ -48,7 +51,7 @@ export function MarketingNav() {
             className="hidden min-h-10 items-center gap-2 rounded-full border border-[color:var(--mk-indigo-100)] bg-[color:var(--mk-indigo-50)] px-4 text-sm font-semibold text-[color:var(--mk-indigo-600)] transition-colors hover:bg-[color:var(--mk-indigo-100)] lg:inline-flex"
           >
             <PlayCircle className="h-4 w-4" />
-            Sandbox demo
+            Isprobajte aplikaciju
           </Link>
           <Link
             href="/login"
@@ -60,7 +63,7 @@ export function MarketingNav() {
             href="/kontakt"
             className="hidden min-h-11 items-center gap-2 rounded-full bg-[color:var(--mk-indigo-600)] px-5 py-2.5 text-sm font-semibold text-white shadow-mk-glow transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--mk-indigo-600)] focus-visible:ring-offset-2 sm:inline-flex"
           >
-            Zakazite demo
+            Javite nam se
             <ArrowRight className="h-4 w-4" />
           </Link>
           <button
@@ -95,14 +98,14 @@ export function MarketingNav() {
                 onClick={() => setIsOpen(false)}
               >
                 <PlayCircle className="h-4 w-4" />
-                Isprobajte sandbox demo
+                Isprobajte aplikaciju
               </Link>
               <Link
                 href="/kontakt"
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[color:var(--mk-indigo-600)] px-5 py-3 text-sm font-semibold text-white shadow-mk-glow"
                 onClick={() => setIsOpen(false)}
               >
-                Zakazite demo
+                Javite nam se
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>

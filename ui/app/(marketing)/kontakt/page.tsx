@@ -6,7 +6,7 @@ import { breadcrumbJsonLd, buildMetadata, jsonLd } from "@/lib/seo"
 
 export const metadata: Metadata = buildMetadata({
   title: "Kontakt",
-  description: "Kontaktirajte SURP tim i posaljite zahtev za razgovor, pitanja ili podrsku oko operacija vase autobuske agencije.",
+  description: "Kontakt za softver za autobuske agencije. Javite nam se za online rezervacije, linije, polaske, javni sajt i bolju organizaciju rada.",
   path: "/kontakt",
 })
 
@@ -26,11 +26,11 @@ export default function KontaktPage() {
             Kontakt
           </p>
           <h1 className="mt-3 font-display text-4xl font-bold tracking-[-0.035em] text-[color:var(--mk-navy-900)] md:text-5xl">
-            Kontaktirajte SURP tim za vasu autobusku agenciju.
+            Kontaktirajte nas za softver za autobuske agencije.
           </h1>
           <p className="mt-4 text-base leading-7 text-[color:var(--mk-text-muted)] md:text-lg">
-            Posaljite zahtev, pitanje ili kontekst vase agencije. Javljamo se sa
-            konkretnim predlogom narednih koraka.
+            Javite nam kako trenutno vodite linije, polaske i rezervacije, pa
+            cemo zajedno proci kroz prve korake za uvodjenje sistema.
           </p>
         </div>
       </MarketingSection>
@@ -49,10 +49,10 @@ export default function KontaktPage() {
               </h2>
               <ul className="mt-6 space-y-4">
                 {[
-                  "Odgovor na pitanja o funkcionalnostima i procesu",
-                  "Procenu implementacije prema vasem obimu",
-                  "Predlog narednih koraka za vasu agenciju",
-                  "Po potrebi, dogovor termina za kratak razgovor",
+                  "Odgovor na pitanja o online rezervacijama i javnom sajtu",
+                  "Predlog plana prema broju linija, polazaka i korisnika",
+                  "Pomoc oko prvih koraka za vasu agenciju",
+                  "Dogovor termina za kratak razgovor ako vam odgovara",
                 ].map((item) => (
                   <li key={item} className="flex gap-3 text-sm leading-6 text-slate-200">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[color:var(--mk-success)]" />
@@ -77,8 +77,8 @@ export default function KontaktPage() {
                 </a>
               </div>
               <div className="mt-6 rounded-2xl bg-[color:var(--mk-bg-alt)] p-4 text-sm leading-6 text-[color:var(--mk-text-muted)]">
-                Forma prikuplja osnovne informacije o zahtevu i salje ih SURP
-                timu na dalju komunikaciju.
+                Forma nam pomaze da razumemo vasu agenciju i da vam odgovorimo
+                konkretnije vec u prvoj poruci.
               </div>
             </div>
           </div>

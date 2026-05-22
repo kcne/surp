@@ -81,27 +81,29 @@ export default function MarketingHomePage() {
       <FeaturesGrid />
       <FeatureSpotlight
         eyebrow="Online rezervacije"
-        title="Putnici rezervisu online. Tim vidi rezervaciju odmah."
-        description="SURP povezuje javni storefront i operativni dashboard, pa isti podaci zive u jednom sistemu."
+        title="Omogucite putnicima da pronadju vase polaske i rezervisu online."
+        description="Nas softver za autobuske agencije povezuje vas javni izlog i operativni panel, pa su svi podaci centralizovani."
         bullets={[
-          "SEO-friendly javni sajt za svaku agenciju",
+          "Javni sajt vase agencije koji putnici mogu lakse da pronadju na Google-u",
           "Brending kroz logo, boje, hero slike i sekcije",
           "Rezervacije ulaze direktno u operativni pregled",
         ]}
-        cta="Pogledajte funkcije"
+        cta="Vise informacija"
         href="/funkcije"
+        visual="storefront"
       />
       <FeatureSpotlight
-        eyebrow="Multi-brand operacije"
-        title="Vise brendova, jedan operativni pogled."
-        description="Za agencije koje vode vise linija, prodajnih kanala ili pravnih lica, SURP zadrzava tenant granice i cist pregled."
+        eyebrow="Multi-agencijske operacije"
+        title="Vise agencija, polazaka i prodaje pod jednim administrativnim panelom."
+        description="Za agencije koje vode vise linija, prodajnih kanala ili pravnih lica, SURP postavlja prave granice i daje cist pregled."
         bullets={[
-          "Tenant-scoped arhitektura za bezbedno razdvajanje podataka",
-          "Staff dashboard ostaje fokusiran na dnevni rad",
-          "Javni storefront za svaki brend bez dodatnog alata",
+          "Bezbedno razdvajanje podataka izmedju agencija i brendova",
+          "Operativni panel ostaje fokusiran na svakodnevni rad",
+          "Javni izlog za svaki brend bez dodatnog alata",
         ]}
-        cta="Procitajte za agencije"
+        cta="Procitajte vise za agencije"
         href="/za-agencije"
+        visual="multi-agency"
         dark
         reverse
       />

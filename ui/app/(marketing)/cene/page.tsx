@@ -6,20 +6,23 @@ import { MarketingSection } from "@/components/marketing/section"
 import { breadcrumbJsonLd, buildMetadata, jsonLd } from "@/lib/seo"
 
 export const metadata: Metadata = buildMetadata({
-  title: "Cene",
-  description: "Planovi za autobuske agencije: Starter, Pro i Enterprise, uz demo i personalizovanu ponudu.",
+  title: "Cena softvera za autobuske agencije",
+  description: "Cena softvera za autobuske agencije: Starter, Pro i Enterprise planovi za rezervacije, linije, korisnike i online prodaju karata.",
   path: "/cene",
 })
 
 const featureRows = [
-  ["Linije i stanice", true, true, true],
-  ["Manuelne rezervacije", true, true, true],
-  ["Javni storefront", false, true, true],
+  ["Neogranicen broj stanica", true, true, true],
+  ["Aktivne linije", "Do 10", "Neograniceno", "Neograniceno"],
+  ["Korisnicki racuni", "Do 10", "Neograniceno", "Neograniceno"],
+  ["Rucni unos rezervacija", true, true, true],
+  ["Javni sajt agencije", false, true, true],
   ["Online rezervacije", false, true, true],
-  ["Napredni izvestaji", false, true, true],
-  ["Vise brendova / tenant-a", false, false, true],
-  ["Custom integracije", false, false, true],
-  ["Prioritetni onboarding", false, true, true],
+  ["Izvestaji i pregled prodaje", false, true, true],
+  ["Vise agencija", false, false, true],
+  ["Integracije vasih API-ja", false, false, true],
+  ["Mogucnost vaseg hostinga, servera i baze", false, false, true],
+  ["Podrska", "Email", "Live na zahtev", "Prioritetna"],
 ]
 
 export default function CenePage() {
@@ -47,14 +50,14 @@ export default function CenePage() {
       <MarketingSection className="bg-[color:var(--mk-bg)]">
         <div className="mx-auto max-w-4xl text-center">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)]">
-            Cene
+            Cena
           </p>
           <h1 className="mt-4 font-display text-5xl font-bold tracking-[-0.035em] text-[color:var(--mk-navy-900)] md:text-6xl">
-            Planovi za svaku fazu rasta agencije.
+            Izaberite plan za vasu autobusku agenciju.
           </h1>
           <p className="mt-6 text-lg leading-8 text-[color:var(--mk-text-muted)] md:text-xl">
-            Cenu formiramo prema obimu linija, broju korisnika i potrebnom nivou
-            implementacije. Demo razgovor sluzi da dobijete preciznu ponudu.
+            Pocnite sa osnovnim paketom za rezervacije i linije, ili izaberite Pro
+            plan ako zelite online rezervacije, javni sajt i neogranicen broj korisnika.
           </p>
         </div>
       </MarketingSection>
@@ -66,21 +69,21 @@ export default function CenePage() {
       <MarketingSection className="bg-white">
         <div className="mb-10 max-w-3xl">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)]">
-            Poredjenje
+            Poredjenje planova
           </p>
           <h2 className="mt-4 font-display text-4xl font-semibold tracking-[-0.025em] text-[color:var(--mk-navy-900)] md:text-5xl">
-            Sta ulazi u koji plan?
+            Sta dobijate u svakom paketu?
           </h2>
           <p className="mt-4 text-lg leading-8 text-[color:var(--mk-text-muted)]">
-            Ovo je radni model pakovanja. Finalni obim dogovaramo kroz demo i
-            onboarding plan.
+            Uporedite pakete za softver za autobuske agencije i izaberite opciju
+            koja odgovara trenutnom obimu vaseg poslovanja.
           </p>
         </div>
         <div className="overflow-hidden rounded-3xl border border-[color:var(--mk-border)] shadow-mk-sm">
           <table className="w-full min-w-[720px] bg-white text-left text-sm">
             <thead className="bg-[color:var(--mk-bg-alt)] text-[color:var(--mk-navy-900)]">
               <tr>
-                <th className="px-5 py-4 font-semibold">Funkcija</th>
+                 <th className="px-5 py-4 font-semibold">Sta je ukljuceno</th>
                 <th className="px-5 py-4 text-center font-semibold">Starter</th>
                 <th className="px-5 py-4 text-center font-semibold">Pro</th>
                 <th className="px-5 py-4 text-center font-semibold">Enterprise</th>
@@ -92,10 +95,12 @@ export default function CenePage() {
                   <td className="px-5 py-4 font-medium text-[color:var(--mk-navy-900)]">{label}</td>
                   {[starter, pro, enterprise].map((included, index) => (
                     <td key={index} className="px-5 py-4 text-center">
-                      {included ? (
+                      {included === true ? (
                         <CheckCircle2 className="mx-auto h-5 w-5 text-[color:var(--mk-success)]" />
-                      ) : (
+                      ) : included === false ? (
                         <Minus className="mx-auto h-5 w-5 text-[color:var(--mk-text-subtle)]" />
+                      ) : (
+                        <span className="text-sm font-semibold text-[color:var(--mk-text-muted)]">{included}</span>
                       )}
                     </td>
                   ))}

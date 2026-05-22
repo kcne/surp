@@ -152,6 +152,23 @@
     animation: pulse-soft 2.4s ease-in-out infinite;
   }
 
+  .hero-aurora {
+    background:
+      radial-gradient(circle at 15% 20%, rgba(79, 70, 229, 0.18), transparent 28%),
+      radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.18), transparent 30%),
+      radial-gradient(circle at 30% 78%, rgba(16, 185, 129, 0.10), transparent 32%),
+      radial-gradient(circle at 78% 72%, rgba(245, 158, 11, 0.08), transparent 30%),
+      linear-gradient(120deg, rgba(255, 255, 255, 0), rgba(79, 70, 229, 0.06), rgba(14, 165, 233, 0.05), rgba(255, 255, 255, 0));
+    background-size: 150% 150%, 140% 140%, 160% 160%, 145% 145%, 240% 240%;
+    animation: hero-aurora 18s ease-in-out infinite alternate;
+  }
+
+  .hero-route-label {
+    fill: rgba(15, 23, 42, 0.48);
+    font-size: 11px;
+    font-weight: 800;
+  }
+
   @keyframes marquee {
     from {
       transform: translateX(0);
@@ -171,6 +188,24 @@
     50% {
       opacity: 0.55;
       transform: scale(1.22);
+    }
+  }
+
+  @keyframes hero-aurora {
+    0% {
+      background-position: 0% 20%;
+      filter: hue-rotate(0deg);
+    }
+
+    100% {
+      background-position: 100% 70%;
+      filter: hue-rotate(10deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-aurora {
+      animation: none;
     }
   }
 }
@@ -292,9 +327,3 @@
      }
    }
 }
-
-
-
-
-
-

@@ -11,7 +11,7 @@ export function BlogCard({ post }: BlogCardProps) {
     <article className="group overflow-hidden rounded-3xl border border-[color:var(--mk-border)] bg-white shadow-mk-sm transition duration-300 hover:-translate-y-1 hover:border-[color:var(--mk-indigo-100)] hover:shadow-mk-lg">
       <div className="relative flex h-44 items-end overflow-hidden bg-[linear-gradient(135deg,rgba(79,70,229,0.18),rgba(14,165,233,0.18))] p-6">
         <div className="absolute inset-0 opacity-[0.16] [background-image:radial-gradient(#0B1220_1px,transparent_1px)] [background-size:18px_18px]" />
-        <span className="absolute -right-3 -top-8 font-display text-8xl font-bold tracking-[-0.08em] text-white/55">
+        <span aria-hidden="true" className="absolute -right-3 -top-8 font-display text-8xl font-bold tracking-[-0.08em] text-white/55">
           {post.cover.slice(0, 2).toUpperCase()}
         </span>
         <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-[color:var(--mk-indigo-600)] shadow-mk-sm">

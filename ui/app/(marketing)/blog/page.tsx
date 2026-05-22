@@ -5,8 +5,8 @@ import { getAllBlogPosts } from "@/lib/blog"
 import { breadcrumbJsonLd, buildMetadata, jsonLd } from "@/lib/seo"
 
 export const metadata: Metadata = buildMetadata({
-  title: "Blog",
-  description: "Saveti o digitalizaciji autobuskih agencija, online rezervacijama i boljem vodjenju linija.",
+  title: "Blog za autobuske agencije",
+  description: "Saveti za autobuske agencije o online rezervacijama, prodaji karata preko interneta, voznim redovima i boljoj organizaciji rada.",
   path: "/blog",
 })
 
@@ -26,11 +26,11 @@ export default function BlogPage() {
             Blog
           </p>
           <h1 className="mt-4 font-display text-5xl font-bold tracking-[-0.035em] text-[color:var(--mk-navy-900)] md:text-6xl">
-            Prakticni vodici za autobuske agencije.
+            Saveti za bolju organizaciju autobuske agencije.
           </h1>
           <p className="mt-6 text-lg leading-8 text-[color:var(--mk-text-muted)] md:text-xl">
-            Pisemo o online rezervacijama, SEO-u, digitalizaciji operacija i
-            procesima koji pomazu agencijama da rastu bez operativnog haosa.
+            Pisemo o online rezervacijama, prodaji karata preko interneta,
+            voznim redovima, javnom sajtu agencije i svakodnevnoj organizaciji rada.
           </p>
         </div>
       </MarketingSection>
@@ -48,7 +48,7 @@ export default function BlogPage() {
               Uskoro dolaze prvi clanci.
             </h2>
             <p className="mt-3 text-sm text-[color:var(--mk-text-muted)]">
-              Pripremamo vodice o online rezervacijama, SEO-u i operacijama.
+              Pripremamo tekstove o online rezervacijama, javnom sajtu agencije i boljoj organizaciji rada.
             </p>
           </div>
         )}

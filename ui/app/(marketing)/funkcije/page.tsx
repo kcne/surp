@@ -6,8 +6,8 @@ import { MarketingSection } from "@/components/marketing/section"
 import { breadcrumbJsonLd, buildMetadata, jsonLd } from "@/lib/seo"
 
 export const metadata: Metadata = buildMetadata({
-  title: "Funkcije",
-  description: "Softver za autobuske agencije: linije, vozni redovi, rezervacije, putnici, storefront i izvestaji.",
+  title: "Softver za autobuske agencije",
+  description: "Alati za autobuske agencije: linije, polasci, rezervacije, putnici, javni sajt i prodaja karata online.",
   path: "/funkcije",
 })
 
@@ -16,50 +16,54 @@ const featureDetails = [
     icon: Route,
     title: "Linije i stanice",
     description:
-      "Modelujte stvarnu mrezu prevoza: polazne i dolazne stanice, medjustanice, redosled, segmente i poslovna pravila.",
-    bullets: ["Jedan izvor istine za rute", "Spremno za cene po segmentu", "Pregled koji razume operativni tim"],
+      "Unesite linije, stanice, medjustanice i cene onako kako stvarno radi vasa autobuska agencija.",
+    bullets: ["Neogranicen broj stanica", "Cene i pravila po liniji", "Vasi podaci, vasa kontrola"],
   },
   {
     icon: Calendar,
     title: "Vozni redovi",
     description:
-      "Planirajte redovne, sezonske i ad-hoc polaske bez rucnog preslikavanja podataka kroz tabele.",
-    bullets: ["Dnevni i sezonski rasporedi", "Brze izmene polazaka", "Manje gresaka u komunikaciji"],
+      "Vodite polaske, dane voznje i sezonske izmene bez prepisivanja kroz tabele i poruke.",
+    bullets: ["Redovni i sezonski polasci", "Brze izmene voznih redova", "Jasan pregled za ceo tim"],
   },
   {
     icon: Ticket,
     title: "Rezervacije",
     description:
-      "Centralizujte manuelne i online rezervacije tako da tim u svakom trenutku zna sta je prodato, rezervisano i slobodno.",
-    bullets: ["Pregled zauzeca po polasku", "Manuelni unos iz call centra", "Online tok kroz storefront"],
+      "Sve rezervacije drzite na jednom mestu, bilo da dolaze telefonom, porukom, iz agencije ili preko interneta.",
+    bullets: ["Pregled slobodnih i zauzetih mesta", "Rucni unos rezervacija", "Online rezervacije sa javnog sajta"],
   },
   {
     icon: Users,
     title: "Putnici",
     description:
-      "Gradite bazu putnika i istoriju rezervacija kao osnovu za bolju podrsku, prodaju i buduce loyalty funkcije.",
-    bullets: ["Pretraga i istorija", "Manje duplih unosa", "Bolji kontekst za podrsku"],
+      "Sacuvajte podatke o putnicima i istoriju rezervacija kako bi vas tim brze pronasao informacije kada su potrebne.",
+    bullets: ["Baza putnika", "Istorija rezervacija", "Manje duplih unosa"],
   },
   {
     icon: Globe,
     title: "Javni sajt agencije",
     description:
-      "Svaka agencija dobija storefront koji moze da nosi logo, boje, hero poruku, slike i online rezervacije.",
-    bullets: ["SEO-friendly SSR strane", "Brending po agenciji", "Rezervacije povezane sa dashboard-om"],
+      "Napravite javni sajt za agenciju na kome putnici mogu da pronadju polaske i posalju online rezervaciju.",
+    bullets: [
+      "Sajt koji putnici mogu lakse da pronadju na Google-u",
+      "Logo, boje i slike vase agencije",
+      "Rezervacije odmah ulaze u operativni panel",
+    ],
   },
   {
     icon: BarChart3,
     title: "Izvestaji",
     description:
-      "Pratite popunjenost, prihode po liniji i operativne trendove bez rucnog spajanja vise izvora.",
-    bullets: ["Popunjenost po polasku", "Top destinacije", "Osnova za revenue odluke"],
+      "Pratite popunjenost polazaka, prihode i najtrazenije linije bez rucnog sabiranja iz vise tabela.",
+    bullets: ["Popunjenost po polasku", "Prihodi po liniji", "Najtrazenije destinacije"],
   },
 ]
 
 export default function FunkcijePage() {
   const breadcrumbs = breadcrumbJsonLd([
     { name: "SURP", path: "/" },
-    { name: "Funkcije", path: "/funkcije" },
+    { name: "Softver", path: "/funkcije" },
   ])
 
   return (
@@ -68,14 +72,14 @@ export default function FunkcijePage() {
       <MarketingSection className="bg-[color:var(--mk-bg)]">
         <div className="mx-auto max-w-4xl text-center">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)]">
-            Funkcije
+            Alati za autobuske agencije
           </p>
           <h1 className="mt-4 font-display text-5xl font-bold tracking-[-0.035em] text-[color:var(--mk-navy-900)] md:text-6xl">
-            Softver za autobuske agencije koji pokriva ceo operativni tok.
+            Sve sto vam treba za online vodjenje autobuske agencije.
           </h1>
           <p className="mt-6 text-lg leading-8 text-[color:var(--mk-text-muted)] md:text-xl">
-            SURP spaja planiranje linija, rezervacije, putnike, javni sajt i
-            izvestaje u jedan sistem koji je razumljiv operativi i koristan prodaji.
+            Nas softver za autobuske agencije pomaze da upravljate linijama,
+            polascima, rezervacijama, putnicima i prodajom karata preko interneta.
           </p>
         </div>
       </MarketingSection>
@@ -112,18 +116,18 @@ export default function FunkcijePage() {
         <div className="grid items-center gap-10 rounded-[2rem] border border-[color:var(--mk-border)] bg-[color:var(--mk-bg-alt)] p-8 shadow-mk-md lg:grid-cols-[1fr_auto] lg:p-10">
           <div>
             <h2 className="font-display text-3xl font-semibold tracking-[-0.025em] text-[color:var(--mk-navy-900)]">
-              Niste sigurni koje funkcije su vam potrebne prvo?
+              Niste sigurni odakle da pocnete?
             </h2>
             <p className="mt-3 text-base leading-7 text-[color:var(--mk-text-muted)]">
-              Demo mozemo voditi kroz vas konkretan proces: broj linija, nacin
-              prodaje, trenutne tabele i kanale rezervacije.
+              Javite nam se da prodjemo kroz vase trenutne linije, rezervacije i
+              nacin prodaje, pa cemo predloziti prvi korak za uvodjenje softvera.
             </p>
           </div>
           <Link
             href="/kontakt"
             className="inline-flex min-h-12 items-center justify-center rounded-full bg-[color:var(--mk-indigo-600)] px-6 py-3 text-sm font-semibold text-white shadow-mk-glow"
           >
-            Zakazite demo
+            Kontaktirajte nas
           </Link>
         </div>
       </MarketingSection>

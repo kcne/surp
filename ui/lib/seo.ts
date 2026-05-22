@@ -14,7 +14,7 @@ export const siteConfig = {
     "prodaja autobuskih karata",
   ],
   nav: [
-    { href: "/funkcije", label: "Funkcije" },
+    { href: "/funkcije", label: "Softver" },
     { href: "/za-agencije", label: "Za agencije" },
     { href: "/cene", label: "Cene" },
     { href: "/blog", label: "Blog" },
