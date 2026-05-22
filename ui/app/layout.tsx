@@ -24,7 +24,7 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: {
-    default: "SURP - Sistem za autobuske agencije",
+    default: "Softver za autobuske agencije",
     template: "%s - SURP",
   },
   description: siteConfig.description,
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     canonical: absoluteUrl("/"),
   },
   openGraph: {
-    title: "SURP - Sistem za autobuske agencije",
+    title: "Softver za autobuske agencije",
     description: siteConfig.description,
     url: absoluteUrl("/"),
     siteName: siteConfig.name,
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "SURP - Sistem za autobuske agencije",
+    title: "Softver za autobuske agencije",
     description: siteConfig.description,
     images: [absoluteUrl("/marketing/og.svg")],
   },

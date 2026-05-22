@@ -4,7 +4,7 @@ export const siteConfig = {
   name: "SURP",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
   description:
-    "SURP objedinjuje linije, vozne redove, rezervacije, putnike i javni sajt autobuske agencije.",
+    "Softver za autobuske agencije za online rezervacije, prodaju karata, linije, polaske, putnike i javni sajt. Sve za bolju organizaciju rada u jednom sistemu.",
   keywords: [
     "softver za autobuske agencije",
     "online rezervacije autobuskih karata",

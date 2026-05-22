@@ -10,11 +10,15 @@ import { ProblemFraming } from "@/components/marketing/problem-framing"
 import { Testimonials } from "@/components/marketing/testimonials"
 import { absoluteUrl, buildMetadata, jsonLd, siteConfig } from "@/lib/seo"
 
-export const metadata: Metadata = buildMetadata({
-  title: "Sistem za autobuske agencije",
-  description:
-    "SURP objedinjuje linije, vozne redove, rezervacije, putnike i javni sajt autobuske agencije.",
-})
+export const metadata: Metadata = {
+  ...buildMetadata({
+    title: "Softver za autobuske agencije",
+    description: siteConfig.description,
+  }),
+  title: {
+    absolute: "Softver za autobuske agencije",
+  },
+}
 
 export default function MarketingHomePage() {
   const structuredData = {
