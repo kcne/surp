@@ -124,7 +124,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   }, [reservations, selectedRideInstance, selectedSeats])
 
   useEffect(() => {
-    const queryDate = searchParams.get("date")
+    const queryDate = searchParams?.get("date")
     if (queryDate) {
       const parsedFromQuery = new Date(`${queryDate}T00:00:00`)
       if (!Number.isNaN(parsedFromQuery.getTime())) {

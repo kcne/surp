@@ -12,6 +12,7 @@ const privateRoutePrefixes = [
   "/schedule",
   "/stations",
   "/storefront",
+  "/superadmin",
   "/tickets",
   "/sandbox-demo",
 ]
@@ -39,6 +40,7 @@ export const config = {
     "/schedule/:path*",
     "/stations/:path*",
     "/storefront/:path*",
+    "/superadmin/:path*",
     "/tickets/:path*",
   ],
 }

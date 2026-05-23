@@ -1,8 +1,9 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { MarketingLeadStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
-export class ListPlatformTenantsQueryDto {
+export class ListPlatformLeadsQueryDto {
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
@@ -18,17 +19,28 @@ export class ListPlatformTenantsQueryDto {
   @Max(100)
   pageSize?: number;
 
-  @ApiPropertyOptional({ example: true })
+  @ApiPropertyOptional({ enum: MarketingLeadStatus })
   @IsOptional()
-  @Type(() => Boolean)
-  @IsBoolean()
-  isActive?: boolean;
+  @IsEnum(MarketingLeadStatus)
+  status?: MarketingLeadStatus;
 
-  @ApiPropertyOptional({ example: 'acme' })
+  @ApiPropertyOptional({ example: 'drina' })
   @IsOptional()
   @IsString()
   @MaxLength(120)
   search?: string;
+
+  @ApiPropertyOptional({ example: 'superadmin-1' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  assigneeUserId?: string;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  converted?: boolean;
 
   @ApiPropertyOptional({ example: '2026-05-01' })
   @IsOptional()

@@ -114,6 +114,10 @@ model MarketingLead {
   departuresPerDay        MarketingLeadDeparturesPerDay
   message                 String?                       @db.Text
   ipAddress               String?
+  notes                   String?                       @db.Text
+  assigneeUserId          String?
+  convertedTenantId       String?                       @unique
+  convertedAt             DateTime?
   internalEmailSentAt     DateTime?
   confirmationEmailSentAt DateTime?
   lastEmailError          String?                       @db.Text
@@ -123,6 +127,8 @@ model MarketingLead {
   @@index([status, createdAt])
   @@index([createdAt])
   @@index([email])
+  @@index([assigneeUserId])
+  @@index([convertedTenantId])
 }
 
 model Tenant {
@@ -528,5 +534,25 @@ model AuditEvent {
   @@index([tenantId, type])
   @@index([actorUserId])
   @@index([targetUserId])
+  @@index([createdAt])
+}
+
+model PlatformAuditEvent {
+  id             String   @id @default(cuid())
+  actorUserId    String
+  action         String
+  targetType     String
+  targetId       String
+  targetTenantId String?
+  targetLeadId   String?
+  targetUserId   String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([actorUserId])
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
+  @@index([targetTenantId])
+  @@index([targetLeadId])
   @@index([createdAt])
 }

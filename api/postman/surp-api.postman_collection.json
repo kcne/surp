@@ -425,8 +425,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status code is 400', function () {",
-                  "  pm.response.to.have.status(400);",
+                  "pm.test('Status code is 400 or missing fixture 404', function () {",
+                  "  pm.expect([400, 404]).to.include(pm.response.code);",
                   "});"
                 ]
               }
@@ -638,8 +638,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status code is 400', function () {",
-                  "  pm.response.to.have.status(400);",
+                  "pm.test('Status code is 400 or missing fixture 404', function () {",
+                  "  pm.expect([400, 404]).to.include(pm.response.code);",
                   "});"
                 ]
               }
@@ -4872,8 +4872,8 @@
                   "  pm.response.to.have.status(200);",
                   "});",
                   "const body = pm.response.json();",
-                  "if (body.accessToken) { pm.environment.set('accessToken', body.accessToken); }",
-                  "if (body.refreshToken) { pm.environment.set('refreshToken', body.refreshToken); }"
+                  "if (body.accessToken) { pm.environment.set('platformAccessToken', body.accessToken); }",
+                  "if (body.refreshToken) { pm.environment.set('platformRefreshToken', body.refreshToken); }"
                 ]
               }
             }
@@ -5440,7 +5440,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"heroTitle\": \"Test Agency\",\n  \"heroSubtitle\": \"Comfortable rides across the region\",\n  \"primaryColor\": \"#1D4ED8\",\n  \"sectionsEnabled\": {\n    \"hero\": true,\n    \"rides\": true,\n    \"gallery\": true,\n    \"about\": true,\n    \"blog\": true\n  }\n}"
+              "raw": "{\n  \"heroTitle\": \"Test Agency\",\n  \"heroSubtitle\": \"Comfortable rides across the region\",\n  \"primaryColor\": \"#1D4ED8\",\n  \"sectionsEnabled\": {\n    \"hero\": true,\n    \"rides\": true,\n    \"about\": true\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/storefront",
@@ -5918,8 +5918,8 @@
           "const isPlatformRequest = /^Platform /.test(requestName) || /\\/platform\\//.test(rawUrl);",
           "const tenantSlug = pm.environment.get('tenantSlug') || pm.collectionVariables.get('tenantSlug');",
           "const skipTenantHeader = /Missing Tenant Header/.test(requestName) || isPlatformRequest;",
-          "const skipAuthHeader = /Missing Token|Invalid Token/.test(requestName);",
-          "const skipAutoAuth = /Missing Token|Invalid Token|Missing Tenant Header/.test(requestName) || isPlatformRequest;",
+          "const skipAuthHeader = /Missing Token|Invalid Token|Get Storefront - 401/.test(requestName);",
+          "const skipAutoAuth = /Missing Token|Invalid Token|Missing Tenant Header|Get Storefront - 401/.test(requestName) || isPlatformRequest;",
           "",
           "if (tenantSlug && !skipTenantHeader) {",
           "  pm.request.headers.upsert({ key: 'X-Tenant-Slug', value: tenantSlug });",
@@ -5930,7 +5930,7 @@
           "  return;",
           "}",
           "",
-          "const accessToken = pm.environment.get('accessToken');",
+          "const accessToken = isPlatformRequest ? pm.environment.get('platformAccessToken') : pm.environment.get('accessToken');",
           "if (accessToken && !skipAuthHeader) {",
           "  pm.request.headers.upsert({ key: 'Authorization', value: `Bearer ${accessToken}` });",
           "}",

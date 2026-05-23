@@ -1,8 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
-export class ListPlatformTenantsQueryDto {
+export class ListPlatformAuditQueryDto {
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
@@ -18,17 +18,29 @@ export class ListPlatformTenantsQueryDto {
   @Max(100)
   pageSize?: number;
 
-  @ApiPropertyOptional({ example: true })
+  @ApiPropertyOptional({ example: 'TENANT_UPDATED' })
   @IsOptional()
-  @Type(() => Boolean)
-  @IsBoolean()
-  isActive?: boolean;
+  @IsString()
+  @MaxLength(80)
+  action?: string;
 
-  @ApiPropertyOptional({ example: 'acme' })
+  @ApiPropertyOptional({ example: 'TENANT' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  targetType?: string;
+
+  @ApiPropertyOptional({ example: 'clx123' })
   @IsOptional()
   @IsString()
   @MaxLength(120)
-  search?: string;
+  actorUserId?: string;
+
+  @ApiPropertyOptional({ example: 'clx123' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  targetTenantId?: string;
 
   @ApiPropertyOptional({ example: '2026-05-01' })
   @IsOptional()

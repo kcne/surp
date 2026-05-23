@@ -9,6 +9,9 @@ import { InternalSandboxModule } from './internal-sandbox/internal-sandbox.modul
 import { LinesModule } from './lines/lines.module';
 import { MarketingLeadsModule } from './marketing-leads/marketing-leads.module';
 import { PassengersModule } from './passengers/passengers.module';
+import { PlatformAnalyticsModule } from './platform-analytics/platform-analytics.module';
+import { PlatformAuditModule } from './platform-audit/platform-audit.module';
+import { PlatformLeadsModule } from './platform-leads/platform-leads.module';
 import { PlatformTenantsModule } from './platform-tenants/platform-tenants.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PublicStorefrontModule } from './public-storefront/public-storefront.module';
@@ -40,6 +43,9 @@ import { UsersModule } from './users/users.module';
     StationsModule,
     LinesModule,
     MarketingLeadsModule,
+    PlatformAnalyticsModule,
+    PlatformAuditModule,
+    PlatformLeadsModule,
     PassengersModule,
     PlatformTenantsModule,
     RidesModule,

@@ -71,7 +71,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (hasHydrated && isAuthenticated && !isSandboxLogin) {
-      router.replace("/reservations")
+      const currentUser = useAuthStore.getState().user
+      router.replace(currentUser?.role === "SUPERADMIN" ? "/superadmin/overview" : "/reservations")
     }
   }, [hasHydrated, isAuthenticated, isSandboxLogin, router])
 
@@ -95,7 +96,8 @@ export default function LoginPage() {
       clearError()
       await login(data.email, data.password, data.tenantSlug)
       toast.success("Uspešno ste se prijavili!")
-      router.push("/reservations")
+      const currentUser = useAuthStore.getState().user
+      router.push(currentUser?.role === "SUPERADMIN" ? "/superadmin/overview" : "/reservations")
     } catch (err) {
       toast.error("Greška pri prijavljivanju. Molimo pokušajte ponovo.")
     }
@@ -264,7 +266,6 @@ export default function LoginPage() {
     </div>
   )
 }
-
 
 
 

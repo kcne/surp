@@ -26,6 +26,37 @@ describe('PlatformTenantsController (e2e)', () => {
       update: jest.fn()
     },
     user: {
+      count: jest.fn(),
+      findFirst: jest.fn(),
+      create: jest.fn()
+    },
+    reservation: {
+      count: jest.fn(),
+      findFirst: jest.fn()
+    },
+    ride: {
+      count: jest.fn(),
+      findFirst: jest.fn()
+    },
+    line: {
+      count: jest.fn(),
+      findFirst: jest.fn()
+    },
+    passenger: {
+      count: jest.fn(),
+      findFirst: jest.fn()
+    },
+    ticket: {
+      count: jest.fn(),
+      findFirst: jest.fn()
+    },
+    station: {
+      findFirst: jest.fn()
+    },
+    agencyStorefront: {
+      findUnique: jest.fn()
+    },
+    platformAuditEvent: {
       create: jest.fn()
     }
   };
@@ -60,7 +91,13 @@ describe('PlatformTenantsController (e2e)', () => {
       throw new Error('invalid token');
     });
 
-    prismaMock.$transaction.mockResolvedValue([[], 0]);
+    prismaMock.$transaction.mockImplementation((input: unknown) => {
+      if (typeof input === 'function') {
+        return input(prismaMock);
+      }
+
+      return Promise.all(input as Promise<unknown>[]);
+    });
 
     prismaMock.tenant.create.mockResolvedValue({
       id: 'tenant-acme',
@@ -104,6 +141,25 @@ describe('PlatformTenantsController (e2e)', () => {
     );
 
     prismaMock.tenant.count.mockResolvedValue(1);
+    prismaMock.user.count.mockResolvedValue(2);
+    prismaMock.reservation.count.mockResolvedValue(3);
+    prismaMock.ride.count.mockResolvedValue(4);
+    prismaMock.line.count.mockResolvedValue(5);
+    prismaMock.passenger.count.mockResolvedValue(6);
+    prismaMock.ticket.count.mockResolvedValue(1);
+    prismaMock.agencyStorefront.findUnique.mockResolvedValue({
+      status: 'PUBLISHED',
+      publishedAt: updatedAt
+    });
+    prismaMock.platformAuditEvent.create.mockResolvedValue({ id: 'platform-audit-1' });
+
+    prismaMock.user.findFirst.mockResolvedValue({ updatedAt });
+    prismaMock.station.findFirst.mockResolvedValue({ updatedAt });
+    prismaMock.line.findFirst.mockResolvedValue({ updatedAt });
+    prismaMock.passenger.findFirst.mockResolvedValue({ updatedAt });
+    prismaMock.ride.findFirst.mockResolvedValue({ updatedAt });
+    prismaMock.reservation.findFirst.mockResolvedValue({ updatedAt });
+    prismaMock.ticket.findFirst.mockResolvedValue({ updatedAt });
 
     prismaMock.tenant.findUnique.mockImplementation(({ where }: { where: { id?: string } }) => {
       if (where?.id === 'tenant-acme' || where?.id === 'tenant-inactive') {

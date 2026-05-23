@@ -106,10 +106,11 @@ export class PlatformTenantsController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
   update(
+    @Req() request: RequestWithAuth,
     @Param('id') id: string,
     @Body() dto: UpdatePlatformTenantDto
   ): Promise<PlatformTenantResponseDto> {
-    return this.platformTenantsService.update(id, dto);
+    return this.platformTenantsService.update(request.auth!, id, dto);
   }
 
   @Patch(':id/activate')
@@ -119,8 +120,11 @@ export class PlatformTenantsController {
   @ApiNotFoundResponse({ description: 'Tenant not found.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
-  activate(@Param('id') id: string): Promise<PlatformTenantResponseDto> {
-    return this.platformTenantsService.activate(id);
+  activate(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string
+  ): Promise<PlatformTenantResponseDto> {
+    return this.platformTenantsService.activate(request.auth!, id);
   }
 
   @Patch(':id/deactivate')

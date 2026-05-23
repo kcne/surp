@@ -21,8 +21,8 @@ import { useRideInstanceSeatMapPage } from "@/hooks/useRideInstanceSeatMapPage"
 import { formatDateDisplay, formatTimeDisplay } from "@/utils/dateHelpers"
 
 export default function SeatMapPage() {
-  const params = useParams()
-  const rideInstanceId = decodeURIComponent(params.rideInstanceId as string)
+  const params = useParams<{ rideInstanceId: string }>()
+  const rideInstanceId = decodeURIComponent(params?.rideInstanceId ?? "")
   const {
     selectedDate,
     seatMap,

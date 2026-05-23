@@ -5,11 +5,16 @@ import { CtaBand } from "@/components/marketing/cta-band"
 import { MarketingSection } from "@/components/marketing/section"
 import { breadcrumbJsonLd, buildMetadata, jsonLd } from "@/lib/seo"
 
-export const metadata: Metadata = buildMetadata({
-  title: "Softver za autobuske agencije",
-  description: "Alati za autobuske agencije: linije, polasci, rezervacije, putnici, javni sajt i prodaja karata online.",
-  path: "/funkcije",
-})
+export const metadata: Metadata = {
+  ...buildMetadata({
+    title: "Softver za autobuske agencije",
+    description: "Alati za autobuske agencije: linije, polasci, rezervacije, putnici, javni sajt i prodaja karata online.",
+    path: "/funkcije",
+  }),
+  title: {
+    absolute: "SURP - Softver za autobuske agencije",
+  },
+}
 
 const featureDetails = [
   {

@@ -158,7 +158,8 @@ async function main() {
       tenantId: testAgencyTenant.id
     },
     update: {
-      status: 'DRAFT',
+      status: 'PUBLISHED',
+      publishedAt: new Date(),
       heroTitle: 'Test Agency',
       heroSubtitle: 'Comfortable rides across the region',
       aboutMarkdown: '## About Test Agency\n\nPublish this storefront from the dashboard to preview the public page.',
@@ -169,7 +170,8 @@ async function main() {
     },
     create: {
       tenantId: testAgencyTenant.id,
-      status: 'DRAFT',
+      status: 'PUBLISHED',
+      publishedAt: new Date(),
       heroTitle: 'Test Agency',
       heroSubtitle: 'Comfortable rides across the region',
       aboutMarkdown: '## About Test Agency\n\nPublish this storefront from the dashboard to preview the public page.',

@@ -8,6 +8,49 @@ export class PlatformTenantLoginOptionResponseDto {
   name!: string;
 }
 
+export class PlatformTenantStorefrontSummaryDto {
+  @ApiProperty({ nullable: true })
+  status!: string | null;
+
+  @ApiProperty({ nullable: true })
+  publishedAt!: Date | null;
+}
+
+export class PlatformTenantKpiResponseDto {
+  @ApiProperty()
+  totalUsers!: number;
+
+  @ApiProperty()
+  activeUsers!: number;
+
+  @ApiProperty()
+  reservationsInPeriod!: number;
+
+  @ApiProperty()
+  activeRides!: number;
+
+  @ApiProperty()
+  activeLines!: number;
+
+  @ApiProperty()
+  totalPassengers!: number;
+
+  @ApiProperty()
+  activePassengers!: number;
+
+  @ApiProperty()
+  openTickets!: number;
+
+  @ApiProperty()
+  inProgressTickets!: number;
+
+  @ApiProperty({ type: () => PlatformTenantStorefrontSummaryDto })
+  storefront!: PlatformTenantStorefrontSummaryDto;
+
+  @ApiProperty({ nullable: true })
+  lastActivityAt!: Date | null;
+}
+
 export class PlatformTenantResponseDto {
   @ApiProperty()
   id!: string;
@@ -35,6 +78,9 @@ export class PlatformTenantResponseDto {
 
   @ApiProperty()
   updatedAt!: Date;
+
+  @ApiProperty({ type: () => PlatformTenantKpiResponseDto, required: false })
+  kpis?: PlatformTenantKpiResponseDto;
 }
 
 export class PaginatedPlatformTenantsResponseDto {
