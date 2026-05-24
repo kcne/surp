@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 
 export const siteConfig = {
   name: "SURP",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  url: resolveSiteUrl(),
   description:
     "Softver za autobuske agencije za online rezervacije, prodaju karata, linije, polaske, putnike i javni sajt. Sve za bolju organizaciju rada u jednom sistemu.",
   keywords: [
@@ -21,6 +21,20 @@ export const siteConfig = {
     { href: "/kontakt", label: "Kontakt" },
   ],
 } as const
+
+function resolveSiteUrl() {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+
+  if (siteUrl) {
+    return siteUrl.replace(/\/$/, "")
+  }
+
+  if (process.env.APP_ENV === "production" || process.env.VERCEL_ENV === "production") {
+    throw new Error("NEXT_PUBLIC_SITE_URL must be set in production to avoid invalid canonical URLs.")
+  }
+
+  return process.env.NODE_ENV === "production" ? "https://www.surp.rs" : "http://localhost:3000"
+}
 
 type BuildMetadataInput = {
   title: string

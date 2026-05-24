@@ -1,6 +1,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { MapPin, Mail, Phone } from "lucide-react"
+import { landingPages } from "@/lib/landing-pages"
 import { siteConfig } from "@/lib/seo"
 
 const footerGroups = [
@@ -11,6 +12,10 @@ const footerGroups = [
       { href: "/cene", label: "Cene" },
       { href: "/za-agencije", label: "Za agencije" },
     ],
+  },
+  {
+    title: "Resenja",
+    links: landingPages.map((page) => ({ href: `/${page.slug}`, label: page.title })),
   },
   {
     title: "Kompanija",

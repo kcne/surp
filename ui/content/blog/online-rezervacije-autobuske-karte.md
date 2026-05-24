@@ -2,8 +2,13 @@
 title: "Kako online rezervacije menjaju rad autobuske agencije"
 description: "Vodic za autobuske agencije koje zele manje telefonskih rezervacija i vise online rezervacija karata."
 date: "2026-05-16"
+updatedAt: "2026-05-24"
 category: "Online rezervacije"
 cover: "Rezervacije"
+author: "SURP tim"
+reviewedBy: "SURP tim"
+tags: "online rezervacije, autobuske karte, rezervacije"
+pillar: "online-rezervacije-autobuskih-karata"
 ---
 
 Autobuske agencije najcesce ne pate od manjka potraznje, vec od manjka pregleda. Kada rezervacije dolaze telefonom, preko poruka, na salteru i kroz tabele, tim mora stalno da proverava sta je stvarno slobodno.

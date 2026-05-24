@@ -56,11 +56,17 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
     headline: post.title,
     description: post.description,
     datePublished: post.date,
-    dateModified: post.date,
+    dateModified: post.updatedAt,
     author: {
-      "@type": "Organization",
-      name: siteConfig.name,
+      "@type": "Person",
+      name: post.author,
     },
+    reviewedBy: post.reviewedBy
+      ? {
+          "@type": "Person",
+          name: post.reviewedBy,
+        }
+      : undefined,
     publisher: {
       "@type": "Organization",
       name: siteConfig.name,
@@ -86,12 +92,19 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
             <span>·</span>
             <time dateTime={post.date}>{formatDate(post.date)}</time>
             <span>·</span>
+            <span>Azurirano {formatDate(post.updatedAt)}</span>
+            <span>·</span>
             <span>{post.readingTime}</span>
           </div>
           <h1 className="mt-5 font-display text-5xl font-bold tracking-[-0.035em] text-[color:var(--mk-navy-900)] md:text-6xl">
             {post.title}
           </h1>
           <p className="mt-6 text-lg leading-8 text-[color:var(--mk-text-muted)] md:text-xl">{post.description}</p>
+          <div className="mt-5 flex flex-wrap gap-3 text-sm text-[color:var(--mk-text-subtle)]">
+            <span>Autor: {post.author}</span>
+            {post.reviewedBy ? <span>Recenzija: {post.reviewedBy}</span> : null}
+            {post.tags.length > 0 ? <span>Tagovi: {post.tags.join(", ")}</span> : null}
+          </div>
           <div className="relative mt-10 overflow-hidden rounded-[2rem] bg-[linear-gradient(135deg,rgba(79,70,229,0.2),rgba(14,165,233,0.16))] p-10 shadow-mk-sm">
             <div className="absolute inset-0 opacity-[0.16] [background-image:radial-gradient(#0B1220_1px,transparent_1px)] [background-size:22px_22px]" />
             <span className="absolute -right-6 -top-12 font-display text-9xl font-bold tracking-[-0.08em] text-white/60">

@@ -14,6 +14,7 @@ import { PlatformAuditModule } from './platform-audit/platform-audit.module';
 import { PlatformLeadsModule } from './platform-leads/platform-leads.module';
 import { PlatformTenantsModule } from './platform-tenants/platform-tenants.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { PublicSeoModule } from './public-seo/public-seo.module';
 import { PublicStorefrontModule } from './public-storefront/public-storefront.module';
 import { ReportingModule } from './reporting/reporting.module';
 import { ReservationsModule } from './reservations/reservations.module';
@@ -52,6 +53,7 @@ import { UsersModule } from './users/users.module';
     ReservationsModule,
     ReportingModule,
     TicketsModule,
+    PublicSeoModule,
     PublicStorefrontModule,
     StorefrontAdminModule
   ],

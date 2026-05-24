@@ -8,8 +8,13 @@ export type BlogPost = {
   title: string
   description: string
   date: string
+  updatedAt: string
   category: string
   cover: string
+  author: string
+  reviewedBy: string | null
+  tags: string[]
+  pillar: string | null
   readingTime: string
   body: string
 }
@@ -25,8 +30,13 @@ export function getAllBlogPosts(): BlogPostMeta[] {
         title: post.title,
         description: post.description,
         date: post.date,
+        updatedAt: post.updatedAt,
         category: post.category,
         cover: post.cover,
+        author: post.author,
+        reviewedBy: post.reviewedBy,
+        tags: post.tags,
+        pillar: post.pillar,
         readingTime: post.readingTime,
       }
     })
@@ -48,8 +58,13 @@ export function getBlogPost(slug: string): BlogPost {
     title: requiredFrontmatter(frontmatter, "title", slug),
     description: requiredFrontmatter(frontmatter, "description", slug),
     date: requiredFrontmatter(frontmatter, "date", slug),
+    updatedAt: frontmatter.updatedAt ?? frontmatter.date ?? requiredFrontmatter(frontmatter, "date", slug),
     category: requiredFrontmatter(frontmatter, "category", slug),
     cover: frontmatter.cover ?? "SURP",
+    author: frontmatter.author ?? "SURP tim",
+    reviewedBy: frontmatter.reviewedBy ?? null,
+    tags: parseList(frontmatter.tags),
+    pillar: frontmatter.pillar ?? null,
     readingTime: estimateReadingTime(body),
     body,
   }
@@ -110,6 +125,17 @@ function requiredFrontmatter(frontmatter: Record<string, string>, key: string, s
   }
 
   return value
+}
+
+function parseList(value: string | undefined) {
+  if (!value) {
+    return []
+  }
+
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 function estimateReadingTime(body: string) {

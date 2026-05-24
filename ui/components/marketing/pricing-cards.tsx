@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 
 const plans = [
   {
-    name: "Starter",
+    name: "Pocetni",
     description: "Za manje agencije koje zele digitalni pregled rezervacija.",
     price: "20 EUR",
     originalPrice: "30 EUR",
@@ -23,7 +23,7 @@ const plans = [
     ],
   },
   {
-    name: "Pro",
+    name: "Napredni",
     description: "Za agencije koje zele javni sajt, online rezervacije i izvestaje.",
     price: "30 EUR",
     originalPrice: "50 EUR",
@@ -35,7 +35,7 @@ const plans = [
     cta: "Pretplatite se",
     footerNote: "Prvi mesec besplatno",
     features: [
-      "Sve iz Starter",
+      "Sve iz Pocetnog",
       "Neogranicen broj linija",
       "Neogranicen broj korisnickih racuna",
       "Live podrska na zahtev",
@@ -44,7 +44,7 @@ const plans = [
     highlighted: true,
   },
   {
-    name: "Enterprise",
+    name: "Po meri",
     description: "Za vise brendova, posebne procese i napredne integracije.",
     price: "Po dogovoru",
     priceNote: "Personalizovana ponuda nakon demo razgovora",
@@ -55,7 +55,7 @@ const plans = [
     cta: "Zatrazite ponudu",
     footerNote: "Ponuda prema potrebama agencije",
     features: [
-      "Sve iz Pro+",
+      "Sve iz Naprednog",
       "Vise agencija",
       "Integracije vasih API-ja",
       "Prioritetna podrska",

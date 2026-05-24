@@ -2,8 +2,13 @@
 title: "Kako uvesti softver u autobusku agenciju bez prekida rada"
 description: "Jednostavan vodic za autobuske agencije koje zele da predju sa tabela, poruka i poziva na organizovan sistem."
 date: "2026-05-16"
+updatedAt: "2026-05-24"
 category: "Operacije"
 cover: "Operacije"
+author: "SURP tim"
+reviewedBy: "SURP tim"
+tags: "digitalizacija, operacije, autobuske agencije"
+pillar: "digitalizacija-autobuske-agencije"
 ---
 
 Najveci strah kod uvodjenja novog softvera nije tehnologija. Najveci strah je da se poremeti svakodnevni rad agencije.

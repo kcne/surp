@@ -19,6 +19,11 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
+        userAgent: ["GPTBot", "ClaudeBot", "PerplexityBot", "Google-Extended"],
+        allow: "/",
+        disallow: ["/api", "/login", "/dashboard", "/superadmin"],
+      },
+      {
         userAgent: "*",
         allow: "/",
         disallow: [

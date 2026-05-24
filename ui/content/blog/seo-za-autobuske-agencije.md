@@ -2,8 +2,13 @@
 title: "SEO za autobuske agencije: sta putnici stvarno traze"
 description: "Sta putnici traze na Google-u kada biraju autobusku liniju, vozni red ili online rezervaciju karte."
 date: "2026-05-16"
+updatedAt: "2026-05-24"
 category: "SEO"
 cover: "SEO"
+author: "SURP tim"
+reviewedBy: "SURP tim"
+tags: "seo, javni sajt, autobuske agencije"
+pillar: "softver-za-autobuske-agencije"
 ---
 
 SEO za autobuske agencije ne pocinje blogom. Pocinje jasnim stranicama za linije, destinacije, vozne redove i informacije koje putnik trazi pre rezervacije.

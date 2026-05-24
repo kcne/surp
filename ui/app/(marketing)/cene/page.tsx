@@ -7,7 +7,7 @@ import { breadcrumbJsonLd, buildMetadata, jsonLd } from "@/lib/seo"
 
 export const metadata: Metadata = buildMetadata({
   title: "Cena softvera za autobuske agencije",
-  description: "Cena softvera za autobuske agencije: Starter, Pro i Enterprise planovi za rezervacije, linije, korisnike i online prodaju karata.",
+  description: "Cena softvera za autobuske agencije: Pocetni, Napredni i Po meri paketi za rezervacije, linije, korisnike i online prodaju karata.",
   path: "/cene",
 })
 
@@ -56,8 +56,8 @@ export default function CenePage() {
             Izaberite plan za vasu autobusku agenciju.
           </h1>
           <p className="mt-6 text-lg leading-8 text-[color:var(--mk-text-muted)] md:text-xl">
-            Pocnite sa osnovnim paketom za rezervacije i linije, ili izaberite Pro
-            plan ako zelite online rezervacije, javni sajt i neogranicen broj korisnika.
+            Pocnite sa osnovnim paketom za rezervacije i linije, ili izaberite
+            napredni paket ako zelite online rezervacije, javni sajt i neogranicen broj korisnika.
           </p>
         </div>
       </MarketingSection>
@@ -84,9 +84,9 @@ export default function CenePage() {
             <thead className="bg-[color:var(--mk-bg-alt)] text-[color:var(--mk-navy-900)]">
               <tr>
                  <th className="px-5 py-4 font-semibold">Sta je ukljuceno</th>
-                <th className="px-5 py-4 text-center font-semibold">Starter</th>
-                <th className="px-5 py-4 text-center font-semibold">Pro</th>
-                <th className="px-5 py-4 text-center font-semibold">Enterprise</th>
+                <th className="px-5 py-4 text-center font-semibold">Pocetni</th>
+                <th className="px-5 py-4 text-center font-semibold">Napredni</th>
+                <th className="px-5 py-4 text-center font-semibold">Po meri</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[color:var(--mk-border)]">

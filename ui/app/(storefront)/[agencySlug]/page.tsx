@@ -1,6 +1,6 @@
-/* eslint-disable @next/next/no-img-element */
 import type { CSSProperties, ReactNode } from "react"
 import type { Metadata } from "next"
+import Image from "next/image"
 import { notFound } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -174,9 +174,13 @@ function HeroSection({
   return (
     <section id="hero" className="relative min-h-[70vh] overflow-hidden md:min-h-[85vh]">
       {agency.heroImageUrl ? (
-        <img
+        <Image
           src={agency.heroImageUrl}
           alt={agency.heroImageAlt || `Autobus agencije ${agency.name}`}
+          fill
+          priority
+          sizes="100vw"
+          unoptimized
           className="absolute inset-0 h-full w-full object-cover"
         />
       ) : (
@@ -187,9 +191,12 @@ function HeroSection({
       <div className="relative mx-auto flex min-h-[70vh] max-w-7xl flex-col justify-between px-6 py-8 md:min-h-[85vh] lg:px-8">
         <div className="inline-flex w-fit items-center gap-3 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-white shadow-2xl backdrop-blur-md">
           {agency.logoUrl ? (
-            <img
+            <Image
               src={agency.logoUrl}
               alt={agency.logoAlt || `${agency.name} logo`}
+              width={44}
+              height={44}
+              unoptimized
               className="h-11 w-11 rounded-lg object-cover"
             />
           ) : (
@@ -296,10 +303,13 @@ function RidesSection({ agency }: { agency: PublicAgencyStorefront }) {
             >
               {agency.rideIconUrl ? (
                 <div className="mb-5 flex justify-center">
-                  <img
+                  <Image
                     src={resolveStorefrontImageUrl(agency.rideIconUrl)}
                     alt=""
                     aria-hidden="true"
+                    width={56}
+                    height={56}
+                    unoptimized
                     className="h-14 w-auto rounded-xl object-contain"
                   />
                 </div>
@@ -373,7 +383,14 @@ function StorefrontFooter({
       <div className="mx-auto max-w-7xl py-16">
         <div className="flex flex-col gap-5 md:flex-row md:items-center">
           {agency.logoUrl ? (
-            <img src={agency.logoUrl} alt={agency.logoAlt || `${agency.name} logo`} className="h-16 w-16 rounded-xl object-cover" />
+            <Image
+              src={agency.logoUrl}
+              alt={agency.logoAlt || `${agency.name} logo`}
+              width={64}
+              height={64}
+              unoptimized
+              className="h-16 w-16 rounded-xl object-cover"
+            />
           ) : (
             <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-brand-primary text-xl font-bold text-white">
               {agency.name.slice(0, 1).toUpperCase()}
