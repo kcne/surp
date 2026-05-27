@@ -67,12 +67,15 @@ export const landingPages: LandingPage[] = [
       { area: "Rezervacije", manual: "Pozivi, poruke i tabele", surp: "Jedan pregled rezervacija i putnika" },
       { area: "Linije", manual: "Odvojeni fajlovi i rucne izmene", surp: "Centralna evidencija linija i stanica" },
       { area: "Online prisustvo", manual: "Staticki sajt ili drustvene mreze", surp: "Javni izlog povezan sa sistemom" },
+      { area: "Uvodjenje", manual: "Neformalno i bez plana", surp: "Pilot uvodjenje po liniji sa jasnim koracima" },
     ],
     faq: [
       { question: "Da li je SURP samo za velike agencije?", answer: "Ne. Moze se krenuti od osnovnih linija i rezervacija, pa kasnije dodati javni sajt i online rezervacije." },
       { question: "Da li zamenjuje Excel?", answer: "Da. Cilj je da se vazni podaci vode u jednom sistemu, umesto u vise tabela koje se rucno uskladjuju." },
       { question: "Da li putnici vide sve podatke iz sistema?", answer: "Ne. Javni sajt prikazuje samo informacije koje agencija objavi, dok podaci za tim ostaju u panelu." },
       { question: "Da li mozemo prvo testirati jednu liniju?", answer: "Da. Preporuka je da se krene sa jednom linijom i jasnim pravilom kako tim prati rezervacije." },
+      { question: "Koliko traje uvodjenje u rad?", answer: "Najcesce se pocinje u roku od 7-14 dana kroz pilot sa jednom linijom, pa se sirenje radi postepeno." },
+      { question: "Sta ako tim nije tehnicki iskusan?", answer: "SURP je pravljen za operativni rad u agenciji, pa uvodjenje ide kroz kratke, prakticne korake i jasna pravila rada." },
     ],
   },
   {

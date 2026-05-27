@@ -41,6 +41,21 @@ export function SeoLandingPage({ page }: SeoLandingPageProps) {
             {page.h1}
           </h1>
           <p className="mt-6 text-lg leading-8 text-[color:var(--mk-text-muted)] md:text-xl">{page.description}</p>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href={buildContactHref(page.slug, "hero-primary")}
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[color:var(--mk-indigo-600)] px-6 py-3 text-sm font-semibold text-white shadow-mk-glow sm:w-auto"
+            >
+              Zakazite demo
+            </Link>
+            <Link
+              href="/cene"
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-full border border-[color:var(--mk-border)] bg-white px-6 py-3 text-sm font-semibold text-[color:var(--mk-navy-900)] sm:w-auto"
+            >
+              Pogledajte cene
+            </Link>
+          </div>
+          <p className="mt-3 text-xs text-[color:var(--mk-text-subtle)]">Bez obaveze. Prvi predlog implementacije dobijate nakon kratkog poziva.</p>
           <p className="mt-5 text-sm text-[color:var(--mk-text-subtle)]">
             Azurirano: <time dateTime={page.updatedAt}>{formatDate(page.updatedAt)}</time>
           </p>
@@ -114,6 +129,18 @@ export function SeoLandingPage({ page }: SeoLandingPageProps) {
             <p className="mt-4 text-lg leading-8 text-[color:var(--mk-text-muted)]">
               Kratki odgovori na pitanja koja agencije najcesce imaju pre uvodjenja novog sistema.
             </p>
+            <div className="mt-6 rounded-2xl border border-[color:var(--mk-border)] bg-[color:var(--mk-bg-alt)] p-5">
+              <p className="text-sm font-semibold text-[color:var(--mk-navy-900)]">Hocete procenu za vasu agenciju?</p>
+              <p className="mt-2 text-sm leading-6 text-[color:var(--mk-text-muted)]">
+                Posaljite broj linija i kako trenutno vodite rezervacije. Vraticemo konkretan predlog prvog koraka.
+              </p>
+              <Link
+                href={buildContactHref(page.slug, "faq-side")}
+                className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--mk-indigo-600)] px-5 py-2.5 text-sm font-semibold text-white"
+              >
+                Posaljite upit
+              </Link>
+            </div>
           </div>
           <div className="space-y-3">
             {page.faq.map((item) => (
@@ -139,17 +166,35 @@ export function SeoLandingPage({ page }: SeoLandingPageProps) {
           <p className="mt-3 max-w-3xl text-base leading-7 text-[color:var(--mk-text-muted)]">
             Posaljite nam kako sada vodite linije i rezervacije, pa cemo predloziti prvi praktican korak.
           </p>
-          <Link
-            href="/kontakt"
-            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-[color:var(--mk-indigo-600)] px-6 py-3 text-sm font-semibold text-white shadow-mk-glow"
-          >
-            Zakazite demo
-          </Link>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Link
+              href={buildContactHref(page.slug, "bottom-primary")}
+              className="inline-flex min-h-12 items-center justify-center rounded-full bg-[color:var(--mk-indigo-600)] px-6 py-3 text-sm font-semibold text-white shadow-mk-glow"
+            >
+              Zakazite demo
+            </Link>
+            <Link
+              href="/funkcije"
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-[color:var(--mk-border)] bg-white px-6 py-3 text-sm font-semibold text-[color:var(--mk-navy-900)]"
+            >
+              Pogledajte funkcije
+            </Link>
+          </div>
+          <p className="mt-3 text-xs text-[color:var(--mk-text-subtle)]">Bez ugovorne obaveze za uvodni razgovor.</p>
         </div>
       </MarketingSection>
       <CtaBand />
     </>
   )
+}
+
+function buildContactHref(slug: string, section: string) {
+  const params = new URLSearchParams({
+    source: "seo-landing",
+    page: slug,
+    section,
+  })
+  return `/kontakt?${params.toString()}`
 }
 
 function formatDate(date: string) {
