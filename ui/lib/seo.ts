@@ -1,4 +1,7 @@
 import type { Metadata } from "next"
+import brandEntity from "@/content/brand-entity.json"
+
+export { brandEntity }
 
 export const siteConfig = {
   name: "SURP",
@@ -114,5 +117,68 @@ export function breadcrumbJsonLd(items: Array<{ name: string; path: string }>) {
       name: item.name,
       item: absoluteUrl(item.path),
     })),
+  }
+}
+
+/**
+ * AI-C: Centralni Organization JSON-LD. Renderuje se u root layout-u kako bi
+ * AI sistemi (ChatGPT, Perplexity, Google AI Mode, Claude, Gemini) imali jasan
+ * entity opis SURP-a sa konzistentnim podacima koji se cuvaju u brand-entity.json.
+ */
+export function organizationJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: brandEntity.name,
+    legalName: brandEntity.legalName,
+    url: brandEntity.url,
+    logo: brandEntity.logo,
+    description: brandEntity.description,
+    foundingDate: brandEntity.foundingDate,
+    areaServed: brandEntity.areaServed,
+    knowsAbout: brandEntity.knowsAbout,
+    // sameAs se izostavlja dok ne dodamo realne third-party profile (AI-D).
+    // Prazan niz salje los signal Google-u; izostavljen kljuc je neutralan.
+    ...(brandEntity.sameAs.length > 0 ? { sameAs: brandEntity.sameAs } : {}),
+  }
+}
+
+type SoftwareApplicationInput = {
+  name: string
+  url: string
+  description: string
+  inLanguage?: string
+}
+
+/**
+ * AI-C: SoftwareApplication JSON-LD za SEO landing stranice. AI sistemi koriste
+ * ovu schema da bi prepoznali SURP kao softverski proizvod za odredjenu nisu.
+ */
+export function softwareApplicationJsonLd({ name, url, description, inLanguage = "sr-Latn" }: SoftwareApplicationInput) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name,
+    url,
+    description,
+    inLanguage,
+    applicationCategory: brandEntity.applicationCategory,
+    operatingSystem: brandEntity.operatingSystem,
+    featureList: brandEntity.featureList,
+    audience: {
+      "@type": "Audience",
+      audienceType: brandEntity.audience,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: brandEntity.name,
+      url: brandEntity.url,
+    },
+    offers: {
+      "@type": "Offer",
+      url: absoluteUrl("/cene"),
+      priceCurrency: "EUR",
+      availability: "https://schema.org/InStock",
+    },
   }
 }

@@ -4,7 +4,15 @@ export type LandingPage = {
   description: string
   h1: string
   eyebrow: string
+  /**
+   * Glavni paragraf koji se renderuje u `AnswerBlock`. Sirok, 2-3 recenice.
+   */
   answer: string
+  /**
+   * AI-B: kratki TL;DR (1-2 recenice) prikazan iznad H1.
+   * Eksplicitno oznaceno kao sazetak za LLM ekstrakciju.
+   */
+  tldr?: string
   updatedAt: string
   pillar: string
   intentStage: "BOFU" | "MOFU"
@@ -27,6 +35,13 @@ export type LandingPage = {
     question: string
     answer: string
   }>
+  /**
+   * AI-C/AI-B: opcioni izvori i reference za citation worthiness.
+   */
+  sources?: Array<{
+    label: string
+    url: string
+  }>
 }
 
 export const landingPages: LandingPage[] = [
@@ -38,6 +53,7 @@ export const landingPages: LandingPage[] = [
     eyebrow: "Softver za agencije",
     answer:
       "Softver za autobuske agencije pomaze da se linije, polasci, putnici i rezervacije vode na jednom mestu. SURP je napravljen za agencije koje zele manje tabela, manje poruka i jasniji pregled svakog polaska.",
+    tldr: "SURP je softver za autobuske agencije u Srbiji koji objedinjuje linije, polaske, rezervacije i putnike u jednom panelu, sa pratecim javnim sajtom za online upite. Pilot uvodjenje po jednoj liniji traje 7\u201314 dana.",
     updatedAt: "2026-05-24",
     pillar: "digitalizacija-agencije",
     intentStage: "BOFU",
@@ -60,8 +76,10 @@ export const landingPages: LandingPage[] = [
     ],
     stats: [
       { label: "Pocetak rada", value: "do 14 dana", detail: "Prva verzija sa linijama, korisnicima i osnovnim tokovima." },
-      { label: "Koriscenje", value: "preko weba", detail: "Panel i javna strana rade kroz browser." },
+      { label: "Koriscenje", value: "preko weba", detail: "Panel i javna strana rade kroz browser, bez instalacije." },
       { label: "Namena", value: "agencije", detail: "Sistem je pravljen za autobuske agencije, ne za genericku prodaju." },
+      { label: "Pilot", value: "1 linija", detail: "Postepeno uvodjenje po jednoj liniji smanjuje rizik prekida." },
+      { label: "Pristup", value: "vise uloga", detail: "Tim, dispecer i administracija rade kroz iste podatke." },
     ],
     comparison: [
       { area: "Rezervacije", manual: "Pozivi, poruke i tabele", surp: "Jedan pregled rezervacija i putnika" },
@@ -86,6 +104,7 @@ export const landingPages: LandingPage[] = [
     eyebrow: "Rezervacije",
     answer:
       "Sistem za rezervacije autobusa pomaze agenciji da vidi ko putuje, kada polazi i na kojoj liniji je rezervacija. SURP spaja rezervacije koje unosi tim i upite koji dolaze preko sajta.",
+    tldr: "Sistem za rezervacije autobusa vezuje svaku rezervaciju za konkretan polazak i putnika, sa jednim pregledom za tim. SURP spaja rucni unos i online upite u istom panelu.",
     updatedAt: "2026-05-24",
     pillar: "online-rezervacije",
     intentStage: "BOFU",
@@ -110,6 +129,8 @@ export const landingPages: LandingPage[] = [
       { label: "Rezervacija", value: "po polasku", detail: "Svaka rezervacija je vezana za konkretan polazak." },
       { label: "Pregled", value: "1 panel", detail: "Tim ne mora da sabira poruke i tabele." },
       { label: "Start", value: "jedna linija", detail: "Moze se uvoditi postepeno bez prekida rada." },
+      { label: "Kanali", value: "online + rucno", detail: "Tim unosi telefonske rezervacije; sajt prima online upite u isti pregled." },
+      { label: "Istorija", value: "po putniku", detail: "Prethodne rezervacije i kontakt dostupni iz profila putnika." },
     ],
     comparison: [
       { area: "Upit putnika", manual: "Telefon ili poruka bez jasnih podataka", surp: "Rezervacija sa osnovnim podacima" },
@@ -131,6 +152,7 @@ export const landingPages: LandingPage[] = [
     eyebrow: "Online rezervacije",
     answer:
       "Online rezervacije autobuskih karata omogucavaju putniku da pronadje liniju i posalje rezervaciju preko sajta agencije. Agenciji to znaci manje ponavljajucih pitanja i uredniji pregled upita.",
+    tldr: "Online rezervacije autobuskih karata kroz SURP daju putniku javnu stranicu sa linijama i formom za upit, a agencija dobija uredne rezervacije u istom panelu \u2014 24/7, bez cekanja na telefonsku potvrdu.",
     updatedAt: "2026-05-24",
     pillar: "online-rezervacije",
     intentStage: "BOFU",
@@ -155,6 +177,8 @@ export const landingPages: LandingPage[] = [
       { label: "Kanal", value: "24/7", detail: "Putnik moze poslati upit i van radnog vremena." },
       { label: "Urednost", value: "jasan upit", detail: "Podaci ne ostaju rasuti po porukama." },
       { label: "Google", value: "linije i relacije", detail: "Javna strana pomaze da se agencija pronadje za vazne pretrage." },
+      { label: "Uredjaj", value: "telefon i desktop", detail: "Stranica je optimizovana za citanje na mobilnom." },
+      { label: "Veza", value: "isti panel", detail: "Online rezervacija odmah ulazi u pregled koji tim koristi." },
     ],
     comparison: [
       { area: "Dostupnost", manual: "Samo kad tim odgovara", surp: "Upit je moguc preko sajta" },
@@ -176,6 +200,7 @@ export const landingPages: LandingPage[] = [
     eyebrow: "Digitalizacija",
     answer:
       "Digitalizacija autobuske agencije ne mora da bude velika promena preko noci. Najbolje je krenuti od linija, polazaka i rezervacija, pa postepeno prebacivati tim na jedan pregled.",
+    tldr: "Digitalizacija autobuske agencije kroz SURP ide po koracima: linije i polasci, pa rezervacije i putnici, pa javni sajt. Pilot na jednoj liniji i kratak paralelni rad smanjuju rizik.",
     updatedAt: "2026-05-24",
     pillar: "digitalizacija-agencije",
     intentStage: "BOFU",
@@ -200,6 +225,8 @@ export const landingPages: LandingPage[] = [
       { label: "Prvi korak", value: "pilot", detail: "Jedna linija ili jedan tok rezervacije." },
       { label: "Rizik", value: "nizak", detail: "Postepeno uvodjenje smanjuje prekide." },
       { label: "Dobitak", value: "bolji pregled", detail: "Tim vidi iste podatke o polascima i rezervacijama." },
+      { label: "Trajanje pilota", value: "7\u201314 dana", detail: "Dovoljno da tim proveri tok rada na jednoj liniji." },
+      { label: "Paralelni rad", value: "do 2 nedelje", detail: "Stari i novi nacin rade istovremeno dok tim ne stekne sigurnost." },
     ],
     comparison: [
       { area: "Uvodjenje", manual: "Sve odjednom ili nikako", surp: "Postepeno po toku rada" },
@@ -221,6 +248,7 @@ export const landingPages: LandingPage[] = [
     eyebrow: "Vozni redovi",
     answer:
       "Vozni red online sistem pomaze agenciji da lakse vodi linije, dane voznje i termine polazaka. Kada je povezan sa rezervacijama, tim brze vidi koji polasci su aktivni i sta putnici najcesce traze.",
+    tldr: "Vozni red online sistem u SURP-u vodi linije, dane voznje i termine na jednom mestu i povezuje ih sa rezervacijama. Putnici vide aktuelni red voznje na javnoj strani agencije.",
     updatedAt: "2026-05-24",
     pillar: "vozni-redovi",
     intentStage: "BOFU",
@@ -245,6 +273,8 @@ export const landingPages: LandingPage[] = [
       { label: "Podaci", value: "linija + termin", detail: "Osnovni blok svake rezervacije." },
       { label: "Izmena", value: "jedno mesto", detail: "Promena se vodi u jednom sistemu." },
       { label: "Putnik", value: "telefon", detail: "Javna strana je laka za brzo citanje na mobilnom." },
+      { label: "Dani voznje", value: "po polasku", detail: "Svaki polazak nosi sopstvenu sablon postavu." },
+      { label: "Veza sa rezervacijama", value: "direktna", detail: "Rezervacija se uvek vezuje za polazak iz reda voznje." },
     ],
     comparison: [
       { area: "Objava reda voznje", manual: "PDF, slika ili tabela", surp: "Javna strana agencije" },
@@ -266,6 +296,7 @@ export const landingPages: LandingPage[] = [
     eyebrow: "Linije",
     answer:
       "Upravljanje autobuskim linijama znaci da agencija na jednom mestu vodi polaznu stanicu, dolaznu stanicu, smer, dane voznje i polaske. SURP pomaze da linije budu jasne timu, a putnicima lakse dostupne za pretragu i rezervaciju.",
+    tldr: "Upravljanje autobuskim linijama u SURP-u znaci jedan registar linija sa stanicama, smerovima, danima voznje i polascima. Izmene se prave na jednom mestu i odmah se vide u rezervacijama i na javnom sajtu.",
     updatedAt: "2026-05-24",
     pillar: "vozni-redovi",
     intentStage: "BOFU",
@@ -290,6 +321,8 @@ export const landingPages: LandingPage[] = [
       { label: "Linije", value: "na jednom mestu", detail: "Nazivi, stanice i smerovi su u istom sistemu." },
       { label: "Izmene", value: "brze", detail: "Tim ne mora da trazi poslednju verziju tabele." },
       { label: "Putnici", value: "laksa pretraga", detail: "Jasne linije pomazu da se polazak brze pronadje." },
+      { label: "Stanice", value: "polazna + dolazna", detail: "Smer i meduzaustavljanja su deo linije." },
+      { label: "Versionisanje", value: "jedna istina", detail: "Stara tabela vise nije izvor podataka za tim." },
     ],
     comparison: [
       { area: "Podaci o liniji", manual: "Rasuti kroz tabele i poruke", surp: "Linija je u jednom sistemu" },

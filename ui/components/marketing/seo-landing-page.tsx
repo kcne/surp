@@ -5,7 +5,7 @@ import { CtaBand } from "@/components/marketing/cta-band"
 import { KeyStats } from "@/components/marketing/key-stats"
 import { MarketingSection } from "@/components/marketing/section"
 import type { LandingPage } from "@/lib/landing-pages"
-import { breadcrumbJsonLd, jsonLd } from "@/lib/seo"
+import { absoluteUrl, breadcrumbJsonLd, jsonLd, softwareApplicationJsonLd } from "@/lib/seo"
 
 type SeoLandingPageProps = {
   page: LandingPage
@@ -29,14 +29,30 @@ export function SeoLandingPage({ page }: SeoLandingPageProps) {
       },
     })),
   }
+  const softwareJsonLd = softwareApplicationJsonLd({
+    name: page.title,
+    url: absoluteUrl(path),
+    description: page.tldr ?? page.description,
+  })
 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbs) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(faqJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(softwareJsonLd) }} />
       <MarketingSection className="bg-[color:var(--mk-bg)]">
         <div className="mx-auto max-w-4xl text-center">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)]">{page.eyebrow}</p>
+          {page.tldr ? (
+            <div
+              role="note"
+              aria-label="TL;DR"
+              className="mx-auto mt-5 max-w-2xl rounded-2xl border border-[color:var(--mk-indigo-100)] bg-[color:var(--mk-indigo-50)] px-5 py-3 text-left"
+            >
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[color:var(--mk-indigo-600)]">TL;DR</p>
+              <p className="mt-1 text-sm leading-6 text-[color:var(--mk-navy-900)]">{page.tldr}</p>
+            </div>
+          ) : null}
           <h1 className="mt-4 font-display text-5xl font-bold tracking-[-0.035em] text-[color:var(--mk-navy-900)] md:text-6xl">
             {page.h1}
           </h1>

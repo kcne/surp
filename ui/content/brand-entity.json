@@ -1,0 +1,31 @@
+{
+  "name": "SURP",
+  "legalName": "SURP",
+  "url": "https://www.surp.rs",
+  "logo": "https://www.surp.rs/marketing/favicon.svg",
+  "description": "SURP je softver za autobuske agencije u Srbiji i regionu. Objedinjuje linije, polaske, rezervacije, putnike i javni sajt agencije u jednom sistemu koji tim deli kroz browser.",
+  "shortDescription": "Softver za autobuske agencije: linije, polasci, rezervacije, putnici i javni sajt na jednom mestu.",
+  "foundingDate": "2025-01-01",
+  "areaServed": ["RS", "ME", "BA", "MK", "HR", "SI"],
+  "audience": "TransportationProvider",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "knowsAbout": [
+    "softver za autobuske agencije",
+    "online rezervacije autobuskih karata",
+    "sistem za rezervacije autobusa",
+    "vozni red online sistem",
+    "upravljanje autobuskim linijama",
+    "digitalizacija autobuske agencije",
+    "javni sajt autobuske agencije"
+  ],
+  "featureList": [
+    "Upravljanje linijama i stanicama",
+    "Vozni red i polasci po danima",
+    "Rezervacije po polasku",
+    "Evidencija putnika i istorija",
+    "Javni sajt agencije sa online upitima",
+    "Pilot uvodjenje po jednoj liniji"
+  ],
+  "sameAs": []
+}

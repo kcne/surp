@@ -8,7 +8,7 @@ import { SeoPageAnalytics } from "@/components/analytics/seo-page-analytics"
 import { Toaster } from "@/components/ui/toaster"
 import { Toaster as SonnerToaster } from "sonner"
 import { QueryProvider } from "@/infrastructure/providers/query-provider"
-import { absoluteUrl, siteConfig } from "@/lib/seo"
+import { absoluteUrl, jsonLd, organizationJsonLd, siteConfig } from "@/lib/seo"
 
 const inter = Inter({ 
   subsets: ["latin"],
@@ -84,6 +84,10 @@ export default function RootLayout({
   return (
     <html lang="sr-Latn" className={`${inter.variable} ${spaceGrotesk.variable}`}>
       <body className="min-h-screen flex flex-col antialiased">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLd(organizationJsonLd()) }}
+        />
         <QueryProvider>
           <div className="flex-1">{children}</div>
           <Toaster />
