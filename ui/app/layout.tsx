@@ -5,6 +5,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next"
 import "./globals.css"
 import { GoogleAnalytics } from "@/components/analytics/google-analytics"
 import { SeoPageAnalytics } from "@/components/analytics/seo-page-analytics"
+import { AiReferrerAnalytics } from "@/components/analytics/ai-referrer-analytics"
 import { Toaster } from "@/components/ui/toaster"
 import { Toaster as SonnerToaster } from "sonner"
 import { QueryProvider } from "@/infrastructure/providers/query-provider"
@@ -97,6 +98,7 @@ export default function RootLayout({
         <SpeedInsights />
         <GoogleAnalytics />
         <SeoPageAnalytics />
+        <AiReferrerAnalytics />
       </body>
     </html>
   )

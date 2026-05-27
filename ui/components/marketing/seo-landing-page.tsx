@@ -2,6 +2,7 @@ import Link from "next/link"
 import { CheckCircle2 } from "lucide-react"
 import { AnswerBlock } from "@/components/marketing/answer-block"
 import { CtaBand } from "@/components/marketing/cta-band"
+import { FaqJsonLd } from "@/components/marketing/faq-json-ld"
 import { KeyStats } from "@/components/marketing/key-stats"
 import { MarketingSection } from "@/components/marketing/section"
 import type { LandingPage } from "@/lib/landing-pages"
@@ -17,28 +18,17 @@ export function SeoLandingPage({ page }: SeoLandingPageProps) {
     { name: "SURP", path: "/" },
     { name: page.title, path },
   ])
-  const faqJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: page.faq.map((item) => ({
-      "@type": "Question",
-      name: item.question,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: item.answer,
-      },
-    })),
-  }
+  const faqUrl = absoluteUrl(path)
   const softwareJsonLd = softwareApplicationJsonLd({
     name: page.title,
-    url: absoluteUrl(path),
+    url: faqUrl,
     description: page.tldr ?? page.description,
   })
 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbs) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(faqJsonLd) }} />
+      <FaqJsonLd items={page.faq} url={faqUrl} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(softwareJsonLd) }} />
       <MarketingSection className="bg-[color:var(--mk-bg)]">
         <div className="mx-auto max-w-4xl text-center">
