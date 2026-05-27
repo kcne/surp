@@ -1,5 +1,7 @@
 # SURP SEO/AI Search Strategija 2026 — Tržišna Analiza + Slice Plan
 
+> **Vidi takođe:** [docs/ai-search-plan.md](ai-search-plan.md) — posebna AI Search (GEO/AEO) napad-strategija sa slice-ovima AI-A do AI-H. Komplementarna je ovom dokumentu (slice-ovi SEO-E i SEO-G su temelj, AI-* su nadgradnja).
+
 ## Deo 1: Šta se promenilo u SEO svetu (Q1–Q2 2026)
 
 **Najveće promene koje moramo da prihvatimo:**
@@ -263,6 +265,16 @@ Svaki landing template:
 **Mesec 3:** Slice SEO-D (content cluster) + Slice SEO-G (AI discoverability).
 **Mesec 4-6:** Slice SEO-F (programmatic) + Slice SEO-H (off-site).
 **Kontinuirano:** Slice SEO-J.
+
+### Brzi status update (27.05.2026)
+
+- Slice SEO-C validiran za query "softver za autobuske agencije" (pozicija #1 na Google Search).
+
+### Mini plan nakon osvajanja #1 pozicije
+
+1. ✅ Obeležiti Slice SEO-C kao završen milestone za glavni BOFU query.
+2. Optimizovati conversion layer na landing stranici (CTA, FAQ, comparison) da se poveća demo lead rate.
+3. Uvesti mesečni monitoring za isti query (pozicija, CTR, competitors) i trigger za brzi refresh sadržaja ako padne rank.
 
 ---
 

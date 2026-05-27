@@ -4,7 +4,12 @@ import { absoluteUrl, siteConfig } from "@/lib/seo"
 export const revalidate = 86400
 
 export function GET() {
-  const landingLinks = landingPages.map((page) => `- [${page.title}](${absoluteUrl(`/${page.slug}`)}): ${page.description}`).join("\n")
+  const landingLinks = landingPages
+    .map(
+      (page) =>
+        `- [${page.title}](${absoluteUrl(`/${page.slug}`)}): ${page.description}\n  - Markdown: ${absoluteUrl(`/md/${page.slug}`)}`
+    )
+    .join("\n")
   const body = `# SURP
 
 > ${siteConfig.description}
@@ -18,6 +23,10 @@ SURP je web softver za autobuske agencije u Srbiji i regionu. Pomaze agencijama 
 - [Cene](${absoluteUrl("/cene")}): Planovi i opcije za autobuske agencije.
 - [Blog](${absoluteUrl("/blog")}): Saveti o online rezervacijama, digitalizaciji i SEO-u za autobuske agencije.
 ${landingLinks}
+
+## Optional
+
+- [Full text dump (Markdown)](${absoluteUrl("/llms-full.txt")}): Sav glavni sadrzaj u jednom fajlu za AI agente.
 
 ## Contact
 
