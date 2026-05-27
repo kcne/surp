@@ -336,6 +336,102 @@ export const landingPages: LandingPage[] = [
       { question: "Da li ovo pomaze za rezervacije?", answer: "Da. Uredne linije su osnova za jasne polaske i tacnije rezervacije." },
     ],
   },
+  {
+    slug: "surp-vs-excel",
+    title: "SURP vs Excel za autobuske agencije",
+    description: "Poredjenje SURP softvera i Excel tabela za vodjenje autobuske agencije: linije, polasci, rezervacije, putnici i online prisustvo.",
+    h1: "SURP vs Excel: kada agenciji prestane da bude dovoljno Excel",
+    eyebrow: "Poredjenje",
+    answer:
+      "Excel je dobar pocetak dok agencija ima malo linija i jednog coveka koji sve drzi u glavi. SURP postaje smisleniji onog trenutka kada vise ljudi treba da gleda iste podatke, kada rezervacije dolaze sa vise kanala i kada agencija zeli javni sajt povezan sa polascima.",
+    tldr: "Excel pokriva jednu osobu i malo linija. SURP postaje smisleniji kad vise ljudi rade na istim podacima, kad rezervacije dolaze sa vise kanala i kad agencija zeli javni sajt povezan sa polascima.",
+    updatedAt: "2026-05-27",
+    pillar: "digitalizacija-agencije",
+    intentStage: "BOFU",
+    sections: [
+      {
+        title: "Kada je Excel dovoljan?",
+        body: "Excel moze da radi posao dok jedan covek vodi sve rezervacije, dok je broj polazaka mali i dok ne postoji online kanal za putnike. U tom trenutku, glavni rizik su backup tabele i greske pri rucnom prepisivanju.",
+        bullets: [
+          "Jedna osoba vodi rezervacije",
+          "Mali broj linija i polazaka",
+          "Nema online upita ili sajta",
+          "Backup je rucni i ne planski",
+        ],
+      },
+      {
+        title: "Kada Excel pocinje da kosta vremena?",
+        body: "Cim vise ljudi treba istovremeno da menja podatke, cim se rezervacije primaju i preko telefona i preko poruka i preko sajta, ili cim se desi da dva coveka prodaju isto mesto, Excel postaje izvor problema umesto resenja.",
+        bullets: [
+          "Dva coveka rade u istoj tabeli",
+          "Duplo rezervisana mesta",
+          "Razlicite verzije iste tabele",
+          "Putnik se ne moze pouzdano pronaci po prezimenu",
+          "Tim trazi 'poslednju' verziju fajla",
+        ],
+      },
+      {
+        title: "Kako SURP resava ono sto Excel ne moze?",
+        body: "SURP cuva jedan izvor istine za linije, polaske, rezervacije i putnike. Tim radi kroz panel u browser-u, a javni sajt agencije se napaja iz istih podataka, pa nema duplog unosa za online prisustvo.",
+        bullets: [
+          "Jedna evidencija linija i polazaka",
+          "Rezervacija je vezana za konkretan polazak i putnika",
+          "Vise uloga u timu vidi iste podatke",
+          "Javni sajt koristi iste linije, bez prepisivanja",
+          "Istorija izmena ostaje u sistemu",
+        ],
+      },
+    ],
+    stats: [
+      { label: "Izvor istine", value: "1 sistem", detail: "Linije, polasci, rezervacije i putnici u istoj bazi." },
+      { label: "Vise korisnika", value: "istovremeno", detail: "Tim radi paralelno bez konflikta verzija fajla." },
+      { label: "Online sajt", value: "iz istih podataka", detail: "Javna strana agencije koristi linije iz sistema." },
+      { label: "Pilot prelazak", value: "1 linija", detail: "Prelazak sa Excel-a se radi po jednoj liniji, ne odjednom." },
+      { label: "Pristup", value: "preko weba", detail: "Bez instalacije, bez deljenja fajlova preko mejla." },
+    ],
+    comparison: [
+      { area: "Izvor istine", manual: "Vise verzija iste tabele", surp: "Jedan sistem za sve podatke" },
+      { area: "Istovremeni rad", manual: "Konflikt verzija ili 'ko poslednji snimi'", surp: "Vise korisnika u panelu istovremeno" },
+      { area: "Duplo rezervisano mesto", manual: "Cest scenario kad ima vise kanala", surp: "Rezervacija je vezana za polazak i mesto" },
+      { area: "Pretraga putnika", manual: "Ctrl+F po fajlovima i porukama", surp: "Pretraga unutar sistema po polasku i putniku" },
+      { area: "Javni sajt agencije", manual: "Odvojen sajt sa rucnim unosom", surp: "Sajt koristi linije iz sistema" },
+      { area: "Backup", manual: "Rucno, lako se zaboravi", surp: "Cuvanje podataka kao deo sistema" },
+      { area: "Audit i izmene", manual: "Nema istorije ko je sta promenio", surp: "Izmene ostaju u sistemu" },
+      { area: "Uvodjenje", manual: "Bez plana", surp: "Pilot po jednoj liniji, pa sirenje" },
+    ],
+    faq: [
+      {
+        question: "Da li SURP zamenjuje Excel u potpunosti?",
+        answer:
+          "Za operativni rad agencije (linije, polasci, rezervacije, putnici) cilj je da SURP bude jedini izvor istine. Excel ostaje koristan za ad-hoc analizu, izvoz podataka i sopstvene proracune koji nisu deo operativnog toka.",
+      },
+      {
+        question: "Mozemo li da prebacimo postojece tabele u SURP?",
+        answer:
+          "Da. Prelazak se radi po jednoj liniji odjednom: linija se unese u SURP, tim radi u sistemu nedelju dana, pa se prelazi na sledecu liniju. Stara tabela ostaje samo za reference, ne kao izvor za tim.",
+      },
+      {
+        question: "Sta je glavni signal da je vreme za prelazak sa Excel-a?",
+        answer:
+          "Dva signala: prvo, kada se desi da je isto mesto rezervisano dva puta zato sto su dva coveka radila u razlicitim verzijama tabele. Drugo, kada agencija zeli online prisustvo, a tabela ne moze da se direktno poveze sa javnim sajtom.",
+      },
+      {
+        question: "Koliko traje prelazak sa Excel-a na SURP?",
+        answer:
+          "Prva linija se obicno uvodi u 7-14 dana. Sirenje na ostatak agencije ide u koracima, najcesce kroz nekoliko nedelja, da tim ima vremena da privikne radne navike.",
+      },
+      {
+        question: "Da li SURP radi offline kao Excel?",
+        answer:
+          "SURP je web sistem, pa zahteva internet vezu. To je svesna razluka: cilj je da svi clanovi tima u svakom trenutku gledaju iste podatke, sto offline tabela ne moze da garantuje.",
+      },
+      {
+        question: "Sta sa Excel izvestajima koje agencija vec koristi?",
+        answer:
+          "Podaci iz SURP-a se mogu izvesti, pa se Excel izvestaji mogu nastaviti tamo gde su korisni. Razlika je sto sad polaze od jednog tacnog izvora podataka umesto rucnog unosa.",
+      },
+    ],
+  },
 ]
 
 export function getLandingPage(slug: string) {
