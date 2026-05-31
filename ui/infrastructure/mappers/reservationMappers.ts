@@ -80,6 +80,7 @@ export function toReservation(dto: ReservationResponseDto, rideInstance?: RideIn
       address: "",
     },
     status: toReservationStatus(dto.status),
+    groupId: dto.groupId ?? null,
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
   }

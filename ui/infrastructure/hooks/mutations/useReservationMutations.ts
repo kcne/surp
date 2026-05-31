@@ -82,6 +82,7 @@ interface CreateReservationInput {
 interface CreateReservationsBatchInput {
   data: ReservationFormData[]
   rideInstance: RideInstance
+  travelTogether?: boolean
 }
 
 export function useCreateReservationMutation() {
@@ -111,9 +112,10 @@ export function useCreateReservationsBatchMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ data, rideInstance }: CreateReservationsBatchInput) => {
+    mutationFn: async ({ data, rideInstance, travelTogether }: CreateReservationsBatchInput) => {
       const response = await reservationsControllerCreateBatch({
         items: data.map((item) => toCreateReservationDto(item, rideInstance)),
+        travelTogether: travelTogether ?? false,
       })
 
       if (!isReservationMutationSuccess(response)) {

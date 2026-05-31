@@ -110,6 +110,7 @@ export function ReservationModal({
     assignmentMode,
     perSeatPassengers,
     addPassengerTargetSeat,
+    travelTogether,
     isReturnTicket,
     returnDatePickerOpen,
     selectedReturnDate,
@@ -121,6 +122,7 @@ export function ReservationModal({
     setAssignmentMode,
     setPerSeatPassengers,
     setAddPassengerTargetSeat,
+    setTravelTogether,
     setIsReturnTicket,
     setReturnDatePickerOpen,
     setSelectedReturnDate,
@@ -250,6 +252,7 @@ export function ReservationModal({
     isMultiReservation,
     selectedSeats,
     perSeatPassengers,
+    travelTogether,
     allReservations,
     closeReservationModal,
     onComplete,
@@ -267,7 +270,7 @@ export function ReservationModal({
     createReservationsBatch: async (payload) => {
       await createReservationsBatchMutation.mutateAsync(payload)
     },
-    createReservationsForRideInstance: async (instance, requests, _options) => {
+    createReservationsForRideInstance: async (instance, requests, options) => {
       if (requests.length === 1) {
         await createReservationMutation.mutateAsync({
           data: requests[0],
@@ -279,6 +282,7 @@ export function ReservationModal({
       await createReservationsBatchMutation.mutateAsync({
         data: requests,
         rideInstance: instance,
+        travelTogether: options?.travelTogether,
       })
     },
     updateReservation: async (reservationId, data) => {
@@ -350,8 +354,8 @@ export function ReservationModal({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[720px]">
-        <DialogHeader className="border-b px-6 pb-3 pt-5">
+      <DialogContent className="flex h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[720px]">
+        <DialogHeader className="shrink-0 border-b px-6 pb-3 pt-5">
           <DialogTitle>
             {isEdit
               ? "Izmeni rezervaciju"
@@ -379,7 +383,7 @@ export function ReservationModal({
                 e.stopPropagation()
               }
             }}
-            className="flex min-h-0 flex-1 flex-col"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
           >
           <div className="flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-2">
             <ReservationRideInfoCard
@@ -396,6 +400,9 @@ export function ReservationModal({
                 <ReservationAssignmentModeSection
                   assignmentMode={assignmentMode}
                   onAssignmentModeChange={setAssignmentMode}
+                  showTravelTogether={selectedSeats.length > 1 && !isEdit}
+                  travelTogether={travelTogether}
+                  onTravelTogetherChange={setTravelTogether}
                 />
               </FieldSection>
             )}
@@ -537,7 +544,7 @@ export function ReservationModal({
             </FieldSection>
           </div>
 
-          <div className="border-t bg-background px-6 py-3">
+          <div className="border-t bg-background px-6 py-3 shrink-0">
             <ReservationFormActions
               isEdit={isEdit}
               showCancelReservation={Boolean(isEdit && reservation)}

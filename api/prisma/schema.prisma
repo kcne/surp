@@ -384,6 +384,7 @@ model Reservation {
   cancelledAt        DateTime?
   departureStationId String
   arrivalStationId   String
+  groupId            String?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -401,6 +402,7 @@ model Reservation {
   @@index([departureStationId])
   @@index([arrivalStationId])
   @@index([updatedById])
+  @@index([tenantId, rideId, travelDate, rideDepartureTime, groupId])
 }
 
 model Passenger {

@@ -28,6 +28,8 @@ import type {
   BatchReservationsResponseDto,
   CompleteStorefrontAssetUploadDto,
   CompleteTicketAttachmentDto,
+  ConvertPlatformLeadDto,
+  ConvertPlatformLeadResponseDto,
   CreateLineDto,
   CreateMarketingLeadDto,
   CreatePassengerDto,
@@ -54,6 +56,8 @@ import type {
   MarketingLeadResponseDto,
   PaginatedLinesResponseDto,
   PaginatedPassengersResponseDto,
+  PaginatedPlatformAuditResponseDto,
+  PaginatedPlatformLeadsResponseDto,
   PaginatedPlatformTenantsResponseDto,
   PaginatedReservationsResponseDto,
   PaginatedRidesResponseDto,
@@ -63,10 +67,16 @@ import type {
   PassengerResponseDto,
   PassengersControllerListParams,
   PassengersControllerSearchParams,
+  PlatformAnalyticsControllerGetOverviewParams,
+  PlatformAnalyticsResponseDto,
+  PlatformAuditControllerListParams,
+  PlatformLeadResponseDto,
+  PlatformLeadsControllerListParams,
   PlatformTenantLoginOptionResponseDto,
   PlatformTenantResponseDto,
   PlatformTenantsControllerListParams,
   PublicAgencyStorefrontResponseDto,
+  PublicSeoSitemapDataResponseDto,
   RefreshTokenDto,
   ReplaceLineStopsDto,
   ReplaceRideDaySchedulesDto,
@@ -95,6 +105,7 @@ import type {
   TicketsControllerListParams,
   UpdateLineDto,
   UpdatePassengerDto,
+  UpdatePlatformLeadDto,
   UpdatePlatformTenantDto,
   UpdateReservationDto,
   UpdateRideDto,
@@ -3036,7 +3047,7 @@ export const useLinesControllerCreateReverse = <TError = ErrorType<void>,
     }
     
 /**
- * @summary Create a marketing demo lead.
+ * @summary Create a marketing contact request.
  */
 export type marketingLeadsControllerCreateLeadResponse201 = {
   data: MarketingLeadResponseDto
@@ -3117,7 +3128,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type MarketingLeadsControllerCreateLeadMutationError = ErrorType<void>
 
     /**
- * @summary Create a marketing demo lead.
+ * @summary Create a marketing contact request.
  */
 export const useMarketingLeadsControllerCreateLead = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof marketingLeadsControllerCreateLead>>, TError,{data: CreateMarketingLeadDto}, TContext>, request?: SecondParameter<typeof customInstance>}
@@ -3128,6 +3139,761 @@ export const useMarketingLeadsControllerCreateLead = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getMarketingLeadsControllerCreateLeadMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Get aggregate platform analytics without tenant PII.
+ */
+export type platformAnalyticsControllerGetOverviewResponse200 = {
+  data: PlatformAnalyticsResponseDto
+  status: 200
+}
+
+export type platformAnalyticsControllerGetOverviewResponse400 = {
+  data: void
+  status: 400
+}
+
+export type platformAnalyticsControllerGetOverviewResponse401 = {
+  data: void
+  status: 401
+}
+
+export type platformAnalyticsControllerGetOverviewResponse403 = {
+  data: void
+  status: 403
+}
+
+export type platformAnalyticsControllerGetOverviewResponseSuccess = (platformAnalyticsControllerGetOverviewResponse200) & {
+  headers: Headers;
+};
+export type platformAnalyticsControllerGetOverviewResponseError = (platformAnalyticsControllerGetOverviewResponse400 | platformAnalyticsControllerGetOverviewResponse401 | platformAnalyticsControllerGetOverviewResponse403) & {
+  headers: Headers;
+};
+
+export type platformAnalyticsControllerGetOverviewResponse = (platformAnalyticsControllerGetOverviewResponseSuccess | platformAnalyticsControllerGetOverviewResponseError)
+
+export const getPlatformAnalyticsControllerGetOverviewUrl = (params?: PlatformAnalyticsControllerGetOverviewParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/platform/analytics/overview?${stringifiedParams}` : `/platform/analytics/overview`
+}
+
+export const platformAnalyticsControllerGetOverview = async (params?: PlatformAnalyticsControllerGetOverviewParams, options?: RequestInit): Promise<platformAnalyticsControllerGetOverviewResponse> => {
+  
+  return customInstance<platformAnalyticsControllerGetOverviewResponse>(getPlatformAnalyticsControllerGetOverviewUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getPlatformAnalyticsControllerGetOverviewQueryKey = (params?: PlatformAnalyticsControllerGetOverviewParams,) => {
+    return [
+    `/platform/analytics/overview`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+    
+export const getPlatformAnalyticsControllerGetOverviewQueryOptions = <TData = Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>, TError = ErrorType<void>>(params?: PlatformAnalyticsControllerGetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPlatformAnalyticsControllerGetOverviewQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>> = ({ signal }) => platformAnalyticsControllerGetOverview(params, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type PlatformAnalyticsControllerGetOverviewQueryResult = NonNullable<Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>>
+export type PlatformAnalyticsControllerGetOverviewQueryError = ErrorType<void>
+
+
+export function usePlatformAnalyticsControllerGetOverview<TData = Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>, TError = ErrorType<void>>(
+ params: undefined |  PlatformAnalyticsControllerGetOverviewParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>,
+          TError,
+          Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePlatformAnalyticsControllerGetOverview<TData = Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>, TError = ErrorType<void>>(
+ params?: PlatformAnalyticsControllerGetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>,
+          TError,
+          Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePlatformAnalyticsControllerGetOverview<TData = Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>, TError = ErrorType<void>>(
+ params?: PlatformAnalyticsControllerGetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get aggregate platform analytics without tenant PII.
+ */
+
+export function usePlatformAnalyticsControllerGetOverview<TData = Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>, TError = ErrorType<void>>(
+ params?: PlatformAnalyticsControllerGetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformAnalyticsControllerGetOverview>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getPlatformAnalyticsControllerGetOverviewQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary List platform-level audit events.
+ */
+export type platformAuditControllerListResponse200 = {
+  data: PaginatedPlatformAuditResponseDto
+  status: 200
+}
+
+export type platformAuditControllerListResponse400 = {
+  data: void
+  status: 400
+}
+
+export type platformAuditControllerListResponse401 = {
+  data: void
+  status: 401
+}
+
+export type platformAuditControllerListResponse403 = {
+  data: void
+  status: 403
+}
+
+export type platformAuditControllerListResponseSuccess = (platformAuditControllerListResponse200) & {
+  headers: Headers;
+};
+export type platformAuditControllerListResponseError = (platformAuditControllerListResponse400 | platformAuditControllerListResponse401 | platformAuditControllerListResponse403) & {
+  headers: Headers;
+};
+
+export type platformAuditControllerListResponse = (platformAuditControllerListResponseSuccess | platformAuditControllerListResponseError)
+
+export const getPlatformAuditControllerListUrl = (params?: PlatformAuditControllerListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/platform/audit?${stringifiedParams}` : `/platform/audit`
+}
+
+export const platformAuditControllerList = async (params?: PlatformAuditControllerListParams, options?: RequestInit): Promise<platformAuditControllerListResponse> => {
+  
+  return customInstance<platformAuditControllerListResponse>(getPlatformAuditControllerListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getPlatformAuditControllerListQueryKey = (params?: PlatformAuditControllerListParams,) => {
+    return [
+    `/platform/audit`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+    
+export const getPlatformAuditControllerListQueryOptions = <TData = Awaited<ReturnType<typeof platformAuditControllerList>>, TError = ErrorType<void>>(params?: PlatformAuditControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformAuditControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPlatformAuditControllerListQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof platformAuditControllerList>>> = ({ signal }) => platformAuditControllerList(params, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof platformAuditControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type PlatformAuditControllerListQueryResult = NonNullable<Awaited<ReturnType<typeof platformAuditControllerList>>>
+export type PlatformAuditControllerListQueryError = ErrorType<void>
+
+
+export function usePlatformAuditControllerList<TData = Awaited<ReturnType<typeof platformAuditControllerList>>, TError = ErrorType<void>>(
+ params: undefined |  PlatformAuditControllerListParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformAuditControllerList>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof platformAuditControllerList>>,
+          TError,
+          Awaited<ReturnType<typeof platformAuditControllerList>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePlatformAuditControllerList<TData = Awaited<ReturnType<typeof platformAuditControllerList>>, TError = ErrorType<void>>(
+ params?: PlatformAuditControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformAuditControllerList>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof platformAuditControllerList>>,
+          TError,
+          Awaited<ReturnType<typeof platformAuditControllerList>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePlatformAuditControllerList<TData = Awaited<ReturnType<typeof platformAuditControllerList>>, TError = ErrorType<void>>(
+ params?: PlatformAuditControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformAuditControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List platform-level audit events.
+ */
+
+export function usePlatformAuditControllerList<TData = Awaited<ReturnType<typeof platformAuditControllerList>>, TError = ErrorType<void>>(
+ params?: PlatformAuditControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformAuditControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getPlatformAuditControllerListQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary List marketing leads in platform scope.
+ */
+export type platformLeadsControllerListResponse200 = {
+  data: PaginatedPlatformLeadsResponseDto
+  status: 200
+}
+
+export type platformLeadsControllerListResponse400 = {
+  data: void
+  status: 400
+}
+
+export type platformLeadsControllerListResponse401 = {
+  data: void
+  status: 401
+}
+
+export type platformLeadsControllerListResponse403 = {
+  data: void
+  status: 403
+}
+
+export type platformLeadsControllerListResponseSuccess = (platformLeadsControllerListResponse200) & {
+  headers: Headers;
+};
+export type platformLeadsControllerListResponseError = (platformLeadsControllerListResponse400 | platformLeadsControllerListResponse401 | platformLeadsControllerListResponse403) & {
+  headers: Headers;
+};
+
+export type platformLeadsControllerListResponse = (platformLeadsControllerListResponseSuccess | platformLeadsControllerListResponseError)
+
+export const getPlatformLeadsControllerListUrl = (params?: PlatformLeadsControllerListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/platform/leads?${stringifiedParams}` : `/platform/leads`
+}
+
+export const platformLeadsControllerList = async (params?: PlatformLeadsControllerListParams, options?: RequestInit): Promise<platformLeadsControllerListResponse> => {
+  
+  return customInstance<platformLeadsControllerListResponse>(getPlatformLeadsControllerListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getPlatformLeadsControllerListQueryKey = (params?: PlatformLeadsControllerListParams,) => {
+    return [
+    `/platform/leads`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+    
+export const getPlatformLeadsControllerListQueryOptions = <TData = Awaited<ReturnType<typeof platformLeadsControllerList>>, TError = ErrorType<void>>(params?: PlatformLeadsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPlatformLeadsControllerListQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof platformLeadsControllerList>>> = ({ signal }) => platformLeadsControllerList(params, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type PlatformLeadsControllerListQueryResult = NonNullable<Awaited<ReturnType<typeof platformLeadsControllerList>>>
+export type PlatformLeadsControllerListQueryError = ErrorType<void>
+
+
+export function usePlatformLeadsControllerList<TData = Awaited<ReturnType<typeof platformLeadsControllerList>>, TError = ErrorType<void>>(
+ params: undefined |  PlatformLeadsControllerListParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerList>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof platformLeadsControllerList>>,
+          TError,
+          Awaited<ReturnType<typeof platformLeadsControllerList>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePlatformLeadsControllerList<TData = Awaited<ReturnType<typeof platformLeadsControllerList>>, TError = ErrorType<void>>(
+ params?: PlatformLeadsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerList>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof platformLeadsControllerList>>,
+          TError,
+          Awaited<ReturnType<typeof platformLeadsControllerList>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePlatformLeadsControllerList<TData = Awaited<ReturnType<typeof platformLeadsControllerList>>, TError = ErrorType<void>>(
+ params?: PlatformLeadsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List marketing leads in platform scope.
+ */
+
+export function usePlatformLeadsControllerList<TData = Awaited<ReturnType<typeof platformLeadsControllerList>>, TError = ErrorType<void>>(
+ params?: PlatformLeadsControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getPlatformLeadsControllerListQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Get a marketing lead by id in platform scope.
+ */
+export type platformLeadsControllerGetByIdResponse200 = {
+  data: PlatformLeadResponseDto
+  status: 200
+}
+
+export type platformLeadsControllerGetByIdResponse401 = {
+  data: void
+  status: 401
+}
+
+export type platformLeadsControllerGetByIdResponse403 = {
+  data: void
+  status: 403
+}
+
+export type platformLeadsControllerGetByIdResponse404 = {
+  data: void
+  status: 404
+}
+
+export type platformLeadsControllerGetByIdResponseSuccess = (platformLeadsControllerGetByIdResponse200) & {
+  headers: Headers;
+};
+export type platformLeadsControllerGetByIdResponseError = (platformLeadsControllerGetByIdResponse401 | platformLeadsControllerGetByIdResponse403 | platformLeadsControllerGetByIdResponse404) & {
+  headers: Headers;
+};
+
+export type platformLeadsControllerGetByIdResponse = (platformLeadsControllerGetByIdResponseSuccess | platformLeadsControllerGetByIdResponseError)
+
+export const getPlatformLeadsControllerGetByIdUrl = (id: string,) => {
+
+
+  
+
+  return `/platform/leads/${id}`
+}
+
+export const platformLeadsControllerGetById = async (id: string, options?: RequestInit): Promise<platformLeadsControllerGetByIdResponse> => {
+  
+  return customInstance<platformLeadsControllerGetByIdResponse>(getPlatformLeadsControllerGetByIdUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getPlatformLeadsControllerGetByIdQueryKey = (id: string,) => {
+    return [
+    `/platform/leads/${id}`
+    ] as const;
+    }
+
+    
+export const getPlatformLeadsControllerGetByIdQueryOptions = <TData = Awaited<ReturnType<typeof platformLeadsControllerGetById>>, TError = ErrorType<void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPlatformLeadsControllerGetByIdQueryKey(id);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof platformLeadsControllerGetById>>> = ({ signal }) => platformLeadsControllerGetById(id, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerGetById>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type PlatformLeadsControllerGetByIdQueryResult = NonNullable<Awaited<ReturnType<typeof platformLeadsControllerGetById>>>
+export type PlatformLeadsControllerGetByIdQueryError = ErrorType<void>
+
+
+export function usePlatformLeadsControllerGetById<TData = Awaited<ReturnType<typeof platformLeadsControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerGetById>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof platformLeadsControllerGetById>>,
+          TError,
+          Awaited<ReturnType<typeof platformLeadsControllerGetById>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePlatformLeadsControllerGetById<TData = Awaited<ReturnType<typeof platformLeadsControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerGetById>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof platformLeadsControllerGetById>>,
+          TError,
+          Awaited<ReturnType<typeof platformLeadsControllerGetById>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePlatformLeadsControllerGetById<TData = Awaited<ReturnType<typeof platformLeadsControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get a marketing lead by id in platform scope.
+ */
+
+export function usePlatformLeadsControllerGetById<TData = Awaited<ReturnType<typeof platformLeadsControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof platformLeadsControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getPlatformLeadsControllerGetByIdQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Update marketing lead status, notes, or assignment.
+ */
+export type platformLeadsControllerUpdateResponse200 = {
+  data: PlatformLeadResponseDto
+  status: 200
+}
+
+export type platformLeadsControllerUpdateResponse400 = {
+  data: void
+  status: 400
+}
+
+export type platformLeadsControllerUpdateResponse401 = {
+  data: void
+  status: 401
+}
+
+export type platformLeadsControllerUpdateResponse403 = {
+  data: void
+  status: 403
+}
+
+export type platformLeadsControllerUpdateResponse404 = {
+  data: void
+  status: 404
+}
+
+export type platformLeadsControllerUpdateResponseSuccess = (platformLeadsControllerUpdateResponse200) & {
+  headers: Headers;
+};
+export type platformLeadsControllerUpdateResponseError = (platformLeadsControllerUpdateResponse400 | platformLeadsControllerUpdateResponse401 | platformLeadsControllerUpdateResponse403 | platformLeadsControllerUpdateResponse404) & {
+  headers: Headers;
+};
+
+export type platformLeadsControllerUpdateResponse = (platformLeadsControllerUpdateResponseSuccess | platformLeadsControllerUpdateResponseError)
+
+export const getPlatformLeadsControllerUpdateUrl = (id: string,) => {
+
+
+  
+
+  return `/platform/leads/${id}`
+}
+
+export const platformLeadsControllerUpdate = async (id: string,
+    updatePlatformLeadDto: UpdatePlatformLeadDto, options?: RequestInit): Promise<platformLeadsControllerUpdateResponse> => {
+  
+  return customInstance<platformLeadsControllerUpdateResponse>(getPlatformLeadsControllerUpdateUrl(id),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updatePlatformLeadDto,)
+  }
+);}
+  
+
+
+
+export const getPlatformLeadsControllerUpdateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof platformLeadsControllerUpdate>>, TError,{id: string;data: UpdatePlatformLeadDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof platformLeadsControllerUpdate>>, TError,{id: string;data: UpdatePlatformLeadDto}, TContext> => {
+
+const mutationKey = ['platformLeadsControllerUpdate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof platformLeadsControllerUpdate>>, {id: string;data: UpdatePlatformLeadDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  platformLeadsControllerUpdate(id,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PlatformLeadsControllerUpdateMutationResult = NonNullable<Awaited<ReturnType<typeof platformLeadsControllerUpdate>>>
+    export type PlatformLeadsControllerUpdateMutationBody = UpdatePlatformLeadDto
+    export type PlatformLeadsControllerUpdateMutationError = ErrorType<void>
+
+    /**
+ * @summary Update marketing lead status, notes, or assignment.
+ */
+export const usePlatformLeadsControllerUpdate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof platformLeadsControllerUpdate>>, TError,{id: string;data: UpdatePlatformLeadDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof platformLeadsControllerUpdate>>,
+        TError,
+        {id: string;data: UpdatePlatformLeadDto},
+        TContext
+      > => {
+      return useMutation(getPlatformLeadsControllerUpdateMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Convert a marketing lead into a tenant with an admin user.
+ */
+export type platformLeadsControllerConvertResponse200 = {
+  data: ConvertPlatformLeadResponseDto
+  status: 200
+}
+
+export type platformLeadsControllerConvertResponse400 = {
+  data: void
+  status: 400
+}
+
+export type platformLeadsControllerConvertResponse401 = {
+  data: void
+  status: 401
+}
+
+export type platformLeadsControllerConvertResponse403 = {
+  data: void
+  status: 403
+}
+
+export type platformLeadsControllerConvertResponse404 = {
+  data: void
+  status: 404
+}
+
+export type platformLeadsControllerConvertResponse409 = {
+  data: void
+  status: 409
+}
+
+export type platformLeadsControllerConvertResponse422 = {
+  data: void
+  status: 422
+}
+
+export type platformLeadsControllerConvertResponseSuccess = (platformLeadsControllerConvertResponse200) & {
+  headers: Headers;
+};
+export type platformLeadsControllerConvertResponseError = (platformLeadsControllerConvertResponse400 | platformLeadsControllerConvertResponse401 | platformLeadsControllerConvertResponse403 | platformLeadsControllerConvertResponse404 | platformLeadsControllerConvertResponse409 | platformLeadsControllerConvertResponse422) & {
+  headers: Headers;
+};
+
+export type platformLeadsControllerConvertResponse = (platformLeadsControllerConvertResponseSuccess | platformLeadsControllerConvertResponseError)
+
+export const getPlatformLeadsControllerConvertUrl = (id: string,) => {
+
+
+  
+
+  return `/platform/leads/${id}/convert-to-agency`
+}
+
+export const platformLeadsControllerConvert = async (id: string,
+    convertPlatformLeadDto: ConvertPlatformLeadDto, options?: RequestInit): Promise<platformLeadsControllerConvertResponse> => {
+  
+  return customInstance<platformLeadsControllerConvertResponse>(getPlatformLeadsControllerConvertUrl(id),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      convertPlatformLeadDto,)
+  }
+);}
+  
+
+
+
+export const getPlatformLeadsControllerConvertMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof platformLeadsControllerConvert>>, TError,{id: string;data: ConvertPlatformLeadDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof platformLeadsControllerConvert>>, TError,{id: string;data: ConvertPlatformLeadDto}, TContext> => {
+
+const mutationKey = ['platformLeadsControllerConvert'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof platformLeadsControllerConvert>>, {id: string;data: ConvertPlatformLeadDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  platformLeadsControllerConvert(id,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PlatformLeadsControllerConvertMutationResult = NonNullable<Awaited<ReturnType<typeof platformLeadsControllerConvert>>>
+    export type PlatformLeadsControllerConvertMutationBody = ConvertPlatformLeadDto
+    export type PlatformLeadsControllerConvertMutationError = ErrorType<void>
+
+    /**
+ * @summary Convert a marketing lead into a tenant with an admin user.
+ */
+export const usePlatformLeadsControllerConvert = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof platformLeadsControllerConvert>>, TError,{id: string;data: ConvertPlatformLeadDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof platformLeadsControllerConvert>>,
+        TError,
+        {id: string;data: ConvertPlatformLeadDto},
+        TContext
+      > => {
+      return useMutation(getPlatformLeadsControllerConvertMutationOptions(options), queryClient);
     }
     
 /**
@@ -8202,6 +8968,124 @@ export function useTicketsControllerPresignDownload<TData = Awaited<ReturnType<t
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getTicketsControllerPresignDownloadQueryOptions(id,attachmentId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Get public SEO sitemap data for published storefronts.
+ */
+export type publicSeoControllerGetSitemapDataResponse200 = {
+  data: PublicSeoSitemapDataResponseDto
+  status: 200
+}
+
+export type publicSeoControllerGetSitemapDataResponse429 = {
+  data: void
+  status: 429
+}
+
+export type publicSeoControllerGetSitemapDataResponseSuccess = (publicSeoControllerGetSitemapDataResponse200) & {
+  headers: Headers;
+};
+export type publicSeoControllerGetSitemapDataResponseError = (publicSeoControllerGetSitemapDataResponse429) & {
+  headers: Headers;
+};
+
+export type publicSeoControllerGetSitemapDataResponse = (publicSeoControllerGetSitemapDataResponseSuccess | publicSeoControllerGetSitemapDataResponseError)
+
+export const getPublicSeoControllerGetSitemapDataUrl = () => {
+
+
+  
+
+  return `/api/public/seo/sitemap-data`
+}
+
+export const publicSeoControllerGetSitemapData = async ( options?: RequestInit): Promise<publicSeoControllerGetSitemapDataResponse> => {
+  
+  return customInstance<publicSeoControllerGetSitemapDataResponse>(getPublicSeoControllerGetSitemapDataUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getPublicSeoControllerGetSitemapDataQueryKey = () => {
+    return [
+    `/api/public/seo/sitemap-data`
+    ] as const;
+    }
+
+    
+export const getPublicSeoControllerGetSitemapDataQueryOptions = <TData = Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPublicSeoControllerGetSitemapDataQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>> = ({ signal }) => publicSeoControllerGetSitemapData({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type PublicSeoControllerGetSitemapDataQueryResult = NonNullable<Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>>
+export type PublicSeoControllerGetSitemapDataQueryError = ErrorType<void>
+
+
+export function usePublicSeoControllerGetSitemapData<TData = Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>,
+          TError,
+          Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePublicSeoControllerGetSitemapData<TData = Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>,
+          TError,
+          Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePublicSeoControllerGetSitemapData<TData = Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get public SEO sitemap data for published storefronts.
+ */
+
+export function usePublicSeoControllerGetSitemapData<TData = Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publicSeoControllerGetSitemapData>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getPublicSeoControllerGetSitemapDataQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

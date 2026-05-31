@@ -8,6 +8,8 @@ import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/use
 import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
 import { reservationsControllerList } from "@/infrastructure/generated/surp-api"
 import { buildSeatMap } from "@/utils/seatHelpers"
+import { buildReservationGroupLabels } from "@/utils/reservationGroupLabels"
+import { registerPdfUnicodeFont } from "@/utils/pdfFonts"
 import type { Reservation } from "@/types"
 
 function normalizeDate(value: string): string {
@@ -30,7 +32,9 @@ async function fetchReturnDateForPassenger(
   passengerId: string,
   outboundReservationId: string,
   outboundRideId: string,
-  outboundDate: string
+  outboundDate: string,
+  outboundDepartureStationId: string,
+  outboundArrivalStationId: string
 ): Promise<string> {
   try {
     const response = await reservationsControllerList({
@@ -47,6 +51,8 @@ async function fetchReturnDateForPassenger(
         (item) =>
           item.id !== outboundReservationId &&
           item.rideId !== outboundRideId &&
+          item.departureStationId === outboundArrivalStationId &&
+          item.arrivalStationId === outboundDepartureStationId &&
           normalizeDate(item.travelDate) >= outboundDateOnly
       )
       .sort((left, right) => {
@@ -123,6 +129,16 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     return buildSeatMap(reservations, selectedRideInstance.ride.busCapacity, selectedSeats)
   }, [reservations, selectedRideInstance, selectedSeats])
 
+  const groupLabelByGroupId = useMemo(() => {
+    if (!selectedRideInstance) return new Map<string, string>()
+    return buildReservationGroupLabels(
+      reservations.filter(
+        (reservation) =>
+          reservation.rideInstanceId === selectedRideInstance.id && reservation.status === "active"
+      )
+    )
+  }, [reservations, selectedRideInstance])
+
   useEffect(() => {
     const queryDate = searchParams?.get("date")
     if (queryDate) {
@@ -195,7 +211,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
 
     const fromName = selectedRideInstance.ride.line.departureStation?.name ?? ""
     const toName = selectedRideInstance.ride.line.arrivalStation?.name ?? ""
-    const dateStr = selectedRideInstance.date
+    const dateStr = formatLocalDate(selectedRideInstance.date)
     const timeStr = selectedRideInstance.departureTime
     const passengerCount = rideReservations.length
 
@@ -205,10 +221,11 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       "Telefon",
       "Polazna stanica",
       "Dolazna stanica",
-      "Datum polaska",
-      "Vreme polaska",
       "Datum povratka",
+      "Grupa",
     ]
+
+    const groupLabelByGroupId = buildReservationGroupLabels(rideReservations)
 
     const returnDates = await Promise.all(
       rideReservations.map((reservation) =>
@@ -216,7 +233,9 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
           reservation.passengerId,
           reservation.id,
           selectedRideInstance.ride.id,
-          selectedRideInstance.date
+          selectedRideInstance.date,
+          reservation.departureStationId,
+          reservation.arrivalStationId
         )
       )
     )
@@ -227,24 +246,41 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       reservation.passenger.phone,
       reservation.departureStation.name,
       reservation.arrivalStation.name,
-      formatLocalDate(selectedRideInstance.date),
-      selectedRideInstance.departureTime,
-      returnDates[index],
+      returnDates[index] || "Jedan smer",
+      reservation.groupId ? groupLabelByGroupId.get(reservation.groupId) ?? "—" : "—",
     ])
 
     const safeBaseName = sanitizeFileNamePart(options.fileName) || buildDefaultExportFileName()
-    const headingText = `${fromName} - ${toName} - ${dateStr} - ${timeStr} - ${passengerCount}`
+    const headingText = `${fromName} - ${toName} - ${dateStr} - ${timeStr} - Ukupno putnika: ${passengerCount}`
 
     if (options.format === "pdf") {
       const doc = new jsPDF({ orientation: "landscape" })
+      await registerPdfUnicodeFont(doc)
+      doc.setFont("Roboto", "bold")
       doc.setFontSize(14)
       doc.text(headingText, doc.internal.pageSize.getWidth() / 2, 14, { align: "center" })
+      const groupedRowIndexes = new Set<number>(
+        rideReservations
+          .map((reservation, index) => (reservation.groupId ? index : -1))
+          .filter((index) => index >= 0)
+      )
       autoTable(doc, {
         startY: 22,
         head: [headers],
         body: rows.map((row) => row.map((cell) => (cell == null ? "" : String(cell)))),
-        styles: { fontSize: 9, cellPadding: 2 },
-        headStyles: { fillColor: [229, 231, 235], textColor: 20, halign: "center" },
+        styles: { font: "Roboto", fontStyle: "normal", fontSize: 9, cellPadding: 2 },
+        headStyles: {
+          font: "Roboto",
+          fontStyle: "bold",
+          fillColor: [229, 231, 235],
+          textColor: 20,
+          halign: "center",
+        },
+        didParseCell: (data) => {
+          if (data.section === "body" && groupedRowIndexes.has(data.row.index)) {
+            data.cell.styles.fillColor = [243, 244, 246]
+          }
+        },
         theme: "grid",
       })
       doc.save(`${safeBaseName}.pdf`)
@@ -283,14 +319,24 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       }
     })
 
-    rows.forEach((row) => {
+    const groupRowFillArgb = "FFF3F4F6"
+    rows.forEach((row, index) => {
       const addedRow = worksheet.addRow(row)
+      const reservation = rideReservations[index]
+      const hasGroup = Boolean(reservation.groupId)
       addedRow.eachCell((cell) => {
         cell.border = {
           top: { style: "thin" },
           left: { style: "thin" },
           bottom: { style: "thin" },
           right: { style: "thin" },
+        }
+        if (hasGroup) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: groupRowFillArgb },
+          }
         }
       })
     })
@@ -350,6 +396,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     selectedDate,
     seatMap,
     reservations,
+    groupLabelByGroupId,
     loading:
       reservationsQuery.isLoading ||
       reservationsQuery.isFetching ||

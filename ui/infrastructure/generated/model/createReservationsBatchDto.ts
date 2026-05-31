@@ -9,4 +9,6 @@ import type { CreateReservationDto } from './createReservationDto';
 
 export interface CreateReservationsBatchDto {
   items: CreateReservationDto[];
+  /** When true and items.length > 1, all reservations in the batch are stamped with the same server-generated groupId so they appear as one travel group in driver exports. */
+  travelTogether?: boolean;
 }

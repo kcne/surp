@@ -71,6 +71,7 @@ describe('ReservationsService', () => {
     cancelledAt: null,
     departureStationId: 'station-a',
     arrivalStationId: 'station-c',
+    groupId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ride: {
@@ -189,7 +190,8 @@ describe('ReservationsService', () => {
         rideDepartureTime: data.rideDepartureTime as string,
         rideArrivalTime: data.rideArrivalTime as string,
         createdById: data.createdById as string,
-        updatedById: data.updatedById as string
+        updatedById: data.updatedById as string,
+        groupId: (data.groupId as string | null | undefined) ?? null
       };
 
       reservationStore.push({
@@ -321,6 +323,98 @@ describe('ReservationsService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(reservationStore).toHaveLength(1);
+  });
+
+  it('stamps the same groupId on all items when travelTogether is true and items.length > 1', async () => {
+    const result = await service.createBatch(auth, {
+      travelTogether: true,
+      items: [
+        {
+          rideId: 'ride-1',
+          passengerId: 'passenger-1',
+          travelDate: '2026-03-30',
+          rideDepartureTime: '09:00',
+          rideArrivalTime: '10:30',
+          seatNumber: 1,
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-c'
+        },
+        {
+          rideId: 'ride-1',
+          passengerId: 'passenger-1',
+          travelDate: '2026-03-30',
+          rideDepartureTime: '09:00',
+          rideArrivalTime: '10:30',
+          seatNumber: 2,
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-c'
+        },
+        {
+          rideId: 'ride-1',
+          passengerId: 'passenger-1',
+          travelDate: '2026-03-30',
+          rideDepartureTime: '09:00',
+          rideArrivalTime: '10:30',
+          seatNumber: 3,
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-c'
+        }
+      ]
+    });
+
+    const groupIds = result.items.map((item) => item.reservation?.groupId);
+    expect(groupIds.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
+    expect(new Set(groupIds).size).toBe(1);
+  });
+
+  it('leaves groupId null when travelTogether is false', async () => {
+    const result = await service.createBatch(auth, {
+      travelTogether: false,
+      items: [
+        {
+          rideId: 'ride-1',
+          passengerId: 'passenger-1',
+          travelDate: '2026-03-30',
+          rideDepartureTime: '09:00',
+          rideArrivalTime: '10:30',
+          seatNumber: 7,
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-c'
+        },
+        {
+          rideId: 'ride-1',
+          passengerId: 'passenger-1',
+          travelDate: '2026-03-30',
+          rideDepartureTime: '09:00',
+          rideArrivalTime: '10:30',
+          seatNumber: 8,
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-c'
+        }
+      ]
+    });
+
+    expect(result.items.every((item) => item.reservation?.groupId === null)).toBe(true);
+  });
+
+  it('leaves groupId null when travelTogether is true but only one item is supplied', async () => {
+    const result = await service.createBatch(auth, {
+      travelTogether: true,
+      items: [
+        {
+          rideId: 'ride-1',
+          passengerId: 'passenger-1',
+          travelDate: '2026-03-30',
+          rideDepartureTime: '09:00',
+          rideArrivalTime: '10:30',
+          seatNumber: 9,
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-c'
+        }
+      ]
+    });
+
+    expect(result.items[0].reservation?.groupId).toBeNull();
   });
 
   it('fails when route segment capacity is exhausted', async () => {

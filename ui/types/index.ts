@@ -173,6 +173,7 @@ export interface Reservation {
   arrivalStationId: string
   arrivalStation: Station
   status: 'active' | 'cancelled'
+  groupId?: string | null
   createdAt?: string
   updatedAt?: string
 }

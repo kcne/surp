@@ -5,6 +5,7 @@
  * Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.
  * OpenAPI spec version: 0.1.0
  */
+import type { PlatformTenantKpiResponseDto } from './platformTenantKpiResponseDto';
 import type { PlatformTenantResponseDtoDeactivatedAt } from './platformTenantResponseDtoDeactivatedAt';
 import type { PlatformTenantResponseDtoDeactivatedById } from './platformTenantResponseDtoDeactivatedById';
 import type { PlatformTenantResponseDtoTimezone } from './platformTenantResponseDtoTimezone';
@@ -22,4 +23,5 @@ export interface PlatformTenantResponseDto {
   deactivatedById: PlatformTenantResponseDtoDeactivatedById;
   createdAt: string;
   updatedAt: string;
+  kpis?: PlatformTenantKpiResponseDto;
 }

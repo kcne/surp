@@ -35,6 +35,11 @@ export interface ReservationResponseDto {
   cancelledAt: ReservationResponseDtoCancelledAt;
   departureStationId: string;
   arrivalStationId: string;
+  /**
+   * Correlation id shared by reservations created together as a group
+   * @nullable
+   */
+  groupId: string | null;
   ride: ReservationRideSummaryDto;
   passenger: ReservationPassengerSummaryDto;
   departureStation: ReservationStationSummaryDto;

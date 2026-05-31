@@ -27,6 +27,7 @@ export default function SeatMapPage() {
     selectedDate,
     seatMap,
     reservations,
+    groupLabelByGroupId,
     loading,
     selectedSeat,
     selectedSeats,
@@ -100,6 +101,7 @@ export default function SeatMapPage() {
             onSeatClick={handleSeatClick}
             allowMultiSelect
             selectedSeats={selectedSeats}
+            groupLabelByGroupId={groupLabelByGroupId}
           />
         ) : null}
 

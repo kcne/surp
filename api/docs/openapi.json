@@ -1605,6 +1605,466 @@
         ]
       }
     },
+    "/platform/analytics/overview": {
+      "get": {
+        "operationId": "PlatformAnalyticsController_getOverview",
+        "parameters": [
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-05-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-05-22",
+              "type": "string"
+            }
+          },
+          {
+            "name": "topAgenciesLimit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 5,
+              "example": 5,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformAnalyticsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or invalid date range."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get aggregate platform analytics without tenant PII.",
+        "tags": [
+          "Platform Analytics"
+        ]
+      }
+    },
+    "/platform/audit": {
+      "get": {
+        "operationId": "PlatformAuditController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "TENANT_UPDATED",
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "TENANT",
+              "type": "string"
+            }
+          },
+          {
+            "name": "actorUserId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "clx123",
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetTenantId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "clx123",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-05-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-05-22",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedPlatformAuditResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List platform-level audit events.",
+        "tags": [
+          "Platform Audit"
+        ]
+      }
+    },
+    "/platform/leads": {
+      "get": {
+        "operationId": "PlatformLeadsController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "NEW",
+                "CONTACTED",
+                "QUALIFIED",
+                "FOLLOW_UP",
+                "CONVERTED",
+                "NOT_INTERESTED",
+                "SPAM"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "drina",
+              "type": "string"
+            }
+          },
+          {
+            "name": "assigneeUserId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "superadmin-1",
+              "type": "string"
+            }
+          },
+          {
+            "name": "converted",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-05-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-05-22",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedPlatformLeadsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List marketing leads in platform scope.",
+        "tags": [
+          "Platform Leads"
+        ]
+      }
+    },
+    "/platform/leads/{id}": {
+      "get": {
+        "operationId": "PlatformLeadsController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformLeadResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Marketing lead not found."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get a marketing lead by id in platform scope.",
+        "tags": [
+          "Platform Leads"
+        ]
+      },
+      "patch": {
+        "operationId": "PlatformLeadsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePlatformLeadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformLeadResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Marketing lead not found."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Update marketing lead status, notes, or assignment.",
+        "tags": [
+          "Platform Leads"
+        ]
+      }
+    },
+    "/platform/leads/{id}/convert-to-agency": {
+      "post": {
+        "operationId": "PlatformLeadsController_convert",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertPlatformLeadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertPlatformLeadResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Marketing lead not found."
+          },
+          "409": {
+            "description": "Lead already converted or target tenant/user already exists."
+          },
+          "422": {
+            "description": "Tenant slug is reserved."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Convert a marketing lead into a tenant with an admin user.",
+        "tags": [
+          "Platform Leads"
+        ]
+      }
+    },
     "/passengers": {
       "post": {
         "operationId": "PassengersController_create",
@@ -2149,6 +2609,24 @@
             "in": "query",
             "schema": {
               "example": "acme",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-05-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-05-22",
               "type": "string"
             }
           }
@@ -4471,6 +4949,31 @@
         ]
       }
     },
+    "/api/public/seo/sitemap-data": {
+      "get": {
+        "operationId": "PublicSeoController_getSitemapData",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicSeoSitemapDataResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "Get public SEO sitemap data for published storefronts.",
+        "tags": [
+          "Public · SEO"
+        ]
+      }
+    },
     "/api/public/agencies/{slug}": {
       "get": {
         "operationId": "PublicStorefrontController_getAgencyBySlug",
@@ -5669,6 +6172,615 @@
           "message"
         ]
       },
+      "PlatformAnalyticsRangeDto": {
+        "type": "object",
+        "properties": {
+          "fromDate": {
+            "type": "string"
+          },
+          "toDate": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fromDate",
+          "toDate"
+        ]
+      },
+      "PlatformAnalyticsSummaryDto": {
+        "type": "object",
+        "properties": {
+          "totalAgencies": {
+            "type": "number"
+          },
+          "activeAgencies": {
+            "type": "number"
+          },
+          "totalUsers": {
+            "type": "number"
+          },
+          "activeUsers": {
+            "type": "number"
+          },
+          "reservationsInPeriod": {
+            "type": "number"
+          },
+          "activeRides": {
+            "type": "number"
+          },
+          "activeLines": {
+            "type": "number"
+          },
+          "totalPassengers": {
+            "type": "number"
+          },
+          "openTickets": {
+            "type": "number"
+          },
+          "newLeadsInPeriod": {
+            "type": "number"
+          },
+          "convertedLeadsInPeriod": {
+            "type": "number"
+          },
+          "leadConversionRatePercent": {
+            "type": "number"
+          },
+          "publishedStorefronts": {
+            "type": "number"
+          },
+          "agenciesWithRecentActivity": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "totalAgencies",
+          "activeAgencies",
+          "totalUsers",
+          "activeUsers",
+          "reservationsInPeriod",
+          "activeRides",
+          "activeLines",
+          "totalPassengers",
+          "openTickets",
+          "newLeadsInPeriod",
+          "convertedLeadsInPeriod",
+          "leadConversionRatePercent",
+          "publishedStorefronts",
+          "agenciesWithRecentActivity"
+        ]
+      },
+      "PlatformDailyTrendPointDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "reservations": {
+            "type": "number"
+          },
+          "leads": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "reservations",
+          "leads"
+        ]
+      },
+      "PlatformTopAgencyDto": {
+        "type": "object",
+        "properties": {
+          "tenantId": {
+            "type": "string"
+          },
+          "tenantName": {
+            "type": "string"
+          },
+          "tenantSlug": {
+            "type": "string"
+          },
+          "reservationsInPeriod": {
+            "type": "number"
+          },
+          "activeUsers": {
+            "type": "number"
+          },
+          "activeRides": {
+            "type": "number"
+          },
+          "activeLines": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "tenantId",
+          "tenantName",
+          "tenantSlug",
+          "reservationsInPeriod",
+          "activeUsers",
+          "activeRides",
+          "activeLines"
+        ]
+      },
+      "PlatformAnalyticsResponseDto": {
+        "type": "object",
+        "properties": {
+          "range": {
+            "$ref": "#/components/schemas/PlatformAnalyticsRangeDto"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PlatformAnalyticsSummaryDto"
+          },
+          "dailyTrend": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformDailyTrendPointDto"
+            }
+          },
+          "topAgencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformTopAgencyDto"
+            }
+          }
+        },
+        "required": [
+          "range",
+          "summary",
+          "dailyTrend",
+          "topAgencies"
+        ]
+      },
+      "PlatformAuditEventResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "actorUserId": {
+            "type": "string"
+          },
+          "actorDisplayName": {
+            "type": "object",
+            "nullable": true
+          },
+          "action": {
+            "type": "string"
+          },
+          "targetType": {
+            "type": "string"
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "targetDisplayName": {
+            "type": "object",
+            "nullable": true
+          },
+          "targetTenantId": {
+            "type": "object",
+            "nullable": true
+          },
+          "targetTenantDisplayName": {
+            "type": "object",
+            "nullable": true
+          },
+          "targetLeadId": {
+            "type": "object",
+            "nullable": true
+          },
+          "targetLeadDisplayName": {
+            "type": "object",
+            "nullable": true
+          },
+          "targetUserId": {
+            "type": "object",
+            "nullable": true
+          },
+          "targetUserDisplayName": {
+            "type": "object",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "actorUserId",
+          "actorDisplayName",
+          "action",
+          "targetType",
+          "targetId",
+          "targetDisplayName",
+          "targetTenantId",
+          "targetTenantDisplayName",
+          "targetLeadId",
+          "targetLeadDisplayName",
+          "targetUserId",
+          "targetUserDisplayName",
+          "metadata",
+          "createdAt"
+        ]
+      },
+      "PaginatedPlatformAuditResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformAuditEventResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 25
+          },
+          "total": {
+            "type": "number",
+            "example": 1
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "PlatformLeadResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "CONTACTED",
+              "QUALIFIED",
+              "FOLLOW_UP",
+              "CONVERTED",
+              "NOT_INTERESTED",
+              "SPAM"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "agencyName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "object",
+            "nullable": true
+          },
+          "departuresPerDay": {
+            "type": "string",
+            "enum": [
+              "ONE_TO_FIVE",
+              "SIX_TO_TWENTY",
+              "TWENTY_ONE_TO_FIFTY",
+              "FIFTY_PLUS"
+            ]
+          },
+          "message": {
+            "type": "object",
+            "nullable": true
+          },
+          "ipAddress": {
+            "type": "object",
+            "nullable": true
+          },
+          "notes": {
+            "type": "object",
+            "nullable": true
+          },
+          "assigneeUserId": {
+            "type": "object",
+            "nullable": true
+          },
+          "convertedTenantId": {
+            "type": "object",
+            "nullable": true
+          },
+          "convertedAt": {
+            "type": "object",
+            "nullable": true
+          },
+          "internalEmailSentAt": {
+            "type": "object",
+            "nullable": true
+          },
+          "confirmationEmailSentAt": {
+            "type": "object",
+            "nullable": true
+          },
+          "lastEmailError": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "name",
+          "email",
+          "agencyName",
+          "phone",
+          "departuresPerDay",
+          "message",
+          "ipAddress",
+          "notes",
+          "assigneeUserId",
+          "convertedTenantId",
+          "convertedAt",
+          "internalEmailSentAt",
+          "confirmationEmailSentAt",
+          "lastEmailError",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaginatedPlatformLeadsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformLeadResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 25
+          },
+          "total": {
+            "type": "number",
+            "example": 1
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "UpdatePlatformLeadDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "CONTACTED",
+              "QUALIFIED",
+              "FOLLOW_UP",
+              "CONVERTED",
+              "NOT_INTERESTED",
+              "SPAM"
+            ]
+          },
+          "notes": {
+            "type": "object",
+            "example": "Called twice, follow up next week.",
+            "nullable": true
+          },
+          "assigneeUserId": {
+            "type": "object",
+            "example": "superadmin-1",
+            "nullable": true
+          }
+        }
+      },
+      "ConvertPlatformLeadDto": {
+        "type": "object",
+        "properties": {
+          "tenantSlug": {
+            "type": "string",
+            "example": "drina-bus"
+          },
+          "tenantName": {
+            "type": "string",
+            "example": "Drina Bus"
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Belgrade"
+          },
+          "adminUsername": {
+            "type": "string",
+            "example": "drina-admin"
+          },
+          "adminEmail": {
+            "type": "string",
+            "example": "admin@drina.rs"
+          },
+          "adminPassword": {
+            "type": "string",
+            "example": "strong-password-123"
+          },
+          "requirePasswordChange": {
+            "type": "boolean",
+            "example": true,
+            "default": true
+          }
+        },
+        "required": [
+          "tenantSlug",
+          "tenantName",
+          "adminUsername",
+          "adminEmail",
+          "adminPassword"
+        ]
+      },
+      "PlatformTenantStorefrontSummaryDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "nullable": true
+          },
+          "publishedAt": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "status",
+          "publishedAt"
+        ]
+      },
+      "PlatformTenantKpiResponseDto": {
+        "type": "object",
+        "properties": {
+          "totalUsers": {
+            "type": "number"
+          },
+          "activeUsers": {
+            "type": "number"
+          },
+          "reservationsInPeriod": {
+            "type": "number"
+          },
+          "activeRides": {
+            "type": "number"
+          },
+          "activeLines": {
+            "type": "number"
+          },
+          "totalPassengers": {
+            "type": "number"
+          },
+          "activePassengers": {
+            "type": "number"
+          },
+          "openTickets": {
+            "type": "number"
+          },
+          "inProgressTickets": {
+            "type": "number"
+          },
+          "storefront": {
+            "$ref": "#/components/schemas/PlatformTenantStorefrontSummaryDto"
+          },
+          "lastActivityAt": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "totalUsers",
+          "activeUsers",
+          "reservationsInPeriod",
+          "activeRides",
+          "activeLines",
+          "totalPassengers",
+          "activePassengers",
+          "openTickets",
+          "inProgressTickets",
+          "storefront",
+          "lastActivityAt"
+        ]
+      },
+      "PlatformTenantResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "object",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "deactivatedAt": {
+            "type": "object",
+            "nullable": true
+          },
+          "deactivatedById": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "kpis": {
+            "$ref": "#/components/schemas/PlatformTenantKpiResponseDto"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "timezone",
+          "isActive",
+          "deactivatedAt",
+          "deactivatedById",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ConvertPlatformLeadResponseDto": {
+        "type": "object",
+        "properties": {
+          "lead": {
+            "$ref": "#/components/schemas/PlatformLeadResponseDto"
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/PlatformTenantResponseDto"
+          },
+          "adminUser": {
+            "$ref": "#/components/schemas/UserResponseDto"
+          }
+        },
+        "required": [
+          "lead",
+          "tenant",
+          "adminUser"
+        ]
+      },
       "CreatePassengerDto": {
         "type": "object",
         "properties": {
@@ -5871,54 +6983,6 @@
         "required": [
           "slug",
           "name"
-        ]
-      },
-      "PlatformTenantResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "timezone": {
-            "type": "object",
-            "nullable": true
-          },
-          "isActive": {
-            "type": "boolean"
-          },
-          "deactivatedAt": {
-            "type": "object",
-            "nullable": true
-          },
-          "deactivatedById": {
-            "type": "object",
-            "nullable": true
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "slug",
-          "name",
-          "timezone",
-          "isActive",
-          "deactivatedAt",
-          "deactivatedById",
-          "createdAt",
-          "updatedAt"
         ]
       },
       "CreatePlatformTenantAdminDto": {
@@ -6794,6 +7858,11 @@
           "arrivalStationId": {
             "type": "string"
           },
+          "groupId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Correlation id shared by reservations created together as a group"
+          },
           "ride": {
             "$ref": "#/components/schemas/ReservationRideSummaryDto"
           },
@@ -6830,6 +7899,7 @@
           "cancelledAt",
           "departureStationId",
           "arrivalStationId",
+          "groupId",
           "ride",
           "passenger",
           "departureStation",
@@ -6846,6 +7916,11 @@
             "items": {
               "$ref": "#/components/schemas/CreateReservationDto"
             }
+          },
+          "travelTogether": {
+            "type": "boolean",
+            "description": "When true and items.length > 1, all reservations in the batch are stamped with the same server-generated groupId so they appear as one travel group in driver exports.",
+            "default": false
           }
         },
         "required": [
@@ -7754,6 +8829,40 @@
         "required": [
           "downloadUrl",
           "expiresInSeconds"
+        ]
+      },
+      "PublicSeoSitemapAgencyDto": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "updatedAt"
+        ]
+      },
+      "PublicSeoSitemapDataResponseDto": {
+        "type": "object",
+        "properties": {
+          "agencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicSeoSitemapAgencyDto"
+            }
+          }
+        },
+        "required": [
+          "agencies"
         ]
       },
       "StorefrontSectionsDto": {

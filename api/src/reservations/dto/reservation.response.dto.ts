@@ -77,6 +77,9 @@ export class ReservationResponseDto {
   @ApiProperty()
   arrivalStationId!: string;
 
+  @ApiProperty({ type: String, nullable: true, description: 'Correlation id shared by reservations created together as a group' })
+  groupId!: string | null;
+
   @ApiProperty({ type: ReservationRideSummaryDto })
   ride!: ReservationRideSummaryDto;
 

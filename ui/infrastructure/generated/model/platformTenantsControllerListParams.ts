@@ -11,4 +11,6 @@ page?: number;
 pageSize?: number;
 isActive?: boolean;
 search?: string;
+fromDate?: string;
+toDate?: string;
 };

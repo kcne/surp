@@ -30,6 +30,7 @@ export function useReservationModalState({
   const [assignmentMode, setAssignmentMode] = useState<"single" | "perSeat">("single")
   const [perSeatPassengers, setPerSeatPassengers] = useState<Record<number, Passenger | null>>({})
   const [addPassengerTargetSeat, setAddPassengerTargetSeat] = useState<number | null>(null)
+  const [travelTogether, setTravelTogether] = useState<boolean>(true)
   const [isReturnTicket, setIsReturnTicket] = useState(false)
   const [returnDatePickerOpen, setReturnDatePickerOpen] = useState(false)
   const [selectedReturnDate, setSelectedReturnDate] = useState<Date | undefined>(undefined)
@@ -49,6 +50,7 @@ export function useReservationModalState({
     setAssignmentMode("single")
     setPerSeatPassengers({})
     setAddPassengerTargetSeat(null)
+    setTravelTogether(true)
     setIsReturnTicket(false)
     setSelectedReturnDate(undefined)
     setSelectedReturnRideInstanceId("")
@@ -127,6 +129,7 @@ export function useReservationModalState({
     setAssignmentMode("single")
     setPerSeatPassengers({})
     setAddPassengerTargetSeat(null)
+    setTravelTogether(true)
     setIsReturnTicket(false)
     setSelectedReturnDate(undefined)
     setSelectedReturnRideInstanceId("")
@@ -171,6 +174,7 @@ export function useReservationModalState({
     assignmentMode,
     perSeatPassengers,
     addPassengerTargetSeat,
+    travelTogether,
     isReturnTicket,
     returnDatePickerOpen,
     selectedReturnDate,
@@ -182,6 +186,7 @@ export function useReservationModalState({
     setAssignmentMode,
     setPerSeatPassengers,
     setAddPassengerTargetSeat,
+    setTravelTogether,
     setIsReturnTicket,
     setReturnDatePickerOpen,
     setSelectedReturnDate,

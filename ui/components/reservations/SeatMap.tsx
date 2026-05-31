@@ -13,6 +13,7 @@ interface SeatMapProps {
   onSeatClick: (seatNumber: number, reservation?: Reservation) => void
   allowMultiSelect?: boolean
   selectedSeats?: number[]
+  groupLabelByGroupId?: Map<string, string>
 }
 
 function normalize(value: string): string {
@@ -20,14 +21,6 @@ function normalize(value: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
-}
-
-interface SeatMapProps {
-  seats: SeatInfo[]
-  capacity: number
-  onSeatClick: (seatNumber: number, reservation?: Reservation) => void
-  allowMultiSelect?: boolean
-  selectedSeats?: number[]
 }
 
 type SeatVisualStatus = SeatInfo["status"] | "selected"
@@ -60,9 +53,10 @@ interface SeatProps {
   onClick: () => void
   allowMultiSelect: boolean
   highlight?: "match" | "current" | null
+  groupLabel?: string | null
 }
 
-function Seat({ seat, isSelected, onClick, allowMultiSelect, highlight }: SeatProps) {
+function Seat({ seat, isSelected, onClick, allowMultiSelect, highlight, groupLabel }: SeatProps) {
   const displayStatus: SeatVisualStatus =
     isSelected && seat.status === "available" ? "selected" : seat.status
   const fullName = seat.reservation
@@ -96,13 +90,21 @@ function Seat({ seat, isSelected, onClick, allowMultiSelect, highlight }: SeatPr
     >
       <span
         className={cn(
-          "text-[10px] font-bold uppercase tracking-wide tabular-nums",
+          "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide tabular-nums",
           displayStatus === "available" && "text-emerald-900",
           displayStatus === "reserved" && "text-red-900",
           displayStatus === "selected" && "text-blue-900",
         )}
       >
-        #{seat.seatNumber}
+        <span>#{seat.seatNumber}</span>
+        {groupLabel && (
+          <span
+            className="rounded bg-red-900/15 px-1 py-px text-[9px] font-bold leading-none text-red-900"
+            title={`Putuju zajedno (${groupLabel})`}
+          >
+            {groupLabel}
+          </span>
+        )}
       </span>
       <span
         className={cn(
@@ -144,6 +146,7 @@ export function SeatMap({
   onSeatClick,
   allowMultiSelect = false,
   selectedSeats = [],
+  groupLabelByGroupId,
 }: SeatMapProps) {
   const gridRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -240,6 +243,8 @@ export function SeatMap({
         : matchSet.has(seat.seatNumber)
           ? "match"
           : null
+    const groupId = seat.reservation?.groupId
+    const groupLabel = groupId ? groupLabelByGroupId?.get(groupId) ?? null : null
     return (
       <Seat
         key={seat.seatNumber}
@@ -248,6 +253,7 @@ export function SeatMap({
         onClick={() => onSeatClick(seat.seatNumber, seat.reservation)}
         allowMultiSelect={allowMultiSelect}
         highlight={highlight}
+        groupLabel={groupLabel}
       />
     )
   }

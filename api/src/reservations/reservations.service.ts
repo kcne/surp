@@ -5,6 +5,7 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { Prisma, ReservationStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
@@ -37,6 +38,7 @@ const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   cancelledAt: true,
   departureStationId: true,
   arrivalStationId: true,
+  groupId: true,
   createdAt: true,
   updatedAt: true,
   ride: {
@@ -101,10 +103,11 @@ export class ReservationsService {
   ): Promise<BatchReservationsResponseDto> {
     return this.prisma.$transaction(async (tx) => {
       const results: ReservationBatchItemResultDto[] = [];
+      const groupId = dto.travelTogether && dto.items.length > 1 ? randomUUID() : null;
 
       for (let index = 0; index < dto.items.length; index += 1) {
         const item = dto.items[index];
-        const created = await this.createSingleInTransaction(tx, auth, item);
+        const created = await this.createSingleInTransaction(tx, auth, item, { groupId });
 
         results.push({
           index,
@@ -459,7 +462,8 @@ export class ReservationsService {
   private async createSingleInTransaction(
     tx: Prisma.TransactionClient,
     auth: AccessTokenPayload,
-    dto: CreateReservationDto
+    dto: CreateReservationDto,
+    options: { groupId?: string | null } = {}
   ): Promise<SelectedReservation> {
     const rideContext = await this.getRideRouteContext(auth.tenantId, dto.rideId, tx);
     await this.ensurePassengerExistsInTenant(auth.tenantId, dto.passengerId, tx);
@@ -502,7 +506,8 @@ export class ReservationsService {
           departureStationId: dto.departureStationId,
           arrivalStationId: dto.arrivalStationId,
           status: ReservationStatus.ACTIVE,
-          cancelledAt: null
+          cancelledAt: null,
+          groupId: options.groupId ?? null
         },
         auth.sub
       ),
@@ -557,6 +562,7 @@ export class ReservationsService {
       cancelledAt: reservation.cancelledAt,
       departureStationId: reservation.departureStationId,
       arrivalStationId: reservation.arrivalStationId,
+      groupId: reservation.groupId,
       ride: {
         id: reservation.ride.id,
         name: reservation.ride.name,

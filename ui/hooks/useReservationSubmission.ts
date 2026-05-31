@@ -13,6 +13,7 @@ interface UseReservationSubmissionParams {
   isMultiReservation: boolean
   selectedSeats: number[]
   perSeatPassengers: Record<number, Passenger | null>
+  travelTogether: boolean
   allReservations: Record<string, Reservation[]>
   closeReservationModal: () => void
   onComplete?: () => void
@@ -28,11 +29,12 @@ interface UseReservationSubmissionParams {
   createReservationsBatch: (payload: {
     data: ReservationFormData[]
     rideInstance: RideInstance
+    travelTogether?: boolean
   }) => Promise<void>
   createReservationsForRideInstance: (
     instance: RideInstance,
     requests: ReservationFormData[],
-    options?: { showSuccessToast?: boolean }
+    options?: { showSuccessToast?: boolean; travelTogether?: boolean }
   ) => Promise<void>
   updateReservation: (reservationId: string, data: ReservationFormData) => Promise<void>
   clearSelectedSeats: () => void
@@ -49,6 +51,7 @@ export function useReservationSubmission({
   isMultiReservation,
   selectedSeats,
   perSeatPassengers,
+  travelTogether,
   allReservations,
   closeReservationModal,
   onComplete,
@@ -97,12 +100,14 @@ export function useReservationSubmission({
       await createReservationsBatch({
         data: outboundRequests,
         rideInstance: selectedRideInstance,
+        travelTogether,
       })
     }
 
     if (returnRequests.length > 0 && selectedReturnRideInstance) {
       await createReservationsForRideInstance(selectedReturnRideInstance, returnRequests, {
         showSuccessToast: false,
+        travelTogether,
       })
       toast.success("Povratna karta je uspešno rezervisana")
     }
