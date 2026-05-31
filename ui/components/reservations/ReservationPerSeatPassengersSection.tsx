@@ -1,36 +1,21 @@
-import { Button } from "@/components/ui/button"
 import { PassengerSearch } from "@/components/reservations/PassengerSearch"
 import type { Passenger } from "@/types"
-import { UserPlus } from "lucide-react"
 
 interface ReservationPerSeatPassengersSectionProps {
   selectedSeats: number[]
   perSeatPassengers: Record<number, Passenger | null>
   onSelectPassenger: (seat: number, passenger: Passenger | null) => void
-  onAddNewPassenger: () => void
+  onAddNewPassengerForSeat: (seat: number) => void
 }
 
 export function ReservationPerSeatPassengersSection({
   selectedSeats,
   perSeatPassengers,
   onSelectPassenger,
-  onAddNewPassenger,
+  onAddNewPassengerForSeat,
 }: ReservationPerSeatPassengersSectionProps) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">Putnici po sedištu *</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onAddNewPassenger}
-          className="text-primary"
-        >
-          <UserPlus className="mr-2 h-4 w-4" />
-          Dodaj Novog Putnika
-        </Button>
-      </div>
       <div className="grid gap-3">
         {selectedSeats
           .slice()
@@ -43,7 +28,7 @@ export function ReservationPerSeatPassengersSection({
               <PassengerSearch
                 value={perSeatPassengers[seat] || null}
                 onSelect={(passenger) => onSelectPassenger(seat, passenger)}
-                onAddNew={onAddNewPassenger}
+                onAddNew={() => onAddNewPassengerForSeat(seat)}
               />
             </div>
           ))}

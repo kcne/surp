@@ -16,6 +16,24 @@ export const formatDateToISO = (date: Date): string => {
   return format(date, "yyyy-MM-dd")
 }
 
+// Format duration in minutes as "Xh Ym" / "Xh" / "Ym"
+export const formatDuration = (durationInMinutes?: number): string | null => {
+  if (!durationInMinutes || durationInMinutes <= 0) return null
+
+  const hours = Math.floor(durationInMinutes / 60)
+  const minutes = durationInMinutes % 60
+
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h ${minutes}min`
+  }
+
+  if (hours > 0) {
+    return `${hours}h`
+  }
+
+  return `${minutes}min`
+}
+
 // Parse YYYY-MM-DD to Date
 export const parseISODate = (dateString: string): Date => {
   return new Date(dateString + "T00:00:00")

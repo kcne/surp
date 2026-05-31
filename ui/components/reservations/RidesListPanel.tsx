@@ -29,6 +29,8 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -42,13 +44,24 @@ import { RideInstanceCard } from "@/components/reservations/RideInstanceCard"
 import { RideInstanceInfoDialog } from "@/components/reservations/RideInstanceInfoDialog"
 import { cn } from "@/lib/utils"
 import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
-import { CalendarDays, Check, ChevronsUpDown, Filter, Search, Ticket, X } from "lucide-react"
+import { formatDateToISO, formatDuration } from "@/utils/dateHelpers"
+import { generateRideInstancesForRide } from "@/utils/rideInstanceGenerators"
+import {
+  ArrowLeftRight,
+  ArrowUpDown,
+  CalendarDays,
+  Check,
+  ChevronsUpDown,
+  Filter,
+  Search,
+  Ticket,
+  X,
+} from "lucide-react"
 
 interface RidesListPanelProps {
   rides: Ride[]
   selectedDate: Date | undefined
   rideInstances: RideInstance[]
-  rideIconUrl?: string | null
   loading: boolean
   onDateSelect: (date: Date) => void
 }
@@ -57,6 +70,15 @@ const statusLabels: Record<RideStatus, string> = {
   scheduled: "Zakazana",
   completed: "Završena",
   cancelled: "Otkazana",
+}
+
+type SortKey = "departureAsc" | "departureDesc" | "availableDesc" | "availableAsc"
+
+const sortLabels: Record<SortKey, string> = {
+  departureAsc: "Polazak: rano → kasno",
+  departureDesc: "Polazak: kasno → rano",
+  availableDesc: "Najviše slobodnih mesta",
+  availableAsc: "Najmanje slobodnih mesta",
 }
 
 const globalRideFilter: FilterFn<RideInstance> = (row, _columnId, filterValue) => {
@@ -131,7 +153,6 @@ export function RidesListPanel({
   rides,
   selectedDate,
   rideInstances,
-  rideIconUrl,
   loading,
   onDateSelect,
 }: RidesListPanelProps) {
@@ -144,6 +165,7 @@ export function RidesListPanel({
   const [selectedArrivalStationId, setSelectedArrivalStationId] = useState("")
   const [departurePopoverOpen, setDeparturePopoverOpen] = useState(false)
   const [arrivalPopoverOpen, setArrivalPopoverOpen] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>("departureAsc")
 
   const selectedInstanceReservationsQuery = useReservationsByRideInstanceQuery(selectedInstance, {
     enabled: infoModalOpen && Boolean(selectedInstance),
@@ -165,11 +187,6 @@ export function RidesListPanel({
     candidate.setHours(0, 0, 0, 0)
 
     return candidate < today
-  }
-
-  const isRideInstanceInPast = (instance: RideInstance) => {
-    const rideDate = new Date(`${instance.date}T00:00:00`)
-    return isDateInPast(rideDate)
   }
 
   const handleViewSeats = (rideInstance: RideInstance) => {
@@ -219,8 +236,11 @@ export function RidesListPanel({
     getFilteredRowModel: getFilteredRowModel(),
   })
 
-  const selectedStatuses =
-    (columnFilters.find((filter) => filter.id === "status")?.value as RideStatus[]) || []
+  const selectedStatuses = useMemo<RideStatus[]>(
+    () =>
+      (columnFilters.find((filter) => filter.id === "status")?.value as RideStatus[]) || [],
+    [columnFilters],
+  )
 
   const allStationOptions = useMemo(
     () =>
@@ -262,6 +282,35 @@ export function RidesListPanel({
     (station) => station.id === selectedArrivalStationId
   )
 
+  /**
+   * Set of YYYY-MM-DD strings for dates that have at least one ride matching
+   * the current station + status filters. Drives calendar dot markers.
+   */
+  const availableDateKeys = useMemo(() => {
+    const keys = new Set<string>()
+    rides.forEach((ride) => {
+      if (
+        !matchesStationPair(
+          ride.line,
+          selectedDepartureStationId,
+          selectedArrivalStationId,
+        )
+      ) {
+        return
+      }
+      const instances = generateRideInstancesForRide(ride)
+      instances.forEach((instance) => {
+        if (selectedStatuses.length > 0 && !selectedStatuses.includes(instance.status)) {
+          return
+        }
+        keys.add(instance.date)
+      })
+    })
+    return keys
+  }, [rides, selectedDepartureStationId, selectedArrivalStationId, selectedStatuses])
+
+  const isDayWithRides = (date: Date) => availableDateKeys.has(formatDateToISO(date))
+
   const toggleStatus = (status: RideStatus) => {
     const next = selectedStatuses.includes(status)
       ? selectedStatuses.filter((value) => value !== status)
@@ -292,27 +341,72 @@ export function RidesListPanel({
     setSelectedArrivalStationId("")
   }
 
-  const formatDuration = (durationInMinutes?: number) => {
-    if (!durationInMinutes || durationInMinutes <= 0) return null
-
-    const hours = Math.floor(durationInMinutes / 60)
-    const minutes = durationInMinutes % 60
-
-    if (hours > 0 && minutes > 0) {
-      return `${hours} sati ${minutes} min`
-    }
-
-    if (hours > 0) {
-      return `${hours} sati`
-    }
-
-    return `${minutes} min`
+  const swapStations = () => {
+    setSelectedDepartureStationId(selectedArrivalStationId)
+    setSelectedArrivalStationId(selectedDepartureStationId)
   }
+
+  const today = useMemo(() => {
+    const date = new Date()
+    date.setHours(0, 0, 0, 0)
+    return date
+  }, [])
+
+  const tomorrow = useMemo(() => {
+    const date = new Date(today)
+    date.setDate(date.getDate() + 1)
+    return date
+  }, [today])
+
+  const isSameDay = (left: Date | undefined, right: Date) => {
+    if (!left) return false
+    return (
+      left.getFullYear() === right.getFullYear() &&
+      left.getMonth() === right.getMonth() &&
+      left.getDate() === right.getDate()
+    )
+  }
+
+  const todaySelected = isSameDay(selectedDate, today)
+  const tomorrowSelected = isSameDay(selectedDate, tomorrow)
+
+  const filteredRows = table.getRowModel().rows
+
+  const sortedRows = useMemo(() => {
+    const rows = filteredRows.slice()
+    const compare = (left: RideInstance, right: RideInstance) => {
+      switch (sortKey) {
+        case "departureDesc":
+          return right.departureTime.localeCompare(left.departureTime)
+        case "availableDesc": {
+          const leftFree = left.ride.busCapacity - (left.reservationCount || 0)
+          const rightFree = right.ride.busCapacity - (right.reservationCount || 0)
+          return rightFree - leftFree
+        }
+        case "availableAsc": {
+          const leftFree = left.ride.busCapacity - (left.reservationCount || 0)
+          const rightFree = right.ride.busCapacity - (right.reservationCount || 0)
+          return leftFree - rightFree
+        }
+        case "departureAsc":
+        default:
+          return left.departureTime.localeCompare(right.departureTime)
+      }
+    }
+    rows.sort((a, b) => compare(a.original, b.original))
+    return rows
+  }, [filteredRows, sortKey])
+
+  const hasActiveFilters =
+    Boolean(searchValue) ||
+    selectedStatuses.length > 0 ||
+    Boolean(selectedDepartureStationId) ||
+    Boolean(selectedArrivalStationId)
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border bg-card/70 p-4 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr_0.9fr_auto] xl:items-center">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.4fr_2fr_1fr_auto] xl:items-center">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -323,95 +417,114 @@ export function RidesListPanel({
             />
           </div>
 
-          <Popover open={departurePopoverOpen} onOpenChange={setDeparturePopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={departurePopoverOpen}
-                className="w-full justify-between"
-              >
-                {selectedDepartureStation?.name || "Polazna stanica"}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[320px] p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Pretraži polaznu stanicu..." />
-                <CommandList>
-                  <CommandEmpty>Nema pronađenih stanica.</CommandEmpty>
-                  <CommandGroup>
-                    {departureStationOptions.map((station) => (
-                      <CommandItem
-                        key={station.id}
-                        value={station.name}
-                        onSelect={() => {
-                          setStationFilter(
-                            "departureStationId",
-                            station.id === selectedDepartureStationId ? "" : station.id
-                          )
-                          setDeparturePopoverOpen(false)
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedDepartureStationId === station.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        {station.name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+          <div className="flex items-center gap-1.5">
+            <Popover open={departurePopoverOpen} onOpenChange={setDeparturePopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={departurePopoverOpen}
+                  className="w-full flex-1 justify-between"
+                >
+                  <span className="truncate">
+                    {selectedDepartureStation?.name || "Polazna stanica"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[320px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Pretraži polaznu stanicu..." />
+                  <CommandList>
+                    <CommandEmpty>Nema pronađenih stanica.</CommandEmpty>
+                    <CommandGroup>
+                      {departureStationOptions.map((station) => (
+                        <CommandItem
+                          key={station.id}
+                          value={station.name}
+                          onSelect={() => {
+                            setStationFilter(
+                              "departureStationId",
+                              station.id === selectedDepartureStationId ? "" : station.id
+                            )
+                            setDeparturePopoverOpen(false)
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedDepartureStationId === station.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {station.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
 
-          <Popover open={arrivalPopoverOpen} onOpenChange={setArrivalPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={arrivalPopoverOpen}
-                className="w-full justify-between"
-              >
-                {selectedArrivalStation?.name || "Dolazna stanica"}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[320px] p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Pretraži dolaznu stanicu..." />
-                <CommandList>
-                  <CommandEmpty>Nema pronađenih stanica.</CommandEmpty>
-                  <CommandGroup>
-                    {arrivalStationOptions.map((station) => (
-                      <CommandItem
-                        key={station.id}
-                        value={station.name}
-                        onSelect={() => {
-                          setStationFilter(
-                            "arrivalStationId",
-                            station.id === selectedArrivalStationId ? "" : station.id
-                          )
-                          setArrivalPopoverOpen(false)
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedArrivalStationId === station.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        {station.name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              onClick={swapStations}
+              disabled={!selectedDepartureStationId && !selectedArrivalStationId}
+              aria-label="Zameni polaznu i dolaznu stanicu"
+              title="Zameni stanice"
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+            </Button>
+
+            <Popover open={arrivalPopoverOpen} onOpenChange={setArrivalPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={arrivalPopoverOpen}
+                  className="w-full flex-1 justify-between"
+                >
+                  <span className="truncate">
+                    {selectedArrivalStation?.name || "Dolazna stanica"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[320px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Pretraži dolaznu stanicu..." />
+                  <CommandList>
+                    <CommandEmpty>Nema pronađenih stanica.</CommandEmpty>
+                    <CommandGroup>
+                      {arrivalStationOptions.map((station) => (
+                        <CommandItem
+                          key={station.id}
+                          value={station.name}
+                          onSelect={() => {
+                            setStationFilter(
+                              "arrivalStationId",
+                              station.id === selectedArrivalStationId ? "" : station.id
+                            )
+                            setArrivalPopoverOpen(false)
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedArrivalStationId === station.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {station.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
 
           <Popover>
             <PopoverTrigger asChild>
@@ -429,6 +542,11 @@ export function RidesListPanel({
                 onSelect={handleDateSelect}
                 locale={srLatn}
                 disabled={(date) => isDateInPast(date)}
+                modifiers={{ hasRides: isDayWithRides }}
+                modifiersClassNames={{
+                  hasRides:
+                    "relative after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-success after:content-['']",
+                }}
                 className="rounded-md border"
                 classNames={{
                   months: "flex flex-col space-y-2",
@@ -446,18 +564,28 @@ export function RidesListPanel({
                   day: "h-8 w-8 p-0 text-xs font-medium aria-selected:opacity-100",
                 }}
               />
+              <div className="flex items-center justify-center gap-1.5 px-2 pb-1 pt-2 text-[10px] text-muted-foreground">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" />
+                <span>Datumi sa dostupnim vožnjama</span>
+              </div>
             </PopoverContent>
           </Popover>
+
           <div className="flex flex-wrap items-center justify-start gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Filter className="mr-2 h-4 w-4" />
-                  Filters
+                  Filteri
+                  {selectedStatuses.length > 0 && (
+                    <span className="ml-2 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                      {selectedStatuses.length}
+                    </span>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuLabel>Prikazi</DropdownMenuLabel>
+                <DropdownMenuLabel>Prikaži</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {(Object.keys(statusLabels) as RideStatus[]).map((status) => (
                   <DropdownMenuCheckboxItem
@@ -470,26 +598,111 @@ export function RidesListPanel({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            {(searchValue || columnFilters.length > 0 || selectedDepartureStationId || selectedArrivalStationId) && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                <X className="mr-2 h-4 w-4" />
-                Reset
-              </Button>
-            )}
-            <div className="rounded-md border bg-background px-3 py-1 text-xs text-muted-foreground">
-              {table.getRowModel().rows.length} vožnji
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <ArrowUpDown className="mr-2 h-4 w-4" />
+                  Sortiraj
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Sortiraj po</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuRadioGroup
+                  value={sortKey}
+                  onValueChange={(value) => setSortKey(value as SortKey)}
+                >
+                  {(Object.keys(sortLabels) as SortKey[]).map((key) => (
+                    <DropdownMenuRadioItem key={key} value={key}>
+                      {sortLabels[key]}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="rounded-md border bg-background px-3 py-1 text-xs font-medium tabular-nums text-muted-foreground">
+              {sortedRows.length} vožnji
             </div>
           </div>
         </div>
+
+        {(hasActiveFilters || todaySelected || tomorrowSelected || selectedDate) && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Brzi izbor:
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant={todaySelected ? "default" : "outline"}
+              className="h-7 px-3 text-xs"
+              onClick={() => onDateSelect(today)}
+            >
+              Danas
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={tomorrowSelected ? "default" : "outline"}
+              className="h-7 px-3 text-xs"
+              onClick={() => onDateSelect(tomorrow)}
+            >
+              Sutra
+            </Button>
+
+            {hasActiveFilters && (
+              <>
+                <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+                {searchValue && (
+                  <FilterChip
+                    label={`Pretraga: "${searchValue}"`}
+                    onRemove={() => setSearchValue("")}
+                  />
+                )}
+                {selectedDepartureStation && (
+                  <FilterChip
+                    label={`Polazak: ${selectedDepartureStation.name}`}
+                    onRemove={() => setSelectedDepartureStationId("")}
+                  />
+                )}
+                {selectedArrivalStation && (
+                  <FilterChip
+                    label={`Dolazak: ${selectedArrivalStation.name}`}
+                    onRemove={() => setSelectedArrivalStationId("")}
+                  />
+                )}
+                {selectedStatuses.map((status) => (
+                  <FilterChip
+                    key={status}
+                    label={statusLabels[status]}
+                    onRemove={() => toggleStatus(status)}
+                  />
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={clearFilters}
+                >
+                  <X className="mr-1 h-3 w-3" />
+                  Resetuj sve
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {loading ? (
         <div className="space-y-3">
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
         </div>
-      ) : table.getRowModel().rows.length === 0 ? (
+      ) : sortedRows.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <Ticket className="h-5 w-5 text-muted-foreground" />
@@ -500,20 +713,29 @@ export function RidesListPanel({
           <p className="text-sm text-muted-foreground">
             Nema vožnji za izabrani datum ili filtere
           </p>
+          {hasActiveFilters && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={clearFilters}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Resetuj filtere
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {table.getRowModel().rows.map((row) => {
+          {sortedRows.map((row) => {
             const instance = row.original
             const durationLabel = formatDuration(instance.ride.line.duration)
-            const isPastRide = isRideInstanceInPast(instance)
 
             return (
               <RideInstanceCard
                 key={row.id}
                 instance={instance}
-                rideIconUrl={rideIconUrl}
-                isPastRide={isPastRide}
                 durationLabel={durationLabel}
                 onViewInfo={(value) => {
                   setSelectedInstance(value)
@@ -534,5 +756,26 @@ export function RidesListPanel({
         statusLabels={statusLabels}
       />
     </div>
+  )
+}
+
+interface FilterChipProps {
+  label: string
+  onRemove: () => void
+}
+
+function FilterChip({ label, onRemove }: FilterChipProps) {
+  return (
+    <span className="inline-flex h-7 items-center gap-1 rounded-full border bg-background px-2.5 text-xs font-medium">
+      <span className="max-w-[180px] truncate">{label}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="-mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+        aria-label={`Ukloni filter: ${label}`}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </span>
   )
 }

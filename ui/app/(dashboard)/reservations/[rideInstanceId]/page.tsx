@@ -6,6 +6,7 @@ import { Layout } from "@/components/layout/Layout"
 import { SeatMap } from "@/components/reservations/SeatMap"
 import { ReservationModal } from "@/components/reservations/ReservationModal"
 import { RideInstanceSummaryCard } from "@/components/reservations/RideInstanceSummaryCard"
+import { SelectedSeatsBar } from "@/components/reservations/SelectedSeatsBar"
 import { ExportPassengersDialog } from "@/components/reservations/ExportPassengersDialog"
 import {
   Breadcrumb,
@@ -16,9 +17,8 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Route, Ticket } from "lucide-react"
 import { useRideInstanceSeatMapPage } from "@/hooks/useRideInstanceSeatMapPage"
-import { formatDateDisplay, formatTimeDisplay } from "@/utils/dateHelpers"
+import { formatDateDisplay } from "@/utils/dateHelpers"
 
 export default function SeatMapPage() {
   const params = useParams<{ rideInstanceId: string }>()
@@ -87,9 +87,6 @@ export default function SeatMapPage() {
           localizedRideDate={localizedRideDate}
           reservedCount={reservedCount}
           totalSeats={totalSeats}
-          selectedSeats={selectedSeats}
-          onClearSelectedSeats={clearSelectedSeats}
-          onReserveSelectedSeats={() => setIsMultiReservationModalOpen(true)}
           onExport={() => setIsExportDialogOpen(true)}
         />
 
@@ -105,6 +102,13 @@ export default function SeatMapPage() {
             selectedSeats={selectedSeats}
           />
         ) : null}
+
+        <SelectedSeatsBar
+          selectedSeats={selectedSeats}
+          onRemoveSeat={(seatNumber) => handleSeatClick(seatNumber)}
+          onClear={clearSelectedSeats}
+          onReserve={() => setIsMultiReservationModalOpen(true)}
+        />
 
         <ReservationModal
           open={isReservationModalOpen}

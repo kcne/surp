@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { reservationSchema } from "@/utils/validators"
@@ -16,11 +16,20 @@ import {
   useUpdateReservationMutation,
 } from "@/infrastructure/hooks/mutations/useReservationMutations"
 import { useCreatePassengerMutation } from "@/infrastructure/hooks/mutations/usePassengerMutations"
-import { FormModalShell } from "@/components/forms/FormModalShell"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   Form,
 } from "@/components/ui/form"
+import { Button } from "@/components/ui/button"
+import { FieldSection } from "@/components/reservations/primitives/FieldSection"
 import { PassengerForm } from "../passengers/PassengerForm"
+import { ArrowLeftRight, MapPinned, RotateCcw, UserPlus, Users, X } from "lucide-react"
 import { format } from "date-fns"
 import { ReservationRideInfoCard } from "@/components/reservations/ReservationRideInfoCard"
 import { ReservationAssignmentModeSection } from "@/components/reservations/ReservationAssignmentModeSection"
@@ -60,6 +69,7 @@ export function ReservationModal({
   multipleSelectionMode = false,
   onComplete,
 }: ReservationModalProps) {
+  const passengerFormRef = useRef<HTMLDivElement>(null)
   const createReservationMutation = useCreateReservationMutation()
   const createReservationsBatchMutation = useCreateReservationsBatchMutation()
   const updateReservationMutation = useUpdateReservationMutation()
@@ -99,6 +109,7 @@ export function ReservationModal({
     showPassengerForm,
     assignmentMode,
     perSeatPassengers,
+    addPassengerTargetSeat,
     isReturnTicket,
     returnDatePickerOpen,
     selectedReturnDate,
@@ -109,6 +120,7 @@ export function ReservationModal({
     setNewPassenger,
     setAssignmentMode,
     setPerSeatPassengers,
+    setAddPassengerTargetSeat,
     setIsReturnTicket,
     setReturnDatePickerOpen,
     setSelectedReturnDate,
@@ -234,6 +246,7 @@ export function ReservationModal({
     reservation,
     isReturnTicket,
     selectedReturnRideInstance: selectedReturnRideInstance ?? undefined,
+    existingReturnReservation,
     isMultiReservation,
     selectedSeats,
     perSeatPassengers,
@@ -244,6 +257,9 @@ export function ReservationModal({
     setSelectedPassenger,
     setNewPassenger,
     setShowPassengerForm,
+    setPerSeatPassengers,
+    addPassengerTargetSeat,
+    setAddPassengerTargetSeat,
     selectedRideInstance,
     createReservation: async (payload) => {
       await createReservationMutation.mutateAsync(payload)
@@ -317,43 +333,44 @@ export function ReservationModal({
     setSelectedReturnDate,
   })
 
+  useEffect(() => {
+    if (!showPassengerForm) return
+    const node = passengerFormRef.current
+    if (!node) return
+    // Defer to next frame so the section is laid out before scrolling.
+    const id = window.requestAnimationFrame(() => {
+      node.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [showPassengerForm])
+
   if (!selectedRideInstance) {
     return null
   }
 
   return (
-    <FormModalShell
-      open={open}
-      onOpenChange={handleDialogOpenChange}
-      title={isEdit
-        ? "Izmeni Rezervaciju"
-        : isMultipleSeatsSelection
-        ? "Kreiraj rezervacije"
-        : "Kreiraj rezervaciju"}
-      description={
-        isEdit || !isMultipleSeatsSelection
-          ? isEdit
-            ? "Izmenite informacije o rezervaciji."
-            : "Unesite informacije za novu rezervaciju."
-          : undefined
-      }
-      contentClassName="sm:max-w-[700px] max-h-[90vh] overflow-y-auto"
-    >
-
-        <ReservationRideInfoCard
-          rideInstance={selectedRideInstance}
-          seatDisplay={seatDisplay}
-        />
-
-        {showAssignmentMode && (
-          <ReservationAssignmentModeSection
-            assignmentMode={assignmentMode}
-            onAssignmentModeChange={setAssignmentMode}
-          />
-        )}
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[720px]">
+        <DialogHeader className="border-b px-6 pb-3 pt-5">
+          <DialogTitle>
+            {isEdit
+              ? "Izmeni rezervaciju"
+              : isMultipleSeatsSelection
+                ? "Kreiraj rezervacije"
+                : "Kreiraj rezervaciju"}
+          </DialogTitle>
+          {(isEdit || !isMultipleSeatsSelection) && (
+            <DialogDescription>
+              {isEdit
+                ? "Izmenite informacije o rezervaciji."
+                : "Unesite informacije za novu rezervaciju."}
+            </DialogDescription>
+          )}
+        </DialogHeader>
 
         <Form {...form}>
           <form
+            id="reservation-form"
             onSubmit={(e) => {
               if (!showPassengerForm && assignmentMode === "single") {
                 form.handleSubmit(onSubmit)(e)
@@ -362,64 +379,165 @@ export function ReservationModal({
                 e.stopPropagation()
               }
             }}
-            className="space-y-4"
+            className="flex min-h-0 flex-1 flex-col"
           >
-            {/* Passenger Search */}
+          <div className="flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-2">
+            <ReservationRideInfoCard
+              rideInstance={selectedRideInstance}
+              seatDisplay={seatDisplay}
+            />
+
+            {showAssignmentMode && (
+              <FieldSection
+                icon={Users}
+                title="Način raspodele sedišta"
+                description="Izaberite jednog putnika za sva sedišta ili dodelite svako pojedinačno."
+              >
+                <ReservationAssignmentModeSection
+                  assignmentMode={assignmentMode}
+                  onAssignmentModeChange={setAssignmentMode}
+                />
+              </FieldSection>
+            )}
+
+            {showPassengerForm && (
+              <div ref={passengerFormRef}>
+                <FieldSection
+                  icon={UserPlus}
+                  title="Dodaj novog putnika"
+                  description="Putnik će biti automatski dodeljen ovoj rezervaciji."
+                  trailing={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowPassengerForm(false)
+                        setAddPassengerTargetSeat(null)
+                      }}
+                      aria-label="Zatvori formu putnika"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  }
+                  className="border-primary/40 bg-primary/5"
+                >
+                  <PassengerForm
+                    onSubmit={handleAddNewPassenger}
+                    onCancel={() => {
+                      setShowPassengerForm(false)
+                      setAddPassengerTargetSeat(null)
+                    }}
+                  />
+                </FieldSection>
+              </div>
+            )}
+
             {assignmentMode === "single" && (
-              <ReservationPassengerSelectionSection
-                control={form.control}
-                selectedPassenger={selectedPassenger}
-                onSelectPassenger={setSelectedPassenger}
-                onAddNewPassenger={() => setShowPassengerForm(true)}
-              />
+              <FieldSection
+                icon={UserPlus}
+                title="Putnik"
+                description="Pretražite postojećeg putnika ili dodajte novog."
+                trailing={
+                  !showPassengerForm ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowPassengerForm(true)}
+                    >
+                      <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                      Novi putnik
+                    </Button>
+                  ) : undefined
+                }
+              >
+                <ReservationPassengerSelectionSection
+                  control={form.control}
+                  selectedPassenger={selectedPassenger}
+                  onSelectPassenger={setSelectedPassenger}
+                  onAddNewPassenger={() => setShowPassengerForm(true)}
+                />
+              </FieldSection>
             )}
 
             {showAssignmentMode && assignmentMode === "perSeat" && (
-              <ReservationPerSeatPassengersSection
-                selectedSeats={selectedSeats}
-                perSeatPassengers={perSeatPassengers}
-                onSelectPassenger={(seat, passenger) => {
-                  setPerSeatPassengers((prev) => ({
-                    ...prev,
-                    [seat]: passenger,
-                  }))
-                }}
-                onAddNewPassenger={() => setShowPassengerForm(true)}
-              />
+              <FieldSection
+                icon={Users}
+                title="Putnici po sedištu"
+                description="Dodelite putnika svakom izabranom sedištu."
+              >
+                <ReservationPerSeatPassengersSection
+                  selectedSeats={selectedSeats}
+                  perSeatPassengers={perSeatPassengers}
+                  onSelectPassenger={(seat, passenger) => {
+                    setPerSeatPassengers((prev) => ({
+                      ...prev,
+                      [seat]: passenger,
+                    }))
+                  }}
+                  onAddNewPassengerForSeat={(seat) => {
+                    setAddPassengerTargetSeat(seat)
+                    setShowPassengerForm(true)
+                  }}
+                />
+              </FieldSection>
             )}
 
-            <ReservationStationsSection
-              control={form.control}
-              allStations={allStations}
-              departureStationId={departureStationId}
-              arrivalStationId={arrivalStationId}
-            />
+            <FieldSection
+              icon={MapPinned}
+              title="Stanice"
+              description="Polazna i dolazna stanica za ovog putnika."
+            >
+              <ReservationStationsSection
+                control={form.control}
+                allStations={allStations}
+                departureStationId={departureStationId}
+                arrivalStationId={arrivalStationId}
+              />
+            </FieldSection>
 
-            <ReservationReturnTicketSection
-              isReturnTicket={isReturnTicket}
-              onReturnTicketChange={setIsReturnTicket}
-              returnRideInstancesCount={returnRideInstances.length}
-              returnDatePickerOpen={returnDatePickerOpen}
-              onReturnDatePickerOpenChange={setReturnDatePickerOpen}
-              selectedReturnDate={selectedReturnDate}
-              onSelectReturnDate={(date) => {
-                setSelectedReturnDate(date)
-                setReturnDatePickerOpen(false)
-              }}
-              availableReturnDateKeys={availableReturnDateKeys}
-              selectedReturnRideInstanceId={selectedReturnRideInstanceId}
-              onSelectReturnRideInstance={setSelectedReturnRideInstanceId}
-              returnInstancesForSelectedDate={returnInstancesForSelectedDate}
-              selectedReturnRideInstance={selectedReturnRideInstance}
-              selectedArrivalStationName={selectedArrivalStationName}
-              selectedDepartureStationName={selectedDepartureStationName}
-              returnSeatPreviewNumbers={returnSeatPreviewNumbers}
-              hasExistingReturnReservation={
-                Boolean(existingReturnReservation) &&
-                existingReturnReservation?.rideInstanceId === selectedReturnRideInstanceId
+            <FieldSection
+              icon={ArrowLeftRight}
+              title="Povratna karta"
+              description="Opcionalno: dodajte povratnu vožnju u istu rezervaciju."
+              trailing={
+                isReturnTicket ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                    <RotateCcw className="h-3 w-3" />
+                    Povratna
+                  </span>
+                ) : undefined
               }
-            />
+            >
+              <ReservationReturnTicketSection
+                isReturnTicket={isReturnTicket}
+                onReturnTicketChange={setIsReturnTicket}
+                returnRideInstancesCount={returnRideInstances.length}
+                returnDatePickerOpen={returnDatePickerOpen}
+                onReturnDatePickerOpenChange={setReturnDatePickerOpen}
+                selectedReturnDate={selectedReturnDate}
+                onSelectReturnDate={(date) => {
+                  setSelectedReturnDate(date)
+                  setReturnDatePickerOpen(false)
+                }}
+                availableReturnDateKeys={availableReturnDateKeys}
+                selectedReturnRideInstanceId={selectedReturnRideInstanceId}
+                onSelectReturnRideInstance={setSelectedReturnRideInstanceId}
+                returnInstancesForSelectedDate={returnInstancesForSelectedDate}
+                selectedReturnRideInstance={selectedReturnRideInstance}
+                selectedArrivalStationName={selectedArrivalStationName}
+                selectedDepartureStationName={selectedDepartureStationName}
+                returnSeatPreviewNumbers={returnSeatPreviewNumbers}
+                hasExistingReturnReservation={
+                  Boolean(existingReturnReservation) &&
+                  existingReturnReservation?.rideInstanceId === selectedReturnRideInstanceId
+                }
+              />
+            </FieldSection>
+          </div>
 
+          <div className="border-t bg-background px-6 py-3">
             <ReservationFormActions
               isEdit={isEdit}
               showCancelReservation={Boolean(isEdit && reservation)}
@@ -451,23 +569,10 @@ export function ReservationModal({
               isMultipleSeatsSelection={isMultipleSeatsSelection}
               onPerSeatSubmit={handlePerSeatSubmit}
             />
-          </form>
-        </Form>
-
-        <FormModalShell
-          open={showPassengerForm}
-          onOpenChange={setShowPassengerForm}
-          title="Dodaj Novog Putnika"
-          description="Unesite informacije o putniku."
-          contentClassName="sm:max-w-[560px]"
-        >
-            <PassengerForm
-              onSubmit={handleAddNewPassenger}
-              onCancel={() => {
-                setShowPassengerForm(false)
-              }}
-            />
-        </FormModalShell>
-    </FormModalShell>
+          </div>
+        </form>
+      </Form>
+      </DialogContent>
+    </Dialog>
   )
 }

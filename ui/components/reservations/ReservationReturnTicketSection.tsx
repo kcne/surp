@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { CalendarDays } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface ReservationReturnTicketSectionProps {
   isReturnTicket: boolean
@@ -52,35 +53,55 @@ export function ReservationReturnTicketSection({
   returnSeatPreviewNumbers,
   hasExistingReturnReservation,
 }: ReservationReturnTicketSectionProps) {
+  const noReturnRides = returnRideInstancesCount === 0
+  const isDisabled = !isReturnTicket || noReturnRides
+
   return (
-    <div className="space-y-3 rounded-lg border p-4">
-      <div className="flex items-center space-x-2">
+    <div className="space-y-3">
+      <label
+        htmlFor="return-ticket"
+        className={cn(
+          "flex items-center gap-2 rounded-md border p-2.5 text-sm font-medium transition-colors",
+          isReturnTicket
+            ? "border-primary/40 bg-primary/5"
+            : "bg-muted/30 hover:bg-muted/50",
+          noReturnRides && "cursor-not-allowed opacity-60",
+        )}
+      >
         <Checkbox
           id="return-ticket"
           checked={isReturnTicket}
           onCheckedChange={(checked) => onReturnTicketChange(checked === true)}
-          disabled={returnRideInstancesCount === 0}
+          disabled={noReturnRides}
         />
-        <label htmlFor="return-ticket" className="text-sm font-medium leading-none">
-          Povratna karta
-        </label>
-      </div>
+        <span className="leading-none">
+          {noReturnRides
+            ? "Nema dostupnih vožnji u suprotnom smeru"
+            : isReturnTicket
+              ? "Povratna karta uključena"
+              : "Dodaj povratnu kartu"}
+        </span>
+      </label>
 
-      {returnRideInstancesCount === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          Nema dostupnih vožnji u suprotnom smeru za povratnu kartu.
-        </p>
-      ) : null}
-
-      {isReturnTicket && returnRideInstancesCount > 0 && (
-        <div className="space-y-3">
+      {!noReturnRides && (
+        <div
+          aria-hidden={isDisabled ? "true" : undefined}
+          className={cn(
+            "space-y-3 transition-opacity",
+            isDisabled && "pointer-events-none select-none opacity-50",
+          )}
+        >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Popover open={returnDatePickerOpen} onOpenChange={onReturnDatePickerOpenChange}>
+            <Popover
+              open={isDisabled ? false : returnDatePickerOpen}
+              onOpenChange={onReturnDatePickerOpenChange}
+            >
               <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
                   className="w-full justify-start text-left font-normal"
+                  disabled={isDisabled}
                 >
                   <CalendarDays className="mr-2 h-4 w-4" />
                   {selectedReturnDate
@@ -106,6 +127,7 @@ export function ReservationReturnTicketSection({
             <Select
               value={selectedReturnRideInstanceId}
               onValueChange={onSelectReturnRideInstance}
+              disabled={isDisabled}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Vreme povratka" />

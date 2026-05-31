@@ -9,6 +9,7 @@ interface UseReservationSubmissionParams {
   reservation?: Reservation | null
   isReturnTicket: boolean
   selectedReturnRideInstance: RideInstance | undefined
+  existingReturnReservation: Reservation | null
   isMultiReservation: boolean
   selectedSeats: number[]
   perSeatPassengers: Record<number, Passenger | null>
@@ -19,6 +20,9 @@ interface UseReservationSubmissionParams {
   setSelectedPassenger: (passenger: Passenger | null) => void
   setNewPassenger: (passenger: Passenger | null) => void
   setShowPassengerForm: (open: boolean) => void
+  setPerSeatPassengers: (updater: (prev: Record<number, Passenger | null>) => Record<number, Passenger | null>) => void
+  addPassengerTargetSeat: number | null
+  setAddPassengerTargetSeat: (seat: number | null) => void
   selectedRideInstance: RideInstance | null
   createReservation: (payload: { data: ReservationFormData; rideInstance: RideInstance }) => Promise<void>
   createReservationsBatch: (payload: {
@@ -41,6 +45,7 @@ export function useReservationSubmission({
   reservation,
   isReturnTicket,
   selectedReturnRideInstance,
+  existingReturnReservation,
   isMultiReservation,
   selectedSeats,
   perSeatPassengers,
@@ -51,6 +56,9 @@ export function useReservationSubmission({
   setSelectedPassenger,
   setNewPassenger,
   setShowPassengerForm,
+  setPerSeatPassengers,
+  addPassengerTargetSeat,
+  setAddPassengerTargetSeat,
   selectedRideInstance,
   createReservation,
   createReservationsBatch,
@@ -104,7 +112,7 @@ export function useReservationSubmission({
     try {
       if (isEdit && reservation) {
         await updateReservation(reservation.id, data)
-        if (isReturnTicket) {
+        if (isReturnTicket && !existingReturnReservation) {
           if (!selectedReturnRideInstance) {
             throw new Error("Izaberite datum i vreme povratne vožnje.")
           }
@@ -184,8 +192,11 @@ export function useReservationSubmission({
         setSelectedPassenger(passenger)
         form.setValue("passengerId", passenger.id)
         setNewPassenger(passenger)
+      } else if (assignmentMode === "perSeat" && addPassengerTargetSeat != null) {
+        setPerSeatPassengers((prev) => ({ ...prev, [addPassengerTargetSeat]: passenger }))
       }
 
+      setAddPassengerTargetSeat(null)
       setShowPassengerForm(false)
     } catch (error) {
       throw error
