@@ -3,6 +3,7 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
+import { CheckPassengerDuplicatesDto, PassengerDuplicatesResponseDto } from './dto/check-passenger-duplicates.dto';
 import { CreatePassengerDto } from './dto/create-passenger.dto';
 import { ListPassengersQueryDto } from './dto/list-passengers.query.dto';
 import {
@@ -10,6 +11,7 @@ import {
   PassengerResponseDto
 } from './dto/passenger.response.dto';
 import { UpdatePassengerDto } from './dto/update-passenger.dto';
+import { normalizeNameForMatch, normalizePhoneForMatch } from './passenger-match.util';
 
 function capitalizeName(value: string): string {
   return value
@@ -126,6 +128,39 @@ export class PassengersService {
     query: ListPassengersQueryDto
   ): Promise<PaginatedPassengersResponseDto> {
     return this.list(auth, query);
+  }
+
+  async checkDuplicates(
+    auth: AccessTokenPayload,
+    dto: CheckPassengerDuplicatesDto
+  ): Promise<PassengerDuplicatesResponseDto> {
+    const targetFullName = normalizeNameForMatch(`${dto.firstName} ${dto.lastName}`);
+    const targetPhone = normalizePhoneForMatch(dto.phone);
+
+    if (!targetFullName && !targetPhone) {
+      return { matches: [] };
+    }
+
+    const candidates = await this.prisma.passenger.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        isActive: true
+      },
+      take: 5000,
+      select: this.safePassengerSelect
+    });
+
+    const matches = candidates.filter((candidate) => {
+      const candidateFullName = normalizeNameForMatch(
+        `${candidate.firstName} ${candidate.lastName}`
+      );
+      const candidatePhone = normalizePhoneForMatch(candidate.phone ?? '');
+      const nameMatches = Boolean(targetFullName) && candidateFullName === targetFullName;
+      const phoneMatches = Boolean(targetPhone) && candidatePhone === targetPhone;
+      return nameMatches || phoneMatches;
+    });
+
+    return { matches };
   }
 
   async getById(auth: AccessTokenPayload, id: string): Promise<PassengerResponseDto> {

@@ -26,6 +26,7 @@ import type {
 
 import type {
   BatchReservationsResponseDto,
+  CheckPassengerDuplicatesDto,
   CompleteStorefrontAssetUploadDto,
   CompleteTicketAttachmentDto,
   ConvertPlatformLeadDto,
@@ -64,6 +65,7 @@ import type {
   PaginatedStationsResponseDto,
   PaginatedTicketsResponseDto,
   PaginatedUsersResponseDto,
+  PassengerDuplicatesResponseDto,
   PassengerResponseDto,
   PassengersControllerListParams,
   PassengersControllerSearchParams,
@@ -4266,6 +4268,106 @@ export function usePassengersControllerSearch<TData = Awaited<ReturnType<typeof 
 
 
 
+/**
+ * @summary Find existing passengers that match the supplied full name or phone (diacritic-insensitive).
+ */
+export type passengersControllerCheckDuplicatesResponse200 = {
+  data: PassengerDuplicatesResponseDto
+  status: 200
+}
+
+export type passengersControllerCheckDuplicatesResponse400 = {
+  data: void
+  status: 400
+}
+
+export type passengersControllerCheckDuplicatesResponse401 = {
+  data: void
+  status: 401
+}
+
+export type passengersControllerCheckDuplicatesResponse403 = {
+  data: void
+  status: 403
+}
+
+export type passengersControllerCheckDuplicatesResponseSuccess = (passengersControllerCheckDuplicatesResponse200) & {
+  headers: Headers;
+};
+export type passengersControllerCheckDuplicatesResponseError = (passengersControllerCheckDuplicatesResponse400 | passengersControllerCheckDuplicatesResponse401 | passengersControllerCheckDuplicatesResponse403) & {
+  headers: Headers;
+};
+
+export type passengersControllerCheckDuplicatesResponse = (passengersControllerCheckDuplicatesResponseSuccess | passengersControllerCheckDuplicatesResponseError)
+
+export const getPassengersControllerCheckDuplicatesUrl = () => {
+
+
+  
+
+  return `/passengers/check-duplicates`
+}
+
+export const passengersControllerCheckDuplicates = async (checkPassengerDuplicatesDto: CheckPassengerDuplicatesDto, options?: RequestInit): Promise<passengersControllerCheckDuplicatesResponse> => {
+  
+  return customInstance<passengersControllerCheckDuplicatesResponse>(getPassengersControllerCheckDuplicatesUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      checkPassengerDuplicatesDto,)
+  }
+);}
+  
+
+
+
+export const getPassengersControllerCheckDuplicatesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof passengersControllerCheckDuplicates>>, TError,{data: CheckPassengerDuplicatesDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof passengersControllerCheckDuplicates>>, TError,{data: CheckPassengerDuplicatesDto}, TContext> => {
+
+const mutationKey = ['passengersControllerCheckDuplicates'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof passengersControllerCheckDuplicates>>, {data: CheckPassengerDuplicatesDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  passengersControllerCheckDuplicates(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PassengersControllerCheckDuplicatesMutationResult = NonNullable<Awaited<ReturnType<typeof passengersControllerCheckDuplicates>>>
+    export type PassengersControllerCheckDuplicatesMutationBody = CheckPassengerDuplicatesDto
+    export type PassengersControllerCheckDuplicatesMutationError = ErrorType<void>
+
+    /**
+ * @summary Find existing passengers that match the supplied full name or phone (diacritic-insensitive).
+ */
+export const usePassengersControllerCheckDuplicates = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof passengersControllerCheckDuplicates>>, TError,{data: CheckPassengerDuplicatesDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof passengersControllerCheckDuplicates>>,
+        TError,
+        {data: CheckPassengerDuplicatesDto},
+        TContext
+      > => {
+      return useMutation(getPassengersControllerCheckDuplicatesMutationOptions(options), queryClient);
+    }
+    
 /**
  * @summary Get passenger detail by id in the current tenant.
  */

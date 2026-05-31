@@ -11,6 +11,7 @@ interface ReservationFormActionsProps {
   useSubmitAction: boolean
   isMultipleSeatsSelection: boolean
   onPerSeatSubmit: () => void
+  canSubmit: boolean
 }
 
 export function ReservationFormActions({
@@ -22,7 +23,9 @@ export function ReservationFormActions({
   useSubmitAction,
   isMultipleSeatsSelection,
   onPerSeatSubmit,
+  canSubmit,
 }: ReservationFormActionsProps) {
+  const submitDisabled = loading || !canSubmit
   return (
     <DialogFooter className="flex items-center justify-between">
       <div>
@@ -44,7 +47,7 @@ export function ReservationFormActions({
           Otkaži
         </Button>
         {useSubmitAction ? (
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={submitDisabled}>
             {isEdit ? <Save className="mr-2 h-4 w-4" /> : <Check className="mr-2 h-4 w-4" />}
             {loading
               ? isEdit
@@ -57,7 +60,7 @@ export function ReservationFormActions({
               : "Kreiraj rezervaciju"}
           </Button>
         ) : (
-          <Button type="button" disabled={loading} onClick={onPerSeatSubmit}>
+          <Button type="button" disabled={submitDisabled} onClick={onPerSeatSubmit}>
             <Check className="mr-2 h-4 w-4" />
             {loading ? "Rezervisanje..." : "Kreiraj Rezervacije"}
           </Button>

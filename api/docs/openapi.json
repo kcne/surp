@@ -2287,6 +2287,62 @@
         ]
       }
     },
+    "/passengers/check-duplicates": {
+      "post": {
+        "operationId": "PassengersController_checkDuplicates",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckPassengerDuplicatesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassengerDuplicatesResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Find existing passengers that match the supplied full name or phone (diacritic-insensitive).",
+        "tags": [
+          "Passengers"
+        ]
+      }
+    },
     "/passengers/{id}": {
       "get": {
         "operationId": "PassengersController_getById",
@@ -6924,6 +6980,42 @@
           "page",
           "pageSize",
           "total"
+        ]
+      },
+      "CheckPassengerDuplicatesDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "example": "Mila"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "Marković"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+381640000111"
+          }
+        },
+        "required": [
+          "firstName",
+          "lastName",
+          "phone"
+        ]
+      },
+      "PassengerDuplicatesResponseDto": {
+        "type": "object",
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PassengerResponseDto"
+            }
+          }
+        },
+        "required": [
+          "matches"
         ]
       },
       "UpdatePassengerDto": {

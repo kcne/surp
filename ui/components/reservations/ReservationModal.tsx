@@ -41,6 +41,8 @@ import { ReservationStationsSection } from "@/components/reservations/Reservatio
 import { useReservationModalState } from "@/hooks/useReservationModalState"
 import { useReservationReturnSync } from "@/hooks/useReservationReturnSync"
 import { useReservationSubmission } from "@/hooks/useReservationSubmission"
+import { useDuplicatePassengerCheck } from "@/hooks/useDuplicatePassengerCheck"
+import { DuplicatePassengerDialog } from "@/components/passengers/DuplicatePassengerDialog"
 import { generateRideInstancesForRide } from "@/utils/rideInstanceGenerators"
 
 const EMPTY_RIDES: Reservation["rideInstance"]["ride"][] = []
@@ -88,6 +90,7 @@ export function ReservationModal({
 
   const form = useForm<ReservationFormData>({
     resolver: zodResolver(reservationSchema),
+    mode: "onChange",
     defaultValues: {
       rideInstanceId: selectedRideInstance?.id || "",
       passengerId: "",
@@ -292,6 +295,16 @@ export function ReservationModal({
     createPassenger: createPassengerMutation.mutateAsync,
   })
 
+  const duplicateCheck = useDuplicatePassengerCheck({
+    onConfirmedCreate: handleAddNewPassenger,
+  })
+
+  const canSubmit =
+    assignmentMode === "perSeat"
+      ? selectedSeats.length > 0 &&
+        selectedSeats.every((seat) => Boolean(perSeatPassengers[seat]))
+      : form.formState.isValid
+
   const allStations = selectedRideInstance
     ? [
         {
@@ -430,7 +443,7 @@ export function ReservationModal({
                   className="border-primary/40 bg-primary/5"
                 >
                   <PassengerForm
-                    onSubmit={handleAddNewPassenger}
+                    onSubmit={duplicateCheck.start}
                     onCancel={() => {
                       setShowPassengerForm(false)
                       setAddPassengerTargetSeat(null)
@@ -575,11 +588,22 @@ export function ReservationModal({
               useSubmitAction={assignmentMode === "single" || !showAssignmentMode}
               isMultipleSeatsSelection={isMultipleSeatsSelection}
               onPerSeatSubmit={handlePerSeatSubmit}
+              canSubmit={canSubmit}
             />
           </div>
         </form>
       </Form>
       </DialogContent>
+      <DuplicatePassengerDialog
+        open={duplicateCheck.isOpen}
+        onOpenChange={(value) => {
+          if (!value) duplicateCheck.cancel()
+        }}
+        matches={duplicateCheck.matches}
+        loading={createPassengerMutation.isPending}
+        onConfirm={duplicateCheck.confirm}
+        onCancel={duplicateCheck.cancel}
+      />
     </Dialog>
   )
 }

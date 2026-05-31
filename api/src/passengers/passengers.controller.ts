@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -13,6 +13,10 @@ import {
 import { UserRole } from '@prisma/client';
 import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
+import {
+  CheckPassengerDuplicatesDto,
+  PassengerDuplicatesResponseDto
+} from './dto/check-passenger-duplicates.dto';
 import { CreatePassengerDto } from './dto/create-passenger.dto';
 import { ListPassengersQueryDto } from './dto/list-passengers.query.dto';
 import {
@@ -73,6 +77,24 @@ export class PassengersController {
     @Query() query: ListPassengersQueryDto
   ): Promise<PaginatedPassengersResponseDto> {
     return this.passengersService.search(request.auth!, query);
+  }
+
+  @Post('check-duplicates')
+  @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({
+    summary:
+      'Find existing passengers that match the supplied full name or phone (diacritic-insensitive).'
+  })
+  @ApiOkResponse({ type: PassengerDuplicatesResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failure.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  checkDuplicates(
+    @Req() request: RequestWithAuth,
+    @Body() dto: CheckPassengerDuplicatesDto
+  ): Promise<PassengerDuplicatesResponseDto> {
+    return this.passengersService.checkDuplicates(request.auth!, dto);
   }
 
   @Get(':id')
