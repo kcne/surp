@@ -1,4 +1,4 @@
-import { CalendarDays, Clock, Download, MapPin, Timer, Users } from "lucide-react"
+import { BusFront, CalendarDays, Clock, Download, MapPin, Timer, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { OccupancyMeter } from "@/components/reservations/primitives/OccupancyMeter"
@@ -50,6 +50,10 @@ export function RideInstanceSummaryCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                <BusFront className="h-3 w-3" aria-hidden="true" />
+                Bus
+              </span>
               <RideStatusBadge status={status} rideDate={date} />
               <span className="text-xs font-medium text-muted-foreground">
                 {lineName}

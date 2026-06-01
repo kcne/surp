@@ -22,6 +22,8 @@ export function RouteLine({
   size = "md",
 }: RouteLineProps) {
   const stops = Math.max(intermediateStops, 0)
+  const MAX_VISIBLE_STOPS = 5
+  const visibleStops = Math.min(stops, MAX_VISIBLE_STOPS)
   const cityClasses =
     size === "sm"
       ? "text-sm font-semibold"
@@ -57,7 +59,7 @@ export function RouteLine({
         >
           <span className={departureDotClass} />
           <span className="h-px flex-1 bg-border" />
-          {Array.from({ length: stops }).map((_, index) => (
+          {Array.from({ length: visibleStops }).map((_, index) => (
             <Fragment key={index}>
               <span className={stopDotClass} />
               <span className="h-px flex-1 bg-border" />

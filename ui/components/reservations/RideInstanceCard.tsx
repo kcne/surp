@@ -1,4 +1,4 @@
-import { ArrowRight, Clock, Info, Ticket } from "lucide-react"
+import { ArrowRight, BusFront, Clock, Info, Ticket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { RideInstance } from "@/types"
@@ -51,12 +51,17 @@ export function RideInstanceCard({
     >
       <div className="grid gap-4 md:grid-cols-[1.6fr_1.6fr_auto] md:items-center md:gap-6">
         <div className="flex min-w-0 flex-col gap-2">
-          <RideStatusBadge
-            status={instance.status}
-            rideDate={instance.date}
-            size="sm"
-            className="self-start"
-          />
+          <div className="flex items-center gap-1.5 self-start">
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+              <BusFront className="h-3 w-3" aria-hidden="true" />
+              Bus
+            </span>
+            <RideStatusBadge
+              status={instance.status}
+              rideDate={instance.date}
+              size="sm"
+            />
+          </div>
           <RouteLine
             from={instance.ride.line.departureStation.name}
             to={instance.ride.line.arrivalStation.name}

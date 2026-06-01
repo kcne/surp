@@ -1,4 +1,4 @@
-import { Armchair, CalendarDays, Clock } from "lucide-react"
+import { Armchair, BusFront, CalendarDays, Clock } from "lucide-react"
 import type { RideInstance } from "@/types"
 import { formatDateDisplay } from "@/utils/dateHelpers"
 import { RideStatusBadge } from "@/components/reservations/primitives/RideStatusBadge"
@@ -27,6 +27,10 @@ export function ReservationRideInfoCard({
     <div className="rounded-lg border bg-muted/30 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+            <BusFront className="h-3 w-3" aria-hidden="true" />
+            Bus
+          </span>
           <RideStatusBadge status={status} rideDate={date} size="sm" />
           <span className="text-xs font-medium text-muted-foreground">{ride.line.name}</span>
         </div>
