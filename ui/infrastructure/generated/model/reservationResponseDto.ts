@@ -40,6 +40,11 @@ export interface ReservationResponseDto {
    * @nullable
    */
   groupId: string | null;
+  /**
+   * Per-reservation note shown in driver passenger lists
+   * @nullable
+   */
+  notes: string | null;
   ride: ReservationRideSummaryDto;
   passenger: ReservationPassengerSummaryDto;
   departureStation: ReservationStationSummaryDto;

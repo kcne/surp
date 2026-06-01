@@ -81,6 +81,7 @@ export function toReservation(dto: ReservationResponseDto, rideInstance?: RideIn
     },
     status: toReservationStatus(dto.status),
     groupId: dto.groupId ?? null,
+    notes: dto.notes ?? null,
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
   }
@@ -90,6 +91,7 @@ export function toCreateReservationDto(
   data: ReservationFormData,
   rideInstance: RideInstance
 ): CreateReservationDto {
+  const trimmedNotes = data.notes?.trim()
   return {
     rideId: rideInstance.rideId,
     passengerId: data.passengerId,
@@ -99,6 +101,7 @@ export function toCreateReservationDto(
     seatNumber: data.seatNumber,
     departureStationId: data.departureStationId,
     arrivalStationId: data.arrivalStationId,
+    ...(trimmedNotes ? { notes: trimmedNotes } : {}),
   }
 }
 
@@ -108,5 +111,6 @@ export function toUpdateReservationDto(data: Partial<ReservationFormData>): Upda
     seatNumber: data.seatNumber,
     departureStationId: data.departureStationId,
     arrivalStationId: data.arrivalStationId,
+    ...(data.notes !== undefined ? { notes: data.notes.trim() ? data.notes.trim() : null } : {}),
   }
 }

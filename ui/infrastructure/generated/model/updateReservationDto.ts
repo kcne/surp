@@ -15,4 +15,9 @@ export interface UpdateReservationDto {
   seatNumber?: number;
   departureStationId?: string;
   arrivalStationId?: string;
+  /**
+   * @maxLength 500
+   * @nullable
+   */
+  notes?: string | null;
 }

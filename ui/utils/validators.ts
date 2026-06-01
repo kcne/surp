@@ -140,6 +140,7 @@ export const reservationSchema = z.object({
   seatNumber: z.number().int().positive(),
   departureStationId: z.string().min(1, "Polazna stanica je obavezna"),
   arrivalStationId: z.string().min(1, "Dolazna stanica je obavezna"),
+  notes: z.string().max(500, "Napomena može imati najviše 500 karaktera").optional(),
 }).refine(
   (data) => data.departureStationId !== data.arrivalStationId,
   {

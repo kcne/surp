@@ -223,6 +223,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       "Dolazna stanica",
       "Datum povratka",
       "Grupa",
+      "Napomena",
     ]
 
     const groupLabelByGroupId = buildReservationGroupLabels(rideReservations)
@@ -248,6 +249,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       reservation.arrivalStation.name,
       returnDates[index] || "Jedan smer",
       reservation.groupId ? groupLabelByGroupId.get(reservation.groupId) ?? "—" : "—",
+      reservation.notes ?? "",
     ])
 
     const safeBaseName = sanitizeFileNamePart(options.fileName) || buildDefaultExportFileName()

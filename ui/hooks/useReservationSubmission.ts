@@ -13,6 +13,7 @@ interface UseReservationSubmissionParams {
   isMultiReservation: boolean
   selectedSeats: number[]
   perSeatPassengers: Record<number, Passenger | null>
+  perSeatNotes: Record<number, string>
   travelTogether: boolean
   allReservations: Record<string, Reservation[]>
   closeReservationModal: () => void
@@ -51,6 +52,7 @@ export function useReservationSubmission({
   isMultiReservation,
   selectedSeats,
   perSeatPassengers,
+  perSeatNotes,
   travelTogether,
   allReservations,
   closeReservationModal,
@@ -174,10 +176,12 @@ export function useReservationSubmission({
           throw new Error(`Putnik nije izabran za sedište ${seat}`)
         }
 
+        const seatNotes = perSeatNotes[seat]?.trim()
         return {
           ...sharedValues,
           seatNumber: seat,
           passengerId: passenger.id,
+          notes: seatNotes ? seatNotes : undefined,
         }
       })
 

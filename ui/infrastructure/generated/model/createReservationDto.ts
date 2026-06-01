@@ -19,4 +19,6 @@ export interface CreateReservationDto {
   seatNumber: number;
   departureStationId: string;
   arrivalStationId: string;
+  /** @maxLength 500 */
+  notes?: string;
 }

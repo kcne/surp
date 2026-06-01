@@ -25,11 +25,17 @@ import {
 } from "@/components/ui/dialog"
 import {
   Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
 } from "@/components/ui/form"
+import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { FieldSection } from "@/components/reservations/primitives/FieldSection"
 import { PassengerForm } from "../passengers/PassengerForm"
-import { ArrowLeftRight, MapPinned, RotateCcw, UserPlus, Users, X } from "lucide-react"
+import { ArrowLeftRight, MapPinned, NotebookPen, RotateCcw, UserPlus, Users, X } from "lucide-react"
 import { format } from "date-fns"
 import { ReservationRideInfoCard } from "@/components/reservations/ReservationRideInfoCard"
 import { ReservationAssignmentModeSection } from "@/components/reservations/ReservationAssignmentModeSection"
@@ -112,6 +118,7 @@ export function ReservationModal({
     showPassengerForm,
     assignmentMode,
     perSeatPassengers,
+    perSeatNotes,
     addPassengerTargetSeat,
     travelTogether,
     isReturnTicket,
@@ -124,6 +131,7 @@ export function ReservationModal({
     setNewPassenger,
     setAssignmentMode,
     setPerSeatPassengers,
+    setPerSeatNotes,
     setAddPassengerTargetSeat,
     setTravelTogether,
     setIsReturnTicket,
@@ -255,6 +263,7 @@ export function ReservationModal({
     isMultiReservation,
     selectedSeats,
     perSeatPassengers,
+    perSeatNotes,
     travelTogether,
     allReservations,
     closeReservationModal,
@@ -490,10 +499,17 @@ export function ReservationModal({
                 <ReservationPerSeatPassengersSection
                   selectedSeats={selectedSeats}
                   perSeatPassengers={perSeatPassengers}
+                  perSeatNotes={perSeatNotes}
                   onSelectPassenger={(seat, passenger) => {
                     setPerSeatPassengers((prev) => ({
                       ...prev,
                       [seat]: passenger,
+                    }))
+                  }}
+                  onChangeNotes={(seat, notes) => {
+                    setPerSeatNotes((prev) => ({
+                      ...prev,
+                      [seat]: notes,
                     }))
                   }}
                   onAddNewPassengerForSeat={(seat) => {
@@ -516,6 +532,34 @@ export function ReservationModal({
                 arrivalStationId={arrivalStationId}
               />
             </FieldSection>
+
+            {assignmentMode === "single" && (
+              <FieldSection
+                icon={NotebookPen}
+                title="Napomena"
+                description="Opciono: dodajte napomenu uz ovu rezervaciju."
+              >
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="sr-only">Napomena</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          value={field.value ?? ""}
+                          rows={3}
+                          maxLength={500}
+                          placeholder="npr. Putnik silazi na drugoj stanici"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FieldSection>
+            )}
 
             <FieldSection
               icon={ArrowLeftRight}

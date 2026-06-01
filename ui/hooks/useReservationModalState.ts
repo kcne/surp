@@ -29,6 +29,7 @@ export function useReservationModalState({
   const [newPassenger, setNewPassenger] = useState<Passenger | null>(null)
   const [assignmentMode, setAssignmentMode] = useState<"single" | "perSeat">("single")
   const [perSeatPassengers, setPerSeatPassengers] = useState<Record<number, Passenger | null>>({})
+  const [perSeatNotes, setPerSeatNotes] = useState<Record<number, string>>({})
   const [addPassengerTargetSeat, setAddPassengerTargetSeat] = useState<number | null>(null)
   const [travelTogether, setTravelTogether] = useState<boolean>(true)
   const [isReturnTicket, setIsReturnTicket] = useState(false)
@@ -49,6 +50,7 @@ export function useReservationModalState({
     setShowPassengerForm(false)
     setAssignmentMode("single")
     setPerSeatPassengers({})
+    setPerSeatNotes({})
     setAddPassengerTargetSeat(null)
     setTravelTogether(true)
     setIsReturnTicket(false)
@@ -106,6 +108,7 @@ export function useReservationModalState({
         departureStationId: reservation.departureStationId,
         arrivalStationId: reservation.arrivalStationId,
         status: reservation.status,
+        notes: reservation.notes ?? "",
       })
       setSelectedPassenger(reservation.passenger)
       setShowPassengerForm(false)
@@ -128,6 +131,7 @@ export function useReservationModalState({
     setShowPassengerForm(false)
     setAssignmentMode("single")
     setPerSeatPassengers({})
+    setPerSeatNotes({})
     setAddPassengerTargetSeat(null)
     setTravelTogether(true)
     setIsReturnTicket(false)
@@ -173,6 +177,7 @@ export function useReservationModalState({
     newPassenger,
     assignmentMode,
     perSeatPassengers,
+    perSeatNotes,
     addPassengerTargetSeat,
     travelTogether,
     isReturnTicket,
@@ -185,6 +190,7 @@ export function useReservationModalState({
     setNewPassenger,
     setAssignmentMode,
     setPerSeatPassengers,
+    setPerSeatNotes,
     setAddPassengerTargetSeat,
     setTravelTogether,
     setIsReturnTicket,

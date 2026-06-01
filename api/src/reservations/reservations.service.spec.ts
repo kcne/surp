@@ -72,6 +72,7 @@ describe('ReservationsService', () => {
     departureStationId: 'station-a',
     arrivalStationId: 'station-c',
     groupId: null,
+    notes: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ride: {
@@ -191,7 +192,8 @@ describe('ReservationsService', () => {
         rideArrivalTime: data.rideArrivalTime as string,
         createdById: data.createdById as string,
         updatedById: data.updatedById as string,
-        groupId: (data.groupId as string | null | undefined) ?? null
+        groupId: (data.groupId as string | null | undefined) ?? null,
+        notes: (data.notes as string | null | undefined) ?? null
       };
 
       reservationStore.push({

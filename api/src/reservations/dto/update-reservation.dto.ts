@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class UpdateReservationDto {
   @ApiPropertyOptional({ example: 'passenger-id-123' })
@@ -28,4 +28,10 @@ export class UpdateReservationDto {
   @IsString()
   @IsNotEmpty()
   arrivalStationId?: string;
+
+  @ApiPropertyOptional({ example: 'Putnik silazi na drugoj stanici', maxLength: 500, nullable: true, type: String })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string | null;
 }

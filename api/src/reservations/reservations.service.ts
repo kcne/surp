@@ -39,6 +39,7 @@ const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   departureStationId: true,
   arrivalStationId: true,
   groupId: true,
+  notes: true,
   createdAt: true,
   updatedAt: true,
   ride: {
@@ -220,7 +221,10 @@ export class ReservationsService {
             ...(dto.passengerId ? { passengerId: dto.passengerId } : {}),
             ...(dto.seatNumber !== undefined ? { seatNumber: dto.seatNumber } : {}),
             ...(dto.departureStationId ? { departureStationId: dto.departureStationId } : {}),
-            ...(dto.arrivalStationId ? { arrivalStationId: dto.arrivalStationId } : {})
+            ...(dto.arrivalStationId ? { arrivalStationId: dto.arrivalStationId } : {}),
+            ...(dto.notes !== undefined
+              ? { notes: dto.notes && dto.notes.trim() ? dto.notes.trim() : null }
+              : {})
           },
           auth.sub
         ),
@@ -507,7 +511,8 @@ export class ReservationsService {
           arrivalStationId: dto.arrivalStationId,
           status: ReservationStatus.ACTIVE,
           cancelledAt: null,
-          groupId: options.groupId ?? null
+          groupId: options.groupId ?? null,
+          notes: dto.notes?.trim() ? dto.notes.trim() : null
         },
         auth.sub
       ),
@@ -563,6 +568,7 @@ export class ReservationsService {
       departureStationId: reservation.departureStationId,
       arrivalStationId: reservation.arrivalStationId,
       groupId: reservation.groupId,
+      notes: reservation.notes,
       ride: {
         id: reservation.ride.id,
         name: reservation.ride.name,
