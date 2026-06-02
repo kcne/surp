@@ -256,7 +256,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     const headingText = `${fromName} - ${toName} - ${dateStr} - ${timeStr} - Ukupno putnika: ${passengerCount}`
 
     if (options.format === "pdf") {
-      const doc = new jsPDF({ orientation: "landscape" })
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
       await registerPdfUnicodeFont(doc)
       doc.setFont("Roboto", "bold")
       doc.setFontSize(14)

@@ -199,7 +199,11 @@ export function useReservationSubmission({
 
       if (assignmentMode === "single") {
         setSelectedPassenger(passenger)
-        form.setValue("passengerId", passenger.id)
+        form.setValue("passengerId", passenger.id, {
+          shouldValidate: true,
+          shouldDirty: true,
+          shouldTouch: true,
+        })
         setNewPassenger(passenger)
       } else if (assignmentMode === "perSeat" && addPassengerTargetSeat != null) {
         setPerSeatPassengers((prev) => ({ ...prev, [addPassengerTargetSeat]: passenger }))
