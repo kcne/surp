@@ -10,6 +10,7 @@ import { useAuthStore } from "@/stores/authStore"
 import type { PlatformTenantLoginOption } from "@/infrastructure/types/auth.types"
 import { useTenantLoginOptionsQuery } from "@/infrastructure/hooks/queries/useTenantLoginOptionsQuery"
 import { getApiErrorMessage } from "@/infrastructure/utils/errors"
+import { getAccessToken } from "@/infrastructure/utils/storage"
 import { Button } from "@/components/ui/button"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Input } from "@/components/ui/input"
@@ -71,6 +72,13 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (hasHydrated && isAuthenticated && !isSandboxLogin) {
+      // Never bounce back to the app on a session without a token — that is the
+      // /login <-> /reservations redirect loop.
+      if (!getAccessToken()) {
+        useAuthStore.getState().validateSession()
+        return
+      }
+
       const currentUser = useAuthStore.getState().user
       router.replace(currentUser?.role === "SUPERADMIN" ? "/superadmin/overview" : "/reservations")
     }

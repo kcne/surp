@@ -5,6 +5,7 @@ import { loginRequest } from "@/infrastructure/requests/auth.requests"
 import { getApiErrorMessage } from "@/infrastructure/utils/errors"
 import {
   clearAuthSession,
+  getAccessToken,
   setAccessToken,
   setRefreshToken,
   setTenantSlug,
@@ -17,6 +18,7 @@ interface AuthState {
   loading: boolean
   error: string | null
   setHasHydrated: (hydrated: boolean) => void
+  validateSession: () => void
   login: (username: string, password: string, tenantSlug: string) => Promise<void>
   logout: () => void
   clearError: () => void
@@ -32,6 +34,15 @@ export const useAuthStore = create<AuthState>()(
       error: null,
       setHasHydrated: (hydrated: boolean) => {
         set({ hasHydrated: hydrated })
+      },
+
+      // The access token, not the persisted flag, decides whether we are logged
+      // in. Without this a stale `isAuthenticated` survives token expiry and
+      // bounces the user between /login and the dashboard.
+      validateSession: () => {
+        if (!getAccessToken()) {
+          set({ user: null, isAuthenticated: false })
+        }
       },
 
       login: async (username: string, password: string, tenantSlug: string) => {
@@ -92,6 +103,7 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => (state) => {
+        state?.validateSession()
         state?.setHasHydrated(true)
       },
     }

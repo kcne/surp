@@ -24,7 +24,8 @@ function clearSessionAndRedirectToLogin(): void {
   clearAuthSession()
 
   if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-    window.location.href = "/login"
+    // replace() so a repeated 401 cannot stack up history entries.
+    window.location.replace("/login")
   }
 }
 
@@ -100,14 +101,14 @@ httpClient.interceptors.response.use(
       _retry?: boolean
     })
 
-    if (status === 401 && originalRequest && !originalRequest._retry) {
-      const requestUrl = String(originalRequest.url ?? "")
+    if (status === 401) {
+      const requestUrl = String(originalRequest?.url ?? "")
       const isAuthEndpoint =
         requestUrl.includes("/auth/login") ||
         requestUrl.includes("/auth/refresh") ||
         requestUrl.includes("/auth/logout")
 
-      if (!isAuthEndpoint) {
+      if (originalRequest && !originalRequest._retry && !isAuthEndpoint) {
         originalRequest._retry = true
 
         try {
@@ -126,11 +127,11 @@ httpClient.interceptors.response.use(
         }
       }
 
-      clearSessionAndRedirectToLogin()
-    }
-
-    if (status === 401) {
-      clearSessionAndRedirectToLogin()
+      // A failed login attempt is not a stale session — don't wipe storage or
+      // redirect, the login form shows the error itself.
+      if (!requestUrl.includes("/auth/login")) {
+        clearSessionAndRedirectToLogin()
+      }
     }
 
     return Promise.reject(error)
