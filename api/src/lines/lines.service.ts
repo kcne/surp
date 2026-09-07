@@ -333,6 +333,12 @@ export class LinesService {
 
         if (dto.intermediateStops !== undefined) {
           await this.replaceLineStopsTx(tx, auth.tenantId, id, auth.sub, nextStops, true);
+
+          // A BOTH pair describes one route in two directions, so a stop added
+          // here belongs on the opposite direction as well.
+          if (directionMode === LineDirectionMode.BOTH && pairKey) {
+            await this.syncPairedLineStopsTx(tx, auth.tenantId, id, auth.sub, pairKey, nextStops);
+          }
         }
 
         // Any route change invalidates the day schedules of rides on this line,
@@ -675,6 +681,67 @@ export class LinesService {
       throw new BadRequestException(
         'Intermediate stops cannot reuse departure or arrival station for the same line'
       );
+    }
+  }
+
+  /**
+   * Mirrors this line's intermediate stops onto its paired opposite direction.
+   *
+   * `create` already builds a reverse line with mirrored stops, so a BOTH pair
+   * is meant to describe one physical route travelled two ways. `update` never
+   * carried stop changes across, which let the two drift apart silently: adding
+   * a stop to the outbound line left the return route without it, and no screen
+   * showed that the pair disagreed.
+   *
+   * Only the intermediate stops are mirrored. Each direction keeps its own
+   * departure and arrival, because those legitimately differ — a route can come
+   * back from a different terminus than it departs to. Any mirrored stop that
+   * happens to be the pair's own endpoint is dropped rather than duplicated,
+   * since a stop may not reuse a route endpoint.
+   */
+  private async syncPairedLineStopsTx(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    lineId: string,
+    actorId: string,
+    pairKey: string,
+    nextStops: LineStopInputDto[]
+  ): Promise<void> {
+    const pairedLines = await tx.line.findMany({
+      where: {
+        tenantId,
+        pairKey,
+        directionMode: LineDirectionMode.BOTH,
+        id: {
+          not: lineId
+        }
+      },
+      select: {
+        id: true,
+        departureStationId: true,
+        arrivalStationId: true
+      }
+    });
+
+    for (const pairedLine of pairedLines) {
+      const mirroredStops = this.buildReversedStops(nextStops)
+        .filter(
+          (stop) =>
+            stop.stationId !== pairedLine.departureStationId &&
+            stop.stationId !== pairedLine.arrivalStationId
+        )
+        // Re-number after filtering so order indexes stay contiguous.
+        .map((stop, index) => ({ stationId: stop.stationId, orderIndex: index + 1 }));
+
+      await this.replaceLineStopsTx(tx, tenantId, pairedLine.id, actorId, mirroredStops, true);
+
+      // The mirrored route is a route change for the paired line too, so its
+      // own ride schedules have to follow.
+      await this.reconcileRideDaySchedulesToRouteTx(tx, tenantId, pairedLine.id, actorId, [
+        pairedLine.departureStationId,
+        ...mirroredStops.map((stop) => stop.stationId),
+        pairedLine.arrivalStationId
+      ]);
     }
   }
 

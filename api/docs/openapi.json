@@ -1653,6 +1653,92 @@
         ]
       }
     },
+    "/maintenance/pair-drift": {
+      "get": {
+        "operationId": "MaintenanceController_getPairDrift",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairDriftReportDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Report paired lines whose two directions no longer carry the same intermediate stops.",
+        "tags": [
+          "Maintenance"
+        ]
+      }
+    },
+    "/maintenance/pair-drift/sync": {
+      "post": {
+        "operationId": "MaintenanceController_syncPairs",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairSyncResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Give both directions of a paired line the same intermediate stops, keeping each direction own endpoints. Pairs whose directions genuinely disagree are skipped.",
+        "tags": [
+          "Maintenance"
+        ]
+      }
+    },
     "/api/public/marketing/leads": {
       "post": {
         "operationId": "MarketingLeadsController_createLead",
@@ -6392,6 +6478,136 @@
           "affectedRideCount",
           "estimatedTimeCount",
           "reorderedScheduleCount",
+          "items"
+        ]
+      },
+      "PairDriftLineDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "line-1"
+          },
+          "name": {
+            "type": "string",
+            "example": "Novi Sad - Istanbul Balbus"
+          },
+          "stopCount": {
+            "type": "number",
+            "example": 20,
+            "description": "Intermediate stop count on this direction."
+          },
+          "missingStationNames": {
+            "description": "Stations the other direction has that this one is missing.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "stopCount",
+          "missingStationNames"
+        ]
+      },
+      "PairDriftItemDto": {
+        "type": "object",
+        "properties": {
+          "pairKey": {
+            "type": "string",
+            "example": "pair-abc"
+          },
+          "outbound": {
+            "$ref": "#/components/schemas/PairDriftLineDto"
+          },
+          "inbound": {
+            "$ref": "#/components/schemas/PairDriftLineDto"
+          },
+          "canAutoSync": {
+            "type": "boolean",
+            "example": true,
+            "description": "True when one direction is simply missing stops the other has, which can be synced automatically."
+          },
+          "conflictReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Why the pair cannot be synced automatically, when it cannot."
+          }
+        },
+        "required": [
+          "pairKey",
+          "outbound",
+          "inbound",
+          "canAutoSync",
+          "conflictReason"
+        ]
+      },
+      "PairDriftReportDto": {
+        "type": "object",
+        "properties": {
+          "scannedPairCount": {
+            "type": "number",
+            "example": 5,
+            "minimum": 0
+          },
+          "driftedPairCount": {
+            "type": "number",
+            "example": 2,
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PairDriftItemDto"
+            }
+          }
+        },
+        "required": [
+          "scannedPairCount",
+          "driftedPairCount",
+          "items"
+        ]
+      },
+      "PairSyncResultDto": {
+        "type": "object",
+        "properties": {
+          "syncedPairCount": {
+            "type": "number",
+            "example": 2,
+            "minimum": 0
+          },
+          "addedStopCount": {
+            "type": "number",
+            "example": 3,
+            "minimum": 0,
+            "description": "Stops added across both directions."
+          },
+          "realignedScheduleCount": {
+            "type": "number",
+            "example": 2,
+            "minimum": 0,
+            "description": "Ride day schedules realigned as a result of the route changes."
+          },
+          "skippedPairCount": {
+            "type": "number",
+            "example": 0,
+            "minimum": 0,
+            "description": "Pairs left untouched because their directions genuinely disagree."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PairDriftItemDto"
+            }
+          }
+        },
+        "required": [
+          "syncedPairCount",
+          "addedStopCount",
+          "realignedScheduleCount",
+          "skippedPairCount",
           "items"
         ]
       },

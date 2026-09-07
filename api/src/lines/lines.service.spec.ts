@@ -269,7 +269,9 @@ describe('LinesService', () => {
       line: {
         update: jest.fn().mockResolvedValue(baseLine),
         updateMany: jest.fn(),
-        findFirst: jest.fn().mockResolvedValue(baseLine)
+        findFirst: jest.fn().mockResolvedValue(baseLine),
+        // No paired line in these cases; pair mirroring is covered separately.
+        findMany: jest.fn().mockResolvedValue([])
       },
       lineStop: {
         deleteMany: jest.fn(),
@@ -384,7 +386,9 @@ describe('LinesService', () => {
       line: {
         update: jest.fn().mockResolvedValue(baseLine),
         updateMany: jest.fn(),
-        findFirst: jest.fn().mockResolvedValue(baseLine)
+        findFirst: jest.fn().mockResolvedValue(baseLine),
+        // No paired line in these cases; pair mirroring is covered separately.
+        findMany: jest.fn().mockResolvedValue([])
       },
       lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
       ride: {
@@ -422,5 +426,154 @@ describe('LinesService', () => {
       'station-d',
       'station-b'
     ]);
+  });
+  it('mirrors new stops onto the paired direction while keeping its own endpoints', async () => {
+    // Outbound A -> C -> B, paired with a return that departs from a different
+    // terminus (D) than the outbound arrival (B).
+    prismaMock.line.findFirst.mockResolvedValue({
+      ...baseLine,
+      directionMode: LineDirectionMode.BOTH,
+      pairKey: 'pair-1',
+      intermediateStops: [{ stationId: 'station-c', orderIndex: 1, station: { name: 'Mid 1' } }]
+    });
+
+    prismaMock.station.findMany
+      .mockResolvedValueOnce([
+        { id: 'station-a', name: 'Central' },
+        { id: 'station-b', name: 'North' }
+      ])
+      .mockResolvedValueOnce([
+        { id: 'station-c', name: 'Mid 1' },
+        { id: 'station-d', name: 'Mid 2' }
+      ]);
+
+    const tx = {
+      line: {
+        update: jest.fn().mockResolvedValue(baseLine),
+        updateMany: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(baseLine),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'line-2',
+            departureStationId: 'station-terminus',
+            arrivalStationId: 'station-a'
+          }
+        ])
+      },
+      lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
+      ride: { findMany: jest.fn().mockResolvedValue([]) },
+      rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
+    };
+
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+
+    await service.update(auth, 'line-1', {
+      intermediateStops: [
+        { stationId: 'station-c', orderIndex: 1 },
+        { stationId: 'station-d', orderIndex: 2 }
+      ]
+    });
+
+    // Second createMany is the paired line: stops reversed, order renumbered.
+    const pairedCall = tx.lineStop.createMany.mock.calls[1][0];
+    expect(
+      pairedCall.data.map((entry: { stationId: string; orderIndex: number; lineId: string }) => ({
+        lineId: entry.lineId,
+        stationId: entry.stationId,
+        orderIndex: entry.orderIndex
+      }))
+    ).toEqual([
+      { lineId: 'line-2', stationId: 'station-d', orderIndex: 1 },
+      { lineId: 'line-2', stationId: 'station-c', orderIndex: 2 }
+    ]);
+  });
+
+  it('drops a mirrored stop that is the paired line own endpoint', async () => {
+    prismaMock.line.findFirst.mockResolvedValue({
+      ...baseLine,
+      directionMode: LineDirectionMode.BOTH,
+      pairKey: 'pair-1',
+      intermediateStops: [{ stationId: 'station-c', orderIndex: 1, station: { name: 'Mid 1' } }]
+    });
+
+    prismaMock.station.findMany
+      .mockResolvedValueOnce([
+        { id: 'station-a', name: 'Central' },
+        { id: 'station-b', name: 'North' }
+      ])
+      .mockResolvedValueOnce([
+        { id: 'station-c', name: 'Mid 1' },
+        { id: 'station-d', name: 'Mid 2' }
+      ]);
+
+    const tx = {
+      line: {
+        update: jest.fn().mockResolvedValue(baseLine),
+        updateMany: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(baseLine),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'line-2',
+            // station-d is this line's terminus, so it must not also be a stop.
+            departureStationId: 'station-d',
+            arrivalStationId: 'station-a'
+          }
+        ])
+      },
+      lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
+      ride: { findMany: jest.fn().mockResolvedValue([]) },
+      rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
+    };
+
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+
+    await service.update(auth, 'line-1', {
+      intermediateStops: [
+        { stationId: 'station-c', orderIndex: 1 },
+        { stationId: 'station-d', orderIndex: 2 }
+      ]
+    });
+
+    const pairedCall = tx.lineStop.createMany.mock.calls[1][0];
+    expect(
+      pairedCall.data.map((entry: { stationId: string; orderIndex: number }) => entry)
+    ).toEqual([expect.objectContaining({ stationId: 'station-c', orderIndex: 1 })]);
+  });
+
+  it('does not touch other lines when the line is not part of a pair', async () => {
+    prismaMock.line.findFirst.mockResolvedValue({
+      ...baseLine,
+      directionMode: LineDirectionMode.SINGLE,
+      pairKey: null,
+      intermediateStops: []
+    });
+
+    prismaMock.station.findMany
+      .mockResolvedValueOnce([
+        { id: 'station-a', name: 'Central' },
+        { id: 'station-b', name: 'North' }
+      ])
+      .mockResolvedValueOnce([{ id: 'station-c', name: 'Mid 1' }]);
+
+    const tx = {
+      line: {
+        update: jest.fn().mockResolvedValue(baseLine),
+        updateMany: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(baseLine),
+        findMany: jest.fn()
+      },
+      lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
+      ride: { findMany: jest.fn().mockResolvedValue([]) },
+      rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
+    };
+
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+
+    await service.update(auth, 'line-1', {
+      intermediateStops: [{ stationId: 'station-c', orderIndex: 1 }]
+    });
+
+    expect(tx.line.findMany).not.toHaveBeenCalled();
+    expect(tx.lineStop.createMany).toHaveBeenCalledTimes(1);
   });
 });
