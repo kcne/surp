@@ -23,7 +23,8 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "pnpm prisma db seed",
-    "seed:prod:once": "ts-node --transpile-only scripts/prod-bootstrap-once.ts"
+    "seed:prod:once": "ts-node --transpile-only scripts/prod-bootstrap-once.ts",
+    "schedules:realign": "ts-node --transpile-only scripts/realign-ride-day-schedules.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1011.0",

@@ -7,6 +7,7 @@ import { envValidationSchema } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { InternalSandboxModule } from './internal-sandbox/internal-sandbox.module';
 import { LinesModule } from './lines/lines.module';
+import { MaintenanceModule } from './maintenance/maintenance.module';
 import { MarketingLeadsModule } from './marketing-leads/marketing-leads.module';
 import { PassengersModule } from './passengers/passengers.module';
 import { PlatformAnalyticsModule } from './platform-analytics/platform-analytics.module';
@@ -43,6 +44,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     StationsModule,
     LinesModule,
+    MaintenanceModule,
     MarketingLeadsModule,
     PlatformAnalyticsModule,
     PlatformAuditModule,
