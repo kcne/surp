@@ -1567,6 +1567,92 @@
         ]
       }
     },
+    "/maintenance/schedule-drift": {
+      "get": {
+        "operationId": "MaintenanceController_getScheduleDrift",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleDriftReportDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Report ride day schedules that no longer match their line route in the current tenant.",
+        "tags": [
+          "Maintenance"
+        ]
+      }
+    },
+    "/maintenance/schedule-drift/realign": {
+      "post": {
+        "operationId": "MaintenanceController_realignSchedules",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRealignResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Rewrite drifted ride day schedules to match their line route. Existing station times are preserved by station; stations new to a route are created without a time.",
+        "tags": [
+          "Maintenance"
+        ]
+      }
+    },
     "/api/public/marketing/leads": {
       "post": {
         "operationId": "MarketingLeadsController_createLead",
@@ -6163,6 +6249,150 @@
         },
         "required": [
           "intermediateStops"
+        ]
+      },
+      "ScheduleDriftItemDto": {
+        "type": "object",
+        "properties": {
+          "rideId": {
+            "type": "string",
+            "example": "ride-1"
+          },
+          "rideName": {
+            "type": "string",
+            "example": "Novi Sad - Istanbul Balbus"
+          },
+          "lineId": {
+            "type": "string",
+            "example": "line-1"
+          },
+          "lineName": {
+            "type": "string",
+            "example": "Novi Sad - Istanbul Balbus"
+          },
+          "dayOfWeek": {
+            "type": "number",
+            "example": 1,
+            "minimum": 0,
+            "maximum": 6
+          },
+          "scheduleStationCount": {
+            "type": "number",
+            "example": 20,
+            "description": "Station count currently stored on the day schedule."
+          },
+          "routeStationCount": {
+            "type": "number",
+            "example": 22,
+            "description": "Station count on the line route."
+          },
+          "addedStationNames": {
+            "description": "Station names on the route that the schedule is missing.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "removedStationNames": {
+            "description": "Station names on the schedule that are no longer on the route.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reorderedStationNames": {
+            "description": "Station names the route moved past one another. Their existing times are kept, so after realignment the schedule may read out of sequence and needs review.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "rideId",
+          "rideName",
+          "lineId",
+          "lineName",
+          "dayOfWeek",
+          "scheduleStationCount",
+          "routeStationCount",
+          "addedStationNames",
+          "removedStationNames",
+          "reorderedStationNames"
+        ]
+      },
+      "ScheduleDriftReportDto": {
+        "type": "object",
+        "properties": {
+          "scannedScheduleCount": {
+            "type": "number",
+            "example": 12,
+            "minimum": 0
+          },
+          "driftedScheduleCount": {
+            "type": "number",
+            "example": 3,
+            "minimum": 0
+          },
+          "affectedRideCount": {
+            "type": "number",
+            "example": 2,
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleDriftItemDto"
+            }
+          }
+        },
+        "required": [
+          "scannedScheduleCount",
+          "driftedScheduleCount",
+          "affectedRideCount",
+          "items"
+        ]
+      },
+      "ScheduleRealignResultDto": {
+        "type": "object",
+        "properties": {
+          "realignedScheduleCount": {
+            "type": "number",
+            "example": 3,
+            "minimum": 0,
+            "description": "Day schedules rewritten to match their route."
+          },
+          "affectedRideCount": {
+            "type": "number",
+            "example": 2,
+            "minimum": 0
+          },
+          "estimatedTimeCount": {
+            "type": "number",
+            "example": 4,
+            "minimum": 0,
+            "description": "Station times filled with an estimate rather than a known value. Estimates are a starting point and should be reviewed in the schedule screen."
+          },
+          "reorderedScheduleCount": {
+            "type": "number",
+            "example": 1,
+            "minimum": 0,
+            "description": "Schedules whose stops changed order. Their times were carried over unchanged and may now run backwards, so they need review rather than an estimate."
+          },
+          "items": {
+            "description": "What was repaired.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleDriftItemDto"
+            }
+          }
+        },
+        "required": [
+          "realignedScheduleCount",
+          "affectedRideCount",
+          "estimatedTimeCount",
+          "reorderedScheduleCount",
+          "items"
         ]
       },
       "CreateMarketingLeadDto": {

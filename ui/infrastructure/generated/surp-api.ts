@@ -97,6 +97,8 @@ import type {
   RidesControllerListInstancesByDateParams,
   RidesControllerListParams,
   RidesControllerRemoveParams,
+  ScheduleDriftReportDto,
+  ScheduleRealignResultDto,
   StationResponseDto,
   StationsControllerListParams,
   StorefrontAdminResponseDto,
@@ -3046,6 +3048,223 @@ export const useLinesControllerCreateReverse = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getLinesControllerCreateReverseMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Report ride day schedules that no longer match their line route in the current tenant.
+ */
+export type maintenanceControllerGetScheduleDriftResponse200 = {
+  data: ScheduleDriftReportDto
+  status: 200
+}
+
+export type maintenanceControllerGetScheduleDriftResponse401 = {
+  data: void
+  status: 401
+}
+
+export type maintenanceControllerGetScheduleDriftResponse403 = {
+  data: void
+  status: 403
+}
+
+export type maintenanceControllerGetScheduleDriftResponseSuccess = (maintenanceControllerGetScheduleDriftResponse200) & {
+  headers: Headers;
+};
+export type maintenanceControllerGetScheduleDriftResponseError = (maintenanceControllerGetScheduleDriftResponse401 | maintenanceControllerGetScheduleDriftResponse403) & {
+  headers: Headers;
+};
+
+export type maintenanceControllerGetScheduleDriftResponse = (maintenanceControllerGetScheduleDriftResponseSuccess | maintenanceControllerGetScheduleDriftResponseError)
+
+export const getMaintenanceControllerGetScheduleDriftUrl = () => {
+
+
+  
+
+  return `/maintenance/schedule-drift`
+}
+
+export const maintenanceControllerGetScheduleDrift = async ( options?: RequestInit): Promise<maintenanceControllerGetScheduleDriftResponse> => {
+  
+  return customInstance<maintenanceControllerGetScheduleDriftResponse>(getMaintenanceControllerGetScheduleDriftUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getMaintenanceControllerGetScheduleDriftQueryKey = () => {
+    return [
+    `/maintenance/schedule-drift`
+    ] as const;
+    }
+
+    
+export const getMaintenanceControllerGetScheduleDriftQueryOptions = <TData = Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getMaintenanceControllerGetScheduleDriftQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>> = ({ signal }) => maintenanceControllerGetScheduleDrift({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type MaintenanceControllerGetScheduleDriftQueryResult = NonNullable<Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>>
+export type MaintenanceControllerGetScheduleDriftQueryError = ErrorType<void>
+
+
+export function useMaintenanceControllerGetScheduleDrift<TData = Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerGetScheduleDrift<TData = Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerGetScheduleDrift<TData = Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Report ride day schedules that no longer match their line route in the current tenant.
+ */
+
+export function useMaintenanceControllerGetScheduleDrift<TData = Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetScheduleDrift>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getMaintenanceControllerGetScheduleDriftQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Rewrite drifted ride day schedules to match their line route. Existing station times are preserved by station; stations new to a route are created without a time.
+ */
+export type maintenanceControllerRealignSchedulesResponse200 = {
+  data: ScheduleRealignResultDto
+  status: 200
+}
+
+export type maintenanceControllerRealignSchedulesResponse401 = {
+  data: void
+  status: 401
+}
+
+export type maintenanceControllerRealignSchedulesResponse403 = {
+  data: void
+  status: 403
+}
+
+export type maintenanceControllerRealignSchedulesResponseSuccess = (maintenanceControllerRealignSchedulesResponse200) & {
+  headers: Headers;
+};
+export type maintenanceControllerRealignSchedulesResponseError = (maintenanceControllerRealignSchedulesResponse401 | maintenanceControllerRealignSchedulesResponse403) & {
+  headers: Headers;
+};
+
+export type maintenanceControllerRealignSchedulesResponse = (maintenanceControllerRealignSchedulesResponseSuccess | maintenanceControllerRealignSchedulesResponseError)
+
+export const getMaintenanceControllerRealignSchedulesUrl = () => {
+
+
+  
+
+  return `/maintenance/schedule-drift/realign`
+}
+
+export const maintenanceControllerRealignSchedules = async ( options?: RequestInit): Promise<maintenanceControllerRealignSchedulesResponse> => {
+  
+  return customInstance<maintenanceControllerRealignSchedulesResponse>(getMaintenanceControllerRealignSchedulesUrl(),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+  
+
+
+
+export const getMaintenanceControllerRealignSchedulesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerRealignSchedules>>, TError,void, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerRealignSchedules>>, TError,void, TContext> => {
+
+const mutationKey = ['maintenanceControllerRealignSchedules'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof maintenanceControllerRealignSchedules>>, void> = () => {
+          
+
+          return  maintenanceControllerRealignSchedules(requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MaintenanceControllerRealignSchedulesMutationResult = NonNullable<Awaited<ReturnType<typeof maintenanceControllerRealignSchedules>>>
+    
+    export type MaintenanceControllerRealignSchedulesMutationError = ErrorType<void>
+
+    /**
+ * @summary Rewrite drifted ride day schedules to match their line route. Existing station times are preserved by station; stations new to a route are created without a time.
+ */
+export const useMaintenanceControllerRealignSchedules = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerRealignSchedules>>, TError,void, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof maintenanceControllerRealignSchedules>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getMaintenanceControllerRealignSchedulesMutationOptions(options), queryClient);
     }
     
 /**

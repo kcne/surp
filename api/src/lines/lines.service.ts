@@ -14,6 +14,11 @@ import { LineResponseDto, PaginatedLinesResponseDto } from './dto/line.response.
 import { LineStopInputDto } from './dto/line-stop.dto';
 import { ListLinesQueryDto } from './dto/list-lines.query.dto';
 import { UpdateLineDto } from './dto/update-line.dto';
+import {
+  isScheduleAlignedToRoute,
+  realignDaySchedulesTx,
+  type DayScheduleRealignInput
+} from '../rides/ride-schedule-alignment';
 
 const SAFE_LINE_SELECT = {
   id: true,
@@ -328,6 +333,31 @@ export class LinesService {
 
         if (dto.intermediateStops !== undefined) {
           await this.replaceLineStopsTx(tx, auth.tenantId, id, auth.sub, nextStops, true);
+        }
+
+        // Any route change invalidates the day schedules of rides on this line,
+        // so realign them in the same transaction that changed the route.
+        const routeChanged =
+          dto.intermediateStops !== undefined ||
+          Boolean(dto.departureStationId) ||
+          Boolean(dto.arrivalStationId);
+
+        if (routeChanged) {
+          const nextRouteStationIds = [
+            departureStationId,
+            ...[...nextStops]
+              .sort((left, right) => left.orderIndex - right.orderIndex)
+              .map((stop) => stop.stationId),
+            arrivalStationId
+          ];
+
+          await this.reconcileRideDaySchedulesToRouteTx(
+            tx,
+            auth.tenantId,
+            id,
+            auth.sub,
+            nextRouteStationIds
+          );
         }
 
         return tx.line.findFirst({
@@ -646,6 +676,64 @@ export class LinesService {
         'Intermediate stops cannot reuse departure or arrival station for the same line'
       );
     }
+  }
+
+  /**
+   * Realigns every ride day schedule on this line with the line's current
+   * route. See `ride-schedule-alignment.ts` for why a route change invalidates
+   * stored schedules and how they are repaired.
+   */
+  private async reconcileRideDaySchedulesToRouteTx(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    lineId: string,
+    actorId: string,
+    routeStationIds: string[]
+  ): Promise<void> {
+    const rides = await tx.ride.findMany({
+      where: {
+        lineId,
+        tenantId
+      },
+      select: {
+        daySchedules: {
+          select: {
+            id: true,
+            stationTimes: {
+              select: {
+                stationId: true,
+                orderIndex: true,
+                time: true
+              },
+              orderBy: {
+                orderIndex: 'asc'
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const drifted: DayScheduleRealignInput[] = [];
+
+    for (const ride of rides) {
+      for (const daySchedule of ride.daySchedules) {
+        if (isScheduleAlignedToRoute(daySchedule.stationTimes, routeStationIds)) {
+          continue;
+        }
+
+        drifted.push({
+          rideDayScheduleId: daySchedule.id,
+          stationTimes: daySchedule.stationTimes,
+          routeStationIds
+        });
+      }
+    }
+
+    // Rewritten in one pass: this runs inside the transaction that changed the
+    // route, and a round-trip per schedule would put the line edit at the mercy
+    // of how many rides happen to be on it.
+    await realignDaySchedulesTx(tx, { tenantId, actorId, schedules: drifted });
   }
 
   private async replaceLineStopsTx(

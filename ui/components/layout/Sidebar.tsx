@@ -11,8 +11,10 @@ import {
   Info,
   MapPin,
   Route,
+  Settings,
   Store,
   Ticket,
+  Upload,
   Users,
 } from "lucide-react"
 
@@ -26,6 +28,11 @@ const reservationItems = [
     title: "Putnici",
     href: "/passengers",
     icon: Users,
+  },
+  {
+    title: "Uvoz CSV",
+    href: "/reservations/import",
+    icon: Upload,
   },
 ]
 
@@ -95,6 +102,11 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
                 title: "Upravljanje Agencijom",
                 href: "/agency-management",
                 icon: Building2,
+              },
+              {
+                title: "Podesavanja",
+                href: "/settings",
+                icon: Settings,
               },
             ]
           : supportItems,
