@@ -181,6 +181,8 @@ export * from './reservationsControllerListParams';
 export * from './reservationsControllerListStatus';
 export * from './reservationStationSummaryDto';
 export * from './resetPasswordDto';
+export * from './returnRouteGapItemDto';
+export * from './returnRouteGapReportDto';
 export * from './rideDayScheduleInputDto';
 export * from './rideDayScheduleResponseDto';
 export * from './rideExceptionResponseDto';
