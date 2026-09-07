@@ -118,3 +118,29 @@ export async function writeLineStopsTx(
     )
   });
 }
+
+/** Every station on a line's route, endpoints included. */
+export function fullRouteStationIds(line: PairedRouteLine): string[] {
+  return [line.departureStationId, ...orderedStopIds(line), line.arrivalStationId];
+}
+
+/**
+ * Termini of `line` that appear nowhere on `other`'s route.
+ *
+ * A return ticket swaps the outbound leg's two stations and looks for them on
+ * the opposite direction's route (`buildReturnRequests`). A terminus missing
+ * from the other direction therefore makes a return ticket impossible for every
+ * passenger travelling to or from it, and the booking screen rejects it with a
+ * message about the chosen stations rather than about the route setup.
+ *
+ * Unlike a missing intermediate stop this is never auto-repaired: putting a
+ * terminus onto the other direction means deciding where along that route the
+ * bus calls at it, which the data cannot answer.
+ */
+export function unreachableTermini(line: PairedRouteLine, other: PairedRouteLine): string[] {
+  const otherRoute = new Set(fullRouteStationIds(other));
+
+  return [line.departureStationId, line.arrivalStationId].filter(
+    (stationId) => !otherRoute.has(stationId)
+  );
+}

@@ -1,4 +1,9 @@
-import { isSubsequence, mergePairedRoutes, stopsForDirection } from './line-pair-alignment';
+import {
+  isSubsequence,
+  mergePairedRoutes,
+  stopsForDirection,
+  unreachableTermini
+} from './line-pair-alignment';
 
 describe('line pair alignment', () => {
   describe('mergePairedRoutes', () => {
@@ -68,6 +73,50 @@ describe('line pair alignment', () => {
       const stops = stopsForDirection(line, ['agencija', 'b', 'novi-sad'], false);
 
       expect(stops).toEqual([{ stationId: 'b', orderIndex: 1 }]);
+    });
+  });
+  describe('unreachableTermini', () => {
+    // The real case: outbound ends at Istanbul Balbus, the return departs from
+    // Agencija and never calls at Istanbul Balbus.
+    const outbound = {
+      id: 'out',
+      departureStationId: 'novi-sad',
+      arrivalStationId: 'istanbul-balbus',
+      intermediateStops: [{ stationId: 'montenegro', orderIndex: 1 }]
+    };
+    const inbound = {
+      id: 'in',
+      departureStationId: 'agencija',
+      arrivalStationId: 'novi-sad',
+      intermediateStops: [{ stationId: 'montenegro', orderIndex: 1 }]
+    };
+
+    it('flags a terminus the opposite direction never calls at', () => {
+      expect(unreachableTermini(outbound, inbound)).toEqual(['istanbul-balbus']);
+      expect(unreachableTermini(inbound, outbound)).toEqual(['agencija']);
+    });
+
+    it('flags nothing when both termini appear on the opposite route', () => {
+      const mirrored = {
+        ...inbound,
+        departureStationId: 'istanbul-balbus',
+        arrivalStationId: 'novi-sad'
+      };
+
+      expect(unreachableTermini(outbound, mirrored)).toEqual([]);
+      expect(unreachableTermini(mirrored, outbound)).toEqual([]);
+    });
+
+    it('counts a terminus that appears as an intermediate stop as reachable', () => {
+      const withStop = {
+        ...inbound,
+        intermediateStops: [
+          { stationId: 'istanbul-balbus', orderIndex: 1 },
+          { stationId: 'montenegro', orderIndex: 2 }
+        ]
+      };
+
+      expect(unreachableTermini(outbound, withStop)).toEqual([]);
     });
   });
 });

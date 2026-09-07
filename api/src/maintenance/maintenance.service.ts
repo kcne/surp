@@ -5,6 +5,7 @@ import {
   mergePairedRoutes,
   orderedStopIds,
   stopsForDirection,
+  unreachableTermini,
   writeLineStopsTx,
   type PairedRouteLine
 } from '../lines/line-pair-alignment';
@@ -20,6 +21,10 @@ import {
   PairDriftReportDto,
   PairSyncResultDto
 } from './dto/pair-drift.response.dto';
+import {
+  ReturnRouteGapItemDto,
+  ReturnRouteGapReportDto
+} from './dto/return-route-gap.response.dto';
 import {
   ScheduleDriftItemDto,
   ScheduleDriftReportDto,
@@ -268,12 +273,18 @@ export class MaintenanceService {
     return realigned;
   }
 
-  private async findDriftedPairs(tenantId: string): Promise<{
-    drifted: Array<{
-      item: PairDriftItemDto;
+  /**
+   * Loads every complete two-sided BOTH pair in the tenant, with the two
+   * directions identified. A group that is not exactly two lines cannot be
+   * reasoned about as a pair and is skipped.
+   */
+  private async loadPairs(tenantId: string): Promise<{
+    pairs: Array<{
+      pairKey: string;
       outbound: PairedRouteLine;
       inbound: PairedRouteLine;
-      mergedStopIds: string[] | null;
+      outboundName: string;
+      inboundName: string;
     }>;
     scannedPairCount: number;
   }> {
@@ -303,6 +314,45 @@ export class MaintenanceService {
       byPairKey.set(key, [...(byPairKey.get(key) ?? []), line]);
     });
 
+    const pairs: Array<{
+      pairKey: string;
+      outbound: PairedRouteLine;
+      inbound: PairedRouteLine;
+      outboundName: string;
+      inboundName: string;
+    }> = [];
+
+    for (const [pairKey, group] of Array.from(byPairKey.entries())) {
+      if (group.length !== 2) {
+        continue;
+      }
+
+      const outbound = group.find((line) => line.direction === LineDirection.OUTBOUND) ?? group[0];
+      const inbound = group.find((line) => line.id !== outbound.id)!;
+
+      pairs.push({
+        pairKey,
+        outbound,
+        inbound,
+        outboundName: outbound.name,
+        inboundName: inbound.name
+      });
+    }
+
+    return { pairs, scannedPairCount: pairs.length };
+  }
+
+  private async findDriftedPairs(tenantId: string): Promise<{
+    drifted: Array<{
+      item: PairDriftItemDto;
+      outbound: PairedRouteLine;
+      inbound: PairedRouteLine;
+      mergedStopIds: string[] | null;
+    }>;
+    scannedPairCount: number;
+  }> {
+    const { pairs, scannedPairCount } = await this.loadPairs(tenantId);
+
     const stationNameById = await this.getStationNameLookup(tenantId);
     const drifted: Array<{
       item: PairDriftItemDto;
@@ -310,19 +360,8 @@ export class MaintenanceService {
       inbound: PairedRouteLine;
       mergedStopIds: string[] | null;
     }> = [];
-    let scannedPairCount = 0;
 
-    for (const [pairKey, group] of Array.from(byPairKey.entries())) {
-      // Only a clean two-sided pair can be reasoned about.
-      if (group.length !== 2) {
-        continue;
-      }
-
-      scannedPairCount += 1;
-
-      const outbound = group.find((line) => line.direction === LineDirection.OUTBOUND) ?? group[0];
-      const inbound = group.find((line) => line.id !== outbound.id)!;
-
+    for (const { pairKey, outbound, inbound, outboundName, inboundName } of pairs) {
       const outboundStopIds = orderedStopIds(outbound);
       const inboundReversed = [...orderedStopIds(inbound)].reverse();
 
@@ -344,7 +383,7 @@ export class MaintenanceService {
           pairKey,
           outbound: {
             id: outbound.id,
-            name: outbound.name,
+            name: outboundName,
             stopCount: outboundStopIds.length,
             missingStationNames: toNames(
               inboundReversed.filter((id) => !outboundStopIds.includes(id))
@@ -352,7 +391,7 @@ export class MaintenanceService {
           },
           inbound: {
             id: inbound.id,
-            name: inbound.name,
+            name: inboundName,
             stopCount: inboundReversed.length,
             missingStationNames: toNames(
               outboundStopIds.filter((id) => !inboundReversed.includes(id))
@@ -365,6 +404,46 @@ export class MaintenanceService {
     }
 
     return { drifted, scannedPairCount };
+  }
+
+  /**
+   * Finds pairs where one direction ends at a station the other never calls at.
+   *
+   * This is reported rather than repaired. Return tickets swap the outbound
+   * leg's stations onto the opposite direction, so the gap blocks every return
+   * booking through that terminus — but deciding where the opposite route
+   * should call at it is a routing question the data cannot answer, and the two
+   * stations are often the same physical place recorded twice.
+   */
+  async getReturnRouteGapReport(auth: AccessTokenPayload): Promise<ReturnRouteGapReportDto> {
+    const { pairs, scannedPairCount } = await this.loadPairs(auth.tenantId);
+    const stationNameById = await this.getStationNameLookup(auth.tenantId);
+
+    const items: ReturnRouteGapItemDto[] = [];
+
+    for (const { outbound, inbound, outboundName, inboundName, pairKey } of pairs) {
+      for (const [line, other, name, otherName] of [
+        [outbound, inbound, outboundName, inboundName],
+        [inbound, outbound, inboundName, outboundName]
+      ] as Array<[PairedRouteLine, PairedRouteLine, string, string]>) {
+        const unreachable = unreachableTermini(line, other);
+
+        if (unreachable.length === 0) {
+          continue;
+        }
+
+        items.push({
+          pairKey,
+          lineName: name,
+          oppositeLineName: otherName,
+          unreachableStationNames: unreachable.map(
+            (stationId) => stationNameById.get(stationId) ?? stationId
+          )
+        });
+      }
+    }
+
+    return { scannedPairCount, gapCount: items.length, items };
   }
 
   private async getStationNameLookup(tenantId: string): Promise<Map<string, string>> {

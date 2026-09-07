@@ -12,6 +12,7 @@ import { UserRole } from '@prisma/client';
 import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
 import { PairDriftReportDto, PairSyncResultDto } from './dto/pair-drift.response.dto';
+import { ReturnRouteGapReportDto } from './dto/return-route-gap.response.dto';
 import {
   ScheduleDriftReportDto,
   ScheduleRealignResultDto
@@ -81,5 +82,18 @@ export class MaintenanceController {
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
   syncPairs(@Req() request: RequestWithAuth): Promise<PairSyncResultDto> {
     return this.maintenanceService.syncPairs(request.auth!);
+  }
+
+  @Get('return-route-gaps')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary:
+      'Report paired lines where one direction ends at a station the other never calls at, which blocks return tickets through that station. Reported only; placing a terminus onto the opposite route is a routing decision.'
+  })
+  @ApiOkResponse({ type: ReturnRouteGapReportDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  getReturnRouteGaps(@Req() request: RequestWithAuth): Promise<ReturnRouteGapReportDto> {
+    return this.maintenanceService.getReturnRouteGapReport(request.auth!);
   }
 }
