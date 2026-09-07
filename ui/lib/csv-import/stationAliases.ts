@@ -59,8 +59,10 @@ const ALIASES_BY_TENANT: Record<string, StationAliasMap> = {
     // Istanbul Balbus terminus.
     ISTANBUL: { stationName: "Istanbul Balbus" },
 
-    // Distinct from "NIS NAIS", which already matches "Nis - Nais" exactly.
-    NIS: { stationName: "Nis - eco" },
+    // Resolves to the same stop as "NIS NAIS", which already matches
+    // "Nis - Nais" exactly. The alias is still needed because a bare "NIS"
+    // ties between "Nis - Nais" and "Nis - eco" and so never auto-resolves.
+    NIS: { stationName: "Nis - Nais" },
 
     // The sheet writes "the agency" from the writer's point of view: boarding
     // at the agency means the Novi Pazar office, arriving at the agency means
