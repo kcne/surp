@@ -1,8 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { maintenanceControllerRealignSchedules } from "@/infrastructure/generated/surp-api"
+import {
+  maintenanceControllerRealignSchedules,
+  maintenanceControllerSyncPairs,
+} from "@/infrastructure/generated/surp-api"
+import { pairDriftQueryKey } from "@/infrastructure/hooks/queries/usePairDriftQuery"
 import { scheduleDriftQueryKey } from "@/infrastructure/hooks/queries/useScheduleDriftQuery"
-import type { ScheduleRealignResultDto } from "@/infrastructure/generated/model"
+import type {
+  PairSyncResultDto,
+  ScheduleRealignResultDto,
+} from "@/infrastructure/generated/model"
 
 export function useRealignSchedulesMutation() {
   const queryClient = useQueryClient()
@@ -35,6 +42,48 @@ export function useRealignSchedulesMutation() {
     onError: (error) => {
       toast.error(
         error instanceof Error && error.message ? error.message : "Neuspesno osvezavanje rasporeda"
+      )
+    },
+  })
+}
+
+export function useSyncLinePairsMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (): Promise<PairSyncResultDto> => {
+      const response = await maintenanceControllerSyncPairs()
+
+      if (response.status !== 200) {
+        throw new Error(
+          response.status === 403
+            ? "Samo admin moze da uskladi smerove linija"
+            : "Neuspesno uskladjivanje smerova"
+        )
+      }
+
+      return response.data
+    },
+    onSuccess: (result) => {
+      if (result.syncedPairCount === 0 && result.skippedPairCount === 0) {
+        toast.success("Svi smerovi su vec uskladjeni")
+      } else if (result.skippedPairCount > 0) {
+        toast.warning(
+          `Uskladjeno ${result.syncedPairCount}, preskoceno ${result.skippedPairCount} parova`
+        )
+      } else {
+        toast.success(`Uskladjeno ${result.syncedPairCount} parova linija`)
+      }
+
+      queryClient.invalidateQueries({ queryKey: pairDriftQueryKey })
+      // Routes changed, so schedules and ride instances follow.
+      queryClient.invalidateQueries({ queryKey: scheduleDriftQueryKey })
+      queryClient.invalidateQueries({ queryKey: ["lines"] })
+      queryClient.invalidateQueries({ queryKey: ["rides"] })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error && error.message ? error.message : "Neuspesno uskladjivanje smerova"
       )
     },
   })

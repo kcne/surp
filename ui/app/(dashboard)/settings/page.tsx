@@ -3,6 +3,7 @@
 import { Settings as SettingsIcon, ShieldAlert } from "lucide-react"
 import { Layout } from "@/components/layout/Layout"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { LinePairDriftCard } from "@/components/settings/LinePairDriftCard"
 import { ScheduleDriftCard } from "@/components/settings/ScheduleDriftCard"
 import { useAuthStore } from "@/stores/authStore"
 
@@ -24,7 +25,12 @@ export default function SettingsPage() {
         </div>
 
         {isTenantAdmin ? (
-          <ScheduleDriftCard />
+          <div className="space-y-6">
+            {/* Pair sync first: it changes routes, which is what makes
+                schedules drift in the first place. */}
+            <LinePairDriftCard />
+            <ScheduleDriftCard />
+          </div>
         ) : (
           <Alert>
             <ShieldAlert className="h-4 w-4" />

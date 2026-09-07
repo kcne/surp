@@ -11,6 +11,7 @@ import {
 import { UserRole } from '@prisma/client';
 import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
+import { PairDriftReportDto, PairSyncResultDto } from './dto/pair-drift.response.dto';
 import {
   ScheduleDriftReportDto,
   ScheduleRealignResultDto
@@ -53,5 +54,32 @@ export class MaintenanceController {
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
   realignSchedules(@Req() request: RequestWithAuth): Promise<ScheduleRealignResultDto> {
     return this.maintenanceService.realignSchedules(request.auth!);
+  }
+
+  @Get('pair-drift')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary:
+      'Report paired lines whose two directions no longer carry the same intermediate stops.'
+  })
+  @ApiOkResponse({ type: PairDriftReportDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  getPairDrift(@Req() request: RequestWithAuth): Promise<PairDriftReportDto> {
+    return this.maintenanceService.getPairDriftReport(request.auth!);
+  }
+
+  @Post('pair-drift/sync')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary:
+      'Give both directions of a paired line the same intermediate stops, keeping each direction own endpoints. Pairs whose directions genuinely disagree are skipped.'
+  })
+  @ApiOkResponse({ type: PairSyncResultDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  syncPairs(@Req() request: RequestWithAuth): Promise<PairSyncResultDto> {
+    return this.maintenanceService.syncPairs(request.auth!);
   }
 }

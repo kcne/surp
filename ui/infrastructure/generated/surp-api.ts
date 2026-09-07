@@ -65,6 +65,8 @@ import type {
   PaginatedStationsResponseDto,
   PaginatedTicketsResponseDto,
   PaginatedUsersResponseDto,
+  PairDriftReportDto,
+  PairSyncResultDto,
   PassengerDuplicatesResponseDto,
   PassengerResponseDto,
   PassengersControllerListParams,
@@ -3265,6 +3267,223 @@ export const useMaintenanceControllerRealignSchedules = <TError = ErrorType<void
         TContext
       > => {
       return useMutation(getMaintenanceControllerRealignSchedulesMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Report paired lines whose two directions no longer carry the same intermediate stops.
+ */
+export type maintenanceControllerGetPairDriftResponse200 = {
+  data: PairDriftReportDto
+  status: 200
+}
+
+export type maintenanceControllerGetPairDriftResponse401 = {
+  data: void
+  status: 401
+}
+
+export type maintenanceControllerGetPairDriftResponse403 = {
+  data: void
+  status: 403
+}
+
+export type maintenanceControllerGetPairDriftResponseSuccess = (maintenanceControllerGetPairDriftResponse200) & {
+  headers: Headers;
+};
+export type maintenanceControllerGetPairDriftResponseError = (maintenanceControllerGetPairDriftResponse401 | maintenanceControllerGetPairDriftResponse403) & {
+  headers: Headers;
+};
+
+export type maintenanceControllerGetPairDriftResponse = (maintenanceControllerGetPairDriftResponseSuccess | maintenanceControllerGetPairDriftResponseError)
+
+export const getMaintenanceControllerGetPairDriftUrl = () => {
+
+
+  
+
+  return `/maintenance/pair-drift`
+}
+
+export const maintenanceControllerGetPairDrift = async ( options?: RequestInit): Promise<maintenanceControllerGetPairDriftResponse> => {
+  
+  return customInstance<maintenanceControllerGetPairDriftResponse>(getMaintenanceControllerGetPairDriftUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getMaintenanceControllerGetPairDriftQueryKey = () => {
+    return [
+    `/maintenance/pair-drift`
+    ] as const;
+    }
+
+    
+export const getMaintenanceControllerGetPairDriftQueryOptions = <TData = Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getMaintenanceControllerGetPairDriftQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>> = ({ signal }) => maintenanceControllerGetPairDrift({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type MaintenanceControllerGetPairDriftQueryResult = NonNullable<Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>>
+export type MaintenanceControllerGetPairDriftQueryError = ErrorType<void>
+
+
+export function useMaintenanceControllerGetPairDrift<TData = Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerGetPairDrift<TData = Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerGetPairDrift<TData = Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Report paired lines whose two directions no longer carry the same intermediate stops.
+ */
+
+export function useMaintenanceControllerGetPairDrift<TData = Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetPairDrift>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getMaintenanceControllerGetPairDriftQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Give both directions of a paired line the same intermediate stops, keeping each direction own endpoints. Pairs whose directions genuinely disagree are skipped.
+ */
+export type maintenanceControllerSyncPairsResponse200 = {
+  data: PairSyncResultDto
+  status: 200
+}
+
+export type maintenanceControllerSyncPairsResponse401 = {
+  data: void
+  status: 401
+}
+
+export type maintenanceControllerSyncPairsResponse403 = {
+  data: void
+  status: 403
+}
+
+export type maintenanceControllerSyncPairsResponseSuccess = (maintenanceControllerSyncPairsResponse200) & {
+  headers: Headers;
+};
+export type maintenanceControllerSyncPairsResponseError = (maintenanceControllerSyncPairsResponse401 | maintenanceControllerSyncPairsResponse403) & {
+  headers: Headers;
+};
+
+export type maintenanceControllerSyncPairsResponse = (maintenanceControllerSyncPairsResponseSuccess | maintenanceControllerSyncPairsResponseError)
+
+export const getMaintenanceControllerSyncPairsUrl = () => {
+
+
+  
+
+  return `/maintenance/pair-drift/sync`
+}
+
+export const maintenanceControllerSyncPairs = async ( options?: RequestInit): Promise<maintenanceControllerSyncPairsResponse> => {
+  
+  return customInstance<maintenanceControllerSyncPairsResponse>(getMaintenanceControllerSyncPairsUrl(),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+  
+
+
+
+export const getMaintenanceControllerSyncPairsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerSyncPairs>>, TError,void, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerSyncPairs>>, TError,void, TContext> => {
+
+const mutationKey = ['maintenanceControllerSyncPairs'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof maintenanceControllerSyncPairs>>, void> = () => {
+          
+
+          return  maintenanceControllerSyncPairs(requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MaintenanceControllerSyncPairsMutationResult = NonNullable<Awaited<ReturnType<typeof maintenanceControllerSyncPairs>>>
+    
+    export type MaintenanceControllerSyncPairsMutationError = ErrorType<void>
+
+    /**
+ * @summary Give both directions of a paired line the same intermediate stops, keeping each direction own endpoints. Pairs whose directions genuinely disagree are skipped.
+ */
+export const useMaintenanceControllerSyncPairs = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerSyncPairs>>, TError,void, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof maintenanceControllerSyncPairs>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getMaintenanceControllerSyncPairsMutationOptions(options), queryClient);
     }
     
 /**
