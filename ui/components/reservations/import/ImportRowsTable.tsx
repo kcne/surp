@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils"
 import { normalizeKey } from "@/lib/csv-import"
 import {
   CellShell,
+  DateCell,
   RideInstanceCell,
   SeatCell,
   TextCell,
@@ -285,17 +286,18 @@ export function ImportRowsTable({
           const issues = fieldIssues(importRow.issues, "travelDate")
 
           return (
-            <div className="min-w-[130px]">
+            <div className="min-w-[150px] space-y-1">
               <CellShell {...issues}>
-                <Input
-                  type="date"
+                <DateCell
                   value={importRow.travelDate}
-                  onChange={(event) =>
-                    onUpdateRow(importRow.id, { travelDate: event.target.value })
-                  }
-                  className={cn("h-8 px-2 text-sm", issues.hasError && "border-destructive")}
+                  invalid={issues.hasError}
+                  onChange={(travelDate) => onUpdateRow(importRow.id, { travelDate })}
                 />
               </CellShell>
+
+              <span className="block truncate text-[11px] text-muted-foreground">
+                CSV: {importRow.source.travelDate.trim() || "—"}
+              </span>
             </div>
           )
         },

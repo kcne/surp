@@ -1,8 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AlertTriangle } from "lucide-react"
+import { format } from "date-fns"
+import { srLatn } from "date-fns/locale"
+import { AlertTriangle, CalendarDays } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -12,6 +17,7 @@ import {
 } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { formatDateToISO, parseISODate } from "@/utils/dateHelpers"
 import type { ImportIssue, ImportRowField } from "@/lib/csv-import"
 import type { RideInstance } from "@/types"
 
@@ -138,6 +144,63 @@ export function SeatCell({ value, isAutoAssigned, invalid, onCommit }: SeatCellP
         invalid && "border-destructive"
       )}
     />
+  )
+}
+
+interface DateCellProps {
+  /** ISO `yyyy-MM-dd`, or empty when the CSV date could not be parsed. */
+  value: string
+  invalid?: boolean
+  onChange: (value: string) => void
+}
+
+/**
+ * A native `<input type="date">` renders in the browser's locale, which shows
+ * US month-first order on an en-US machine and misreads day-first source data
+ * at a glance. This picks dates through the same calendar used elsewhere in the
+ * app and always renders them day-first.
+ */
+export function DateCell({ value, invalid, onChange }: DateCellProps) {
+  const [open, setOpen] = useState(false)
+  const selected = value ? parseISODate(value) : undefined
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "h-8 w-full justify-start px-2 text-left text-sm font-normal",
+            !selected && "text-muted-foreground",
+            invalid && "border-destructive text-destructive"
+          )}
+        >
+          <CalendarDays className="mr-1.5 h-3.5 w-3.5 shrink-0 opacity-70" />
+          {selected ? format(selected, "dd.MM.yyyy") : "Izaberi datum"}
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent className="w-auto p-2" align="start">
+        <Calendar
+          mode="single"
+          selected={selected}
+          defaultMonth={selected}
+          onSelect={(date) => {
+            if (!date) {
+              return
+            }
+
+            // Formatted from local parts, so a date is never shifted a day by
+            // a UTC conversion.
+            onChange(formatDateToISO(date))
+            setOpen(false)
+          }}
+          locale={srLatn}
+          className="rounded-md border"
+        />
+      </PopoverContent>
+    </Popover>
   )
 }
 
