@@ -93,6 +93,7 @@ import type {
   ReservationResponseDto,
   ReservationsControllerListParams,
   ResetPasswordDto,
+  ReturnRouteGapReportDto,
   RideExceptionResponseDto,
   RideInstancesByDateResponseDto,
   RideResponseDto,
@@ -3486,6 +3487,129 @@ export const useMaintenanceControllerSyncPairs = <TError = ErrorType<void>,
       return useMutation(getMaintenanceControllerSyncPairsMutationOptions(options), queryClient);
     }
     
+/**
+ * @summary Report paired lines where one direction ends at a station the other never calls at, which blocks return tickets through that station. Reported only; placing a terminus onto the opposite route is a routing decision.
+ */
+export type maintenanceControllerGetReturnRouteGapsResponse200 = {
+  data: ReturnRouteGapReportDto
+  status: 200
+}
+
+export type maintenanceControllerGetReturnRouteGapsResponse401 = {
+  data: void
+  status: 401
+}
+
+export type maintenanceControllerGetReturnRouteGapsResponse403 = {
+  data: void
+  status: 403
+}
+
+export type maintenanceControllerGetReturnRouteGapsResponseSuccess = (maintenanceControllerGetReturnRouteGapsResponse200) & {
+  headers: Headers;
+};
+export type maintenanceControllerGetReturnRouteGapsResponseError = (maintenanceControllerGetReturnRouteGapsResponse401 | maintenanceControllerGetReturnRouteGapsResponse403) & {
+  headers: Headers;
+};
+
+export type maintenanceControllerGetReturnRouteGapsResponse = (maintenanceControllerGetReturnRouteGapsResponseSuccess | maintenanceControllerGetReturnRouteGapsResponseError)
+
+export const getMaintenanceControllerGetReturnRouteGapsUrl = () => {
+
+
+  
+
+  return `/maintenance/return-route-gaps`
+}
+
+export const maintenanceControllerGetReturnRouteGaps = async ( options?: RequestInit): Promise<maintenanceControllerGetReturnRouteGapsResponse> => {
+  
+  return customInstance<maintenanceControllerGetReturnRouteGapsResponse>(getMaintenanceControllerGetReturnRouteGapsUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getMaintenanceControllerGetReturnRouteGapsQueryKey = () => {
+    return [
+    `/maintenance/return-route-gaps`
+    ] as const;
+    }
+
+    
+export const getMaintenanceControllerGetReturnRouteGapsQueryOptions = <TData = Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getMaintenanceControllerGetReturnRouteGapsQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>> = ({ signal }) => maintenanceControllerGetReturnRouteGaps({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type MaintenanceControllerGetReturnRouteGapsQueryResult = NonNullable<Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>>
+export type MaintenanceControllerGetReturnRouteGapsQueryError = ErrorType<void>
+
+
+export function useMaintenanceControllerGetReturnRouteGaps<TData = Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerGetReturnRouteGaps<TData = Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerGetReturnRouteGaps<TData = Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Report paired lines where one direction ends at a station the other never calls at, which blocks return tickets through that station. Reported only; placing a terminus onto the opposite route is a routing decision.
+ */
+
+export function useMaintenanceControllerGetReturnRouteGaps<TData = Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetReturnRouteGaps>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getMaintenanceControllerGetReturnRouteGapsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
 /**
  * @summary Create a marketing contact request.
  */

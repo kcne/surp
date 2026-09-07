@@ -247,4 +247,50 @@ describe('MaintenanceService', () => {
       expect(prismaMock.$transaction).not.toHaveBeenCalled();
     });
   });
+  describe('return route gaps', () => {
+    it('flags a terminus the opposite direction never calls at', async () => {
+      prismaMock.line.findMany.mockResolvedValue([
+        {
+          ...pairedLines[0],
+          // Outbound ends at station-b; the return below never calls there.
+          arrivalStationId: 'station-b'
+        },
+        {
+          ...pairedLines[1],
+          departureStationId: 'station-terminus',
+          arrivalStationId: 'station-a',
+          intermediateStops: [{ stationId: 'station-c', orderIndex: 1 }]
+        }
+      ]);
+
+      const report = await service.getReturnRouteGapReport(auth);
+
+      expect(report.scannedPairCount).toBe(1);
+      expect(report.gapCount).toBe(2);
+      expect(report.items.map((item) => item.unreachableStationNames)).toEqual([
+        ['North'],
+        ['Terminus']
+      ]);
+    });
+
+    it('flags nothing when each terminus appears on the opposite route', async () => {
+      prismaMock.line.findMany.mockResolvedValue([
+        pairedLines[0],
+        {
+          ...pairedLines[1],
+          departureStationId: 'station-b',
+          arrivalStationId: 'station-a',
+          intermediateStops: [
+            { stationId: 'station-d', orderIndex: 1 },
+            { stationId: 'station-c', orderIndex: 2 }
+          ]
+        }
+      ]);
+
+      const report = await service.getReturnRouteGapReport(auth);
+
+      expect(report.gapCount).toBe(0);
+      expect(report.items).toEqual([]);
+    });
+  });
 });

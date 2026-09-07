@@ -1739,6 +1739,49 @@
         ]
       }
     },
+    "/maintenance/return-route-gaps": {
+      "get": {
+        "operationId": "MaintenanceController_getReturnRouteGaps",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnRouteGapReportDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Report paired lines where one direction ends at a station the other never calls at, which blocks return tickets through that station. Reported only; placing a terminus onto the opposite route is a routing decision.",
+        "tags": [
+          "Maintenance"
+        ]
+      }
+    },
     "/api/public/marketing/leads": {
       "post": {
         "operationId": "MarketingLeadsController_createLead",
@@ -6608,6 +6651,62 @@
           "addedStopCount",
           "realignedScheduleCount",
           "skippedPairCount",
+          "items"
+        ]
+      },
+      "ReturnRouteGapItemDto": {
+        "type": "object",
+        "properties": {
+          "pairKey": {
+            "type": "string",
+            "example": "pair-abc"
+          },
+          "lineName": {
+            "type": "string",
+            "example": "Novi Sad - Istanbul Balbus"
+          },
+          "oppositeLineName": {
+            "type": "string",
+            "example": "Istanbul Balbus - Novi Sad"
+          },
+          "unreachableStationNames": {
+            "description": "Terminus stations of this line that appear nowhere on the opposite direction, so return tickets to or from them cannot be booked.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "pairKey",
+          "lineName",
+          "oppositeLineName",
+          "unreachableStationNames"
+        ]
+      },
+      "ReturnRouteGapReportDto": {
+        "type": "object",
+        "properties": {
+          "scannedPairCount": {
+            "type": "number",
+            "example": 5,
+            "minimum": 0
+          },
+          "gapCount": {
+            "type": "number",
+            "example": 2,
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnRouteGapItemDto"
+            }
+          }
+        },
+        "required": [
+          "scannedPairCount",
+          "gapCount",
           "items"
         ]
       },
