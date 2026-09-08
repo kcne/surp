@@ -3,6 +3,7 @@
 import { Layout } from "@/components/layout/Layout"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { Plus, Route } from "lucide-react"
 import { LineModal } from "@/components/lines/LineModal"
 import { DeleteLineDialog } from "@/components/lines/DeleteLineDialog"
@@ -54,7 +55,8 @@ export default function LinesPage() {
   }
 
   return (
-    <Layout>
+    <TooltipProvider delayDuration={200}>
+      <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -128,7 +130,8 @@ export default function LinesPage() {
           onDelete={handleDelete}
         />
       </div>
-    </Layout>
+      </Layout>
+    </TooltipProvider>
   )
 }
 
