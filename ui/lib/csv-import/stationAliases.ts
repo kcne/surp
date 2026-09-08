@@ -4,11 +4,23 @@ import { normalizeKey } from "./normalize"
 export type StationColumn = "departure" | "arrival"
 
 /** A resolved target: id wins when present, name survives a database reseed. */
-export interface StationAliasTarget {
+export interface StationAliasResolution {
   stationId?: string
   stationName?: string
   /** Shown on the row as a warning, for mappings worth a second look. */
   note?: string
+}
+
+/**
+ * A target, plus the exceptions the other end of the trip forces. Shorthand
+ * that means "our office" is read against the destination: a trip whose
+ * arrival is the office's own town cannot also start there, so `byCounterpart`
+ * names the station the *other* column resolved to (a `normalizeKey`-ed
+ * station name) and overrides the target for that pairing. Exceptions are read
+ * one level deep only — they resolve, they do not chain.
+ */
+export interface StationAliasTarget extends StationAliasResolution {
+  byCounterpart?: Record<string, StationAliasResolution>
 }
 
 /**
@@ -76,6 +88,12 @@ const ALIASES_BY_TENANT: Record<string, StationAliasMap> = {
           // departure from Istanbul instead. Flagged rather than overridden,
           // because the rule is the agency's to set, not ours to infer.
           note: "Polazak iz AGENCIJA je mapiran na Novi Pazar — proverite, moguce je Istanbul",
+          byCounterpart: {
+            // Arriving in Novi Pazar settles it: the trip cannot also start
+            // there, so this AGENCIJA is the Istanbul office. Confident, so
+            // it drops the "proverite" note the default carries.
+            "NOVI PAZAR": { stationName: "Istanbul Balbus" },
+          },
         },
         arrival: { stationName: "Istanbul Balbus" },
       },

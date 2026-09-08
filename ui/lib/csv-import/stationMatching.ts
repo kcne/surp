@@ -2,6 +2,7 @@ import { normalizeKey, normalizeTokens } from "./normalize"
 import {
   lookupStationAlias,
   type StationAliasMap,
+  type StationAliasResolution,
   type StationAliasTarget,
   type StationColumn,
 } from "./stationAliases"
@@ -41,16 +42,26 @@ function scoreTokenOverlap(rawTokens: string[], stationTokens: string[]): number
   return (2 * shared) / (rawTokens.length + stationTokens.length)
 }
 
-/**
- * @param column which CSV column the spelling came from. Only matters for
- * aliases that resolve differently by column; omit it and the alias's
- * top-level target is used.
- */
+export interface StationMatchOptions {
+  /**
+   * Which CSV column the spelling came from. Only matters for aliases that
+   * resolve differently by column; omit it and the alias's top-level target
+   * is used.
+   */
+  column?: StationColumn
+  /**
+   * The station the other column of the same row resolved to, when it is
+   * already known. Only matters for aliases that resolve differently
+   * depending on the other end of the trip.
+   */
+  counterpartStationId?: string | null
+}
+
 export function matchStation(
   rawStation: string,
   stations: MatchableStation[],
   aliases: StationAliasMap,
-  column?: StationColumn
+  { column, counterpartStationId }: StationMatchOptions = {}
 ): StationMatch {
   const raw = rawStation.trim()
   if (raw.length === 0) {
@@ -73,7 +84,16 @@ export function matchStation(
 
   if (alias) {
     const columnTarget = column ? alias.byColumn?.[column] : undefined
-    const target: StationAliasTarget = columnTarget ?? alias
+    const columnResolution: StationAliasTarget = columnTarget ?? alias
+
+    const counterpart = counterpartStationId
+      ? stations.find((station) => station.id === counterpartStationId)
+      : undefined
+    const counterpartResolution = counterpart
+      ? columnResolution.byCounterpart?.[normalizeKey(counterpart.name)]
+      : undefined
+
+    const target: StationAliasResolution = counterpartResolution ?? columnResolution
 
     const aliasedById = target.stationId
       ? stations.find((station) => station.id === target.stationId)

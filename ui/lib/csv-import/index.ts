@@ -1,7 +1,13 @@
 export { buildImportRows } from "./buildImportRows"
+export { MISSING_LAST_NAME_PLACEHOLDER } from "./fieldParsers"
 export { parseCsv } from "./parseCsv"
 export { normalizeKey, stripDiacritics, toTitleCase } from "./normalize"
-export { matchStation, type MatchableStation, type StationMatchConfidence } from "./stationMatching"
+export {
+  matchStation,
+  type MatchableStation,
+  type StationMatchConfidence,
+  type StationMatchOptions,
+} from "./stationMatching"
 export {
   getStationAliases,
   type StationAlias,

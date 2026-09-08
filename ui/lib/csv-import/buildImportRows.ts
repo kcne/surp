@@ -4,6 +4,7 @@ import {
   parseCsvPhone,
   parseFullName,
   parseSeatNumber,
+  withPlaceholderLastName,
 } from "./fieldParsers"
 import {
   findMissingRequiredColumns,
@@ -29,11 +30,11 @@ function readName(row: string[], headerMap: HeaderMap): { raw: string; parsed: P
   if (explicitFirst || explicitLast) {
     return {
       raw: [explicitFirst, explicitLast].filter(Boolean).join(" "),
-      parsed: {
+      parsed: withPlaceholderLastName({
         firstName: explicitFirst,
         lastName: explicitLast,
         residue: "",
-      },
+      }),
     }
   }
 
@@ -105,8 +106,24 @@ export function buildImportRows(
     // The column decides the target for spellings that mean different stations
     // depending on where they appear, so it is passed through even though the
     // return leg later reuses these matches with the roles swapped.
-    const departureMatch = matchStation(rawDeparture, stations, aliases, "departure")
-    const arrivalMatch = matchStation(rawArrival, stations, aliases, "arrival")
+    // Two passes: some spellings resolve differently depending on the other
+    // end of the trip, and that other end is itself matched here. The first
+    // pass reads each column on its own, the second re-reads it knowing where
+    // the counterpart landed. Only the first pass ever feeds the second, so
+    // the pair cannot chase each other.
+    const departureAlone = matchStation(rawDeparture, stations, aliases, {
+      column: "departure",
+    })
+    const arrivalAlone = matchStation(rawArrival, stations, aliases, { column: "arrival" })
+
+    const departureMatch = matchStation(rawDeparture, stations, aliases, {
+      column: "departure",
+      counterpartStationId: arrivalAlone.stationId,
+    })
+    const arrivalMatch = matchStation(rawArrival, stations, aliases, {
+      column: "arrival",
+      counterpartStationId: departureAlone.stationId,
+    })
 
     const groupKey = `line-${lineNumber}`
 
