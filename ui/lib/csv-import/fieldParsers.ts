@@ -27,6 +27,31 @@ export interface ParsedName {
 }
 
 /**
+ * Stands in for a surname the CSV never carried. Agencies routinely write a
+ * single given name ("RANKO"), and blocking the whole line on a surname the
+ * file does not have only makes the operator retype the rest of it. The row is
+ * filled in and flagged instead, so it imports and stays visibly incomplete.
+ */
+export const MISSING_LAST_NAME_PLACEHOLDER = "Nepoznato"
+
+/**
+ * Fills the placeholder surname when a name arrived without one. A name with
+ * no given name at all is left alone: there is nothing there to import, and
+ * validation should say so rather than dress it up.
+ */
+export function withPlaceholderLastName(parsed: ParsedName): ParsedName {
+  if (parsed.lastName.trim().length > 0 || parsed.firstName.trim().length === 0) {
+    return parsed
+  }
+
+  return {
+    ...parsed,
+    lastName: MISSING_LAST_NAME_PLACEHOLDER,
+    splitReason: `Prezime nije bilo u CSV-u, upisano je "${MISSING_LAST_NAME_PLACEHOLDER}", dopunite ga`,
+  }
+}
+
+/**
  * Splits "IME I PREZIME" into its two parts.
  *
  * The column is written first-name-first, so the *last* token is the surname
@@ -34,7 +59,8 @@ export interface ParsedName {
  * Marija Petrovic, not Ana Marija. No token is ever dropped into the note —
  * a name silently losing its surname imports a wrong record that validation
  * cannot see — but any split beyond a plain two-token name is a guess, so it
- * is reported for the operator to confirm.
+ * is reported for the operator to confirm. A lone given name gets the
+ * placeholder surname, also reported.
  */
 export function parseFullName(rawName: string): ParsedName {
   const tokens = rawName
@@ -61,7 +87,11 @@ export function parseFullName(rawName: string): ParsedName {
   }
 
   if (nameTokens.length === 1) {
-    return { firstName: toTitleCase(nameTokens[0]), lastName: "", residue }
+    return withPlaceholderLastName({
+      firstName: toTitleCase(nameTokens[0]),
+      lastName: "",
+      residue,
+    })
   }
 
   const lastName = nameTokens[nameTokens.length - 1]

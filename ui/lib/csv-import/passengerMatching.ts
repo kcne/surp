@@ -1,4 +1,5 @@
 import type { Passenger } from "@/types"
+import { MISSING_LAST_NAME_PLACEHOLDER } from "./fieldParsers"
 import { normalizeKey } from "./normalize"
 
 /** Last 8 digits, so `+381628246580` and `0628246580` compare equal. */
@@ -60,6 +61,14 @@ export function findExistingPassenger(
     if (exact) {
       return exact
     }
+  }
+
+  // A placeholder surname is not evidence of identity: two unrelated one-name
+  // passengers both read as "Ranko Nepoznato", and merging them onto one
+  // record would put someone else's trips on their profile. Such a row links
+  // only on the phone match above.
+  if (normalizeKey(lastName) === normalizeKey(MISSING_LAST_NAME_PLACEHOLDER)) {
+    return null
   }
 
   const sameName = index.byName.get(name) ?? []
