@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 import type { Reservation, RideInstance } from "@/types"
+import { findReturnCounterpart } from "@/utils/reservationReturnMatching"
 
 interface UseReservationReturnSyncParams {
   open: boolean
@@ -39,56 +40,18 @@ export function useReservationReturnSync({
       return
     }
 
-    const returnInstanceById = new Map(
-      returnRideInstances.map((instance) => [instance.id, instance])
+    const counterpart = findReturnCounterpart(
+      reservation,
+      returnRideInstances,
+      allReservations
     )
 
-    const candidates = Object.entries(allReservations)
-      .flatMap(([instanceId, reservationsForInstance]) => {
-        if (!returnInstanceById.has(instanceId)) {
-          return []
-        }
-        return reservationsForInstance
-      })
-      .filter((candidate) => {
-        if (candidate.status !== "active") return false
-        if (candidate.passengerId !== reservation.passengerId) return false
-        if (candidate.departureStationId !== reservation.arrivalStationId) return false
-        if (candidate.arrivalStationId !== reservation.departureStationId) return false
-        return true
-      })
-      .sort((left, right) => {
-        const leftSeatScore = left.seatNumber === reservation.seatNumber ? 0 : 1
-        const rightSeatScore = right.seatNumber === reservation.seatNumber ? 0 : 1
-        if (leftSeatScore !== rightSeatScore) {
-          return leftSeatScore - rightSeatScore
-        }
-
-        const leftInstance = returnInstanceById.get(left.rideInstanceId)
-        const rightInstance = returnInstanceById.get(right.rideInstanceId)
-
-        const leftDateTime = leftInstance
-          ? `${leftInstance.date}T${leftInstance.departureTime}`
-          : ""
-        const rightDateTime = rightInstance
-          ? `${rightInstance.date}T${rightInstance.departureTime}`
-          : ""
-
-        return leftDateTime.localeCompare(rightDateTime)
-      })
-
-    const matched = candidates[0]
-
-    if (!matched) {
+    if (!counterpart) {
       setExistingReturnReservation(null)
       return
     }
 
-    const matchedInstance = returnInstanceById.get(matched.rideInstanceId)
-    if (!matchedInstance) {
-      setExistingReturnReservation(null)
-      return
-    }
+    const { reservation: matched, rideInstance: matchedInstance } = counterpart
 
     if (existingReturnReservation?.id !== matched.id) {
       setExistingReturnReservation(matched)
