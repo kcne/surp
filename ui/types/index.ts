@@ -29,6 +29,10 @@ export interface LineStation {
   stationId: string
   stationName: string
   order: number
+  /** Passengers may board at this stop. */
+  isBoarding: boolean
+  /** Passengers may get off at this stop. */
+  isDropoff: boolean
   distanceFromStart?: number
   estimatedTimeFromStart?: number
 }
@@ -50,11 +54,17 @@ export interface Line {
   updatedAt?: string
 }
 
+export interface LineFormStop {
+  stationId: string
+  isBoarding: boolean
+  isDropoff: boolean
+}
+
 export type LineFormData = {
   name?: string
   departureStationId: string
   arrivalStationId: string
-  intermediateStationIds?: string[]
+  intermediateStops?: LineFormStop[]
   directionMode?: "single" | "both"
   distance?: number
   duration?: number

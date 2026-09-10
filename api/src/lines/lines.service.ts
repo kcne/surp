@@ -56,6 +56,8 @@ const SAFE_LINE_SELECT = {
     select: {
       stationId: true,
       orderIndex: true,
+      isBoarding: true,
+      isDropoff: true,
       station: {
         select: {
           name: true
@@ -82,7 +84,22 @@ type LineWithStops = {
   intermediateStops: Array<{
     stationId: string;
     orderIndex: number;
+    isBoarding: boolean;
+    isDropoff: boolean;
   }>;
+};
+
+/**
+ * An intermediate stop with its boarding rules resolved.
+ *
+ * `LineStopInputDto` leaves the flags optional so existing clients keep working;
+ * everything past `resolveIntermediateStops` works with explicit values.
+ */
+type ResolvedLineStop = {
+  stationId: string;
+  orderIndex: number;
+  isBoarding: boolean;
+  isDropoff: boolean;
 };
 
 @Injectable()
@@ -397,12 +414,7 @@ export class LinesService {
   async createReverse(auth: AccessTokenPayload, id: string): Promise<LineResponseDto> {
     const source = await this.getLineOrThrow(auth.tenantId, id);
 
-    const reversedStops: LineStopInputDto[] = [...source.intermediateStops]
-      .sort((a, b) => b.orderIndex - a.orderIndex)
-      .map((stop, index) => ({
-        stationId: stop.stationId,
-        orderIndex: index + 1
-      }));
+    const reversedStops: LineStopInputDto[] = this.buildReversedStops(source.intermediateStops);
 
     const targetStopSequence = reversedStops.map((stop) => stop.stationId);
 
@@ -463,12 +475,17 @@ export class LinesService {
     });
   }
 
-  private buildReversedStops(stops: LineStopInputDto[]): LineStopInputDto[] {
+  private buildReversedStops(stops: ResolvedLineStop[]): ResolvedLineStop[] {
     return [...stops]
       .sort((a, b) => b.orderIndex - a.orderIndex)
       .map((stop, index) => ({
         stationId: stop.stationId,
-        orderIndex: index + 1
+        orderIndex: index + 1,
+        // Boarding rules flip with the direction of travel: a stop that only
+        // picks passengers up on the way out is where the same passengers get
+        // off on the way back.
+        isBoarding: stop.isDropoff,
+        isDropoff: stop.isBoarding
       }));
   }
 
@@ -625,7 +642,7 @@ export class LinesService {
     departureStationId: string,
     arrivalStationId: string,
     stops: LineStopInputDto[]
-  ): Promise<LineStopInputDto[]> {
+  ): Promise<ResolvedLineStop[]> {
     if (!stops.length) {
       return [];
     }
@@ -665,7 +682,14 @@ export class LinesService {
       throw new BadRequestException('Intermediate stops must exist in the current tenant');
     }
 
-    return [...stops].sort((a, b) => a.orderIndex - b.orderIndex);
+    return [...stops]
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .map((stop) => ({
+        stationId: stop.stationId,
+        orderIndex: stop.orderIndex,
+        isBoarding: stop.isBoarding ?? true,
+        isDropoff: stop.isDropoff ?? true
+      }));
   }
 
   private ensureStopsDoNotUseRouteEndpoints(
@@ -705,7 +729,7 @@ export class LinesService {
     lineId: string,
     actorId: string,
     pairKey: string,
-    nextStops: LineStopInputDto[]
+    nextStops: ResolvedLineStop[]
   ): Promise<void> {
     const pairedLines = await tx.line.findMany({
       where: {
@@ -731,7 +755,12 @@ export class LinesService {
             stop.stationId !== pairedLine.arrivalStationId
         )
         // Re-number after filtering so order indexes stay contiguous.
-        .map((stop, index) => ({ stationId: stop.stationId, orderIndex: index + 1 }));
+        .map((stop, index) => ({
+          stationId: stop.stationId,
+          orderIndex: index + 1,
+          isBoarding: stop.isBoarding,
+          isDropoff: stop.isDropoff
+        }));
 
       await this.replaceLineStopsTx(tx, tenantId, pairedLine.id, actorId, mirroredStops, true);
 
@@ -808,7 +837,7 @@ export class LinesService {
     tenantId: string,
     lineId: string,
     actorId: string,
-    stops: LineStopInputDto[],
+    stops: ResolvedLineStop[],
     deleteExisting: boolean
   ): Promise<void> {
     if (deleteExisting) {
@@ -831,7 +860,9 @@ export class LinesService {
             tenantId,
             lineId,
             stationId: stop.stationId,
-            orderIndex: stop.orderIndex
+            orderIndex: stop.orderIndex,
+            isBoarding: stop.isBoarding,
+            isDropoff: stop.isDropoff
           },
           actorId
         )
@@ -876,7 +907,9 @@ export class LinesService {
       intermediateStops: line.intermediateStops.map((stop) => ({
         stationId: stop.stationId,
         stationName: stop.station.name,
-        orderIndex: stop.orderIndex
+        orderIndex: stop.orderIndex,
+        isBoarding: stop.isBoarding,
+        isDropoff: stop.isDropoff
       }))
     };
   }

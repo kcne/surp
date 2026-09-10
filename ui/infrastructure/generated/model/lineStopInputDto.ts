@@ -10,4 +10,8 @@ export interface LineStopInputDto {
   stationId: string;
   /** @minimum 1 */
   orderIndex: number;
+  /** Whether passengers may board at this stop. */
+  isBoarding?: boolean;
+  /** Whether passengers may get off at this stop. */
+  isDropoff?: boolean;
 }

@@ -319,19 +319,30 @@ export function ReservationModal({
         selectedSeats.every((seat) => Boolean(perSeatPassengers[seat]))
       : form.formState.isValid
 
+  // The route endpoints are always usable: a ride starts by boarding at its
+  // departure station and ends by getting off at its arrival station. Only
+  // intermediate stops carry boarding rules.
   const allStations = selectedRideInstance
     ? [
         {
           id: selectedRideInstance.ride.line.departureStation.id,
           name: selectedRideInstance.ride.line.departureStation.name,
+          isBoarding: true,
+          isDropoff: false,
         },
-        ...selectedRideInstance.ride.line.intermediateStations.map((stop) => ({
-          id: stop.stationId,
-          name: stop.stationName,
-        })),
+        ...[...selectedRideInstance.ride.line.intermediateStations]
+          .sort((left, right) => left.order - right.order)
+          .map((stop) => ({
+            id: stop.stationId,
+            name: stop.stationName,
+            isBoarding: stop.isBoarding,
+            isDropoff: stop.isDropoff,
+          })),
         {
           id: selectedRideInstance.ride.line.arrivalStation.id,
           name: selectedRideInstance.ride.line.arrivalStation.name,
+          isBoarding: false,
+          isDropoff: true,
         },
       ]
     : []

@@ -50,8 +50,8 @@ describe('ReservationsService', () => {
       departureStationId: 'station-a',
       arrivalStationId: 'station-d',
       intermediateStops: [
-        { stationId: 'station-b', orderIndex: 1 },
-        { stationId: 'station-c', orderIndex: 2 }
+        { stationId: 'station-b', orderIndex: 1, isBoarding: true, isDropoff: true },
+        { stationId: 'station-c', orderIndex: 2, isBoarding: true, isDropoff: true }
       ]
     }
   };
@@ -263,6 +263,76 @@ describe('ReservationsService', () => {
         arrivalStationId: 'station-c'
       })
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects a departure station that is drop-off only', async () => {
+    prismaMock.ride.findFirst.mockResolvedValueOnce({
+      ...routeRide,
+      capacity: 40,
+      line: {
+        ...routeRide.line,
+        intermediateStops: [
+          { stationId: 'station-b', orderIndex: 1, isBoarding: false, isDropoff: true },
+          { stationId: 'station-c', orderIndex: 2, isBoarding: true, isDropoff: true }
+        ]
+      }
+    });
+
+    await expect(
+      service.create(auth, {
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 15,
+        departureStationId: 'station-b',
+        arrivalStationId: 'station-d'
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects an arrival station that is boarding only', async () => {
+    prismaMock.ride.findFirst.mockResolvedValueOnce({
+      ...routeRide,
+      capacity: 40,
+      line: {
+        ...routeRide.line,
+        intermediateStops: [
+          { stationId: 'station-b', orderIndex: 1, isBoarding: true, isDropoff: true },
+          { stationId: 'station-c', orderIndex: 2, isBoarding: true, isDropoff: false }
+        ]
+      }
+    });
+
+    await expect(
+      service.create(auth, {
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 15,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-c'
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('allows the line endpoints regardless of intermediate boarding rules', async () => {
+    const result = await service.create(auth, {
+      rideId: 'ride-1',
+      passengerId: 'passenger-1',
+      travelDate: '2026-03-30',
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:30',
+      seatNumber: 21,
+      departureStationId: 'station-a',
+      arrivalStationId: 'station-d'
+    });
+
+    expect(result.departureStationId).toBe('station-a');
+    expect(result.arrivalStationId).toBe('station-d');
   });
 
   it('updates status and audit fields on cancellation', async () => {

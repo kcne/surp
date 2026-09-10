@@ -18,7 +18,15 @@ export const lineSchema = z.object({
   name: z.string().optional(),
   departureStationId: z.string().min(1, "Polazna stanica je obavezna"),
   arrivalStationId: z.string().min(1, "Dolazna stanica je obavezna"),
-  intermediateStationIds: z.array(z.string()).optional(),
+  intermediateStops: z
+    .array(
+      z.object({
+        stationId: z.string().min(1),
+        isBoarding: z.boolean(),
+        isDropoff: z.boolean(),
+      })
+    )
+    .optional(),
   directionMode: z.enum(["single", "both"]).optional().default("both"),
   distance: z.number().positive().optional(),
   duration: z.number().positive().optional(),

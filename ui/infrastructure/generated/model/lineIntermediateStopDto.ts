@@ -10,4 +10,6 @@ export interface LineIntermediateStopDto {
   stationId: string;
   stationName: string;
   orderIndex: number;
+  isBoarding: boolean;
+  isDropoff: boolean;
 }
