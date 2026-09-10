@@ -117,6 +117,16 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
     },
   ]
 
+  // Nested routes (npr. /reservations/import) odgovaraju i roditeljskoj stavci,
+  // pa aktivnom smatramo samo onu sa najduzim poklapanjem.
+  const activeHref = sections
+    .flatMap((section) => section.items.map((item) => item.href))
+    .filter((href) => pathname === href || pathname?.startsWith(href + "/"))
+    .reduce<string | null>(
+      (best, href) => (best === null || href.length > best.length ? href : best),
+      null
+    )
+
   return (
     <nav className="flex-1 space-y-5 px-3 py-4">
       {sections.map((section) => (
@@ -126,7 +136,7 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
           </p>
           {section.items.map((item) => {
             const Icon = item.icon
-            const isActive = pathname === item.href || pathname?.startsWith(item.href + "/")
+            const isActive = item.href === activeHref
 
             return (
               <Link
