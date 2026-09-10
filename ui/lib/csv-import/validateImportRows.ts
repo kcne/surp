@@ -1,4 +1,5 @@
 import type { RideInstance } from "@/types"
+import type { ImportDuplicateInfo } from "./duplicateDetection"
 import type { ImportIssue, ImportRow, ImportRowState } from "./types"
 
 export interface ValidationContext {
@@ -6,6 +7,8 @@ export interface ValidationContext {
   /** Seats already booked in the system, keyed by ride instance id. */
   bookedSeatsByRideInstanceId: Record<string, number[]>
   knownStationIds: Set<string>
+  /** Trips each row repeats, keyed by row id. */
+  duplicatesByRowId: Map<string, ImportDuplicateInfo>
 }
 
 const MIN_PHONE_DIGITS = 8
@@ -206,11 +209,19 @@ export function validateImportRows(
   const duplicateSeatRowIds = findDuplicateSeatRowIds(rows)
 
   return rows.map((row) => {
+    const duplicate = context.duplicatesByRowId.get(row.id) ?? null
+
     if (row.excluded) {
-      return { ...row, issues: [], isValid: true }
+      return { ...row, issues: [], isValid: true, duplicate }
     }
 
     const issues = validateSingleRow(row, context)
+
+    // A kept duplicate stays importable on purpose: the operator has looked at
+    // it and decided the second trip is real, so this only warns.
+    if (duplicate) {
+      issues.push({ field: "row", severity: "warning", message: duplicate.message })
+    }
 
     if (duplicateSeatRowIds.has(row.id)) {
       issues.push({
@@ -223,6 +234,7 @@ export function validateImportRows(
     return {
       ...row,
       issues,
+      duplicate,
       isValid: issues.every((issue) => issue.severity !== "error"),
     }
   })
@@ -239,6 +251,7 @@ export function summarizeRows(rows: ImportRowState[]) {
     valid: valid.length,
     invalid: included.length - valid.length,
     withWarnings: valid.filter((row) => row.issues.length > 0).length,
+    duplicates: rows.filter((row) => row.duplicate !== null).length,
     canSubmit: included.length > 0 && included.every((row) => row.isValid),
   }
 }

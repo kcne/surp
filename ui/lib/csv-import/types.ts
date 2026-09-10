@@ -1,3 +1,4 @@
+import type { ImportDuplicateInfo } from "./duplicateDetection"
 import type { StationMatchConfidence } from "./stationMatching"
 
 export type ImportRowField =
@@ -68,11 +69,19 @@ export interface ImportRow {
 
   notes: string
   excluded: boolean
+  /**
+   * Who decided this row's inclusion: `auto-excluded` marks an exclusion made
+   * by duplicate detection and taken back once the row stops being one,
+   * `manual` an operator choice detection must never overrule.
+   */
+  duplicateResolution: "auto-excluded" | "manual" | null
 }
 
 export interface ImportRowState extends ImportRow {
   issues: ImportIssue[]
   isValid: boolean
+  /** The trip this row repeats, if any. */
+  duplicate: ImportDuplicateInfo | null
 }
 
 export interface ParseCsvFileResult {

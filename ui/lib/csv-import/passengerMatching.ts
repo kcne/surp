@@ -12,6 +12,48 @@ function nameKey(firstName: string, lastName: string): string {
   return [normalizeKey(firstName), normalizeKey(lastName)].sort().join(" ")
 }
 
+export interface PassengerIdentity {
+  passengerId: string | null
+  nameKey: string
+  phoneKey: string
+}
+
+export function passengerIdentity(
+  firstName: string,
+  lastName: string,
+  phone: string,
+  passengerId: string | null = null
+): PassengerIdentity {
+  return {
+    passengerId,
+    nameKey: nameKey(firstName, lastName),
+    phoneKey: phoneKey(phone),
+  }
+}
+
+/**
+ * Whether two identities are the same person, for comparisons where the pair
+ * is already narrowed down to one ride — a shared name means much more there
+ * than it does across the whole passenger directory. Known ids decide it on
+ * their own; otherwise the names must match, and the phones must agree unless
+ * one of them is missing.
+ */
+export function samePassenger(left: PassengerIdentity, right: PassengerIdentity): boolean {
+  if (left.passengerId && right.passengerId) {
+    return left.passengerId === right.passengerId
+  }
+
+  if (left.nameKey.length === 0 || left.nameKey !== right.nameKey) {
+    return false
+  }
+
+  if (left.phoneKey.length === 0 || right.phoneKey.length === 0) {
+    return true
+  }
+
+  return left.phoneKey === right.phoneKey
+}
+
 export interface PassengerIndex {
   byPhoneAndName: Map<string, Passenger>
   byName: Map<string, Passenger[]>

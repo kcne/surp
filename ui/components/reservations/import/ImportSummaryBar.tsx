@@ -1,6 +1,13 @@
 "use client"
 
-import { AlertTriangle, CheckCircle2, CircleSlash, Loader2, XCircle } from "lucide-react"
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleSlash,
+  Copy,
+  Loader2,
+  XCircle,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -12,6 +19,7 @@ export interface ImportSummary {
   valid: number
   invalid: number
   withWarnings: number
+  duplicates: number
   canSubmit: boolean
 }
 
@@ -69,6 +77,14 @@ export function ImportSummaryBar({
             tone="warning"
           />
           <Stat icon={CircleSlash} label="izuzeto" value={summary.excluded} tone="muted" />
+          {summary.duplicates > 0 ? (
+            <Stat
+              icon={Copy}
+              label="duplikata"
+              value={summary.duplicates}
+              tone="muted"
+            />
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2">

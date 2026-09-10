@@ -9,7 +9,7 @@ import {
   useReactTable,
   type ColumnDef,
 } from "@tanstack/react-table"
-import { CircleSlash, RotateCcw, Search, Trash2, Undo2, Wand2 } from "lucide-react"
+import { CircleSlash, Copy, RotateCcw, Search, Trash2, Undo2, Wand2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DataTablePagination } from "@/components/ui/data-table-pagination"
@@ -38,12 +38,13 @@ import type { StationListItem } from "@/infrastructure/hooks/queries/useStations
 import type { ImportRow, ImportRowState } from "@/lib/csv-import"
 import type { RideInstance } from "@/types"
 
-export type RowFilter = "all" | "errors" | "warnings" | "excluded"
+export type RowFilter = "all" | "errors" | "warnings" | "duplicates" | "excluded"
 
 const ROW_FILTER_LABELS: Record<RowFilter, string> = {
   all: "Svi",
   errors: "Greske",
   warnings: "Za proveru",
+  duplicates: "Duplikati",
   excluded: "Izuzeti",
 }
 
@@ -63,6 +64,8 @@ function matchesFilter(row: ImportRowState, filter: RowFilter): boolean {
       return !row.excluded && !row.isValid
     case "warnings":
       return !row.excluded && row.isValid && row.issues.length > 0
+    case "duplicates":
+      return row.duplicate !== null
     case "excluded":
       return row.excluded
     case "all":
@@ -203,6 +206,23 @@ export function ImportRowsTable({
               <Badge variant={importRow.leg === "return" ? "secondary" : "outline"}>
                 {importRow.leg === "return" ? "Povratak" : "Polazak"}
               </Badge>
+
+              {importRow.duplicate ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      variant="outline"
+                      className="flex w-fit items-center gap-1 border-amber-300 text-[10px] text-amber-700"
+                    >
+                      <Copy className="h-3 w-3" />
+                      {importRow.duplicate.kind === "existing" ? "Vec u sistemu" : "Duplikat u fajlu"}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-xs">
+                    {importRow.duplicate.message}
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
             </div>
           )
         },
@@ -436,6 +456,7 @@ export function ImportRowsTable({
     all: rows.length,
     errors: rows.filter((row) => matchesFilter(row, "errors")).length,
     warnings: rows.filter((row) => matchesFilter(row, "warnings")).length,
+    duplicates: rows.filter((row) => matchesFilter(row, "duplicates")).length,
     excluded: rows.filter((row) => matchesFilter(row, "excluded")).length,
   }
 
