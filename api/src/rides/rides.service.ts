@@ -21,6 +21,12 @@ import {
   RideExceptionResponseDto,
   RideResponseDto
 } from './dto/ride.response.dto';
+import {
+  dayOfWeekOf,
+  formatDateOnly,
+  materializeInstanceTimesForDate,
+  utcDateOf
+} from './ride-instance-materialization';
 import { UpdateRideDto } from './dto/update-ride.dto';
 
 const SAFE_RIDE_SELECT = Prisma.validator<Prisma.RideSelect>()({
@@ -1084,12 +1090,11 @@ export class RidesService {
       throw new BadRequestException('date must be in YYYY-MM-DD format');
     }
 
-    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    return utcDateOf(localDate);
   }
 
   private getDayOfWeekFromDateString(value: string): number {
-    const [year, month, day] = value.split('-').map((part) => Number(part));
-    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)).getUTCDay();
+    return dayOfWeekOf(value);
   }
 
   private materializeRideInstancesForDate(
@@ -1097,103 +1102,31 @@ export class RidesService {
     targetDate: string,
     targetDayOfWeek: number
   ): MaterializedRideInstance[] {
-    const baseInstances: MaterializedRideInstance[] = [];
-
-    if (ride.type === RideType.RECURRING) {
-      if (!ride.recurringStartDate) {
-        return [];
+    return materializeInstanceTimesForDate(
+      ride,
+      ride.exceptions,
+      targetDate,
+      targetDayOfWeek
+    ).map((times) => ({
+      rideId: ride.id,
+      date: targetDate,
+      departureTime: times.departureTime,
+      arrivalTime: times.arrivalTime,
+      source: times.source,
+      rideType: ride.type,
+      status: ride.status,
+      capacity: ride.capacity,
+      line: {
+        id: ride.line.id,
+        name: ride.line.name,
+        departureStationId: ride.line.departureStationId,
+        arrivalStationId: ride.line.arrivalStationId
       }
-
-      const startDate = this.formatDate(ride.recurringStartDate)!;
-      const endDate = ride.recurringEndDate ? this.formatDate(ride.recurringEndDate)! : null;
-
-      const dateInRange = targetDate >= startDate && (!endDate || targetDate <= endDate);
-      const daySchedule = ride.daySchedules.find((entry) => entry.dayOfWeek === targetDayOfWeek);
-      const orderedStationTimes = daySchedule
-        ? [...daySchedule.stationTimes].sort((left, right) => left.orderIndex - right.orderIndex)
-        : [];
-      const departureTime = orderedStationTimes[0]?.time ?? null;
-      const arrivalTime = orderedStationTimes[orderedStationTimes.length - 1]?.time ?? null;
-
-      if (dateInRange && departureTime && arrivalTime) {
-        baseInstances.push({
-          rideId: ride.id,
-          date: targetDate,
-          departureTime,
-          arrivalTime,
-          source: 'BASE',
-          rideType: ride.type,
-          status: ride.status,
-          capacity: ride.capacity,
-          line: {
-            id: ride.line.id,
-            name: ride.line.name,
-            departureStationId: ride.line.departureStationId,
-            arrivalStationId: ride.line.arrivalStationId
-          }
-        });
-      }
-    }
-
-    if (ride.type === RideType.ONE_TIME) {
-      const oneTimeDate = ride.oneTimeDate ? this.formatDate(ride.oneTimeDate) : null;
-
-      if (
-        oneTimeDate === targetDate &&
-        ride.oneTimeDepartureTime &&
-        ride.oneTimeArrivalTime
-      ) {
-        baseInstances.push({
-          rideId: ride.id,
-          date: targetDate,
-          departureTime: ride.oneTimeDepartureTime,
-          arrivalTime: ride.oneTimeArrivalTime,
-          source: 'BASE',
-          rideType: ride.type,
-          status: ride.status,
-          capacity: ride.capacity,
-          line: {
-            id: ride.line.id,
-            name: ride.line.name,
-            departureStationId: ride.line.departureStationId,
-            arrivalStationId: ride.line.arrivalStationId
-          }
-        });
-      }
-    }
-
-    const hasSkip = ride.exceptions.some((item) => item.type === RideExceptionType.SKIP);
-    const additionalInstances: MaterializedRideInstance[] = ride.exceptions
-      .filter((item) => item.type === RideExceptionType.ADDITIONAL)
-      .filter((item) => Boolean(item.departureTime && item.arrivalTime))
-      .map((item) => ({
-        rideId: ride.id,
-        date: targetDate,
-        departureTime: item.departureTime!,
-        arrivalTime: item.arrivalTime!,
-        source: 'ADDITIONAL' as const,
-        rideType: ride.type,
-        status: ride.status,
-        capacity: ride.capacity,
-        line: {
-          id: ride.line.id,
-          name: ride.line.name,
-          departureStationId: ride.line.departureStationId,
-          arrivalStationId: ride.line.arrivalStationId
-        }
-      }));
-
-    const effectiveBase = hasSkip ? [] : baseInstances;
-
-    return [...effectiveBase, ...additionalInstances];
+    }));
   }
 
   private formatDate(value: Date | null): string | undefined {
-    if (!value) {
-      return undefined;
-    }
-
-    return value.toISOString().slice(0, 10);
+    return formatDateOnly(value);
   }
 
   private toRideResponse(ride: SelectedRide): RideResponseDto {

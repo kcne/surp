@@ -2,11 +2,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   maintenanceControllerRealignSchedules,
+  maintenanceControllerRepairOrphanedReservations,
   maintenanceControllerSyncPairs,
 } from "@/infrastructure/generated/surp-api"
+import { orphanedReservationsQueryKey } from "@/infrastructure/hooks/queries/useOrphanedReservationsQuery"
 import { pairDriftQueryKey } from "@/infrastructure/hooks/queries/usePairDriftQuery"
 import { scheduleDriftQueryKey } from "@/infrastructure/hooks/queries/useScheduleDriftQuery"
 import type {
+  OrphanedReservationRepairResultDto,
   PairSyncResultDto,
   ScheduleRealignResultDto,
 } from "@/infrastructure/generated/model"
@@ -84,6 +87,52 @@ export function useSyncLinePairsMutation() {
     onError: (error) => {
       toast.error(
         error instanceof Error && error.message ? error.message : "Neuspesno uskladjivanje smerova"
+      )
+    },
+  })
+}
+
+export function useRepairOrphanedReservationsMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (): Promise<OrphanedReservationRepairResultDto> => {
+      const response = await maintenanceControllerRepairOrphanedReservations()
+
+      if (response.status !== 200) {
+        throw new Error(
+          response.status === 403
+            ? "Samo admin moze da vrati rezervacije u sistem"
+            : "Neuspesno vracanje rezervacija"
+        )
+      }
+
+      return response.data
+    },
+    onSuccess: (result) => {
+      if (result.repairedCount === 0) {
+        toast.success("Nema rezervacija koje treba vratiti")
+      } else if (result.seatChangedCount > 0) {
+        toast.success(
+          `Vraceno ${result.repairedCount} rezervacija, od toga ${result.seatChangedCount} sa novim sedistem`
+        )
+      } else {
+        toast.success(`Vraceno ${result.repairedCount} rezervacija`)
+      }
+
+      if (result.skippedCount > 0) {
+        toast.warning(`Preskoceno ${result.skippedCount} — treba ih resiti rucno`)
+      }
+
+      queryClient.invalidateQueries({ queryKey: orphanedReservationsQueryKey })
+      // The reservations just became visible on their instances, which changes
+      // seat maps and availability counts.
+      queryClient.invalidateQueries({ queryKey: ["reservations"] })
+      queryClient.invalidateQueries({ queryKey: ["rides"] })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error && error.message ? error.message : "Neuspesno vracanje rezervacija"
       )
     },
   })

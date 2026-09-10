@@ -1782,6 +1782,92 @@
         ]
       }
     },
+    "/maintenance/orphaned-reservations": {
+      "get": {
+        "operationId": "MaintenanceController_getOrphanedReservations",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrphanedReservationReportDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Report active reservations in the next 30 days that no ride instance can reach, usually because a route edit moved the instance departure time away from the one stored on the reservation.",
+        "tags": [
+          "Maintenance"
+        ]
+      }
+    },
+    "/maintenance/orphaned-reservations/repair": {
+      "post": {
+        "operationId": "MaintenanceController_repairOrphanedReservations",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrphanedReservationRepairResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Move unreachable reservations onto the single ride instance that runs on their travel date. Each keeps its seat where that seat is still free, otherwise it takes the lowest free one. Dates with no instance, or with more than one, are left untouched.",
+        "tags": [
+          "Maintenance"
+        ]
+      }
+    },
     "/api/public/marketing/leads": {
       "post": {
         "operationId": "MarketingLeadsController_createLead",
@@ -6804,6 +6890,186 @@
         "required": [
           "scannedPairCount",
           "gapCount",
+          "items"
+        ]
+      },
+      "OrphanedReservationItemDto": {
+        "type": "object",
+        "properties": {
+          "reservationId": {
+            "type": "string",
+            "example": "reservation-id-123"
+          },
+          "passengerName": {
+            "type": "string",
+            "example": "Marko Markovic"
+          },
+          "passengerPhone": {
+            "type": "string",
+            "example": "+381601234567"
+          },
+          "travelDate": {
+            "type": "string",
+            "example": "2026-09-15"
+          },
+          "rideName": {
+            "type": "string",
+            "example": "Istanbul Balbus - Novi Sad"
+          },
+          "lineName": {
+            "type": "string",
+            "example": "Montenegro - Novi Sad"
+          },
+          "departureStationName": {
+            "type": "string",
+            "example": "Agencija"
+          },
+          "arrivalStationName": {
+            "type": "string",
+            "example": "Novi Sad"
+          },
+          "currentDepartureTime": {
+            "type": "string",
+            "example": "07:45",
+            "description": "Departure time stored on the reservation."
+          },
+          "targetDepartureTime": {
+            "type": "string",
+            "example": "07:30",
+            "nullable": true,
+            "description": "Departure time of the single instance that can claim it, when there is one."
+          },
+          "targetArrivalTime": {
+            "type": "string",
+            "example": "23:00",
+            "nullable": true
+          },
+          "seatNumber": {
+            "type": "number",
+            "example": 12
+          },
+          "targetSeatNumber": {
+            "type": "number",
+            "example": 31,
+            "nullable": true,
+            "description": "Seat the reservation would take after repair. Differs from seatNumber when the original seat was sold again while this reservation was invisible; null when the target instance is full."
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "DEPARTURE_TIME_MOVED",
+              "AMBIGUOUS_INSTANCE",
+              "NO_INSTANCE",
+              "RIDE_NOT_ACTIVE"
+            ],
+            "example": "DEPARTURE_TIME_MOVED"
+          },
+          "canRepair": {
+            "type": "boolean",
+            "example": true
+          },
+          "offRouteStationNames": {
+            "example": [],
+            "description": "Reservation stations that are no longer on the ride route, if any.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "reservationId",
+          "passengerName",
+          "passengerPhone",
+          "travelDate",
+          "rideName",
+          "lineName",
+          "departureStationName",
+          "arrivalStationName",
+          "currentDepartureTime",
+          "targetDepartureTime",
+          "targetArrivalTime",
+          "seatNumber",
+          "targetSeatNumber",
+          "reason",
+          "canRepair",
+          "offRouteStationNames"
+        ]
+      },
+      "OrphanedReservationReportDto": {
+        "type": "object",
+        "properties": {
+          "windowStartDate": {
+            "type": "string",
+            "example": "2026-09-10"
+          },
+          "windowEndDate": {
+            "type": "string",
+            "example": "2026-10-10"
+          },
+          "scannedReservationCount": {
+            "type": "number",
+            "example": 201,
+            "description": "Active reservations travelling inside the window."
+          },
+          "orphanedCount": {
+            "type": "number",
+            "example": 93
+          },
+          "repairableCount": {
+            "type": "number",
+            "example": 93,
+            "description": "Orphans a single instance can claim."
+          },
+          "seatChangeCount": {
+            "type": "number",
+            "example": 40,
+            "description": "Repairable orphans whose seat number would change."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrphanedReservationItemDto"
+            }
+          }
+        },
+        "required": [
+          "windowStartDate",
+          "windowEndDate",
+          "scannedReservationCount",
+          "orphanedCount",
+          "repairableCount",
+          "seatChangeCount",
+          "items"
+        ]
+      },
+      "OrphanedReservationRepairResultDto": {
+        "type": "object",
+        "properties": {
+          "repairedCount": {
+            "type": "number",
+            "example": 93
+          },
+          "seatChangedCount": {
+            "type": "number",
+            "example": 40
+          },
+          "skippedCount": {
+            "type": "number",
+            "example": 0,
+            "description": "Orphans left untouched because no single instance could claim them."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrphanedReservationItemDto"
+            }
+          }
+        },
+        "required": [
+          "repairedCount",
+          "seatChangedCount",
+          "skippedCount",
           "items"
         ]
       },

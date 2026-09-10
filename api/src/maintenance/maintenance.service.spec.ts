@@ -5,7 +5,9 @@ describe('MaintenanceService', () => {
   const prismaMock = {
     $transaction: jest.fn(),
     line: { findMany: jest.fn() },
-    station: { findMany: jest.fn() }
+    station: { findMany: jest.fn() },
+    ride: { findMany: jest.fn() },
+    reservation: { findMany: jest.fn(), update: jest.fn() }
   };
 
   const pairedLines = [
@@ -291,6 +293,223 @@ describe('MaintenanceService', () => {
 
       expect(report.gapCount).toBe(0);
       expect(report.items).toEqual([]);
+    });
+  });
+
+  describe('orphaned reservations', () => {
+    // Travel dates are pinned relative to today so the 30-day window always
+    // contains them, whenever the suite runs.
+    const dateInDays = (days: number) => {
+      const date = new Date();
+      date.setUTCDate(date.getUTCDate() + days);
+      date.setUTCHours(0, 0, 0, 0);
+      return date;
+    };
+
+    const travelDate = dateInDays(7);
+
+    // The line gained a new first station at 07:30; the old head departed at
+    // 07:45, which is what every reservation below still stores.
+    const strandedRide = {
+      id: 'ride-1',
+      name: 'Istanbul - Novi Sad',
+      capacity: 48,
+      status: 'ACTIVE',
+      type: 'RECURRING',
+      recurringStartDate: dateInDays(-90),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      line: {
+        name: 'Montenegro - Novi Sad',
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b',
+        intermediateStops: [{ stationId: 'station-c' }]
+      },
+      daySchedules: [
+        {
+          dayOfWeek: travelDate.getUTCDay(),
+          stationTimes: [
+            { orderIndex: 0, time: '07:30' },
+            { orderIndex: 1, time: '07:45' },
+            { orderIndex: 2, time: '23:00' }
+          ]
+        }
+      ],
+      exceptions: []
+    };
+
+    const reservation = (id: string, seatNumber: number, departureTime: string) => ({
+      id,
+      rideId: 'ride-1',
+      travelDate,
+      rideDepartureTime: departureTime,
+      rideArrivalTime: '23:00',
+      seatNumber,
+      departureStationId: 'station-a',
+      arrivalStationId: 'station-b',
+      passenger: { firstName: 'Marko', lastName: 'Markovic', phone: '+381601234567' }
+    });
+
+    beforeEach(() => {
+      prismaMock.ride.findMany.mockResolvedValue([strandedRide]);
+    });
+
+    it('points stranded reservations at the instance that replaced their departure time', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
+
+      const report = await service.getOrphanedReservationReport(auth);
+
+      expect(report.scannedReservationCount).toBe(1);
+      expect(report.orphanedCount).toBe(1);
+      expect(report.repairableCount).toBe(1);
+      expect(report.seatChangeCount).toBe(0);
+      expect(report.items[0]).toEqual(
+        expect.objectContaining({
+          reason: 'DEPARTURE_TIME_MOVED',
+          currentDepartureTime: '07:45',
+          targetDepartureTime: '07:30',
+          targetArrivalTime: '23:00',
+          seatNumber: 12,
+          targetSeatNumber: 12,
+          canRepair: true
+        })
+      );
+    });
+
+    it('leaves reservations already sitting on a live instance alone', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:30')]);
+
+      const report = await service.getOrphanedReservationReport(auth);
+
+      expect(report.scannedReservationCount).toBe(1);
+      expect(report.orphanedCount).toBe(0);
+    });
+
+    it('moves a stranded reservation off a seat a visible passenger now holds', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        // Sold after the route changed, so it is visible and owns seat 12.
+        reservation('res-visible', 12, '07:30'),
+        reservation('res-stranded', 12, '07:45')
+      ]);
+
+      const report = await service.getOrphanedReservationReport(auth);
+
+      expect(report.orphanedCount).toBe(1);
+      expect(report.seatChangeCount).toBe(1);
+      expect(report.items[0]).toEqual(
+        expect.objectContaining({ reservationId: 'res-stranded', targetSeatNumber: 1 })
+      );
+    });
+
+    it('lets every orphan that can keep its seat do so before reseating the rest', async () => {
+      // A single pass would hand seat 1 to res-b, evicting res-a from a seat it
+      // could have kept and cascading one collision into two moves.
+      prismaMock.reservation.findMany.mockResolvedValue([
+        reservation('res-visible', 5, '07:30'),
+        reservation('res-a', 1, '07:45'),
+        reservation('res-b', 5, '07:45')
+      ]);
+
+      const report = await service.getOrphanedReservationReport(auth);
+
+      const seatOf = (id: string) =>
+        report.items.find((item) => item.reservationId === id)?.targetSeatNumber;
+
+      expect(seatOf('res-a')).toBe(1);
+      expect(seatOf('res-b')).toBe(2);
+      expect(report.seatChangeCount).toBe(1);
+    });
+
+    it('refuses to guess when the travel date carries more than one departure', async () => {
+      prismaMock.ride.findMany.mockResolvedValue([
+        {
+          ...strandedRide,
+          exceptions: [
+            {
+              exceptionDate: travelDate,
+              type: 'ADDITIONAL',
+              departureTime: '14:00',
+              arrivalTime: '05:00'
+            }
+          ]
+        }
+      ]);
+      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
+
+      const report = await service.getOrphanedReservationReport(auth);
+
+      expect(report.items[0]).toEqual(
+        expect.objectContaining({
+          reason: 'AMBIGUOUS_INSTANCE',
+          targetDepartureTime: null,
+          canRepair: false
+        })
+      );
+      expect(report.repairableCount).toBe(0);
+    });
+
+    it('reports a date the ride no longer runs on without offering a repair', async () => {
+      prismaMock.ride.findMany.mockResolvedValue([
+        {
+          ...strandedRide,
+          exceptions: [
+            {
+              exceptionDate: travelDate,
+              type: 'SKIP',
+              departureTime: null,
+              arrivalTime: null
+            }
+          ]
+        }
+      ]);
+      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
+
+      const report = await service.getOrphanedReservationReport(auth);
+
+      expect(report.items[0]).toEqual(
+        expect.objectContaining({ reason: 'NO_INSTANCE', canRepair: false })
+      );
+    });
+
+    it('writes the new departure time and seat, and skips what it cannot place', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        reservation('res-visible', 12, '07:30'),
+        reservation('res-stranded', 12, '07:45')
+      ]);
+
+      const result = await service.repairOrphanedReservations(auth);
+
+      expect(result.repairedCount).toBe(1);
+      expect(result.seatChangedCount).toBe(1);
+      expect(result.skippedCount).toBe(0);
+      expect(prismaMock.reservation.update).toHaveBeenCalledTimes(1);
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'res-stranded' },
+          data: expect.objectContaining({
+            rideDepartureTime: '07:30',
+            rideArrivalTime: '23:00',
+            seatNumber: 1,
+            updatedById: 'admin-1'
+          })
+        })
+      );
+    });
+
+    it('touches nothing when no single instance can claim the orphans', async () => {
+      prismaMock.ride.findMany.mockResolvedValue([
+        { ...strandedRide, status: 'INACTIVE', daySchedules: [] }
+      ]);
+      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
+
+      const result = await service.repairOrphanedReservations(auth);
+
+      expect(result.repairedCount).toBe(0);
+      expect(result.skippedCount).toBe(1);
+      expect(result.items[0].reason).toBe('RIDE_NOT_ACTIVE');
+      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
     });
   });
 });
