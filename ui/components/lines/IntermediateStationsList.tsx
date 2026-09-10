@@ -34,13 +34,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useStationsListQuery } from "@/infrastructure/hooks/queries/useStationsListQuery"
 import type { StationListItem } from "@/infrastructure/hooks/queries/useStationsListQuery"
+import type { LineFormStop } from "@/types"
 import { cn } from "@/lib/utils"
 
 interface IntermediateStationsListProps {
-  selectedStationIds: string[]
-  onChange: (stationIds: string[]) => void
+  stops: LineFormStop[]
+  onChange: (stops: LineFormStop[]) => void
   departureStationId?: string
   arrivalStationId?: string
 }
@@ -48,12 +50,20 @@ interface IntermediateStationsListProps {
 interface SortableStationItemProps {
   stationId: string
   stationName: string
+  isBoarding: boolean
+  isDropoff: boolean
+  onToggleBoarding: (checked: boolean) => void
+  onToggleDropoff: (checked: boolean) => void
   onRemove: () => void
 }
 
 function SortableStationItem({
   stationId,
   stationName,
+  isBoarding,
+  isDropoff,
+  onToggleBoarding,
+  onToggleDropoff,
   onRemove,
 }: SortableStationItemProps) {
   const {
@@ -89,6 +99,20 @@ function SortableStationItem({
         <GripVertical className="h-5 w-5" />
       </button>
       <span className="flex-1 font-medium">{stationName}</span>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox
+          checked={isBoarding}
+          onCheckedChange={(checked) => onToggleBoarding(checked === true)}
+        />
+        Polazna
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox
+          checked={isDropoff}
+          onCheckedChange={(checked) => onToggleDropoff(checked === true)}
+        />
+        Dolazna
+      </label>
       <Button
         type="button"
         variant="ghost"
@@ -103,7 +127,7 @@ function SortableStationItem({
 }
 
 export function IntermediateStationsList({
-  selectedStationIds,
+  stops,
   onChange,
   departureStationId,
   arrivalStationId,
@@ -123,6 +147,8 @@ export function IntermediateStationsList({
     })
   )
 
+  const selectedStationIds = stops.map((stop) => stop.stationId)
+
   // Filter out already selected stations and departure/arrival stations
   const availableStations = stations.filter(
     (station) =>
@@ -131,9 +157,12 @@ export function IntermediateStationsList({
       station.id !== arrivalStationId
   )
 
-  const selectedStations = selectedStationIds
-    .map((id) => stations.find((s) => s.id === id))
-    .filter((s): s is StationListItem => !!s)
+  const selectedStations = stops
+    .map((stop) => {
+      const station = stations.find((s) => s.id === stop.stationId)
+      return station ? { stop, station } : null
+    })
+    .filter((entry): entry is { stop: LineFormStop; station: StationListItem } => !!entry)
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -142,17 +171,31 @@ export function IntermediateStationsList({
       const oldIndex = selectedStationIds.indexOf(active.id as string)
       const newIndex = selectedStationIds.indexOf(over.id as string)
 
-      onChange(arrayMove(selectedStationIds, oldIndex, newIndex))
+      onChange(arrayMove(stops, oldIndex, newIndex))
     }
   }
 
   const handleAddStation = (stationId: string) => {
-    onChange([...selectedStationIds, stationId])
+    // New stops serve both directions, which matches how stops behaved before
+    // boarding rules existed.
+    onChange([...stops, { stationId, isBoarding: true, isDropoff: true }])
     setIsPopoverOpen(false)
   }
 
   const handleRemoveStation = (stationId: string) => {
-    onChange(selectedStationIds.filter((id) => id !== stationId))
+    onChange(stops.filter((stop) => stop.stationId !== stationId))
+  }
+
+  const handleToggleStop = (
+    stationId: string,
+    key: "isBoarding" | "isDropoff",
+    checked: boolean
+  ) => {
+    onChange(
+      stops.map((stop) =>
+        stop.stationId === stationId ? { ...stop, [key]: checked } : stop
+      )
+    )
   }
 
   return (
@@ -207,11 +250,19 @@ export function IntermediateStationsList({
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-2">
-              {selectedStations.map((station, index) => (
+              {selectedStations.map(({ stop, station }) => (
                 <SortableStationItem
                   key={station.id}
                   stationId={station.id}
                   stationName={station.name}
+                  isBoarding={stop.isBoarding}
+                  isDropoff={stop.isDropoff}
+                  onToggleBoarding={(checked) =>
+                    handleToggleStop(station.id, "isBoarding", checked)
+                  }
+                  onToggleDropoff={(checked) =>
+                    handleToggleStop(station.id, "isDropoff", checked)
+                  }
                   onRemove={() => handleRemoveStation(station.id)}
                 />
               ))}
@@ -223,7 +274,7 @@ export function IntermediateStationsList({
       {selectedStations.length > 0 && (
         <div className="flex flex-wrap gap-2">
           <span className="text-xs text-muted-foreground">Redosled:</span>
-          {selectedStations.map((station, index) => (
+          {selectedStations.map(({ station }, index) => (
             <Badge key={station.id} variant="outline" className="text-xs">
               {index + 1}. {station.name}
             </Badge>

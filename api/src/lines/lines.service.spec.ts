@@ -427,6 +427,82 @@ describe('LinesService', () => {
       'station-b'
     ]);
   });
+  it('stores boarding rules per stop and flips them on the paired direction', async () => {
+    prismaMock.line.findFirst.mockResolvedValue({
+      ...baseLine,
+      directionMode: LineDirectionMode.BOTH,
+      pairKey: 'pair-1',
+      intermediateStops: [{ stationId: 'station-c', orderIndex: 1, station: { name: 'Mid 1' } }]
+    });
+
+    prismaMock.station.findMany
+      .mockResolvedValueOnce([
+        { id: 'station-a', name: 'Central' },
+        { id: 'station-b', name: 'North' }
+      ])
+      .mockResolvedValueOnce([
+        { id: 'station-c', name: 'Mid 1' },
+        { id: 'station-d', name: 'Mid 2' }
+      ]);
+
+    const tx = {
+      line: {
+        update: jest.fn().mockResolvedValue(baseLine),
+        updateMany: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(baseLine),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'line-2',
+            departureStationId: 'station-terminus',
+            arrivalStationId: 'station-a'
+          }
+        ])
+      },
+      lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
+      ride: { findMany: jest.fn().mockResolvedValue([]) },
+      rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
+    };
+
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+
+    await service.update(auth, 'line-1', {
+      intermediateStops: [
+        { stationId: 'station-c', orderIndex: 1, isBoarding: true, isDropoff: false },
+        // Flags left out default to a stop that serves both directions.
+        { stationId: 'station-d', orderIndex: 2 }
+      ]
+    });
+
+    const ownCall = tx.lineStop.createMany.mock.calls[0][0];
+    expect(
+      ownCall.data.map(
+        (entry: { stationId: string; isBoarding: boolean; isDropoff: boolean }) => ({
+          stationId: entry.stationId,
+          isBoarding: entry.isBoarding,
+          isDropoff: entry.isDropoff
+        })
+      )
+    ).toEqual([
+      { stationId: 'station-c', isBoarding: true, isDropoff: false },
+      { stationId: 'station-d', isBoarding: true, isDropoff: true }
+    ]);
+
+    // The return direction picks up where the outbound dropped off.
+    const pairedCall = tx.lineStop.createMany.mock.calls[1][0];
+    expect(
+      pairedCall.data.map(
+        (entry: { stationId: string; isBoarding: boolean; isDropoff: boolean }) => ({
+          stationId: entry.stationId,
+          isBoarding: entry.isBoarding,
+          isDropoff: entry.isDropoff
+        })
+      )
+    ).toEqual([
+      { stationId: 'station-d', isBoarding: true, isDropoff: true },
+      { stationId: 'station-c', isBoarding: false, isDropoff: true }
+    ]);
+  });
+
   it('mirrors new stops onto the paired direction while keeping its own endpoints', async () => {
     // Outbound A -> C -> B, paired with a return that departs from a different
     // terminus (D) than the outbound arrival (B).

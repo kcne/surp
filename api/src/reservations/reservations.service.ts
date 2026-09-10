@@ -77,6 +77,10 @@ type RideRouteContext = {
   rideId: string;
   capacity: number;
   stationOrderById: Map<string, number>;
+  /** Stations on the route where a passenger may board. */
+  boardingStationIds: Set<string>;
+  /** Stations on the route where a passenger may get off. */
+  dropoffStationIds: Set<string>;
 };
 
 type RouteSegment = {
@@ -188,7 +192,7 @@ export class ReservationsService {
 
       const rideContext = await this.getRideRouteContext(auth.tenantId, existing.rideId, tx);
       const segment = this.validateAndResolveSegment(
-        rideContext.stationOrderById,
+        rideContext,
         departureStationId,
         arrivalStationId
       );
@@ -311,7 +315,9 @@ export class ReservationsService {
             intermediateStops: {
               select: {
                 stationId: true,
-                orderIndex: true
+                orderIndex: true,
+                isBoarding: true,
+                isDropoff: true
               },
               orderBy: {
                 orderIndex: 'asc'
@@ -335,18 +341,38 @@ export class ReservationsService {
 
     stationOrderById.set(ride.line.arrivalStationId, ride.line.intermediateStops.length + 1);
 
+    // The line endpoints are always usable: the route starts by boarding at the
+    // departure station and ends by getting off at the arrival station.
+    // Intermediate stops may be restricted to one of the two.
+    const boardingStationIds = new Set<string>([ride.line.departureStationId]);
+    const dropoffStationIds = new Set<string>([ride.line.arrivalStationId]);
+
+    ride.line.intermediateStops.forEach((stop) => {
+      if (stop.isBoarding) {
+        boardingStationIds.add(stop.stationId);
+      }
+
+      if (stop.isDropoff) {
+        dropoffStationIds.add(stop.stationId);
+      }
+    });
+
     return {
       rideId: ride.id,
       capacity: ride.capacity,
-      stationOrderById
+      stationOrderById,
+      boardingStationIds,
+      dropoffStationIds
     };
   }
 
   private validateAndResolveSegment(
-    stationOrderById: Map<string, number>,
+    route: RideRouteContext,
     departureStationId: string,
     arrivalStationId: string
   ): RouteSegment {
+    const { stationOrderById } = route;
+
     if (departureStationId === arrivalStationId) {
       throw new BadRequestException('Departure and arrival stations must be different');
     }
@@ -360,6 +386,14 @@ export class ReservationsService {
 
     if (departureOrder >= arrivalOrder) {
       throw new BadRequestException('Departure station must come before arrival station on line path');
+    }
+
+    if (!route.boardingStationIds.has(departureStationId)) {
+      throw new BadRequestException('Departure station is not a boarding stop on this line');
+    }
+
+    if (!route.dropoffStationIds.has(arrivalStationId)) {
+      throw new BadRequestException('Arrival station is not a drop-off stop on this line');
     }
 
     return {
@@ -473,7 +507,7 @@ export class ReservationsService {
     await this.ensurePassengerExistsInTenant(auth.tenantId, dto.passengerId, tx);
 
     const segment = this.validateAndResolveSegment(
-      rideContext.stationOrderById,
+      rideContext,
       dto.departureStationId,
       dto.arrivalStationId
     );

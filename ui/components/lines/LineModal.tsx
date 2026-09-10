@@ -42,7 +42,7 @@ const LINE_DEFAULT_VALUES: LineFormData = {
   name: "",
   departureStationId: "",
   arrivalStationId: "",
-  intermediateStationIds: [],
+  intermediateStops: [],
   directionMode: "both",
   distance: undefined,
   duration: undefined,
@@ -59,7 +59,13 @@ function getLineFormValues(line?: Line | null): LineFormData {
     name: line.name,
     departureStationId: line.departureStation.id,
     arrivalStationId: line.arrivalStation.id,
-    intermediateStationIds: line.intermediateStations.map((station) => station.stationId),
+    intermediateStops: [...line.intermediateStations]
+      .sort((left, right) => left.order - right.order)
+      .map((station) => ({
+        stationId: station.stationId,
+        isBoarding: station.isBoarding,
+        isDropoff: station.isDropoff,
+      })),
     directionMode: line.directionMode || "single",
     distance: line.distance,
     duration: line.duration,
@@ -127,11 +133,6 @@ export function LineModal({
     control: form.control,
     name: "arrivalStationId",
   })
-  const intermediateStationIds = useWatch({
-    control: form.control,
-    name: "intermediateStationIds",
-  }) || []
-
   return (
     <FormModalShell
       open={open}
@@ -237,12 +238,12 @@ export function LineModal({
 
             <FormField
               control={form.control}
-              name="intermediateStationIds"
+              name="intermediateStops"
               render={({ field }) => (
                 <FormItem>
                   <FormControl>
                     <IntermediateStationsList
-                      selectedStationIds={field.value || []}
+                      stops={field.value || []}
                       onChange={field.onChange}
                       departureStationId={departureStationId}
                       arrivalStationId={arrivalStationId}

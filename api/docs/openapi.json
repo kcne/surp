@@ -6094,6 +6094,18 @@
             "type": "number",
             "example": 1,
             "minimum": 1
+          },
+          "isBoarding": {
+            "type": "boolean",
+            "example": true,
+            "default": true,
+            "description": "Whether passengers may board at this stop."
+          },
+          "isDropoff": {
+            "type": "boolean",
+            "example": true,
+            "default": true,
+            "description": "Whether passengers may get off at this stop."
           }
         },
         "required": [
@@ -6197,12 +6209,22 @@
           "orderIndex": {
             "type": "number",
             "example": 1
+          },
+          "isBoarding": {
+            "type": "boolean",
+            "example": true
+          },
+          "isDropoff": {
+            "type": "boolean",
+            "example": true
           }
         },
         "required": [
           "stationId",
           "stationName",
-          "orderIndex"
+          "orderIndex",
+          "isBoarding",
+          "isDropoff"
         ]
       },
       "LineResponseDto": {

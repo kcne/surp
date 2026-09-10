@@ -5,7 +5,7 @@ import type {
   LineStationSummaryDtoCategory,
   UpdateLineDto,
 } from "@/infrastructure/generated/model"
-import type { Line, LineFormData, Station } from "@/types"
+import type { Line, LineFormData, LineFormStop, Station } from "@/types"
 
 function toStationCategory(
   category: LineStationSummaryDtoCategory
@@ -38,10 +38,12 @@ function toDirection(direction: LineResponseDto["direction"]): Line["direction"]
   return direction === "RETURN" ? "return" : "outbound"
 }
 
-function toIntermediateStops(stationIds: string[] | undefined) {
-  return stationIds?.map((stationId, index) => ({
-    stationId,
+function toIntermediateStops(stops: LineFormStop[] | undefined) {
+  return stops?.map((stop, index) => ({
+    stationId: stop.stationId,
     orderIndex: index + 1,
+    isBoarding: stop.isBoarding,
+    isDropoff: stop.isDropoff,
   }))
 }
 
@@ -55,6 +57,8 @@ export function toLine(line: LineResponseDto): Line {
       stationId: stop.stationId,
       stationName: stop.stationName,
       order: stop.orderIndex,
+      isBoarding: stop.isBoarding,
+      isDropoff: stop.isDropoff,
     })),
     directionMode: toDirectionMode(line.directionMode),
     direction: toDirection(line.direction),
@@ -72,7 +76,7 @@ export function toCreateLineDto(data: LineFormData): CreateLineDto {
     arrivalStationId: data.arrivalStationId,
     directionMode: data.directionMode === "both" ? "BOTH" : "SINGLE",
     isActive: data.isActive ?? true,
-    intermediateStops: toIntermediateStops(data.intermediateStationIds),
+    intermediateStops: toIntermediateStops(data.intermediateStops),
   }
 }
 
@@ -88,8 +92,8 @@ export function toUpdateLineDto(data: Partial<LineFormData>): UpdateLineDto {
       : undefined,
     isActive: data.isActive,
     intermediateStops:
-      data.intermediateStationIds === undefined
+      data.intermediateStops === undefined
         ? undefined
-        : toIntermediateStops(data.intermediateStationIds),
+        : toIntermediateStops(data.intermediateStops),
   }
 }

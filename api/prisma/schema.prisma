@@ -353,6 +353,8 @@ model LineStop {
   lineId      String
   stationId   String
   orderIndex  Int
+  isBoarding  Boolean  @default(true)
+  isDropoff   Boolean  @default(true)
   createdById String?
   updatedById String?
   createdAt   DateTime @default(now())

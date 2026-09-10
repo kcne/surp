@@ -4,6 +4,8 @@ import { checkSeatConflict } from "@/utils/seatHelpers"
 interface OrderedStation {
   stationId: string
   order: number
+  isBoarding: boolean
+  isDropoff: boolean
 }
 
 function getOrderedStations(instance: RideInstance): OrderedStation[] {
@@ -12,14 +14,23 @@ function getOrderedStations(instance: RideInstance): OrderedStation[] {
   )
 
   return [
-    { stationId: instance.ride.line.departureStation.id, order: 0 },
+    {
+      stationId: instance.ride.line.departureStation.id,
+      order: 0,
+      isBoarding: true,
+      isDropoff: false,
+    },
     ...orderedIntermediate.map((station, index) => ({
       stationId: station.stationId,
       order: index + 1,
+      isBoarding: station.isBoarding,
+      isDropoff: station.isDropoff,
     })),
     {
       stationId: instance.ride.line.arrivalStation.id,
       order: orderedIntermediate.length + 1,
+      isBoarding: false,
+      isDropoff: true,
     },
   ]
 }
@@ -41,15 +52,25 @@ export function buildReturnRequests({
 }: BuildReturnRequestsParams): ReservationFormData[] {
   const returnStations = getOrderedStations(returnInstance)
 
-  const returnDepOrder = returnStations.find(
+  const returnDeparture = returnStations.find(
     (station) => station.stationId === returnDepartureStationId
-  )?.order
-  const returnArrOrder = returnStations.find(
+  )
+  const returnArrival = returnStations.find(
     (station) => station.stationId === returnArrivalStationId
-  )?.order
+  )
+  const returnDepOrder = returnDeparture?.order
+  const returnArrOrder = returnArrival?.order
 
   if (returnDepOrder == null || returnArrOrder == null || returnArrOrder <= returnDepOrder) {
     throw new Error("Povratna vožnja ne podržava izabrane stanice.")
+  }
+
+  if (!returnDeparture?.isBoarding) {
+    throw new Error("Na povratnoj vožnji izabrana stanica nije polazna.")
+  }
+
+  if (!returnArrival?.isDropoff) {
+    throw new Error("Na povratnoj vožnji izabrana stanica nije dolazna.")
   }
 
   const existingReturnReservations = (allReservations[returnInstance.id] || []).filter(

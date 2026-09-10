@@ -18,6 +18,10 @@ import {
 interface StationOption {
   id: string
   name: string
+  /** Passengers may board here. */
+  isBoarding: boolean
+  /** Passengers may get off here. */
+  isDropoff: boolean
 }
 
 interface ReservationStationsSectionProps {
@@ -49,7 +53,9 @@ export function ReservationStationsSection({
               </FormControl>
               <SelectContent>
                 {allStations
-                  .filter((station) => station.id !== arrivalStationId)
+                  .filter(
+                    (station) => station.isBoarding && station.id !== arrivalStationId
+                  )
                   .map((station) => (
                     <SelectItem key={station.id} value={station.id}>
                       {station.name}
@@ -76,7 +82,9 @@ export function ReservationStationsSection({
               </FormControl>
               <SelectContent>
                 {allStations
-                  .filter((station) => station.id !== departureStationId)
+                  .filter(
+                    (station) => station.isDropoff && station.id !== departureStationId
+                  )
                   .map((station) => {
                     const depStation = allStations.find((entry) => entry.id === departureStationId)
                     const depIndex = depStation

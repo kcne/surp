@@ -27,6 +27,12 @@ export class LineIntermediateStopDto {
 
   @ApiProperty({ example: 1 })
   orderIndex!: number;
+
+  @ApiProperty({ example: true })
+  isBoarding!: boolean;
+
+  @ApiProperty({ example: true })
+  isDropoff!: boolean;
 }
 
 export class LineResponseDto {
