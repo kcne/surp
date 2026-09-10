@@ -4,6 +4,7 @@ import { Settings as SettingsIcon, ShieldAlert } from "lucide-react"
 import { Layout } from "@/components/layout/Layout"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { LinePairDriftCard } from "@/components/settings/LinePairDriftCard"
+import { OrphanedReservationsCard } from "@/components/settings/OrphanedReservationsCard"
 import { ReturnRouteGapCard } from "@/components/settings/ReturnRouteGapCard"
 import { ScheduleDriftCard } from "@/components/settings/ScheduleDriftCard"
 import { useAuthStore } from "@/stores/authStore"
@@ -27,7 +28,10 @@ export default function SettingsPage() {
 
         {isTenantAdmin ? (
           <div className="space-y-6">
-            {/* Pair sync first: it changes routes, which is what makes
+            {/* Lost reservations first: they are passengers nobody can see
+                today, and every route repair below can strand more of them. */}
+            <OrphanedReservationsCard />
+            {/* Pair sync next: it changes routes, which is what makes
                 schedules drift in the first place. */}
             <LinePairDriftCard />
             <ReturnRouteGapCard />

@@ -55,6 +55,8 @@ import type {
   LogoutDto,
   LogoutResponseDto,
   MarketingLeadResponseDto,
+  OrphanedReservationRepairResultDto,
+  OrphanedReservationReportDto,
   PaginatedLinesResponseDto,
   PaginatedPassengersResponseDto,
   PaginatedPlatformAuditResponseDto,
@@ -3612,6 +3614,223 @@ export function useMaintenanceControllerGetReturnRouteGaps<TData = Awaited<Retur
 
 
 
+/**
+ * @summary Report active reservations in the next 30 days that no ride instance can reach, usually because a route edit moved the instance departure time away from the one stored on the reservation.
+ */
+export type maintenanceControllerGetOrphanedReservationsResponse200 = {
+  data: OrphanedReservationReportDto
+  status: 200
+}
+
+export type maintenanceControllerGetOrphanedReservationsResponse401 = {
+  data: void
+  status: 401
+}
+
+export type maintenanceControllerGetOrphanedReservationsResponse403 = {
+  data: void
+  status: 403
+}
+
+export type maintenanceControllerGetOrphanedReservationsResponseSuccess = (maintenanceControllerGetOrphanedReservationsResponse200) & {
+  headers: Headers;
+};
+export type maintenanceControllerGetOrphanedReservationsResponseError = (maintenanceControllerGetOrphanedReservationsResponse401 | maintenanceControllerGetOrphanedReservationsResponse403) & {
+  headers: Headers;
+};
+
+export type maintenanceControllerGetOrphanedReservationsResponse = (maintenanceControllerGetOrphanedReservationsResponseSuccess | maintenanceControllerGetOrphanedReservationsResponseError)
+
+export const getMaintenanceControllerGetOrphanedReservationsUrl = () => {
+
+
+  
+
+  return `/maintenance/orphaned-reservations`
+}
+
+export const maintenanceControllerGetOrphanedReservations = async ( options?: RequestInit): Promise<maintenanceControllerGetOrphanedReservationsResponse> => {
+  
+  return customInstance<maintenanceControllerGetOrphanedReservationsResponse>(getMaintenanceControllerGetOrphanedReservationsUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getMaintenanceControllerGetOrphanedReservationsQueryKey = () => {
+    return [
+    `/maintenance/orphaned-reservations`
+    ] as const;
+    }
+
+    
+export const getMaintenanceControllerGetOrphanedReservationsQueryOptions = <TData = Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getMaintenanceControllerGetOrphanedReservationsQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>> = ({ signal }) => maintenanceControllerGetOrphanedReservations({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type MaintenanceControllerGetOrphanedReservationsQueryResult = NonNullable<Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>>
+export type MaintenanceControllerGetOrphanedReservationsQueryError = ErrorType<void>
+
+
+export function useMaintenanceControllerGetOrphanedReservations<TData = Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerGetOrphanedReservations<TData = Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerGetOrphanedReservations<TData = Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Report active reservations in the next 30 days that no ride instance can reach, usually because a route edit moved the instance departure time away from the one stored on the reservation.
+ */
+
+export function useMaintenanceControllerGetOrphanedReservations<TData = Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetOrphanedReservations>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getMaintenanceControllerGetOrphanedReservationsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Move unreachable reservations onto the single ride instance that runs on their travel date. Each keeps its seat where that seat is still free, otherwise it takes the lowest free one. Dates with no instance, or with more than one, are left untouched.
+ */
+export type maintenanceControllerRepairOrphanedReservationsResponse200 = {
+  data: OrphanedReservationRepairResultDto
+  status: 200
+}
+
+export type maintenanceControllerRepairOrphanedReservationsResponse401 = {
+  data: void
+  status: 401
+}
+
+export type maintenanceControllerRepairOrphanedReservationsResponse403 = {
+  data: void
+  status: 403
+}
+
+export type maintenanceControllerRepairOrphanedReservationsResponseSuccess = (maintenanceControllerRepairOrphanedReservationsResponse200) & {
+  headers: Headers;
+};
+export type maintenanceControllerRepairOrphanedReservationsResponseError = (maintenanceControllerRepairOrphanedReservationsResponse401 | maintenanceControllerRepairOrphanedReservationsResponse403) & {
+  headers: Headers;
+};
+
+export type maintenanceControllerRepairOrphanedReservationsResponse = (maintenanceControllerRepairOrphanedReservationsResponseSuccess | maintenanceControllerRepairOrphanedReservationsResponseError)
+
+export const getMaintenanceControllerRepairOrphanedReservationsUrl = () => {
+
+
+  
+
+  return `/maintenance/orphaned-reservations/repair`
+}
+
+export const maintenanceControllerRepairOrphanedReservations = async ( options?: RequestInit): Promise<maintenanceControllerRepairOrphanedReservationsResponse> => {
+  
+  return customInstance<maintenanceControllerRepairOrphanedReservationsResponse>(getMaintenanceControllerRepairOrphanedReservationsUrl(),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+  
+
+
+
+export const getMaintenanceControllerRepairOrphanedReservationsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerRepairOrphanedReservations>>, TError,void, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerRepairOrphanedReservations>>, TError,void, TContext> => {
+
+const mutationKey = ['maintenanceControllerRepairOrphanedReservations'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof maintenanceControllerRepairOrphanedReservations>>, void> = () => {
+          
+
+          return  maintenanceControllerRepairOrphanedReservations(requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MaintenanceControllerRepairOrphanedReservationsMutationResult = NonNullable<Awaited<ReturnType<typeof maintenanceControllerRepairOrphanedReservations>>>
+    
+    export type MaintenanceControllerRepairOrphanedReservationsMutationError = ErrorType<void>
+
+    /**
+ * @summary Move unreachable reservations onto the single ride instance that runs on their travel date. Each keeps its seat where that seat is still free, otherwise it takes the lowest free one. Dates with no instance, or with more than one, are left untouched.
+ */
+export const useMaintenanceControllerRepairOrphanedReservations = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerRepairOrphanedReservations>>, TError,void, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof maintenanceControllerRepairOrphanedReservations>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getMaintenanceControllerRepairOrphanedReservationsMutationOptions(options), queryClient);
+    }
+    
 /**
  * @summary Create a marketing contact request.
  */
