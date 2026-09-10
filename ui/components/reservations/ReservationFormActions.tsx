@@ -1,11 +1,13 @@
 import { DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Ban, Check, Save, X } from "lucide-react"
+import { Ban, Check, Save, Users, X } from "lucide-react"
 
 interface ReservationFormActionsProps {
   isEdit: boolean
   showCancelReservation: boolean
-  onCancelReservation: () => Promise<void> | void
+  onCancelReservation: () => void
+  showCancelGroupReservation: boolean
+  onCancelGroupReservation: () => void
   onClose: () => void
   loading: boolean
   useSubmitAction: boolean
@@ -18,6 +20,8 @@ export function ReservationFormActions({
   isEdit,
   showCancelReservation,
   onCancelReservation,
+  showCancelGroupReservation,
+  onCancelGroupReservation,
   onClose,
   loading,
   useSubmitAction,
@@ -28,7 +32,7 @@ export function ReservationFormActions({
   const submitDisabled = loading || !canSubmit
   return (
     <DialogFooter className="flex items-center justify-between">
-      <div>
+      <div className="flex flex-wrap gap-2">
         {showCancelReservation && (
           <Button
             type="button"
@@ -38,6 +42,18 @@ export function ReservationFormActions({
           >
             <Ban className="mr-2 h-4 w-4" />
             Otkaži Rezervaciju
+          </Button>
+        )}
+        {showCancelGroupReservation && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancelGroupReservation}
+            disabled={loading}
+            className="border-danger/40 text-danger hover:bg-danger/10 hover:text-danger"
+          >
+            <Users className="mr-2 h-4 w-4" />
+            Otkaži Grupnu Rezervaciju
           </Button>
         )}
       </div>

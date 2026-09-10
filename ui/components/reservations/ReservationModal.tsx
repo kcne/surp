@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { reservationSchema } from "@/utils/validators"
@@ -10,7 +10,7 @@ import {
   useReservationsByRideInstancesQuery,
 } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
 import {
-  useCancelReservationMutation,
+  useCancelReservationsMutation,
   useCreateReservationMutation,
   useCreateReservationsBatchMutation,
   useUpdateReservationMutation,
@@ -50,6 +50,11 @@ import { useReservationSubmission } from "@/hooks/useReservationSubmission"
 import { useDuplicatePassengerCheck } from "@/hooks/useDuplicatePassengerCheck"
 import { DuplicatePassengerDialog } from "@/components/passengers/DuplicatePassengerDialog"
 import { generateRideInstancesForRide } from "@/utils/rideInstanceGenerators"
+import { findReturnCounterpart } from "@/utils/reservationReturnMatching"
+import {
+  CancelReservationDialog,
+  type CancelReservationScope,
+} from "@/components/reservations/CancelReservationDialog"
 
 const EMPTY_RIDES: Reservation["rideInstance"]["ride"][] = []
 
@@ -81,7 +86,7 @@ export function ReservationModal({
   const createReservationMutation = useCreateReservationMutation()
   const createReservationsBatchMutation = useCreateReservationsBatchMutation()
   const updateReservationMutation = useUpdateReservationMutation()
-  const cancelReservationMutation = useCancelReservationMutation()
+  const cancelReservationsMutation = useCancelReservationsMutation()
   const createPassengerMutation = useCreatePassengerMutation()
   const ridesQuery = useRidesListQuery()
   const rides = ridesQuery.data ?? EMPTY_RIDES
@@ -341,6 +346,48 @@ export function ReservationModal({
   const seatDisplay = isMultiReservation
     ? selectedSeats.slice().sort((a, b) => a - b).join(", ")
     : String(seatNumber || reservation?.seatNumber || "")
+
+  const [cancelScope, setCancelScope] = useState<CancelReservationScope | null>(null)
+
+  // A seat can belong to a wider booking: reservations created with "travel
+  // together" share a groupId, and one passenger can also hold several seats on
+  // the same ride. Both cases can be released in one action from any seat.
+  const groupReservations = useMemo(() => {
+    if (!reservation) {
+      return []
+    }
+
+    const related = reservations.filter((candidate) => {
+      if (candidate.status !== "active") return false
+
+      return reservation.groupId
+        ? candidate.groupId === reservation.groupId
+        : !candidate.groupId && candidate.passengerId === reservation.passengerId
+    })
+
+    return related.sort((left, right) => left.seatNumber - right.seatNumber)
+  }, [reservation, reservations])
+
+  const cancelOutboundReservations = useMemo(() => {
+    if (!reservation) {
+      return []
+    }
+
+    return cancelScope === "group" ? groupReservations : [reservation]
+  }, [cancelScope, groupReservations, reservation])
+
+  const cancelReturnReservations = useMemo(() => {
+    const matchedById = new Map<string, Reservation>()
+
+    cancelOutboundReservations.forEach((outbound) => {
+      const counterpart = findReturnCounterpart(outbound, returnRideInstances, allReservations)
+      if (counterpart) {
+        matchedById.set(counterpart.reservation.id, counterpart.reservation)
+      }
+    })
+
+    return [...matchedById.values()]
+  }, [allReservations, cancelOutboundReservations, returnRideInstances])
 
   useReservationReturnSync({
     open,
@@ -605,28 +652,15 @@ export function ReservationModal({
             <ReservationFormActions
               isEdit={isEdit}
               showCancelReservation={Boolean(isEdit && reservation)}
-              onCancelReservation={async () => {
-                if (!reservation) {
-                  return
-                }
-
-                try {
-                  await cancelReservationMutation.mutateAsync({
-                    id: reservation.id,
-                    rideInstanceId: reservation.rideInstanceId,
-                  })
-                  onComplete?.()
-                  closeReservationModal()
-                } catch (error) {
-                  // Error is handled in mutation hook
-                }
-              }}
+              onCancelReservation={() => setCancelScope("single")}
+              showCancelGroupReservation={Boolean(isEdit && groupReservations.length > 1)}
+              onCancelGroupReservation={() => setCancelScope("group")}
               onClose={closeReservationModal}
               loading={
                 createReservationMutation.isPending ||
                 createReservationsBatchMutation.isPending ||
                 updateReservationMutation.isPending ||
-                cancelReservationMutation.isPending ||
+                cancelReservationsMutation.isPending ||
                 createPassengerMutation.isPending
               }
               useSubmitAction={assignmentMode === "single" || !showAssignmentMode}
@@ -638,6 +672,31 @@ export function ReservationModal({
         </form>
       </Form>
       </DialogContent>
+      <CancelReservationDialog
+        open={cancelScope !== null}
+        onOpenChange={(value) => {
+          if (!value) setCancelScope(null)
+        }}
+        scope={cancelScope ?? "single"}
+        outboundReservations={cancelOutboundReservations}
+        returnReservations={cancelReturnReservations}
+        loading={cancelReservationsMutation.isPending}
+        onConfirm={async (reservationsToCancel) => {
+          try {
+            await cancelReservationsMutation.mutateAsync({
+              reservations: reservationsToCancel.map((item) => ({
+                id: item.id,
+                rideInstanceId: item.rideInstanceId,
+              })),
+            })
+            setCancelScope(null)
+            onComplete?.()
+            closeReservationModal()
+          } catch (error) {
+            // Error is handled in mutation hook
+          }
+        }}
+      />
       <DuplicatePassengerDialog
         open={duplicateCheck.isOpen}
         onOpenChange={(value) => {

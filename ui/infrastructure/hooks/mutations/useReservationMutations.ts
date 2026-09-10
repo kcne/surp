@@ -202,3 +202,53 @@ export function useCancelReservationMutation() {
     },
   })
 }
+
+interface CancelReservationsInput {
+  /** Reservations to cancel, in the order they should be released. */
+  reservations: { id: string; rideInstanceId?: string }[]
+}
+
+/**
+ * Cancels several reservations (a group and/or its return leg) as one action.
+ *
+ * The API only cancels one reservation per call, so requests are sequential and
+ * the first failure stops the run - already cancelled ones stay cancelled and
+ * the affected ride instances are refreshed either way.
+ */
+export function useCancelReservationsMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ reservations }: CancelReservationsInput) => {
+      const cancelledRideInstanceIds: string[] = []
+
+      try {
+        for (const reservation of reservations) {
+          const response = await reservationsControllerCancel(reservation.id)
+
+          if (!isCancelReservationSuccess(response)) {
+            throw new Error(getCancelReservationErrorMessage(response))
+          }
+
+          if (reservation.rideInstanceId) {
+            cancelledRideInstanceIds.push(reservation.rideInstanceId)
+          }
+        }
+      } finally {
+        invalidateReservations(queryClient, cancelledRideInstanceIds)
+      }
+
+      return { cancelledCount: reservations.length }
+    },
+    onSuccess: ({ cancelledCount }) => {
+      toast.success(
+        cancelledCount > 1
+          ? `Otkazano rezervacija: ${cancelledCount}`
+          : "Rezervacija je uspesno otkazana"
+      )
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Neuspesno otkazivanje rezervacije"))
+    },
+  })
+}
