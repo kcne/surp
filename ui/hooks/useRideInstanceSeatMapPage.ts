@@ -21,21 +21,54 @@ function formatLocalDate(value: string): string {
   if (Number.isNaN(date.getTime())) {
     return value
   }
-  return date.toLocaleDateString("sr-Latn-RS", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })
+  const day = String(date.getDate()).padStart(2, "0")
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  return `${day}/${month}/${date.getFullYear()}`
 }
 
-async function fetchReturnDateForPassenger(
+const WEEKDAY_NAMES = [
+  "NEDELJA",
+  "PONEDELJAK",
+  "UTORAK",
+  "SREDA",
+  "\u010cETVRTAK",
+  "PETAK",
+  "SUBOTA",
+]
+
+function formatWeekday(value: string): string {
+  const date = new Date(`${normalizeDate(value)}T00:00:00`)
+  if (Number.isNaN(date.getTime())) {
+    return ""
+  }
+  return WEEKDAY_NAMES[date.getDay()]
+}
+
+/** Widest gap, in days, still treated as the other leg of the same round trip. */
+const COUNTERPART_WINDOW_DAYS = 90
+
+interface CounterpartLeg {
+  /** "POV" when the other leg is still ahead, "ODL" when it already happened. */
+  direction: "POV" | "ODL"
+  date: string
+}
+
+/**
+ * Looks up the other leg of a passenger's round trip.
+ *
+ * Legs are not linked in the database, so the counterpart is recognized by the
+ * mirrored station pair on another ride; the closest one in time wins. A leg in
+ * the past means the passenger is on the way back (ODL: departure date), a leg
+ * in the future means a return ticket is still open (POV: return date).
+ */
+async function fetchCounterpartLegForPassenger(
   passengerId: string,
-  outboundReservationId: string,
-  outboundRideId: string,
-  outboundDate: string,
-  outboundDepartureStationId: string,
-  outboundArrivalStationId: string
-): Promise<string> {
+  currentReservationId: string,
+  currentRideId: string,
+  currentDate: string,
+  currentDepartureStationId: string,
+  currentArrivalStationId: string
+): Promise<CounterpartLeg | null> {
   try {
     const response = await reservationsControllerList({
       passengerId,
@@ -43,30 +76,35 @@ async function fetchReturnDateForPassenger(
       pageSize: 100,
     })
     if (response.status !== 200) {
-      return ""
+      return null
     }
-    const outboundDateOnly = normalizeDate(outboundDate)
+    const currentTime = new Date(`${normalizeDate(currentDate)}T00:00:00`).getTime()
     const candidates = response.data.items
       .filter(
         (item) =>
-          item.id !== outboundReservationId &&
-          item.rideId !== outboundRideId &&
-          item.departureStationId === outboundArrivalStationId &&
-          item.arrivalStationId === outboundDepartureStationId &&
-          normalizeDate(item.travelDate) >= outboundDateOnly
+          item.id !== currentReservationId &&
+          item.rideId !== currentRideId &&
+          item.departureStationId === currentArrivalStationId &&
+          item.arrivalStationId === currentDepartureStationId
       )
-      .sort((left, right) => {
-        const leftKey = `${normalizeDate(left.travelDate)}T${left.rideDepartureTime}`
-        const rightKey = `${normalizeDate(right.travelDate)}T${right.rideDepartureTime}`
-        return leftKey.localeCompare(rightKey)
+      .map((item) => {
+        const itemTime = new Date(`${normalizeDate(item.travelDate)}T00:00:00`).getTime()
+        return { item, dayGap: Math.round((itemTime - currentTime) / 86400000) }
       })
-    const returnReservation = candidates[0]
-    if (!returnReservation) {
-      return ""
+      .filter(({ dayGap }) => Math.abs(dayGap) <= COUNTERPART_WINDOW_DAYS)
+      .sort((left, right) => Math.abs(left.dayGap) - Math.abs(right.dayGap))
+
+    const closest = candidates[0]
+    if (!closest) {
+      return null
     }
-    return formatLocalDate(returnReservation.travelDate)
+
+    return {
+      direction: closest.dayGap < 0 ? "ODL" : "POV",
+      date: formatLocalDate(closest.item.travelDate),
+    }
   } catch {
-    return ""
+    return null
   }
 }
 
@@ -209,28 +247,28 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       )
       .sort((left, right) => left.seatNumber - right.seatNumber)
 
-    const fromName = selectedRideInstance.ride.line.departureStation?.name ?? ""
-    const toName = selectedRideInstance.ride.line.arrivalStation?.name ?? ""
     const dateStr = formatLocalDate(selectedRideInstance.date)
-    const timeStr = selectedRideInstance.departureTime
+    const weekdayStr = formatWeekday(selectedRideInstance.date)
     const passengerCount = rideReservations.length
+    const capacity = selectedRideInstance.ride.busCapacity
+    const freeSeats = Math.max(capacity - passengerCount, 0)
 
     const headers = [
-      "Sedište",
-      "Ime i prezime",
-      "Telefon",
-      "Polazna stanica",
-      "Dolazna stanica",
-      "Datum povratka",
-      "Grupa",
-      "Napomena",
+      "SED.",
+      "GR",
+      "PUTNIK",
+      "POLAZAK",
+      "DOLAZAK",
+      "DATUM",
+      "TELEFON",
+      "INFO",
     ]
 
     const groupLabelByGroupId = buildReservationGroupLabels(rideReservations)
 
-    const returnDates = await Promise.all(
+    const counterpartLegs = await Promise.all(
       rideReservations.map((reservation) =>
-        fetchReturnDateForPassenger(
+        fetchCounterpartLegForPassenger(
           reservation.passengerId,
           reservation.id,
           selectedRideInstance.ride.id,
@@ -241,49 +279,74 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       )
     )
 
-    const rows = rideReservations.map((reservation, index) => [
-      reservation.seatNumber,
-      `${reservation.passenger.firstName} ${reservation.passenger.lastName}`.trim(),
-      reservation.passenger.phone,
-      reservation.departureStation.name,
-      reservation.arrivalStation.name,
-      returnDates[index] || "Jedan smer",
-      reservation.groupId ? groupLabelByGroupId.get(reservation.groupId) ?? "—" : "—",
-      reservation.notes ?? "",
-    ])
+    const rows = rideReservations.map((reservation, index) => {
+      const leg = counterpartLegs[index]
+      return [
+        String(reservation.seatNumber),
+        reservation.groupId ? groupLabelByGroupId.get(reservation.groupId) ?? "" : "",
+        `${reservation.passenger.firstName} ${reservation.passenger.lastName}`.trim().toUpperCase(),
+        reservation.departureStation.name.toUpperCase(),
+        reservation.arrivalStation.name.toUpperCase(),
+        dateStr,
+        reservation.passenger.phone ?? "",
+        leg ? `${leg.direction}: ${leg.date}` : "1 SMER",
+      ]
+    })
 
     const safeBaseName = sanitizeFileNamePart(options.fileName) || buildDefaultExportFileName()
-    const headingText = `${fromName} - ${toName} - ${dateStr} - ${timeStr} - Ukupno putnika: ${passengerCount}`
+    const headingText = `LISTA: ${dateStr}${weekdayStr ? ` (${weekdayStr})` : ""} | PUTNIKA: ${passengerCount} | SLOBODNO: ${freeSeats}`
 
     if (options.format === "pdf") {
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
       await registerPdfUnicodeFont(doc)
-      doc.setFont("Roboto", "bold")
-      doc.setFontSize(14)
-      doc.text(headingText, doc.internal.pageSize.getWidth() / 2, 14, { align: "center" })
-      const groupedRowIndexes = new Set<number>(
-        rideReservations
-          .map((reservation, index) => (reservation.groupId ? index : -1))
-          .filter((index) => index >= 0)
-      )
+
+      const margin = 8
+      const headerFill: [number, number, number] = [26, 32, 51]
+      const groupTextColor: [number, number, number] = [192, 0, 0]
+
       autoTable(doc, {
-        startY: 22,
-        head: [headers],
-        body: rows.map((row) => row.map((cell) => (cell == null ? "" : String(cell)))),
-        styles: { font: "Roboto", fontStyle: "normal", fontSize: 9, cellPadding: 2 },
+        startY: margin,
+        margin: { left: margin, right: margin },
+        head: [[{ content: headingText, colSpan: headers.length }], headers],
+        body: rows,
+        theme: "grid",
+        styles: {
+          font: "Roboto",
+          fontStyle: "normal",
+          fontSize: 8,
+          cellPadding: { top: 1.2, bottom: 1.2, left: 1, right: 1 },
+          textColor: [0, 0, 0],
+          lineColor: [0, 0, 0],
+          lineWidth: 0.2,
+          halign: "center",
+          valign: "middle",
+          overflow: "ellipsize",
+        },
         headStyles: {
           font: "Roboto",
           fontStyle: "bold",
-          fillColor: [229, 231, 235],
-          textColor: 20,
+          fillColor: headerFill,
+          textColor: [255, 255, 255],
           halign: "center",
+          valign: "middle",
+          lineColor: [0, 0, 0],
+          lineWidth: 0.2,
+        },
+        columnStyles: {
+          0: { cellWidth: 12, fontStyle: "bold" },
+          1: { cellWidth: 10, fontStyle: "bold", textColor: groupTextColor },
+          2: { cellWidth: 42 },
+          3: { cellWidth: 26 },
+          4: { cellWidth: 26 },
+          5: { cellWidth: 20 },
+          6: { cellWidth: 30 },
+          7: { cellWidth: 28 },
         },
         didParseCell: (data) => {
-          if (data.section === "body" && groupedRowIndexes.has(data.row.index)) {
-            data.cell.styles.fillColor = [243, 244, 246]
+          if (data.section === "head" && data.row.index === 0) {
+            data.cell.styles.fontSize = 11
           }
         },
-        theme: "grid",
       })
       doc.save(`${safeBaseName}.pdf`)
       return
