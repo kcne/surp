@@ -151,6 +151,7 @@ export function buildImportRows(
       seatIsAutoAssigned: seatNumber === null,
       notes,
       excluded: false,
+      duplicateResolution: null,
     })
 
     // A return leg is asked for by a return date, or by a "povratna karta"
@@ -197,6 +198,7 @@ export function buildImportRows(
       seatIsAutoAssigned: true,
       notes,
       excluded: false,
+      duplicateResolution: null,
     })
   })
 

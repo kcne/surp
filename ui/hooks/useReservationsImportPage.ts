@@ -6,6 +6,7 @@ import {
   assignSeats,
   buildImportRows,
   buildPassengerIndex,
+  findDuplicateRows,
   findExistingPassenger,
   getStationAliases,
   resolveRideInstance,
@@ -216,6 +217,38 @@ export function useReservationsImportPage() {
     })
   }, [passengersQuery.data])
 
+  const duplicatesByRowId = useMemo(
+    () => findDuplicateRows(rows, { reservationsByRideInstanceId }),
+    [rows, reservationsByRideInstanceId]
+  )
+
+  // Duplicates drop out of the import on their own, and come back if the row
+  // stops being one — an operator who corrects a ride or a name should not
+  // have to remember that the row was excluded for them.
+  useEffect(() => {
+    setRows((currentRows) => {
+      let changed = false
+
+      const nextRows = currentRows.map((row) => {
+        const isDuplicate = duplicatesByRowId.has(row.id)
+
+        if (isDuplicate && row.duplicateResolution === null) {
+          changed = true
+          return { ...row, excluded: true, duplicateResolution: "auto-excluded" as const }
+        }
+
+        if (!isDuplicate && row.duplicateResolution === "auto-excluded") {
+          changed = true
+          return { ...row, excluded: false, duplicateResolution: null }
+        }
+
+        return row
+      })
+
+      return changed ? nextRows : currentRows
+    })
+  }, [duplicatesByRowId])
+
   const seatedRows = useMemo(
     () => assignSeats(rows, { bookedSeatsByRideInstanceId, capacityByRideInstanceId }),
     [rows, bookedSeatsByRideInstanceId, capacityByRideInstanceId]
@@ -227,8 +260,15 @@ export function useReservationsImportPage() {
         rideInstancesById,
         bookedSeatsByRideInstanceId,
         knownStationIds,
+        duplicatesByRowId,
       }),
-    [seatedRows, rideInstancesById, bookedSeatsByRideInstanceId, knownStationIds]
+    [
+      seatedRows,
+      rideInstancesById,
+      bookedSeatsByRideInstanceId,
+      knownStationIds,
+      duplicatesByRowId,
+    ]
   )
 
   const summary = useMemo(() => summarizeRows(validatedRows), [validatedRows])
@@ -267,7 +307,13 @@ export function useReservationsImportPage() {
 
   const toggleRowExcluded = useCallback((rowId: string) => {
     setRows((currentRows) =>
-      currentRows.map((row) => (row.id === rowId ? { ...row, excluded: !row.excluded } : row))
+      currentRows.map((row) =>
+        row.id === rowId
+          ? // The operator has now decided this row themselves, so duplicate
+            // detection stops moving it either way.
+            { ...row, excluded: !row.excluded, duplicateResolution: "manual" as const }
+          : row
+      )
     )
   }, [])
 

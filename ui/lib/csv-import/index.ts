@@ -28,8 +28,17 @@ export {
 export {
   buildPassengerIndex,
   findExistingPassenger,
+  passengerIdentity,
+  samePassenger,
+  type PassengerIdentity,
   type PassengerIndex,
 } from "./passengerMatching"
+export {
+  findDuplicateRows,
+  type DuplicateDetectionContext,
+  type ImportDuplicateInfo,
+  type ImportDuplicateKind,
+} from "./duplicateDetection"
 export type {
   ImportIssue,
   ImportIssueSeverity,
