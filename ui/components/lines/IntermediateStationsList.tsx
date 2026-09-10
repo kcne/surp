@@ -176,7 +176,7 @@ export function IntermediateStationsList({
   }
 
   const handleAddStation = (stationId: string) => {
-    // New stops serve both directions, which matches how stops behaved before
+    // A new stop serves both roles, which matches how stops behaved before
     // boarding rules existed.
     onChange([...stops, { stationId, isBoarding: true, isDropoff: true }])
     setIsPopoverOpen(false)
@@ -201,7 +201,12 @@ export function IntermediateStationsList({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium">Međustanice</label>
+        <div>
+          <label className="text-sm font-medium">Međustanice</label>
+          <p className="text-xs text-muted-foreground">
+            Polazne i dolazne stanice važe samo za ovaj smer.
+          </p>
+        </div>
         <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
           <PopoverTrigger asChild>
             <Button

@@ -138,8 +138,8 @@ export function LineModal({
       open={open}
       onOpenChange={onOpenChange}
       title={isEdit ? "Izmeni Liniju" : "Dodaj Novu Liniju"}
-      description={isEdit
-        ? "Izmenite informacije o liniji."
+      description={isEdit && line
+        ? `Izmenite smer ${line.departureStation.name} → ${line.arrivalStation.name}. Suprotan smer se menja iz svog reda u tabeli.`
         : "Unesite informacije o novoj liniji."}
       contentClassName="sm:max-w-[700px] max-h-[90vh] overflow-y-auto"
     >

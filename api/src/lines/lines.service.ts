@@ -717,11 +717,19 @@ export class LinesService {
    * a stop to the outbound line left the return route without it, and no screen
    * showed that the pair disagreed.
    *
-   * Only the intermediate stops are mirrored. Each direction keeps its own
-   * departure and arrival, because those legitimately differ — a route can come
-   * back from a different terminus than it departs to. Any mirrored stop that
-   * happens to be the pair's own endpoint is dropped rather than duplicated,
-   * since a stop may not reuse a route endpoint.
+   * Only which stations are on the route is mirrored. Each direction keeps its
+   * own departure and arrival, because those legitimately differ — a route can
+   * come back from a different terminus than it departs to. Any mirrored stop
+   * that happens to be the pair's own endpoint is dropped rather than
+   * duplicated, since a stop may not reuse a route endpoint.
+   *
+   * Boarding rules are per direction and are never overwritten here. Which
+   * stops pick passengers up and which let them off differs between the two
+   * directions, and both are edited from their own row, so a stop the paired
+   * line already has keeps the flags it was given there. Only a station that is
+   * new to the paired line needs a starting value, and it gets the source flags
+   * flipped: a stop that only picks passengers up on the way out is where the
+   * same passengers get off on the way back.
    */
   private async syncPairedLineStopsTx(
     tx: Prisma.TransactionClient,
@@ -743,11 +751,25 @@ export class LinesService {
       select: {
         id: true,
         departureStationId: true,
-        arrivalStationId: true
+        arrivalStationId: true,
+        intermediateStops: {
+          select: {
+            stationId: true,
+            isBoarding: true,
+            isDropoff: true
+          }
+        }
       }
     });
 
     for (const pairedLine of pairedLines) {
+      const existingFlagsByStationId = new Map(
+        pairedLine.intermediateStops.map((stop) => [
+          stop.stationId,
+          { isBoarding: stop.isBoarding, isDropoff: stop.isDropoff }
+        ])
+      );
+
       const mirroredStops = this.buildReversedStops(nextStops)
         .filter(
           (stop) =>
@@ -755,12 +777,16 @@ export class LinesService {
             stop.stationId !== pairedLine.arrivalStationId
         )
         // Re-number after filtering so order indexes stay contiguous.
-        .map((stop, index) => ({
-          stationId: stop.stationId,
-          orderIndex: index + 1,
-          isBoarding: stop.isBoarding,
-          isDropoff: stop.isDropoff
-        }));
+        .map((stop, index) => {
+          const existingFlags = existingFlagsByStationId.get(stop.stationId);
+
+          return {
+            stationId: stop.stationId,
+            orderIndex: index + 1,
+            isBoarding: existingFlags?.isBoarding ?? stop.isBoarding,
+            isDropoff: existingFlags?.isDropoff ?? stop.isDropoff
+          };
+        });
 
       await this.replaceLineStopsTx(tx, tenantId, pairedLine.id, actorId, mirroredStops, true);
 
