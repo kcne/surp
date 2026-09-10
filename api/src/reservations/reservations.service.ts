@@ -12,9 +12,11 @@ import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/re
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { CreateReservationsBatchDto } from './dto/create-reservations-batch.dto';
+import { ListReservationCountsQueryDto } from './dto/reservation-counts.query.dto';
 import { ListReservationsQueryDto } from './dto/list-reservations.query.dto';
 import {
   PaginatedReservationsResponseDto,
+  ReservationCountsResponseDto,
   ReservationResponseDto
 } from './dto/reservation.response.dto';
 import {
@@ -161,6 +163,46 @@ export class ReservationsService {
       total,
       page: pagination.page ?? DEFAULT_PAGE,
       pageSize: pagination.pageSize ?? DEFAULT_PAGE_SIZE
+    };
+  }
+
+  /**
+   * Passenger counts for every ride instance in a date window.
+   *
+   * The driver passenger-list page shows a seat count next to each upcoming
+   * ride, and fetching the reservations of every instance one by one would be
+   * hundreds of requests. A grouped count over the window answers all of them
+   * in one, and rides without a single booking simply stay out of the result.
+   */
+  async countsByRideInstance(
+    auth: AccessTokenPayload,
+    query: ListReservationCountsQueryDto
+  ): Promise<ReservationCountsResponseDto> {
+    const from = this.toUtcDate(query.from);
+    const to = this.toUtcDate(query.to);
+
+    if (from > to) {
+      throw new BadRequestException('from must not be after to');
+    }
+
+    const grouped = await this.prisma.reservation.groupBy({
+      by: ['rideId', 'travelDate', 'rideDepartureTime'],
+      where: {
+        tenantId: auth.tenantId,
+        status: ReservationStatus.ACTIVE,
+        travelDate: { gte: from, lte: to },
+        ...(query.rideId ? { rideId: query.rideId } : {})
+      },
+      _count: { _all: true }
+    });
+
+    return {
+      items: grouped.map((entry) => ({
+        rideId: entry.rideId,
+        travelDate: this.formatDate(entry.travelDate),
+        rideDepartureTime: entry.rideDepartureTime,
+        activeCount: entry._count._all
+      }))
     };
   }
 

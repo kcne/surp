@@ -8,6 +8,7 @@ import {
   BarChart3,
   Building2,
   Calendar,
+  ClipboardList,
   Info,
   MapPin,
   Route,
@@ -28,6 +29,11 @@ const reservationItems = [
     title: "Putnici",
     href: "/passengers",
     icon: Users,
+  },
+  {
+    title: "Liste Putnika",
+    href: "/passenger-lists",
+    icon: ClipboardList,
   },
   {
     title: "Uvoz CSV",

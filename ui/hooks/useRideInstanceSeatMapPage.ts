@@ -6,107 +6,17 @@ import autoTable from "jspdf-autotable"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/useRidesInstancesByDateQuery"
 import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
-import { reservationsControllerList } from "@/infrastructure/generated/surp-api"
 import { buildSeatMap } from "@/utils/seatHelpers"
 import { buildReservationGroupLabels } from "@/utils/reservationGroupLabels"
+import {
+  PASSENGER_LIST_HEADERS,
+  buildPassengerListHeading,
+  buildPassengerListRows,
+  selectRideInstancePassengers,
+  toPassengerListCells,
+} from "@/utils/passengerListHelpers"
 import { registerPdfUnicodeFont } from "@/utils/pdfFonts"
 import type { Reservation } from "@/types"
-
-function normalizeDate(value: string): string {
-  return value.includes("T") ? value.split("T")[0] : value
-}
-
-function formatLocalDate(value: string): string {
-  const date = new Date(`${normalizeDate(value)}T00:00:00`)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  const day = String(date.getDate()).padStart(2, "0")
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  return `${day}/${month}/${date.getFullYear()}`
-}
-
-const WEEKDAY_NAMES = [
-  "NEDELJA",
-  "PONEDELJAK",
-  "UTORAK",
-  "SREDA",
-  "\u010cETVRTAK",
-  "PETAK",
-  "SUBOTA",
-]
-
-function formatWeekday(value: string): string {
-  const date = new Date(`${normalizeDate(value)}T00:00:00`)
-  if (Number.isNaN(date.getTime())) {
-    return ""
-  }
-  return WEEKDAY_NAMES[date.getDay()]
-}
-
-/** Widest gap, in days, still treated as the other leg of the same round trip. */
-const COUNTERPART_WINDOW_DAYS = 90
-
-interface CounterpartLeg {
-  /** "POV" when the other leg is still ahead, "ODL" when it already happened. */
-  direction: "POV" | "ODL"
-  date: string
-}
-
-/**
- * Looks up the other leg of a passenger's round trip.
- *
- * Legs are not linked in the database, so the counterpart is recognized by the
- * mirrored station pair on another ride; the closest one in time wins. A leg in
- * the past means the passenger is on the way back (ODL: departure date), a leg
- * in the future means a return ticket is still open (POV: return date).
- */
-async function fetchCounterpartLegForPassenger(
-  passengerId: string,
-  currentReservationId: string,
-  currentRideId: string,
-  currentDate: string,
-  currentDepartureStationId: string,
-  currentArrivalStationId: string
-): Promise<CounterpartLeg | null> {
-  try {
-    const response = await reservationsControllerList({
-      passengerId,
-      status: "ACTIVE",
-      pageSize: 100,
-    })
-    if (response.status !== 200) {
-      return null
-    }
-    const currentTime = new Date(`${normalizeDate(currentDate)}T00:00:00`).getTime()
-    const candidates = response.data.items
-      .filter(
-        (item) =>
-          item.id !== currentReservationId &&
-          item.rideId !== currentRideId &&
-          item.departureStationId === currentArrivalStationId &&
-          item.arrivalStationId === currentDepartureStationId
-      )
-      .map((item) => {
-        const itemTime = new Date(`${normalizeDate(item.travelDate)}T00:00:00`).getTime()
-        return { item, dayGap: Math.round((itemTime - currentTime) / 86400000) }
-      })
-      .filter(({ dayGap }) => Math.abs(dayGap) <= COUNTERPART_WINDOW_DAYS)
-      .sort((left, right) => Math.abs(left.dayGap) - Math.abs(right.dayGap))
-
-    const closest = candidates[0]
-    if (!closest) {
-      return null
-    }
-
-    return {
-      direction: closest.dayGap < 0 ? "ODL" : "POV",
-      date: formatLocalDate(closest.item.travelDate),
-    }
-  } catch {
-    return null
-  }
-}
 
 interface UseRideInstanceSeatMapPageParams {
   rideInstanceId: string
@@ -240,61 +150,13 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   ) => {
     if (!selectedRideInstance) return
 
-    const rideReservations = reservations
-      .filter(
-        (reservation) =>
-          reservation.rideInstanceId === selectedRideInstance.id && reservation.status === "active"
-      )
-      .sort((left, right) => left.seatNumber - right.seatNumber)
-
-    const dateStr = formatLocalDate(selectedRideInstance.date)
-    const weekdayStr = formatWeekday(selectedRideInstance.date)
-    const passengerCount = rideReservations.length
-    const capacity = selectedRideInstance.ride.busCapacity
-    const freeSeats = Math.max(capacity - passengerCount, 0)
-
-    const headers = [
-      "SED.",
-      "GR",
-      "PUTNIK",
-      "POLAZAK",
-      "DOLAZAK",
-      "DATUM",
-      "TELEFON",
-      "INFO",
-    ]
-
-    const groupLabelByGroupId = buildReservationGroupLabels(rideReservations)
-
-    const counterpartLegs = await Promise.all(
-      rideReservations.map((reservation) =>
-        fetchCounterpartLegForPassenger(
-          reservation.passengerId,
-          reservation.id,
-          selectedRideInstance.ride.id,
-          selectedRideInstance.date,
-          reservation.departureStationId,
-          reservation.arrivalStationId
-        )
-      )
-    )
-
-    const rows = rideReservations.map((reservation, index) => {
-      const leg = counterpartLegs[index]
-      return [
-        String(reservation.seatNumber),
-        reservation.groupId ? groupLabelByGroupId.get(reservation.groupId) ?? "" : "",
-        `${reservation.passenger.firstName} ${reservation.passenger.lastName}`.trim().toUpperCase(),
-        reservation.departureStation.name.toUpperCase(),
-        reservation.arrivalStation.name.toUpperCase(),
-        dateStr,
-        reservation.passenger.phone ?? "",
-        leg ? `${leg.direction}: ${leg.date}` : "1 SMER",
-      ]
-    })
+    const rideReservations = selectRideInstancePassengers(reservations, selectedRideInstance)
+    const headers = [...PASSENGER_LIST_HEADERS]
+    const listRows = await buildPassengerListRows(selectedRideInstance, rideReservations)
+    const rows = listRows.map(toPassengerListCells)
 
     const safeBaseName = sanitizeFileNamePart(options.fileName) || buildDefaultExportFileName()
-    const headingText = `LISTA: ${dateStr}${weekdayStr ? ` (${weekdayStr})` : ""} | PUTNIKA: ${passengerCount} | SLOBODNO: ${freeSeats}`
+    const headingText = buildPassengerListHeading(selectedRideInstance, rideReservations.length)
 
     if (options.format === "pdf") {
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
@@ -387,8 +249,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     const groupRowFillArgb = "FFF3F4F6"
     rows.forEach((row, index) => {
       const addedRow = worksheet.addRow(row)
-      const reservation = rideReservations[index]
-      const hasGroup = Boolean(reservation.groupId)
+      const hasGroup = listRows[index].hasGroup
       addedRow.eachCell((cell) => {
         cell.border = {
           top: { style: "thin" },

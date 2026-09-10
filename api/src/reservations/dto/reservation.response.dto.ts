@@ -102,6 +102,25 @@ export class ReservationResponseDto {
   updatedAt!: Date;
 }
 
+export class ReservationCountDto {
+  @ApiProperty()
+  rideId!: string;
+
+  @ApiProperty({ example: '2026-03-30' })
+  travelDate!: string;
+
+  @ApiProperty({ example: '09:00' })
+  rideDepartureTime!: string;
+
+  @ApiProperty({ example: 12, description: 'Active reservations booked on that ride instance.' })
+  activeCount!: number;
+}
+
+export class ReservationCountsResponseDto {
+  @ApiProperty({ type: [ReservationCountDto] })
+  items!: ReservationCountDto[];
+}
+
 export class PaginatedReservationsResponseDto {
   @ApiProperty({ type: [ReservationResponseDto] })
   items!: ReservationResponseDto[];

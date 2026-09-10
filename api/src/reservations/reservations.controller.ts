@@ -17,9 +17,11 @@ import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { CreateReservationsBatchDto } from './dto/create-reservations-batch.dto';
+import { ListReservationCountsQueryDto } from './dto/reservation-counts.query.dto';
 import { ListReservationsQueryDto } from './dto/list-reservations.query.dto';
 import {
   PaginatedReservationsResponseDto,
+  ReservationCountsResponseDto,
   ReservationResponseDto
 } from './dto/reservation.response.dto';
 import { BatchReservationsResponseDto } from './dto/reservations-batch.response.dto';
@@ -81,6 +83,23 @@ export class ReservationsController {
     @Query() query: ListReservationsQueryDto
   ): Promise<PaginatedReservationsResponseDto> {
     return this.reservationsService.list(request.auth!, query);
+  }
+
+  // Declared before `:id` so the literal segment is not swallowed by the param route.
+  @Get('counts')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({
+    summary: 'Count active reservations per ride instance over a travel-date window.'
+  })
+  @ApiOkResponse({ type: ReservationCountsResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failure.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  counts(
+    @Req() request: RequestWithAuth,
+    @Query() query: ListReservationCountsQueryDto
+  ): Promise<ReservationCountsResponseDto> {
+    return this.reservationsService.countsByRideInstance(request.auth!, query);
   }
 
   @Get(':id')

@@ -25,6 +25,7 @@ describe('ReservationsService', () => {
     reservation: {
       create: jest.fn(),
       findMany: jest.fn(),
+      groupBy: jest.fn(),
       count: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn()
@@ -542,5 +543,50 @@ describe('ReservationsService', () => {
 
     expect(fulfilledCount).toBe(1);
     expect(rejectedCount).toBe(1);
+  });
+
+  it('counts active reservations per ride instance inside the travel-date window', async () => {
+    prismaMock.reservation.groupBy.mockResolvedValue([
+      {
+        rideId: 'ride-1',
+        travelDate: new Date('2026-03-30T00:00:00.000Z'),
+        rideDepartureTime: '09:00',
+        _count: { _all: 12 }
+      }
+    ]);
+
+    const result = await service.countsByRideInstance(auth, {
+      from: '2026-03-30',
+      to: '2026-04-30'
+    });
+
+    expect(prismaMock.reservation.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ['rideId', 'travelDate', 'rideDepartureTime'],
+        where: expect.objectContaining({
+          tenantId: 'tenant-1',
+          status: ReservationStatus.ACTIVE,
+          travelDate: {
+            gte: new Date('2026-03-30T00:00:00.000Z'),
+            lte: new Date('2026-04-30T00:00:00.000Z')
+          }
+        })
+      })
+    );
+
+    expect(result.items).toEqual([
+      {
+        rideId: 'ride-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        activeCount: 12
+      }
+    ]);
+  });
+
+  it('rejects a counts window that ends before it starts', async () => {
+    await expect(
+      service.countsByRideInstance(auth, { from: '2026-04-30', to: '2026-03-30' })
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

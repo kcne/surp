@@ -4112,6 +4112,81 @@
         ]
       }
     },
+    "/reservations/counts": {
+      "get": {
+        "operationId": "ReservationsController_counts",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "description": "First travel date to count, inclusive.",
+            "schema": {
+              "example": "2026-03-30",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "description": "Last travel date to count, inclusive.",
+            "schema": {
+              "example": "2026-06-30",
+              "type": "string"
+            }
+          },
+          {
+            "name": "rideId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "ride-id-123",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationCountsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Count active reservations per ride instance over a travel-date window.",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
     "/reservations/{id}": {
       "get": {
         "operationId": "ReservationsController_getById",
@@ -8690,6 +8765,47 @@
           "page",
           "pageSize",
           "total"
+        ]
+      },
+      "ReservationCountDto": {
+        "type": "object",
+        "properties": {
+          "rideId": {
+            "type": "string"
+          },
+          "travelDate": {
+            "type": "string",
+            "example": "2026-03-30"
+          },
+          "rideDepartureTime": {
+            "type": "string",
+            "example": "09:00"
+          },
+          "activeCount": {
+            "type": "number",
+            "example": 12,
+            "description": "Active reservations booked on that ride instance."
+          }
+        },
+        "required": [
+          "rideId",
+          "travelDate",
+          "rideDepartureTime",
+          "activeCount"
+        ]
+      },
+      "ReservationCountsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReservationCountDto"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "UpdateReservationDto": {
