@@ -90,7 +90,9 @@ import type {
   ReportingControllerGetOccupancyParams,
   ReportingDashboardResponseDto,
   ReportingOccupancyResponseDto,
+  ReservationCountsResponseDto,
   ReservationResponseDto,
+  ReservationsControllerCountsParams,
   ReservationsControllerListParams,
   ResetPasswordDto,
   ReturnRouteGapReportDto,
@@ -7754,6 +7756,141 @@ export const useReservationsControllerCreateBatch = <TError = ErrorType<void>,
       return useMutation(getReservationsControllerCreateBatchMutationOptions(options), queryClient);
     }
     
+/**
+ * @summary Count active reservations per ride instance over a travel-date window.
+ */
+export type reservationsControllerCountsResponse200 = {
+  data: ReservationCountsResponseDto
+  status: 200
+}
+
+export type reservationsControllerCountsResponse400 = {
+  data: void
+  status: 400
+}
+
+export type reservationsControllerCountsResponse401 = {
+  data: void
+  status: 401
+}
+
+export type reservationsControllerCountsResponse403 = {
+  data: void
+  status: 403
+}
+
+export type reservationsControllerCountsResponseSuccess = (reservationsControllerCountsResponse200) & {
+  headers: Headers;
+};
+export type reservationsControllerCountsResponseError = (reservationsControllerCountsResponse400 | reservationsControllerCountsResponse401 | reservationsControllerCountsResponse403) & {
+  headers: Headers;
+};
+
+export type reservationsControllerCountsResponse = (reservationsControllerCountsResponseSuccess | reservationsControllerCountsResponseError)
+
+export const getReservationsControllerCountsUrl = (params: ReservationsControllerCountsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/reservations/counts?${stringifiedParams}` : `/reservations/counts`
+}
+
+export const reservationsControllerCounts = async (params: ReservationsControllerCountsParams, options?: RequestInit): Promise<reservationsControllerCountsResponse> => {
+  
+  return customInstance<reservationsControllerCountsResponse>(getReservationsControllerCountsUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getReservationsControllerCountsQueryKey = (params?: ReservationsControllerCountsParams,) => {
+    return [
+    `/reservations/counts`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+    
+export const getReservationsControllerCountsQueryOptions = <TData = Awaited<ReturnType<typeof reservationsControllerCounts>>, TError = ErrorType<void>>(params: ReservationsControllerCountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerCounts>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getReservationsControllerCountsQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof reservationsControllerCounts>>> = ({ signal }) => reservationsControllerCounts(params, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerCounts>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ReservationsControllerCountsQueryResult = NonNullable<Awaited<ReturnType<typeof reservationsControllerCounts>>>
+export type ReservationsControllerCountsQueryError = ErrorType<void>
+
+
+export function useReservationsControllerCounts<TData = Awaited<ReturnType<typeof reservationsControllerCounts>>, TError = ErrorType<void>>(
+ params: ReservationsControllerCountsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerCounts>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof reservationsControllerCounts>>,
+          TError,
+          Awaited<ReturnType<typeof reservationsControllerCounts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useReservationsControllerCounts<TData = Awaited<ReturnType<typeof reservationsControllerCounts>>, TError = ErrorType<void>>(
+ params: ReservationsControllerCountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerCounts>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof reservationsControllerCounts>>,
+          TError,
+          Awaited<ReturnType<typeof reservationsControllerCounts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useReservationsControllerCounts<TData = Awaited<ReturnType<typeof reservationsControllerCounts>>, TError = ErrorType<void>>(
+ params: ReservationsControllerCountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerCounts>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Count active reservations per ride instance over a travel-date window.
+ */
+
+export function useReservationsControllerCounts<TData = Awaited<ReturnType<typeof reservationsControllerCounts>>, TError = ErrorType<void>>(
+ params: ReservationsControllerCountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsControllerCounts>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getReservationsControllerCountsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
 /**
  * @summary Get reservation detail by id in the current tenant.
  */
