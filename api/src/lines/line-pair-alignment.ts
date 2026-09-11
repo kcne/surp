@@ -8,11 +8,18 @@ import { withCreateAudit } from '../prisma/audit-write.helper';
  * terminus than it departs to — so only the intermediate stops are compared.
  */
 
+export interface PairedRouteStop {
+  stationId: string;
+  orderIndex: number;
+  isBoarding: boolean;
+  isDropoff: boolean;
+}
+
 export interface PairedRouteLine {
   id: string;
   departureStationId: string;
   arrivalStationId: string;
-  intermediateStops: Array<{ stationId: string; orderIndex: number }>;
+  intermediateStops: PairedRouteStop[];
 }
 
 export function orderedStopIds(line: PairedRouteLine): string[] {
@@ -70,20 +77,42 @@ export function mergePairedRoutes(
 /**
  * Stops for one direction, taken from the merged order and filtered so that a
  * stop never repeats that line's own departure or arrival station.
+ *
+ * Boarding rules belong to the direction that was mapped, not to the merged
+ * route, so a stop this line already has keeps its own flags. A stop this
+ * direction is gaining takes the opposite direction's flags flipped — the stop
+ * where passengers are picked up on the way out is where they get off on the
+ * way back — and falls back to serving both roles when the other side has
+ * nothing to say about it either.
  */
 export function stopsForDirection(
   line: PairedRouteLine,
   mergedStopIds: string[],
-  reverse: boolean
-): Array<{ stationId: string; orderIndex: number }> {
+  reverse: boolean,
+  opposite?: PairedRouteLine
+): PairedRouteStop[] {
   const ordered = reverse ? [...mergedStopIds].reverse() : mergedStopIds;
+  const ownFlags = new Map(line.intermediateStops.map((stop) => [stop.stationId, stop]));
+  const oppositeFlags = new Map(
+    (opposite?.intermediateStops ?? []).map((stop) => [stop.stationId, stop])
+  );
 
   return ordered
     .filter(
       (stationId) =>
         stationId !== line.departureStationId && stationId !== line.arrivalStationId
     )
-    .map((stationId, index) => ({ stationId, orderIndex: index + 1 }));
+    .map((stationId, index) => {
+      const own = ownFlags.get(stationId);
+      const mirrored = oppositeFlags.get(stationId);
+
+      return {
+        stationId,
+        orderIndex: index + 1,
+        isBoarding: own?.isBoarding ?? mirrored?.isDropoff ?? true,
+        isDropoff: own?.isDropoff ?? mirrored?.isBoarding ?? true
+      };
+    });
 }
 
 export async function writeLineStopsTx(
@@ -91,7 +120,7 @@ export async function writeLineStopsTx(
   tenantId: string,
   lineId: string,
   actorId: string,
-  stops: Array<{ stationId: string; orderIndex: number }>
+  stops: PairedRouteStop[]
 ): Promise<void> {
   await tx.lineStop.deleteMany({
     where: {
@@ -111,7 +140,9 @@ export async function writeLineStopsTx(
           tenantId,
           lineId,
           stationId: stop.stationId,
-          orderIndex: stop.orderIndex
+          orderIndex: stop.orderIndex,
+          isBoarding: stop.isBoarding,
+          isDropoff: stop.isDropoff
         },
         actorId
       )

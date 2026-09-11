@@ -219,11 +219,11 @@ export class MaintenanceService {
         let scheduleCount = 0;
         let stopCount = 0;
 
-        for (const { line, reverse } of [
-          { line: entry.outbound, reverse: false },
-          { line: entry.inbound, reverse: true }
+        for (const { line, reverse, opposite } of [
+          { line: entry.outbound, reverse: false, opposite: entry.inbound },
+          { line: entry.inbound, reverse: true, opposite: entry.outbound }
         ]) {
-          const nextStops = stopsForDirection(line, mergedStopIds, reverse);
+          const nextStops = stopsForDirection(line, mergedStopIds, reverse, opposite);
           stopCount += Math.max(nextStops.length - line.intermediateStops.length, 0);
 
           await writeLineStopsTx(tx, auth.tenantId, line.id, auth.sub, nextStops);
@@ -326,7 +326,12 @@ export class MaintenanceService {
         departureStationId: true,
         arrivalStationId: true,
         intermediateStops: {
-          select: { stationId: true, orderIndex: true },
+          select: {
+            stationId: true,
+            orderIndex: true,
+            isBoarding: true,
+            isDropoff: true
+          },
           orderBy: { orderIndex: 'asc' }
         }
       }

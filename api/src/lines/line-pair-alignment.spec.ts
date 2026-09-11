@@ -61,10 +61,10 @@ describe('line pair alignment', () => {
     it('reverses the merged order and renumbers from one', () => {
       const stops = stopsForDirection(line, ['a', 'b', 'c'], true);
 
-      expect(stops).toEqual([
-        { stationId: 'c', orderIndex: 1 },
-        { stationId: 'b', orderIndex: 2 },
-        { stationId: 'a', orderIndex: 3 }
+      expect(stops.map((stop) => [stop.stationId, stop.orderIndex])).toEqual([
+        ['c', 1],
+        ['b', 2],
+        ['a', 3]
       ]);
     });
 
@@ -72,7 +72,48 @@ describe('line pair alignment', () => {
       // "agencija" is this line's terminus, so it must not also be a stop.
       const stops = stopsForDirection(line, ['agencija', 'b', 'novi-sad'], false);
 
-      expect(stops).toEqual([{ stationId: 'b', orderIndex: 1 }]);
+      expect(stops.map((stop) => stop.stationId)).toEqual(['b']);
+    });
+
+    it('keeps the boarding rules this direction was already given', () => {
+      const mapped = {
+        ...line,
+        intermediateStops: [
+          { stationId: 'b', orderIndex: 1, isBoarding: false, isDropoff: true }
+        ]
+      };
+
+      // Repairing the route must not re-open boarding at a drop-off only stop.
+      const stops = stopsForDirection(mapped, ['a', 'b'], false, {
+        id: 'line-outbound',
+        departureStationId: 'novi-sad',
+        arrivalStationId: 'agencija',
+        intermediateStops: [
+          { stationId: 'b', orderIndex: 1, isBoarding: true, isDropoff: true }
+        ]
+      });
+
+      expect(stops).toEqual([
+        // New to this direction and unknown to the other one: serves both roles.
+        { stationId: 'a', orderIndex: 1, isBoarding: true, isDropoff: true },
+        { stationId: 'b', orderIndex: 2, isBoarding: false, isDropoff: true }
+      ]);
+    });
+
+    it('seeds a stop new to this direction from the opposite one, flipped', () => {
+      const stops = stopsForDirection(line, ['a'], false, {
+        id: 'line-outbound',
+        departureStationId: 'novi-sad',
+        arrivalStationId: 'agencija',
+        // Boarding only on the way out, so drop-off only on the way back.
+        intermediateStops: [
+          { stationId: 'a', orderIndex: 1, isBoarding: true, isDropoff: false }
+        ]
+      });
+
+      expect(stops).toEqual([
+        { stationId: 'a', orderIndex: 1, isBoarding: false, isDropoff: true }
+      ]);
     });
   });
   describe('unreachableTermini', () => {
@@ -82,13 +123,17 @@ describe('line pair alignment', () => {
       id: 'out',
       departureStationId: 'novi-sad',
       arrivalStationId: 'istanbul-balbus',
-      intermediateStops: [{ stationId: 'montenegro', orderIndex: 1 }]
+      intermediateStops: [
+        { stationId: 'montenegro', orderIndex: 1, isBoarding: true, isDropoff: true }
+      ]
     };
     const inbound = {
       id: 'in',
       departureStationId: 'agencija',
       arrivalStationId: 'novi-sad',
-      intermediateStops: [{ stationId: 'montenegro', orderIndex: 1 }]
+      intermediateStops: [
+        { stationId: 'montenegro', orderIndex: 1, isBoarding: true, isDropoff: true }
+      ]
     };
 
     it('flags a terminus the opposite direction never calls at', () => {
@@ -111,8 +156,8 @@ describe('line pair alignment', () => {
       const withStop = {
         ...inbound,
         intermediateStops: [
-          { stationId: 'istanbul-balbus', orderIndex: 1 },
-          { stationId: 'montenegro', orderIndex: 2 }
+          { stationId: 'istanbul-balbus', orderIndex: 1, isBoarding: true, isDropoff: true },
+          { stationId: 'montenegro', orderIndex: 2, isBoarding: true, isDropoff: true }
         ]
       };
 
