@@ -199,8 +199,12 @@ describe('ReservationsController (e2e)', () => {
         departureStationId: 'station-a',
         arrivalStationId: 'station-d',
         intermediateStops: [
-          { stationId: 'station-b', orderIndex: 1 },
-          { stationId: 'station-c', orderIndex: 2 }
+          // isBoarding/isDropoff default to true in the schema, so a real row
+          // always carries them. Leaving them off the fixture made every
+          // intermediate stop serve neither role, and the segment check
+          // rejected bookings before the seat check could run.
+          { stationId: 'station-b', orderIndex: 1, isBoarding: true, isDropoff: true },
+          { stationId: 'station-c', orderIndex: 2, isBoarding: true, isDropoff: true }
         ]
       }
     });
@@ -368,6 +372,77 @@ describe('ReservationsController (e2e)', () => {
     expect(response.body.message).toBe('Departure and arrival stations must exist on the ride line path');
   });
 
+  // The boarding/drop-off flags had no coverage at this level, which is why
+  // dropping them from the fixture above went unnoticed: every intermediate
+  // stop silently stopped serving either role and four unrelated tests changed
+  // their failure mode. These two exercise the restriction on purpose, so the
+  // flags cannot quietly become decoration again.
+  it('rejects boarding at a stop that only serves drop-off', async () => {
+    prismaMock.ride.findFirst.mockResolvedValue({
+      id: 'ride-1',
+      capacity: rideCapacity,
+      line: {
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-d',
+        intermediateStops: [
+          { stationId: 'station-b', orderIndex: 1, isBoarding: false, isDropoff: true },
+          { stationId: 'station-c', orderIndex: 2, isBoarding: true, isDropoff: true }
+        ]
+      }
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/reservations')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 14,
+        departureStationId: 'station-b',
+        arrivalStationId: 'station-d'
+      })
+      .expect(400);
+
+    expect(response.body.message).toBe('Departure station is not a boarding stop on this line');
+  });
+
+  it('rejects alighting at a stop that only serves boarding', async () => {
+    prismaMock.ride.findFirst.mockResolvedValue({
+      id: 'ride-1',
+      capacity: rideCapacity,
+      line: {
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-d',
+        intermediateStops: [
+          { stationId: 'station-b', orderIndex: 1, isBoarding: true, isDropoff: true },
+          { stationId: 'station-c', orderIndex: 2, isBoarding: true, isDropoff: false }
+        ]
+      }
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/reservations')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 15,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-c'
+      })
+      .expect(400);
+
+    expect(response.body.message).toBe('Arrival station is not a drop-off stop on this line');
+  });
+
   it('cancels reservation and updates state', async () => {
     const response = await request(app.getHttpServer())
       .post('/reservations/reservation-1/cancel')
@@ -462,8 +537,12 @@ describe('ReservationsController (e2e)', () => {
         departureStationId: 'station-a',
         arrivalStationId: 'station-d',
         intermediateStops: [
-          { stationId: 'station-b', orderIndex: 1 },
-          { stationId: 'station-c', orderIndex: 2 }
+          // isBoarding/isDropoff default to true in the schema, so a real row
+          // always carries them. Leaving them off the fixture made every
+          // intermediate stop serve neither role, and the segment check
+          // rejected bookings before the seat check could run.
+          { stationId: 'station-b', orderIndex: 1, isBoarding: true, isDropoff: true },
+          { stationId: 'station-c', orderIndex: 2, isBoarding: true, isDropoff: true }
         ]
       }
     });
