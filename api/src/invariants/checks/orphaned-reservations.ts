@@ -1,4 +1,4 @@
-import { MaterializedInstanceTimes } from '../rides/ride-instance-materialization';
+import { MaterializedInstanceTimes } from '../../rides/ride-instance-materialization';
 
 /**
  * A reservation is only ever reached through a ride instance, and instances are

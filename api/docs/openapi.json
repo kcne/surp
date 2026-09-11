@@ -1868,6 +1868,159 @@
         ]
       }
     },
+    "/maintenance/invariants": {
+      "get": {
+        "operationId": "MaintenanceController_checkInvariants",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvariantReportDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Run every data integrity check for the current tenant and report them in one shape. Each result carries what was scanned alongside what was wrong, so a clean check is distinguishable from one that examined nothing.",
+        "tags": [
+          "Maintenance"
+        ]
+      }
+    },
+    "/maintenance/invariants/{key}": {
+      "get": {
+        "operationId": "MaintenanceController_checkInvariant",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "reservation.reachable",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvariantResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown invariant key."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Run a single data integrity check for the current tenant.",
+        "tags": [
+          "Maintenance"
+        ]
+      }
+    },
+    "/maintenance/invariants/{key}/repair": {
+      "post": {
+        "operationId": "MaintenanceController_repairInvariant",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "reservation.reachable",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvariantRepairResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown invariant key, or the invariant is report-only."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Repair one invariant, then re-run its check so the response says what is left rather than what was attempted. Checks whose fix would require a decision the data cannot make have no repair and are rejected.",
+        "tags": [
+          "Maintenance"
+        ]
+      }
+    },
     "/api/public/marketing/leads": {
       "post": {
         "operationId": "MarketingLeadsController_createLead",
@@ -7071,6 +7224,172 @@
           "seatChangedCount",
           "skippedCount",
           "items"
+        ]
+      },
+      "InvariantViolationDto": {
+        "type": "object",
+        "properties": {
+          "subjectType": {
+            "type": "string",
+            "example": "reservation"
+          },
+          "subjectId": {
+            "type": "string",
+            "example": "reservation-id-123"
+          },
+          "summary": {
+            "type": "string",
+            "example": "Marko Markovic, 2026-09-15, polazak 07:45 vise ne postoji."
+          },
+          "detail": {
+            "type": "object",
+            "description": "Check-specific fields backing the detail row in Settings."
+          },
+          "canRepair": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "subjectType",
+          "subjectId",
+          "summary",
+          "detail",
+          "canRepair"
+        ]
+      },
+      "InvariantResultDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "reservation.reachable"
+          },
+          "title": {
+            "type": "string",
+            "example": "Rezervacija se vidi na svom polasku"
+          },
+          "description": {
+            "type": "string",
+            "example": "Rezervacija se vezuje za polazak preko vremena polaska..."
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "warning"
+            ],
+            "example": "critical"
+          },
+          "scannedCount": {
+            "type": "number",
+            "example": 201,
+            "description": "How much was examined. Distinguishes a clean check from one that scanned nothing."
+          },
+          "violationCount": {
+            "type": "number",
+            "example": 93
+          },
+          "repairableCount": {
+            "type": "number",
+            "example": 93,
+            "description": "Violations this check could repair without guessing."
+          },
+          "hasRepair": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether this check offers a repair at all."
+          },
+          "violations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvariantViolationDto"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "title",
+          "description",
+          "severity",
+          "scannedCount",
+          "violationCount",
+          "repairableCount",
+          "hasRepair",
+          "violations"
+        ]
+      },
+      "InvariantReportDto": {
+        "type": "object",
+        "properties": {
+          "checkedAt": {
+            "type": "string",
+            "example": "2026-09-11T01:40:55.000Z"
+          },
+          "windowDays": {
+            "type": "number",
+            "example": 30,
+            "description": "Days ahead the time-windowed checks covered."
+          },
+          "invariantCount": {
+            "type": "number",
+            "example": 4
+          },
+          "violatedCount": {
+            "type": "number",
+            "example": 1,
+            "description": "Invariants reporting at least one violation."
+          },
+          "totalViolationCount": {
+            "type": "number",
+            "example": 93
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvariantResultDto"
+            }
+          }
+        },
+        "required": [
+          "checkedAt",
+          "windowDays",
+          "invariantCount",
+          "violatedCount",
+          "totalViolationCount",
+          "results"
+        ]
+      },
+      "InvariantRepairResultDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "reservation.reachable"
+          },
+          "repairedCount": {
+            "type": "number",
+            "example": 93
+          },
+          "skippedCount": {
+            "type": "number",
+            "example": 0,
+            "description": "Violations the repair declined to guess at; these stay reported."
+          },
+          "remaining": {
+            "description": "The check re-run after repairing, so the caller sees what is left.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InvariantResultDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "repairedCount",
+          "skippedCount",
+          "remaining"
         ]
       },
       "CreateMarketingLeadDto": {
