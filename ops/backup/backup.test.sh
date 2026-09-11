@@ -28,11 +28,18 @@ setup_stubs() {
   # pg_dump writes a file of DUMP_BYTES bytes wherever --file points.
   cat > "${STUB_DIR}/pg_dump" <<'STUB'
 #!/usr/bin/env bash
+if [ "${1:-}" = "--version" ]; then
+  echo "pg_dump (PostgreSQL) ${CLIENT_MAJOR:-18}.6"
+  exit 0
+fi
 for arg in "$@"; do
   case "$arg" in --file=*) out="${arg#--file=}" ;; esac
 done
-head -c "${DUMP_BYTES:-4096}" /dev/zero > "$out"
 echo "pg_dump $*" >> "${WORK_DIR}/calls"
+if [ "${DUMP_HANGS:-0}" = "1" ]; then
+  sleep 30
+fi
+head -c "${DUMP_BYTES:-4096}" /dev/zero > "$out"
 STUB
 
   # pg_restore --list emits a table of contents, or fails if told to.
@@ -67,6 +74,33 @@ done
 exit 0
 STUB
 
+  # psql answers the server-version preflight.
+  cat > "${STUB_DIR}/psql" <<'STUB'
+#!/usr/bin/env bash
+echo "psql $*" >> "${WORK_DIR}/calls"
+if [ "${SERVER_UNREACHABLE:-0}" = "1" ]; then
+  exit 1
+fi
+echo "${SERVER_MAJOR:-18}0006"
+STUB
+
+  # Alpine provides `timeout` via busybox, but macOS ships it as `gtimeout`.
+  # A portable shim keeps the suite runnable on any host; what is under test is
+  # that the script aborts when the ceiling is hit, not the utility itself.
+  cat > "${STUB_DIR}/timeout" <<'STUB'
+#!/usr/bin/env bash
+secs="$1"; shift
+"$@" &
+pid=$!
+( sleep "$secs"; kill -9 "$pid" 2>/dev/null ) &
+watcher=$!
+wait "$pid" 2>/dev/null
+rc=$?
+kill -9 "$watcher" 2>/dev/null
+wait "$watcher" 2>/dev/null
+exit "$rc"
+STUB
+
   chmod +x "${STUB_DIR}"/*
   : > "${WORK_DIR}/calls"
 
@@ -81,7 +115,8 @@ STUB
 teardown_stubs() {
   PATH="${PATH#"${STUB_DIR}":}"
   rm -rf "$STUB_DIR" "$WORK_DIR"
-  unset DUMP_BYTES REMOTE_BYTES RESTORE_FAILS RESTORE_EMPTY
+  unset DUMP_BYTES REMOTE_BYTES RESTORE_FAILS RESTORE_EMPTY DUMP_HANGS
+  unset BACKUP_DUMP_TIMEOUT_SECONDS CLIENT_MAJOR SERVER_MAJOR SERVER_UNREACHABLE
   unset DATABASE_URL BACKUP_S3_BUCKET BACKUP_S3_ENDPOINT
   unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 }
@@ -158,6 +193,44 @@ run_sut > /dev/null
 grep -q 'latest\.json' "${WORK_DIR}/calls" \
   && { FAIL=$((FAIL+1)); echo "  FAIL  no heartbeat after a failed upload"; } \
   || { PASS=$((PASS+1)); echo "  ok    no heartbeat after a failed upload"; }
+teardown_stubs
+
+# Railway skips a scheduled run while the previous one is still Active, so a
+# hung dump would stop every future backup rather than failing one. The ceiling
+# has to turn that into a loud failure.
+setup_stubs
+export DUMP_HANGS=1 BACKUP_DUMP_TIMEOUT_SECONDS=1
+check "aborts a dump that hangs past its timeout" 1 "$(run_sut)"
+teardown_stubs
+
+# Production runs a different major version than the local and CI databases,
+# which is how the first deploy shipped a pg_dump that could not read the
+# server. The preflight has to name the fix, not just fail.
+setup_stubs
+export CLIENT_MAJOR=16 SERVER_MAJOR=18
+check "refuses a pg_dump older than the server" 1 "$(run_sut)"
+grep -q 'PG_MAJOR=18 in ops/backup/Dockerfile' "${WORK_DIR}/out" \
+  && { PASS=$((PASS+1)); echo "  ok    names the fix for an old client"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL  names the fix for an old client"; }
+teardown_stubs
+
+# A client ahead of the server dumps happily and writes an archive the server
+# cannot restore — a failure that would only appear during a recovery.
+setup_stubs
+export CLIENT_MAJOR=18 SERVER_MAJOR=16
+check "refuses a pg_dump newer than the server" 1 "$(run_sut)"
+teardown_stubs
+
+setup_stubs
+export CLIENT_MAJOR=18 SERVER_MAJOR=18
+check "proceeds when the majors match" 0 "$(run_sut)"
+teardown_stubs
+
+# An unreachable server must not block the backup on the preflight alone;
+# pg_dump is about to try anyway and fails on its own terms.
+setup_stubs
+export SERVER_UNREACHABLE=1
+check "continues when the server version cannot be read" 0 "$(run_sut)"
 teardown_stubs
 
 echo

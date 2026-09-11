@@ -27,6 +27,12 @@ require AWS_SECRET_ACCESS_KEY
 
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}"
 
+# Railway skips a scheduled run while the previous one is still Active, so a
+# dump that hangs does not fail loudly — it stops every future backup, quietly
+# and indefinitely. Every step that can block on the network gets a ceiling.
+readonly DUMP_TIMEOUT="${BACKUP_DUMP_TIMEOUT_SECONDS:-3600}"
+readonly UPLOAD_TIMEOUT="${BACKUP_UPLOAD_TIMEOUT_SECONDS:-1800}"
+
 readonly S3=(aws s3 --endpoint-url "$BACKUP_S3_ENDPOINT")
 readonly S3API=(aws s3api --endpoint-url "$BACKUP_S3_ENDPOINT")
 
@@ -40,6 +46,41 @@ log() { echo "[backup] $(date -u +%H:%M:%S) $*"; }
 cleanup() { rm -f "$LOCAL"; }
 trap cleanup EXIT
 
+# --- Version preflight ------------------------------------------------------
+#
+# pg_dump refuses to dump a server newer than itself, and an archive written by
+# a newer pg_dump cannot be restored into an older server. pg_dump reports the
+# two numbers when it aborts but not what to do about them, so check first and
+# say where the fix lives.
+#
+# A server version we cannot read is not fatal: pg_dump is about to try anyway
+# and will fail on its own terms.
+
+readonly CLIENT_MAJOR="$(pg_dump --version | sed -E 's/.* ([0-9]+).*/\1/')"
+SERVER_NUM="$(psql "$DATABASE_URL" -tAc 'show server_version_num' 2>/dev/null | tr -d ' ' || true)"
+
+if [ -n "${SERVER_NUM:-}" ]; then
+  readonly SERVER_MAJOR=$((SERVER_NUM / 10000))
+  log "server major ${SERVER_MAJOR}, pg_dump major ${CLIENT_MAJOR}"
+
+  if [ "$CLIENT_MAJOR" -lt "$SERVER_MAJOR" ]; then
+    echo "FATAL: pg_dump ${CLIENT_MAJOR} cannot dump a PostgreSQL ${SERVER_MAJOR} server." >&2
+    echo "       Set PG_MAJOR=${SERVER_MAJOR} in ops/backup/Dockerfile and redeploy." >&2
+    exit 1
+  fi
+
+  # A client ahead of the server still dumps, but writes an archive the server
+  # cannot restore — which only surfaces during a recovery.
+  if [ "$CLIENT_MAJOR" -gt "$SERVER_MAJOR" ]; then
+    echo "FATAL: pg_dump ${CLIENT_MAJOR} is ahead of the PostgreSQL ${SERVER_MAJOR} server." >&2
+    echo "       The archive would not restore into it. Set PG_MAJOR=${SERVER_MAJOR}" >&2
+    echo "       in ops/backup/Dockerfile and redeploy." >&2
+    exit 1
+  fi
+else
+  log "server version unavailable, letting pg_dump decide"
+fi
+
 # --- Dump -------------------------------------------------------------------
 #
 # Custom format (-Fc) is compressed and lets pg_restore pull out a single table
@@ -50,8 +91,13 @@ trap cleanup EXIT
 # reservations are being written. The quiet hour is chosen for load and for a
 # cleaner recovery point, not for correctness.
 
-log "dumping database"
-pg_dump --format=custom --no-owner --no-privileges --file="$LOCAL" "$DATABASE_URL"
+log "dumping database (timeout ${DUMP_TIMEOUT}s)"
+
+if ! timeout "$DUMP_TIMEOUT" \
+  pg_dump --format=custom --no-owner --no-privileges --file="$LOCAL" "$DATABASE_URL"; then
+  echo "FATAL: pg_dump failed or exceeded ${DUMP_TIMEOUT}s" >&2
+  exit 1
+fi
 
 readonly BYTES="$(wc -c < "$LOCAL" | tr -d ' ')"
 log "dump written: ${BYTES} bytes"
@@ -94,11 +140,11 @@ readonly SHA="$(sha256sum "$LOCAL" | cut -d' ' -f1)"
 
 readonly DAILY_KEY="daily/${FILE}"
 log "uploading s3://${BACKUP_S3_BUCKET}/${DAILY_KEY}"
-"${S3[@]}" cp "$LOCAL" "s3://${BACKUP_S3_BUCKET}/${DAILY_KEY}"
+timeout "$UPLOAD_TIMEOUT" "${S3[@]}" cp "$LOCAL" "s3://${BACKUP_S3_BUCKET}/${DAILY_KEY}"
 
 if [ "$DAY_OF_MONTH" = "01" ]; then
   log "first of month, also uploading to monthly/"
-  "${S3[@]}" cp "$LOCAL" "s3://${BACKUP_S3_BUCKET}/monthly/${FILE}"
+  timeout "$UPLOAD_TIMEOUT" "${S3[@]}" cp "$LOCAL" "s3://${BACKUP_S3_BUCKET}/monthly/${FILE}"
 fi
 
 # --- Confirm it arrived whole -----------------------------------------------
