@@ -1,16 +1,24 @@
-import { Controller, Get, HttpCode, Post, Req } from '@nestjs/common';
+import { Controller, Get, HttpCode, Param, Post, Req } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
   ApiHeader,
   ApiOkResponse,
   ApiOperation,
+  ApiBadRequestResponse,
+  ApiParam,
   ApiTags,
   ApiUnauthorizedResponse
 } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { RequestWithAuth } from '../auth/auth.types';
 import { Roles } from '../auth/roles.decorator';
+import {
+  InvariantRepairResultDto,
+  InvariantReportDto,
+  InvariantResultDto
+} from '../invariants/dto/invariant.response.dto';
+import { InvariantsService } from '../invariants/invariants.service';
 import {
   OrphanedReservationReportDto,
   OrphanedReservationRepairResultDto
@@ -32,7 +40,10 @@ import { MaintenanceService } from './maintenance.service';
 })
 @Controller('maintenance')
 export class MaintenanceController {
-  constructor(private readonly maintenanceService: MaintenanceService) {}
+  constructor(
+    private readonly maintenanceService: MaintenanceService,
+    private readonly invariantsService: InvariantsService
+  ) {}
 
   @Get('schedule-drift')
   @Roles(UserRole.ADMIN)
@@ -130,5 +141,52 @@ export class MaintenanceController {
     @Req() request: RequestWithAuth
   ): Promise<OrphanedReservationRepairResultDto> {
     return this.maintenanceService.repairOrphanedReservations(request.auth!);
+  }
+
+  @Get('invariants')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary:
+      'Run every data integrity check for the current tenant and report them in one shape. Each result carries what was scanned alongside what was wrong, so a clean check is distinguishable from one that examined nothing.'
+  })
+  @ApiOkResponse({ type: InvariantReportDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  checkInvariants(@Req() request: RequestWithAuth): Promise<InvariantReportDto> {
+    return this.invariantsService.checkAll(request.auth!);
+  }
+
+  @Get('invariants/:key')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Run a single data integrity check for the current tenant.' })
+  @ApiParam({ name: 'key', example: 'reservation.reachable' })
+  @ApiOkResponse({ type: InvariantResultDto })
+  @ApiBadRequestResponse({ description: 'Unknown invariant key.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  checkInvariant(
+    @Req() request: RequestWithAuth,
+    @Param('key') key: string
+  ): Promise<InvariantResultDto> {
+    return this.invariantsService.checkOne(request.auth!, key);
+  }
+
+  @Post('invariants/:key/repair')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary:
+      'Repair one invariant, then re-run its check so the response says what is left rather than what was attempted. Checks whose fix would require a decision the data cannot make have no repair and are rejected.'
+  })
+  @ApiParam({ name: 'key', example: 'reservation.reachable' })
+  @ApiOkResponse({ type: InvariantRepairResultDto })
+  @ApiBadRequestResponse({ description: 'Unknown invariant key, or the invariant is report-only.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  repairInvariant(
+    @Req() request: RequestWithAuth,
+    @Param('key') key: string
+  ): Promise<InvariantRepairResultDto> {
+    return this.invariantsService.repair(request.auth!, key);
   }
 }

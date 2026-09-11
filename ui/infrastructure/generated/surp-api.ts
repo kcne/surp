@@ -46,6 +46,9 @@ import type {
   CreateTicketCommentDto,
   CreateTicketDto,
   CreateUserDto,
+  InvariantRepairResultDto,
+  InvariantReportDto,
+  InvariantResultDto,
   LineResponseDto,
   LinesControllerListParams,
   LinesControllerRemoveParams,
@@ -3829,6 +3832,356 @@ export const useMaintenanceControllerRepairOrphanedReservations = <TError = Erro
         TContext
       > => {
       return useMutation(getMaintenanceControllerRepairOrphanedReservationsMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Run every data integrity check for the current tenant and report them in one shape. Each result carries what was scanned alongside what was wrong, so a clean check is distinguishable from one that examined nothing.
+ */
+export type maintenanceControllerCheckInvariantsResponse200 = {
+  data: InvariantReportDto
+  status: 200
+}
+
+export type maintenanceControllerCheckInvariantsResponse401 = {
+  data: void
+  status: 401
+}
+
+export type maintenanceControllerCheckInvariantsResponse403 = {
+  data: void
+  status: 403
+}
+
+export type maintenanceControllerCheckInvariantsResponseSuccess = (maintenanceControllerCheckInvariantsResponse200) & {
+  headers: Headers;
+};
+export type maintenanceControllerCheckInvariantsResponseError = (maintenanceControllerCheckInvariantsResponse401 | maintenanceControllerCheckInvariantsResponse403) & {
+  headers: Headers;
+};
+
+export type maintenanceControllerCheckInvariantsResponse = (maintenanceControllerCheckInvariantsResponseSuccess | maintenanceControllerCheckInvariantsResponseError)
+
+export const getMaintenanceControllerCheckInvariantsUrl = () => {
+
+
+  
+
+  return `/maintenance/invariants`
+}
+
+export const maintenanceControllerCheckInvariants = async ( options?: RequestInit): Promise<maintenanceControllerCheckInvariantsResponse> => {
+  
+  return customInstance<maintenanceControllerCheckInvariantsResponse>(getMaintenanceControllerCheckInvariantsUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getMaintenanceControllerCheckInvariantsQueryKey = () => {
+    return [
+    `/maintenance/invariants`
+    ] as const;
+    }
+
+    
+export const getMaintenanceControllerCheckInvariantsQueryOptions = <TData = Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getMaintenanceControllerCheckInvariantsQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>> = ({ signal }) => maintenanceControllerCheckInvariants({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type MaintenanceControllerCheckInvariantsQueryResult = NonNullable<Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>>
+export type MaintenanceControllerCheckInvariantsQueryError = ErrorType<void>
+
+
+export function useMaintenanceControllerCheckInvariants<TData = Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerCheckInvariants<TData = Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerCheckInvariants<TData = Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Run every data integrity check for the current tenant and report them in one shape. Each result carries what was scanned alongside what was wrong, so a clean check is distinguishable from one that examined nothing.
+ */
+
+export function useMaintenanceControllerCheckInvariants<TData = Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariants>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getMaintenanceControllerCheckInvariantsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Run a single data integrity check for the current tenant.
+ */
+export type maintenanceControllerCheckInvariantResponse200 = {
+  data: InvariantResultDto
+  status: 200
+}
+
+export type maintenanceControllerCheckInvariantResponse400 = {
+  data: void
+  status: 400
+}
+
+export type maintenanceControllerCheckInvariantResponse401 = {
+  data: void
+  status: 401
+}
+
+export type maintenanceControllerCheckInvariantResponse403 = {
+  data: void
+  status: 403
+}
+
+export type maintenanceControllerCheckInvariantResponseSuccess = (maintenanceControllerCheckInvariantResponse200) & {
+  headers: Headers;
+};
+export type maintenanceControllerCheckInvariantResponseError = (maintenanceControllerCheckInvariantResponse400 | maintenanceControllerCheckInvariantResponse401 | maintenanceControllerCheckInvariantResponse403) & {
+  headers: Headers;
+};
+
+export type maintenanceControllerCheckInvariantResponse = (maintenanceControllerCheckInvariantResponseSuccess | maintenanceControllerCheckInvariantResponseError)
+
+export const getMaintenanceControllerCheckInvariantUrl = (key: string,) => {
+
+
+  
+
+  return `/maintenance/invariants/${key}`
+}
+
+export const maintenanceControllerCheckInvariant = async (key: string, options?: RequestInit): Promise<maintenanceControllerCheckInvariantResponse> => {
+  
+  return customInstance<maintenanceControllerCheckInvariantResponse>(getMaintenanceControllerCheckInvariantUrl(key),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getMaintenanceControllerCheckInvariantQueryKey = (key: string,) => {
+    return [
+    `/maintenance/invariants/${key}`
+    ] as const;
+    }
+
+    
+export const getMaintenanceControllerCheckInvariantQueryOptions = <TData = Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>, TError = ErrorType<void>>(key: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getMaintenanceControllerCheckInvariantQueryKey(key);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>> = ({ signal }) => maintenanceControllerCheckInvariant(key, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(key), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type MaintenanceControllerCheckInvariantQueryResult = NonNullable<Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>>
+export type MaintenanceControllerCheckInvariantQueryError = ErrorType<void>
+
+
+export function useMaintenanceControllerCheckInvariant<TData = Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>, TError = ErrorType<void>>(
+ key: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerCheckInvariant<TData = Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>, TError = ErrorType<void>>(
+ key: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerCheckInvariant<TData = Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>, TError = ErrorType<void>>(
+ key: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Run a single data integrity check for the current tenant.
+ */
+
+export function useMaintenanceControllerCheckInvariant<TData = Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>, TError = ErrorType<void>>(
+ key: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerCheckInvariant>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getMaintenanceControllerCheckInvariantQueryOptions(key,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Repair one invariant, then re-run its check so the response says what is left rather than what was attempted. Checks whose fix would require a decision the data cannot make have no repair and are rejected.
+ */
+export type maintenanceControllerRepairInvariantResponse200 = {
+  data: InvariantRepairResultDto
+  status: 200
+}
+
+export type maintenanceControllerRepairInvariantResponse400 = {
+  data: void
+  status: 400
+}
+
+export type maintenanceControllerRepairInvariantResponse401 = {
+  data: void
+  status: 401
+}
+
+export type maintenanceControllerRepairInvariantResponse403 = {
+  data: void
+  status: 403
+}
+
+export type maintenanceControllerRepairInvariantResponseSuccess = (maintenanceControllerRepairInvariantResponse200) & {
+  headers: Headers;
+};
+export type maintenanceControllerRepairInvariantResponseError = (maintenanceControllerRepairInvariantResponse400 | maintenanceControllerRepairInvariantResponse401 | maintenanceControllerRepairInvariantResponse403) & {
+  headers: Headers;
+};
+
+export type maintenanceControllerRepairInvariantResponse = (maintenanceControllerRepairInvariantResponseSuccess | maintenanceControllerRepairInvariantResponseError)
+
+export const getMaintenanceControllerRepairInvariantUrl = (key: string,) => {
+
+
+  
+
+  return `/maintenance/invariants/${key}/repair`
+}
+
+export const maintenanceControllerRepairInvariant = async (key: string, options?: RequestInit): Promise<maintenanceControllerRepairInvariantResponse> => {
+  
+  return customInstance<maintenanceControllerRepairInvariantResponse>(getMaintenanceControllerRepairInvariantUrl(key),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+  
+
+
+
+export const getMaintenanceControllerRepairInvariantMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerRepairInvariant>>, TError,{key: string}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerRepairInvariant>>, TError,{key: string}, TContext> => {
+
+const mutationKey = ['maintenanceControllerRepairInvariant'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof maintenanceControllerRepairInvariant>>, {key: string}> = (props) => {
+          const {key} = props ?? {};
+
+          return  maintenanceControllerRepairInvariant(key,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MaintenanceControllerRepairInvariantMutationResult = NonNullable<Awaited<ReturnType<typeof maintenanceControllerRepairInvariant>>>
+    
+    export type MaintenanceControllerRepairInvariantMutationError = ErrorType<void>
+
+    /**
+ * @summary Repair one invariant, then re-run its check so the response says what is left rather than what was attempted. Checks whose fix would require a decision the data cannot make have no repair and are rejected.
+ */
+export const useMaintenanceControllerRepairInvariant = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof maintenanceControllerRepairInvariant>>, TError,{key: string}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof maintenanceControllerRepairInvariant>>,
+        TError,
+        {key: string},
+        TContext
+      > => {
+      return useMutation(getMaintenanceControllerRepairInvariantMutationOptions(options), queryClient);
     }
     
 /**
