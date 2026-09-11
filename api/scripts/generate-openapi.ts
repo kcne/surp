@@ -2,11 +2,19 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { AppModule } from '../src/app.module';
-import { createSwaggerDocument } from '../src/config/swagger.config';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { applyOfflineEnv } from './offline-env';
 
 async function generateOpenApi(): Promise<void> {
+  // AppModule validates the environment as it loads, so the placeholders have
+  // to be in place first. That is why the imports below are dynamic: a static
+  // import is hoisted above this call, and the generator would go back to
+  // demanding real S3 credentials to write a JSON file.
+  applyOfflineEnv();
+
+  const { AppModule } = await import('../src/app.module');
+  const { createSwaggerDocument } = await import('../src/config/swagger.config');
+  const { PrismaService } = await import('../src/prisma/prisma.service');
+
   const testingModule = await Test.createTestingModule({
     imports: [AppModule]
   })
