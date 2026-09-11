@@ -31,8 +31,11 @@ setup_stubs() {
 for arg in "$@"; do
   case "$arg" in --file=*) out="${arg#--file=}" ;; esac
 done
-head -c "${DUMP_BYTES:-4096}" /dev/zero > "$out"
 echo "pg_dump $*" >> "${WORK_DIR}/calls"
+if [ "${DUMP_HANGS:-0}" = "1" ]; then
+  sleep 30
+fi
+head -c "${DUMP_BYTES:-4096}" /dev/zero > "$out"
 STUB
 
   # pg_restore --list emits a table of contents, or fails if told to.
@@ -67,6 +70,23 @@ done
 exit 0
 STUB
 
+  # Alpine provides `timeout` via busybox, but macOS ships it as `gtimeout`.
+  # A portable shim keeps the suite runnable on any host; what is under test is
+  # that the script aborts when the ceiling is hit, not the utility itself.
+  cat > "${STUB_DIR}/timeout" <<'STUB'
+#!/usr/bin/env bash
+secs="$1"; shift
+"$@" &
+pid=$!
+( sleep "$secs"; kill -9 "$pid" 2>/dev/null ) &
+watcher=$!
+wait "$pid" 2>/dev/null
+rc=$?
+kill -9 "$watcher" 2>/dev/null
+wait "$watcher" 2>/dev/null
+exit "$rc"
+STUB
+
   chmod +x "${STUB_DIR}"/*
   : > "${WORK_DIR}/calls"
 
@@ -81,7 +101,8 @@ STUB
 teardown_stubs() {
   PATH="${PATH#"${STUB_DIR}":}"
   rm -rf "$STUB_DIR" "$WORK_DIR"
-  unset DUMP_BYTES REMOTE_BYTES RESTORE_FAILS RESTORE_EMPTY
+  unset DUMP_BYTES REMOTE_BYTES RESTORE_FAILS RESTORE_EMPTY DUMP_HANGS
+  unset BACKUP_DUMP_TIMEOUT_SECONDS
   unset DATABASE_URL BACKUP_S3_BUCKET BACKUP_S3_ENDPOINT
   unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 }
@@ -158,6 +179,14 @@ run_sut > /dev/null
 grep -q 'latest\.json' "${WORK_DIR}/calls" \
   && { FAIL=$((FAIL+1)); echo "  FAIL  no heartbeat after a failed upload"; } \
   || { PASS=$((PASS+1)); echo "  ok    no heartbeat after a failed upload"; }
+teardown_stubs
+
+# Railway skips a scheduled run while the previous one is still Active, so a
+# hung dump would stop every future backup rather than failing one. The ceiling
+# has to turn that into a loud failure.
+setup_stubs
+export DUMP_HANGS=1 BACKUP_DUMP_TIMEOUT_SECONDS=1
+check "aborts a dump that hangs past its timeout" 1 "$(run_sut)"
 teardown_stubs
 
 echo

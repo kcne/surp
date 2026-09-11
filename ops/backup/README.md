@@ -82,10 +82,31 @@ Reference the Postgres service for `DATABASE_URL` rather than pasting the public
 
 ### 4. Trial run
 
-Trigger the service manually and read the log. Expected:
+**Railway has no manual trigger for cron services** — no "Run now" button, no CLI command. A cron service runs only on its schedule.
+
+That leaves two things to verify, and they are separate tests:
+
+#### a. The script, credentials and bucket — run the real image locally
+
+This is the useful one, and you can do it before deploying anything. It runs the exact container that will run in production, so `pg_dump` is the right major version:
+
+```bash
+docker build -t surp-backup ops/backup
+
+docker run --rm \
+  -e DATABASE_URL='<production DATABASE_URL, public proxy>' \
+  -e BACKUP_S3_BUCKET=surp-db-backups \
+  -e BACKUP_S3_ENDPOINT='<bucket S3 endpoint>' \
+  -e AWS_ACCESS_KEY_ID=... \
+  -e AWS_SECRET_ACCESS_KEY=... \
+  -e AWS_DEFAULT_REGION=auto \
+  surp-backup
+```
+
+Expected:
 
 ```
-[backup] dumping database
+[backup] dumping database (timeout 3600s)
 [backup] dump written: 2847362 bytes
 [backup] verifying archive
 [backup] archive verified: 184 entries
@@ -96,6 +117,26 @@ Trigger the service manually and read the log. Expected:
 ```
 
 Every step that fails aborts the run with a non-zero exit. The job cannot partially succeed.
+
+This uses the **public** proxy URL because it runs from your machine. The deployed service uses the private network reference instead.
+
+#### b. Railway's scheduler actually fires — nudge the cron
+
+The local run proves nothing about whether Railway will call it. To check that, set the schedule a few minutes ahead, watch it fire, then set it back:
+
+```
+*/5 * * * *     # five minutes is Railway's shortest allowed interval
+```
+
+Wait for one run, confirm the log and a new object in `daily/`, then restore `0 1 * * *`.
+
+Do not skip this. The local run and the scheduled run test different things, and a backup that is never actually invoked looks identical to one that is.
+
+### 5. Why the timeouts matter
+
+Railway skips a scheduled run while the previous one still shows `Active`. A dump that hangs therefore does not fail one backup — it silently stops **every** future backup, which is exactly the class of failure this repo has been fighting.
+
+`BACKUP_DUMP_TIMEOUT_SECONDS` (default 3600) and `BACKUP_UPLOAD_TIMEOUT_SECONDS` (default 1800) put a ceiling on both blocking steps, so a hang becomes a loud failure instead of silence. Raise them if the database outgrows them; never remove them.
 
 ## Restore drill
 
