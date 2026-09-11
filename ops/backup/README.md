@@ -1,88 +1,88 @@
-# Backup baze
+# Database backup
 
-Dnevni `pg_dump` produkcione baze na S3-kompatibilan storage, kao zaseban Railway cron servis.
+A daily `pg_dump` of the production database to S3-compatible storage, running as a separate Railway cron service.
 
-Ovo je jedina mreža ispod produkcionih podataka. Railway Postgres kod nas ne radi sopstveni backup.
+This is the only net under production data. Railway Postgres runs no backups of its own here.
 
-## Kako je postavljeno
+## How it is set up
 
 | | |
 |---|---|
-| Kad | `0 1 * * *` UTC — 02:00 zimi, 03:00 leti |
-| Šta | Ceo dump u custom formatu (`-Fc`), komprimovan |
-| Gde | `daily/` (30 dana) i `monthly/` (365 dana) |
-| Prava | Samo `PutObject` — job ne može ništa da obriše |
+| When | `0 1 * * *` UTC — 02:00 local in winter, 03:00 in summer |
+| What | Full dump in custom format (`-Fc`), compressed |
+| Where | `daily/` (30 days) and `monthly/` (365 days) |
+| Permissions | `PutObject` only — the job cannot delete anything |
 
-`pg_dump` čita iz jednog MVCC snapshota, pa je dump konzistentan i dok se upisuju rezervacije. Noćni termin je izabran zbog opterećenja i zbog čistije tačke oporavka, ne zbog ispravnosti.
+`pg_dump` reads from a single MVCC snapshot, so the dump is consistent even while reservations are being written. The quiet hour is chosen for load and for a cleaner recovery point, not for correctness.
 
-## Gde backup stoji
+## Where backups live
 
-Skripta govori običan S3 API i ne zna kod koga je bucket. Provajder se menja jednom promenljivom — `BACKUP_S3_ENDPOINT`. Radi sa Railway-evim bucketom, Tigrisom, Cloudflare R2, Backblaze B2 ili pravim AWS S3.
+The script speaks plain S3 and does not care whose bucket it is. The provider is one variable — `BACKUP_S3_ENDPOINT`. Railway's own bucket, Tigris, Cloudflare R2, Backblaze B2 and AWS S3 all work.
 
-Izbor provajdera je izbor **od čega je backup nezavisan**:
+Choosing a provider is really choosing what the backup is independent of:
 
-| Gde | Štiti od | Ne štiti od |
+| Location | Protects against | Does not protect against |
 |---|---|---|
-| Bucket kod istog provajdera kao baza | Loše migracije, obrisane tabele, otkaza baze | Gubitka naloga, greške u naplati, brisanja projekta, ispada provajdera |
-| Bucket kod drugog provajdera | Svega gore | — |
+| Bucket at the same provider as the database | Bad migrations, dropped tables, database failure | Losing the account, a billing lapse, deleting the project, a provider-wide outage |
+| Bucket at a different provider | All of the above | — |
 
-Za ono zbog čega ovaj epik postoji — **loša migracija ili backfill pokvari podatke** — isti provajder je sasvim dovoljan. To je i najverovatniji scenario, ubedljivo.
+For the failure this epic exists to prevent — **a migration or backfill corrupting data** — the same provider is entirely sufficient. That is also by far the most likely scenario.
 
-Praktičan savet: uzmi ono što možeš da postaviš **danas**. Backup koji postoji kod istog provajdera vredi neuporedivo više od savršenog koji čeka. Nedeljna kopija kod drugog provajdera se dodaje kasnije, kad zatreba.
+Practical advice: take whatever you can set up **today**. A backup that exists at the same provider is worth far more than a perfect one that is still pending. A weekly copy elsewhere can be added later.
 
-Jedno **ne**: Railway Volume nije mesto za backup. Nije verzionisan, nema lifecycle, i deli sudbinu projekta sa bazom — to je kopija, ne backup.
+One **no**: a Railway Volume is not a backup target. It is not versioned, has no lifecycle rules, and shares the project's fate with the database. That is a copy, not a backup.
 
-## Zašto odvojen bucket i odvojen ključ
+## Why a separate bucket and a separate key
 
-Bez obzira na provajdera, backup **ne** deli bucket sa slikama tiketa (`enclosed-shoebox-uzuh-ovk`).
+Whatever the provider, backups do **not** share a bucket with ticket images (`enclosed-shoebox-uzuh-ovk`).
 
-Ključ aplikacije živi u web servisu izloženom internetu i to je najverovatnije što će da procuri. Backup koji se može obrisati tim ključem nije backup. Ovo važi kod svakog provajdera i nije stvar izbora.
+The application's key lives in an internet-facing web service and is the most likely thing to leak. A backup that key can delete is not a backup. This holds at every provider and is not a matter of preference.
 
-Backup bucket ima svoj ključ, i taj ključ nema pravo brisanja. Retencija ide isključivo kroz lifecycle pravila.
+The backup bucket gets its own key, and that key has no delete permission. Retention is handled entirely by lifecycle rules.
 
-## Postavljanje
+## Setup
 
-### 1. Bucket i kredencijali
+### 1. Bucket and credentials
 
-Napravi nov bucket (npr. `surp-db-backups`) i nov access key **samo za njega**, sa `PutObject` i `GetObject`, bez `DeleteObject`.
+Create a new bucket (for example `surp-db-backups`) and an access key scoped **to that bucket only**, with `PutObject` and `GetObject`, without `DeleteObject`.
 
-`GetObject` treba za restore i za čitanje `latest.json`.
+`GetObject` is needed for restores and for reading `latest.json`.
 
-### 2. Lifecycle pravila
+### 2. Lifecycle rules
 
-Ovo je celokupna retencija — job ne briše ništa:
+These are the entire retention policy — the job deletes nothing:
 
-| Prefiks | Pravilo |
+| Prefix | Rule |
 |---|---|
 | `daily/` | Expire after 30 days |
 | `monthly/` | Expire after 365 days |
 
-Bez ovih pravila bucket raste neograničeno. Postavi ih pre prvog pokretanja.
+Without these rules the bucket grows without bound. Set them before the first run.
 
-### 3. Railway servis
+### 3. Railway service
 
-Nov servis u istom projektu kao baza, da ide preko privatne mreže:
+A new service in the same project as the database, so it reaches it over the private network:
 
 - Root directory: `ops/backup`
 - Builder: Dockerfile
 - Cron schedule: `0 1 * * *`
 
-Promenljive:
+Variables:
 
 ```
-DATABASE_URL           = ${{Postgres.DATABASE_URL}}   # privatna mreza, ne javni proxy
+DATABASE_URL           = ${{Postgres.DATABASE_URL}}   # private network, not the public proxy
 BACKUP_S3_BUCKET       = surp-db-backups
-BACKUP_S3_ENDPOINT     = <S3 endpoint bucketa>   # npr. https://t3.storageapi.dev
-AWS_ACCESS_KEY_ID      = <kljuc samo za backup bucket>
+BACKUP_S3_ENDPOINT     = <bucket S3 endpoint>          # e.g. https://t3.storageapi.dev
+AWS_ACCESS_KEY_ID      = <key scoped to the backup bucket>
 AWS_SECRET_ACCESS_KEY  = <...>
 AWS_DEFAULT_REGION     = auto
 ```
 
-`DATABASE_URL` uzmi kao referencu na Postgres servis, ne kao javni proxy URL — tako saobraćaj ne izlazi iz Railway mreže.
+Reference the Postgres service for `DATABASE_URL` rather than pasting the public proxy URL, so the traffic never leaves Railway's network.
 
-### 4. Probno pokretanje
+### 4. Trial run
 
-Pokreni servis ručno i proveri log. Očekivano:
+Trigger the service manually and read the log. Expected:
 
 ```
 [backup] dumping database
@@ -95,45 +95,45 @@ Pokreni servis ručno i proveri log. Očekivano:
 [backup] done: daily/surp-20260911T010000Z.dump (2847362 bytes, sha256 a3f9c1e8b204)
 ```
 
-Svaki korak koji ne prođe obara run sa ne-nultim izlazom. Job ne ume da „delimično uspe".
+Every step that fails aborts the run with a non-zero exit. The job cannot partially succeed.
 
-## Vežba oporavka
+## Restore drill
 
-**Backup koji nije nijednom vraćen je pretpostavka, ne mreža.** Ovu vežbu treba proći jednom pre prve migracije iz #15, i posle toga kvartalno.
+**A backup nobody has restored is an assumption, not a net.** Run this drill once before the first migration from #15, and quarterly after that.
 
 ```bash
-# Scratch baza — lokalni docker-compose je dovoljan
+# A scratch database — the local docker-compose one is enough
 docker compose -f api/docker-compose.yml up -d
 createdb -h localhost -U postgres surp_restore_drill
 
 export TARGET_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/surp_restore_drill'
 export BACKUP_S3_BUCKET=surp-db-backups
-export BACKUP_S3_ENDPOINT=<S3 endpoint bucketa>
+export BACKUP_S3_ENDPOINT=<bucket S3 endpoint>
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 
 ./ops/backup/restore.sh
 ```
 
-Skripta na kraju ispiše broj redova po tabeli. **Uporedi ih sa produkcijom** — `pg_restore` koji izađe sa nulom je slabiji dokaz nego što zvuči.
+The script ends by printing row counts per table. **Compare them against production** — `pg_restore` exiting zero is a weaker claim than it sounds.
 
-Skripta odbija da piše preko baze čiji URL liči na produkciju. Za pravi oporavak treba eksplicitno:
+The script refuses to write over a database whose URL looks like production. A real recovery has to say so explicitly:
 
 ```bash
 ALLOW_PRODUCTION_RESTORE=yes-i-am-restoring-production ./ops/backup/restore.sh
 ```
 
-## Pravi oporavak
+## Real recovery
 
-1. **Zaustavi API servis** da niko ne piše preko oporavka u toku.
-2. Nađi tačku oporavka: `aws s3 ls s3://surp-db-backups/daily/ --endpoint-url ...`
-3. Restore u **novu** bazu, ne preko postojeće — stara ostaje kao dokaz dok se ne potvrdi da je nova ispravna.
-4. Proveri brojeve redova i pusti provere integriteta iz Podešavanja.
-5. Prebaci `DATABASE_URL` na novu bazu, pa podigni API.
+1. **Stop the API service** so nothing writes over the recovery in progress.
+2. Find the recovery point: `aws s3 ls s3://surp-db-backups/daily/ --endpoint-url ...`
+3. Restore into a **new** database, not over the existing one — the damaged database stays as evidence until the new one is confirmed good.
+4. Check row counts and run the integrity checks from Settings.
+5. Point `DATABASE_URL` at the new database, then bring the API back up.
 
-Korak 3 je bitan: restore preko oštećene baze uništava i dokaz o tome šta se desilo.
+Step 3 matters: restoring over a damaged database destroys the evidence of what happened along with the damage.
 
-## Šta ovde još ne postoji
+## Not here yet
 
-- **Alarm ako backup izostane.** `latest.json` nosi vreme poslednjeg uspešnog backupa; provera da je mlađi od 26h ide kao invarijanta u #23, gde već postoji kanal za alarm. Do tada backup treba pogledati ručno.
-- **Client-side enkripcija.** Dump sadrži lične podatke putnika — imena, telefone, mejlove. Trenutno se oslanjamo na enkripciju koju bucket radi sam. Enkripcija ključem koji ne živi kod provajdera je jača, ali uvodi čuvanje ključa: izgubljen ključ znači bezvredne backupe. Zasebna odluka.
+- **An alert when a backup is missing.** `latest.json` carries the timestamp of the last successful backup; asserting it is younger than 26h belongs in #23, where an alerting channel already exists. Until then the backup needs a manual look.
+- **Client-side encryption.** The dump holds passenger personal data — names, phone numbers, email addresses. Today we rely on the encryption the bucket applies itself. Encrypting under a key the provider never sees is stronger, but introduces key custody: a lost key means worthless backups. A separate decision.
