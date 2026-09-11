@@ -46,6 +46,41 @@ log() { echo "[backup] $(date -u +%H:%M:%S) $*"; }
 cleanup() { rm -f "$LOCAL"; }
 trap cleanup EXIT
 
+# --- Version preflight ------------------------------------------------------
+#
+# pg_dump refuses to dump a server newer than itself, and an archive written by
+# a newer pg_dump cannot be restored into an older server. pg_dump reports the
+# two numbers when it aborts but not what to do about them, so check first and
+# say where the fix lives.
+#
+# A server version we cannot read is not fatal: pg_dump is about to try anyway
+# and will fail on its own terms.
+
+readonly CLIENT_MAJOR="$(pg_dump --version | sed -E 's/.* ([0-9]+).*/\1/')"
+SERVER_NUM="$(psql "$DATABASE_URL" -tAc 'show server_version_num' 2>/dev/null | tr -d ' ' || true)"
+
+if [ -n "${SERVER_NUM:-}" ]; then
+  readonly SERVER_MAJOR=$((SERVER_NUM / 10000))
+  log "server major ${SERVER_MAJOR}, pg_dump major ${CLIENT_MAJOR}"
+
+  if [ "$CLIENT_MAJOR" -lt "$SERVER_MAJOR" ]; then
+    echo "FATAL: pg_dump ${CLIENT_MAJOR} cannot dump a PostgreSQL ${SERVER_MAJOR} server." >&2
+    echo "       Set PG_MAJOR=${SERVER_MAJOR} in ops/backup/Dockerfile and redeploy." >&2
+    exit 1
+  fi
+
+  # A client ahead of the server still dumps, but writes an archive the server
+  # cannot restore — which only surfaces during a recovery.
+  if [ "$CLIENT_MAJOR" -gt "$SERVER_MAJOR" ]; then
+    echo "FATAL: pg_dump ${CLIENT_MAJOR} is ahead of the PostgreSQL ${SERVER_MAJOR} server." >&2
+    echo "       The archive would not restore into it. Set PG_MAJOR=${SERVER_MAJOR}" >&2
+    echo "       in ops/backup/Dockerfile and redeploy." >&2
+    exit 1
+  fi
+else
+  log "server version unavailable, letting pg_dump decide"
+fi
+
 # --- Dump -------------------------------------------------------------------
 #
 # Custom format (-Fc) is compressed and lets pg_restore pull out a single table

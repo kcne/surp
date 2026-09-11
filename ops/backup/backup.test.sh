@@ -28,6 +28,10 @@ setup_stubs() {
   # pg_dump writes a file of DUMP_BYTES bytes wherever --file points.
   cat > "${STUB_DIR}/pg_dump" <<'STUB'
 #!/usr/bin/env bash
+if [ "${1:-}" = "--version" ]; then
+  echo "pg_dump (PostgreSQL) ${CLIENT_MAJOR:-18}.6"
+  exit 0
+fi
 for arg in "$@"; do
   case "$arg" in --file=*) out="${arg#--file=}" ;; esac
 done
@@ -70,6 +74,16 @@ done
 exit 0
 STUB
 
+  # psql answers the server-version preflight.
+  cat > "${STUB_DIR}/psql" <<'STUB'
+#!/usr/bin/env bash
+echo "psql $*" >> "${WORK_DIR}/calls"
+if [ "${SERVER_UNREACHABLE:-0}" = "1" ]; then
+  exit 1
+fi
+echo "${SERVER_MAJOR:-18}0006"
+STUB
+
   # Alpine provides `timeout` via busybox, but macOS ships it as `gtimeout`.
   # A portable shim keeps the suite runnable on any host; what is under test is
   # that the script aborts when the ceiling is hit, not the utility itself.
@@ -102,7 +116,7 @@ teardown_stubs() {
   PATH="${PATH#"${STUB_DIR}":}"
   rm -rf "$STUB_DIR" "$WORK_DIR"
   unset DUMP_BYTES REMOTE_BYTES RESTORE_FAILS RESTORE_EMPTY DUMP_HANGS
-  unset BACKUP_DUMP_TIMEOUT_SECONDS
+  unset BACKUP_DUMP_TIMEOUT_SECONDS CLIENT_MAJOR SERVER_MAJOR SERVER_UNREACHABLE
   unset DATABASE_URL BACKUP_S3_BUCKET BACKUP_S3_ENDPOINT
   unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 }
@@ -187,6 +201,36 @@ teardown_stubs
 setup_stubs
 export DUMP_HANGS=1 BACKUP_DUMP_TIMEOUT_SECONDS=1
 check "aborts a dump that hangs past its timeout" 1 "$(run_sut)"
+teardown_stubs
+
+# Production runs a different major version than the local and CI databases,
+# which is how the first deploy shipped a pg_dump that could not read the
+# server. The preflight has to name the fix, not just fail.
+setup_stubs
+export CLIENT_MAJOR=16 SERVER_MAJOR=18
+check "refuses a pg_dump older than the server" 1 "$(run_sut)"
+grep -q 'PG_MAJOR=18 in ops/backup/Dockerfile' "${WORK_DIR}/out" \
+  && { PASS=$((PASS+1)); echo "  ok    names the fix for an old client"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL  names the fix for an old client"; }
+teardown_stubs
+
+# A client ahead of the server dumps happily and writes an archive the server
+# cannot restore — a failure that would only appear during a recovery.
+setup_stubs
+export CLIENT_MAJOR=18 SERVER_MAJOR=16
+check "refuses a pg_dump newer than the server" 1 "$(run_sut)"
+teardown_stubs
+
+setup_stubs
+export CLIENT_MAJOR=18 SERVER_MAJOR=18
+check "proceeds when the majors match" 0 "$(run_sut)"
+teardown_stubs
+
+# An unreachable server must not block the backup on the preflight alone;
+# pg_dump is about to try anyway and fails on its own terms.
+setup_stubs
+export SERVER_UNREACHABLE=1
+check "continues when the server version cannot be read" 0 "$(run_sut)"
 teardown_stubs
 
 echo

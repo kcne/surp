@@ -1,9 +1,23 @@
 # Backup runner for the Railway cron service.
 #
-# Based on the Postgres image so pg_dump matches the server's major version.
-# A major-version mismatch is the classic way a backup runs happily for months
-# and then refuses to restore.
-FROM postgres:16-alpine
+# PG_MAJOR must match the *production* server's major version. pg_dump refuses
+# to dump a server newer than itself, and an archive written by a newer pg_dump
+# cannot be restored into an older server — so this one number decides whether
+# both the backup and the restore work.
+#
+# Production runs 18.6. Do not read this version off api/docker-compose.yml or
+# the CI workflow: those are the local and CI databases, and they currently sit
+# on a different major version (see the note in README.md). Check the server
+# itself:
+#
+#   psql "$DATABASE_URL" -tAc 'show server_version'
+#
+# When production is upgraded across a major version, this must be bumped in
+# the same change. The failure is loud — pg_dump aborts — but every backup is
+# missing until it is fixed.
+ARG PG_MAJOR=18
+
+FROM postgres:${PG_MAJOR}-alpine
 
 RUN apk add --no-cache aws-cli bash
 
