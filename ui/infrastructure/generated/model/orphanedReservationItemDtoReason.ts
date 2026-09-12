@@ -6,12 +6,19 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Which cause of unreachability this is. "No departure that day" has several, and an agency can only act once it knows which one.
+ */
 export type OrphanedReservationItemDtoReason = typeof OrphanedReservationItemDtoReason[keyof typeof OrphanedReservationItemDtoReason];
 
 
 export const OrphanedReservationItemDtoReason = {
   DEPARTURE_TIME_MOVED: 'DEPARTURE_TIME_MOVED',
   AMBIGUOUS_INSTANCE: 'AMBIGUOUS_INSTANCE',
-  NO_INSTANCE: 'NO_INSTANCE',
   RIDE_NOT_ACTIVE: 'RIDE_NOT_ACTIVE',
+  DATE_OUTSIDE_RANGE: 'DATE_OUTSIDE_RANGE',
+  WEEKDAY_NOT_SCHEDULED: 'WEEKDAY_NOT_SCHEDULED',
+  SCHEDULE_TIME_MISSING: 'SCHEDULE_TIME_MISSING',
+  SKIPPED_BY_EXCEPTION: 'SKIPPED_BY_EXCEPTION',
+  EXTRA_DEPARTURE_REMOVED: 'EXTRA_DEPARTURE_REMOVED',
 } as const;

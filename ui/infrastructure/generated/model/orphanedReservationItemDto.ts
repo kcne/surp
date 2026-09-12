@@ -31,7 +31,12 @@ export interface OrphanedReservationItemDto {
    * @nullable
    */
   targetSeatNumber: number | null;
+  /** Which cause of unreachability this is. "No departure that day" has several, and an agency can only act once it knows which one. */
   reason: OrphanedReservationItemDtoReason;
+  /** Short Serbian name for the reason, for a table cell. */
+  reasonLabel: string;
+  /** What the agency should do about this row, in Serbian. Usually the advice for the reason, but a row whose target departure has no free seat says so instead. */
+  reasonAdvice: string;
   canRepair: boolean;
   /** Reservation stations that are no longer on the ride route, if any. */
   offRouteStationNames: string[];
