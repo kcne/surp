@@ -92,9 +92,7 @@ describe('reservation.arrivalTimeCurrent', () => {
   });
 
   it('leaves a reservation whose arrival time still matches alone', async () => {
-    prismaMock.reservation.findMany.mockResolvedValue([
-      reservation({ rideArrivalTime: '22:15' })
-    ]);
+    prismaMock.reservation.findMany.mockResolvedValue([reservation({ rideArrivalTime: '22:15' })]);
 
     const scan = await scanForStaleArrivalTimes(ctx);
 
@@ -138,9 +136,7 @@ describe('reservation.arrivalTimeCurrent', () => {
   });
 
   it('writes nothing when every arrival time is current', async () => {
-    prismaMock.reservation.findMany.mockResolvedValue([
-      reservation({ rideArrivalTime: '22:15' })
-    ]);
+    prismaMock.reservation.findMany.mockResolvedValue([reservation({ rideArrivalTime: '22:15' })]);
 
     const outcome = await reservationArrivalCurrent.repair!(ctx);
 

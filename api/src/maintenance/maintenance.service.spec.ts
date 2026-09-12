@@ -1,4 +1,5 @@
 import { UserRole } from '@prisma/client';
+import { ORPHAN_NO_FREE_SEAT_ADVICE } from '../invariants/checks/orphaned-reservations';
 import { MaintenanceService } from './maintenance.service';
 
 describe('MaintenanceService', () => {
@@ -155,7 +156,9 @@ describe('MaintenanceService', () => {
       '09:30',
       '10:00'
     ]);
-    expect(data.every((entry: { updatedById: string }) => entry.updatedById === 'admin-1')).toBe(true);
+    expect(data.every((entry: { updatedById: string }) => entry.updatedById === 'admin-1')).toBe(
+      true
+    );
   });
 
   it('does not write anything when there is no drift', async () => {
@@ -448,6 +451,30 @@ describe('MaintenanceService', () => {
         })
       );
       expect(report.repairableCount).toBe(0);
+    });
+
+    // The advice sentence for a moved departure describes what the repair will
+    // do, and the repair declines when the only departure left is full. Showing
+    // that sentence there would promise a button that is refusing to act.
+    it('tells the agency the bus is full rather than promising a repair', async () => {
+      prismaMock.ride.findMany.mockResolvedValue([{ ...strandedRide, capacity: 1 }]);
+      prismaMock.reservation.findMany.mockResolvedValue([
+        reservation('res-visible', 1, '07:30'),
+        reservation('res-stranded', 1, '07:45')
+      ]);
+
+      const report = await service.getOrphanedReservationReport(auth);
+      const stranded = report.items.find((item) => item.reservationId === 'res-stranded');
+
+      expect(stranded).toEqual(
+        expect.objectContaining({
+          reason: 'DEPARTURE_TIME_MOVED',
+          targetDepartureTime: '07:30',
+          targetSeatNumber: null,
+          canRepair: false,
+          reasonAdvice: ORPHAN_NO_FREE_SEAT_ADVICE
+        })
+      );
     });
 
     const skippedRide = {

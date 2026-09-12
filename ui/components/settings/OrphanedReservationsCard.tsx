@@ -250,14 +250,17 @@ export function OrphanedReservationsCard() {
             {/* The wording comes from the API: the same check runs nightly and in
                 CI, and a second copy of these sentences here would be a copy
                 that drifts from what those runs report. */}
+            {/* Deduplicated by the sentence rather than by the reason: one reason
+                can carry two, because a departure the repair knows but cannot
+                reach for lack of a free seat is told apart from one it can. */}
             {report.items
               .filter((item) => !item.canRepair)
               .filter(
                 (item, index, items) =>
-                  items.findIndex((other) => other.reason === item.reason) === index,
+                  items.findIndex((other) => other.reasonAdvice === item.reasonAdvice) === index,
               )
               .map((item) => (
-                <Alert key={item.reason}>
+                <Alert key={item.reasonAdvice}>
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>{item.reasonLabel} — ovo se ne ispravlja automatski</AlertTitle>
                   <AlertDescription>{item.reasonAdvice}</AlertDescription>

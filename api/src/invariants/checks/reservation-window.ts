@@ -143,14 +143,11 @@ export async function loadReservationWindow(ctx: InvariantContext): Promise<Rese
       const dayOfWeek = dayOfWeekOf(travelDate);
       const day: RideDayInstances = {
         rideIsActive: ride.status === RideStatus.ACTIVE,
-        instances: materializeInstanceTimesForDate(
-          ride,
-          exceptionsForDate,
-          travelDate,
-          dayOfWeek
-        ),
+        instances: materializeInstanceTimesForDate(ride, exceptionsForDate, travelDate, dayOfWeek),
         baseInstance: baseInstanceForDate(ride, travelDate, dayOfWeek),
-        skippedByException: exceptionsForDate.some((exception) => exception.type === RideExceptionType.SKIP)
+        skippedByException: exceptionsForDate.some(
+          (exception) => exception.type === RideExceptionType.SKIP
+        )
       };
 
       dayCache.set(key, day);

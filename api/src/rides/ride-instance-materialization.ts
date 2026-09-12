@@ -74,12 +74,6 @@ export function dayOfWeekOf(dateString: string): number {
 }
 
 /**
- * Produces the instance times a ride runs at on one date.
- *
- * `exceptionsForDate` must already be narrowed to `targetDate`: a SKIP there
- * removes the base instance entirely, and each ADDITIONAL adds one.
- */
-/**
  * Decides whether a ride's own schedule runs on a date, and says why not when
  * it does not.
  *

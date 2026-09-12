@@ -35,7 +35,7 @@ export interface OrphanedReservationItemDto {
   reason: OrphanedReservationItemDtoReason;
   /** Short Serbian name for the reason, for a table cell. */
   reasonLabel: string;
-  /** What the agency should do about this reason, in Serbian. */
+  /** What the agency should do about this row, in Serbian. Usually the advice for the reason, but a row whose target departure has no free seat says so instead. */
   reasonAdvice: string;
   canRepair: boolean;
   /** Reservation stations that are no longer on the ride route, if any. */

@@ -1,6 +1,7 @@
 import { withUpdateAudit } from '../../prisma/audit-write.helper';
 import { formatDateOnly } from '../../rides/ride-instance-materialization';
 import {
+  ORPHAN_NO_FREE_SEAT_ADVICE,
   ORPHAN_REASON_ADVICE,
   ORPHAN_REASON_LABELS,
   classifyReservation,
@@ -87,7 +88,7 @@ export async function buildOrphanReport(ctx: InvariantContext): Promise<OrphanRe
  * state of the bus.
  */
 export async function repairOrphanedReservations(
-ctx: InvariantContext
+  ctx: InvariantContext
 ): Promise<OrphanRepairOutcome> {
   const scan = await scanForOrphans(ctx);
 
@@ -268,6 +269,10 @@ export async function scanForOrphans(ctx: InvariantContext): Promise<{
     const targetSeatNumber = seatByReservationId.get(reservation.id) ?? null;
     const stationName = (stationId: string) => stationNameById.get(stationId) ?? stationId;
 
+    // A known departure with no free seat is the one case where the reason's
+    // own sentence would promise a repair that declines to run.
+    const noFreeSeat = targetDepartureTime !== null && targetSeatNumber === null;
+
     return {
       reservationId: reservation.id,
       passengerName: `${reservation.passenger.firstName} ${reservation.passenger.lastName}`,
@@ -284,7 +289,9 @@ export async function scanForOrphans(ctx: InvariantContext): Promise<{
       targetSeatNumber,
       reason: candidate.reason,
       reasonLabel: ORPHAN_REASON_LABELS[candidate.reason],
-      reasonAdvice: ORPHAN_REASON_ADVICE[candidate.reason],
+      reasonAdvice: noFreeSeat
+        ? ORPHAN_NO_FREE_SEAT_ADVICE
+        : ORPHAN_REASON_ADVICE[candidate.reason],
       canRepair: targetDepartureTime !== null && targetSeatNumber !== null,
       offRouteStationNames: findOffRouteStationIds(
         { ...reservation, travelDate },

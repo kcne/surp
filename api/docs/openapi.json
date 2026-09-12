@@ -7130,7 +7130,7 @@
           "reasonAdvice": {
             "type": "string",
             "example": "Tog dana voznja saobraca, ali u drugo vreme nego sto rezervacija nosi. Popravka prebacuje rezervaciju na taj polazak i zadrzava sediste kad je slobodno.",
-            "description": "What the agency should do about this reason, in Serbian."
+            "description": "What the agency should do about this row, in Serbian. Usually the advice for the reason, but a row whose target departure has no free seat says so instead."
           },
           "canRepair": {
             "type": "boolean",

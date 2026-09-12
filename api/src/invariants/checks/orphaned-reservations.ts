@@ -61,16 +61,27 @@ export const ORPHAN_REASON_ADVICE: Record<OrphanReason, string> = {
   RIDE_NOT_ACTIVE:
     'Voznja je u statusu Nacrt ili Neaktivna, pa se ne prikazuje nigde. Vratite je u Aktivna, pa ponovite proveru.',
   DATE_OUTSIDE_RANGE:
-    'Datum putovanja je van perioda u kojem voznja saobraca. Produzite period u Voznjama ili prebacite putnika na drugi datum.',
+    'Datum putovanja je van perioda u kojem voznja saobraca. Produzite period u Voznjama ili prebacite putnika na drugi datum, pa ponovite proveru.',
   WEEKDAY_NOT_SCHEDULED:
-    'Voznja vise nema raspored za taj dan u nedelji. Vratite taj dan u raspored ili prebacite putnika na dan kada voznja saobraca.',
+    'Voznja vise nema raspored za taj dan u nedelji. Vratite taj dan u raspored ili prebacite putnika na dan kada voznja saobraca, pa ponovite proveru.',
   SCHEDULE_TIME_MISSING:
     'Tog dana prva ili poslednja stanica nema upisano vreme, pa polazak ne moze da se izracuna. Upisite vremena u rasporedu voznje, pa ponovite proveru.',
   SKIPPED_BY_EXCEPTION:
     'Za taj datum je upisan izuzetak da voznja ne saobraca. Ako ipak saobraca, obrisite izuzetak; ako ne saobraca, javite putniku i prebacite rezervaciju.',
   EXTRA_DEPARTURE_REMOVED:
-    'Putnik je rezervisao na dodatni polazak koji je u medjuvremenu obrisan. Vratite taj polazak kao izuzetak ili prebacite putnika na drugi polazak.'
+    'Vreme koje rezervacija nosi ne daje raspored voznje za taj datum, pa je putnik najverovatnije rezervisao na dodatni polazak koji je obrisan. Proverite da li tog dana voznja uopste treba da saobraca: ako treba, vratite taj polazak kao izuzetak; ako ne treba, javite putniku i prebacite rezervaciju.'
 };
+
+/**
+ * Advice for an orphan a repair cannot take, even though its departure is known.
+ *
+ * `DEPARTURE_TIME_MOVED` is the one reason whose sentence describes the repair,
+ * and the repair still declines when the target departure has no free seat.
+ * Showing the repair's own sentence there tells the agency a button will handle
+ * something the button is refusing to handle.
+ */
+export const ORPHAN_NO_FREE_SEAT_ADVICE =
+  'Tog dana voznja saobraca u drugo vreme, ali na tom polasku nema nijedno slobodno sediste, pa popravka ne moze da prebaci rezervaciju. Povecajte kapacitet voznje ili prebacite putnika na drugi polazak.';
 
 export interface ReservationToCheck {
   id: string;
@@ -176,6 +187,12 @@ function emptyDayReason(reservation: ReservationToCheck, day: RideDayInstances):
   // different time. Delete the ADDITIONAL and the day empties out, leaving
   // reservations holding a departure time the base schedule never produced —
   // which is what separates this from a day that was simply cancelled.
+  //
+  // The separation is a reading of the stored time, not a fact: a route edit
+  // moves the base departure time on every date of the line, so a reservation
+  // booked before that edit also fails to match it, and a SKIP on the same date
+  // lands it here. The advice is worded to be acted on either way until the
+  // change history of #26 can tell them apart.
   return reservation.rideDepartureTime === day.baseInstance.departureTime
     ? 'SKIPPED_BY_EXCEPTION'
     : 'EXTRA_DEPARTURE_REMOVED';
