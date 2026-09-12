@@ -52,10 +52,34 @@ export class OrphanedReservationItemDto {
   targetSeatNumber!: number | null;
 
   @ApiProperty({
-    enum: ['DEPARTURE_TIME_MOVED', 'AMBIGUOUS_INSTANCE', 'NO_INSTANCE', 'RIDE_NOT_ACTIVE'],
-    example: 'DEPARTURE_TIME_MOVED'
+    enum: [
+      'DEPARTURE_TIME_MOVED',
+      'AMBIGUOUS_INSTANCE',
+      'RIDE_NOT_ACTIVE',
+      'DATE_OUTSIDE_RANGE',
+      'WEEKDAY_NOT_SCHEDULED',
+      'SCHEDULE_TIME_MISSING',
+      'SKIPPED_BY_EXCEPTION',
+      'EXTRA_DEPARTURE_REMOVED'
+    ],
+    example: 'DEPARTURE_TIME_MOVED',
+    description:
+      'Which cause of unreachability this is. "No departure that day" has several, and an agency can only act once it knows which one.'
   })
   reason!: string;
+
+  @ApiProperty({
+    example: 'Vreme polaska pomereno',
+    description: 'Short Serbian name for the reason, for a table cell.'
+  })
+  reasonLabel!: string;
+
+  @ApiProperty({
+    example:
+      'Tog dana voznja saobraca, ali u drugo vreme nego sto rezervacija nosi. Popravka prebacuje rezervaciju na taj polazak i zadrzava sediste kad je slobodno.',
+    description: 'What the agency should do about this reason, in Serbian.'
+  })
+  reasonAdvice!: string;
 
   @ApiProperty({ example: true })
   canRepair!: boolean;

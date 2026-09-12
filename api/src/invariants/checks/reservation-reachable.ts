@@ -1,17 +1,14 @@
-import { ReservationStatus, RideStatus } from '@prisma/client';
 import { withUpdateAudit } from '../../prisma/audit-write.helper';
+import { formatDateOnly } from '../../rides/ride-instance-materialization';
 import {
-  dayOfWeekOf,
-  formatDateOnly,
-  materializeInstanceTimesForDate,
-  utcDateOf
-} from '../../rides/ride-instance-materialization';
-import {
+  ORPHAN_REASON_ADVICE,
+  ORPHAN_REASON_LABELS,
   classifyReservation,
   findOffRouteStationIds,
   resolveSeatNumber,
   type OrphanReason
 } from './orphaned-reservations';
+import { loadReservationWindow } from './reservation-window';
 import { CheckResult, Invariant, InvariantContext, RepairResult } from '../invariant.types';
 import { loadStationNames } from './tenant-lookups';
 
@@ -42,7 +39,9 @@ export interface OrphanedReservationItem {
   targetArrivalTime: string | null;
   seatNumber: number;
   targetSeatNumber: number | null;
-  reason: string;
+  reason: OrphanReason;
+  reasonLabel: string;
+  reasonAdvice: string;
   canRepair: boolean;
   offRouteStationNames: string[];
 }
@@ -141,107 +140,18 @@ export async function scanForOrphans(ctx: InvariantContext): Promise<{
   scannedReservationCount: number;
   items: OrphanedReservationItem[];
 }> {
-  const today = formatDateOnly(new Date())!;
-  const windowStart = utcDateOf(today);
-  const windowEnd = new Date(windowStart);
-  windowEnd.setUTCDate(windowEnd.getUTCDate() + ctx.windowDays);
-  const windowEndDate = formatDateOnly(windowEnd)!;
+  const window = await loadReservationWindow(ctx);
 
-  const reservations = await ctx.prisma.reservation.findMany({
-    where: {
-      tenantId: ctx.tenantId,
-      status: ReservationStatus.ACTIVE,
-      travelDate: { gte: windowStart, lte: windowEnd }
-    },
-    select: {
-      id: true,
-      rideId: true,
-      travelDate: true,
-      rideDepartureTime: true,
-      rideArrivalTime: true,
-      seatNumber: true,
-      departureStationId: true,
-      arrivalStationId: true,
-      passenger: { select: { firstName: true, lastName: true, phone: true } }
-    },
-    // A stable order makes the report and the repair assign the same seats.
-    orderBy: [{ travelDate: 'asc' }, { seatNumber: 'asc' }, { id: 'asc' }]
-  });
-
-  if (reservations.length === 0) {
+  if (window.reservations.length === 0) {
     return {
-      windowStartDate: today,
-      windowEndDate,
+      windowStartDate: window.windowStartDate,
+      windowEndDate: window.windowEndDate,
       scannedReservationCount: 0,
       items: []
     };
   }
 
-  const rideIds = [...new Set(reservations.map((reservation) => reservation.rideId))];
-  const rides = await ctx.prisma.ride.findMany({
-    where: { id: { in: rideIds }, tenantId: ctx.tenantId },
-    select: {
-      id: true,
-      name: true,
-      capacity: true,
-      status: true,
-      type: true,
-      recurringStartDate: true,
-      recurringEndDate: true,
-      oneTimeDate: true,
-      oneTimeDepartureTime: true,
-      oneTimeArrivalTime: true,
-      line: {
-        select: {
-          name: true,
-          departureStationId: true,
-          arrivalStationId: true,
-          intermediateStops: { select: { stationId: true } }
-        }
-      },
-      daySchedules: {
-        select: {
-          dayOfWeek: true,
-          stationTimes: { select: { orderIndex: true, time: true } }
-        }
-      },
-      exceptions: {
-        where: { exceptionDate: { gte: windowStart, lte: windowEnd } },
-        select: { exceptionDate: true, type: true, departureTime: true, arrivalTime: true },
-        orderBy: { createdAt: 'asc' }
-      }
-    }
-  });
-
-  const rideById = new Map(rides.map((ride) => [ride.id, ride]));
   const stationNameById = await loadStationNames(ctx);
-
-  // Instances are derived per ride and date, so cache them: a busy ride can
-  // carry dozens of reservations on the same day.
-  const instanceCache = new Map<string, ReturnType<typeof materializeInstanceTimesForDate>>();
-
-  const instancesFor = (ride: (typeof rides)[number], travelDate: string) => {
-    const key = `${ride.id}:${travelDate}`;
-    const cached = instanceCache.get(key);
-
-    if (cached) {
-      return cached;
-    }
-
-    const exceptionsForDate = ride.exceptions.filter(
-      (exception) => formatDateOnly(exception.exceptionDate) === travelDate
-    );
-    const materialized = materializeInstanceTimesForDate(
-      ride,
-      exceptionsForDate,
-      travelDate,
-      dayOfWeekOf(travelDate)
-    );
-
-    instanceCache.set(key, materialized);
-
-    return materialized;
-  };
 
   // Seats already spoken for on each instance, so a repair never lands a
   // passenger on top of one who is currently visible.
@@ -252,21 +162,22 @@ export async function scanForOrphans(ctx: InvariantContext): Promise<{
     const seats = occupiedSeats.get(key) ?? new Set<number>();
     seats.add(seat);
     occupiedSeats.set(key, seats);
-    return seats;
   };
 
-  const orphanCandidates: Array<{
-    reservation: (typeof reservations)[number];
+  type OrphanCandidate = {
+    reservation: (typeof window.reservations)[number];
     travelDate: string;
-    ride: (typeof rides)[number];
+    ride: NonNullable<ReturnType<typeof window.rideOf>>;
     reason: OrphanReason;
     targetDepartureTime: string | null;
     targetArrivalTime: string | null;
-  }> = [];
+  };
 
-  for (const reservation of reservations) {
+  const orphanCandidates: OrphanCandidate[] = [];
+
+  for (const reservation of window.reservations) {
     const travelDate = formatDateOnly(reservation.travelDate)!;
-    const ride = rideById.get(reservation.rideId);
+    const ride = window.rideOf(reservation);
 
     if (!ride) {
       continue;
@@ -274,15 +185,17 @@ export async function scanForOrphans(ctx: InvariantContext): Promise<{
 
     const classification = classifyReservation(
       { ...reservation, travelDate },
-      {
-        rideIsActive: ride.status === RideStatus.ACTIVE,
-        instances: instancesFor(ride, travelDate)
-      }
+      window.dayOf(ride, travelDate)
     );
 
     if (!classification) {
       // Reachable today, so its seat is genuinely taken.
-      claimSeat(reservation.rideId, travelDate, reservation.rideDepartureTime, reservation.seatNumber);
+      claimSeat(
+        reservation.rideId,
+        travelDate,
+        reservation.rideDepartureTime,
+        reservation.seatNumber
+      );
       continue;
     }
 
@@ -306,7 +219,7 @@ export async function scanForOrphans(ctx: InvariantContext): Promise<{
   // seat claim it first cut the moves on the tenant this was built for from
   // 66 to 39, and every avoided move is a passenger nobody has to call.
   const seatByReservationId = new Map<string, number | null>();
-  const needsAnotherSeat: typeof orphanCandidates = [];
+  const needsAnotherSeat: OrphanCandidate[] = [];
 
   for (const candidate of orphanCandidates) {
     const { reservation, ride, travelDate, targetDepartureTime } = candidate;
@@ -370,6 +283,8 @@ export async function scanForOrphans(ctx: InvariantContext): Promise<{
       seatNumber: reservation.seatNumber,
       targetSeatNumber,
       reason: candidate.reason,
+      reasonLabel: ORPHAN_REASON_LABELS[candidate.reason],
+      reasonAdvice: ORPHAN_REASON_ADVICE[candidate.reason],
       canRepair: targetDepartureTime !== null && targetSeatNumber !== null,
       offRouteStationNames: findOffRouteStationIds(
         { ...reservation, travelDate },
@@ -379,9 +294,9 @@ export async function scanForOrphans(ctx: InvariantContext): Promise<{
   });
 
   return {
-    windowStartDate: today,
-    windowEndDate,
-    scannedReservationCount: reservations.length,
+    windowStartDate: window.windowStartDate,
+    windowEndDate: window.windowEndDate,
+    scannedReservationCount: window.reservations.length,
     items
   };
 }
@@ -401,7 +316,7 @@ export const reservationReachable: Invariant = {
       violations: report.items.map((item) => ({
         subjectType: 'reservation' as const,
         subjectId: item.reservationId,
-        summary: `${item.passengerName}, ${item.travelDate}, polazak ${item.currentDepartureTime} vise ne postoji.`,
+        summary: `${item.passengerName}, ${item.travelDate}, polazak ${item.currentDepartureTime}: ${item.reasonLabel.toLowerCase()}.`,
         detail: { ...item },
         canRepair: item.canRepair
       }))

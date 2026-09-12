@@ -450,26 +450,65 @@ describe('MaintenanceService', () => {
       expect(report.repairableCount).toBe(0);
     });
 
-    it('reports a date the ride no longer runs on without offering a repair', async () => {
+    const skippedRide = {
+      ...strandedRide,
+      exceptions: [
+        { exceptionDate: travelDate, type: 'SKIP', departureTime: null, arrivalTime: null }
+      ]
+    };
+
+    it('says somebody marked the date as not running, rather than that no bus exists', async () => {
+      prismaMock.ride.findMany.mockResolvedValue([skippedRide]);
+      // 07:30 is what the ride's own schedule produces, so the skip is the only
+      // thing standing between this reservation and its departure.
+      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:30')]);
+
+      const report = await service.getOrphanedReservationReport(auth);
+
+      expect(report.items[0]).toEqual(
+        expect.objectContaining({
+          reason: 'SKIPPED_BY_EXCEPTION',
+          reasonLabel: 'Upisano je da se tog dana ne vozi',
+          canRepair: false
+        })
+      );
+      expect(report.items[0].reasonAdvice.length).toBeGreaterThan(0);
+    });
+
+    it('separates a deleted extra departure by the time the reservation still holds', async () => {
+      prismaMock.ride.findMany.mockResolvedValue([skippedRide]);
+      // 07:45 is a time the base schedule never produced, so this passenger was
+      // booked onto an extra departure that has since been deleted.
+      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
+
+      const report = await service.getOrphanedReservationReport(auth);
+
+      expect(report.items[0]).toEqual(
+        expect.objectContaining({ reason: 'EXTRA_DEPARTURE_REMOVED', canRepair: false })
+      );
+    });
+
+    it('names the weekday dropped from the schedule as its own cause', async () => {
+      prismaMock.ride.findMany.mockResolvedValue([{ ...strandedRide, daySchedules: [] }]);
+      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
+
+      const report = await service.getOrphanedReservationReport(auth);
+
+      expect(report.items[0]).toEqual(
+        expect.objectContaining({ reason: 'WEEKDAY_NOT_SCHEDULED', canRepair: false })
+      );
+    });
+
+    it('names a travel date past a shortened recurring period', async () => {
       prismaMock.ride.findMany.mockResolvedValue([
-        {
-          ...strandedRide,
-          exceptions: [
-            {
-              exceptionDate: travelDate,
-              type: 'SKIP',
-              departureTime: null,
-              arrivalTime: null
-            }
-          ]
-        }
+        { ...strandedRide, recurringEndDate: dateInDays(1) }
       ]);
       prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
 
       const report = await service.getOrphanedReservationReport(auth);
 
       expect(report.items[0]).toEqual(
-        expect.objectContaining({ reason: 'NO_INSTANCE', canRepair: false })
+        expect.objectContaining({ reason: 'DATE_OUTSIDE_RANGE', canRepair: false })
       );
     });
 

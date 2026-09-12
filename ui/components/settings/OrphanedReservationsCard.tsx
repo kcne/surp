@@ -27,22 +27,6 @@ import {
 import { useOrphanedReservationsQuery } from "@/infrastructure/hooks/queries/useOrphanedReservationsQuery"
 import { useRepairOrphanedReservationsMutation } from "@/infrastructure/hooks/mutations/useMaintenanceMutations"
 
-const REASON_LABELS: Record<string, string> = {
-  DEPARTURE_TIME_MOVED: "Vreme polaska pomereno",
-  AMBIGUOUS_INSTANCE: "Vise polazaka tog dana",
-  NO_INSTANCE: "Voznja tog dana ne postoji",
-  RIDE_NOT_ACTIVE: "Voznja nije aktivna",
-}
-
-const REASON_HELP: Record<string, string> = {
-  AMBIGUOUS_INSTANCE:
-    "Tog dana voznja ima vise polazaka, pa se iz podataka ne vidi na koji je putnik rezervisao. Otvorite rezervaciju i izaberite polazak rucno.",
-  NO_INSTANCE:
-    "Tog dana voznja uopste ne saobraca — dan je van perioda ponavljanja, nema raspored za taj dan u nedelji, upisan je izuzetak da se ne vozi, ili prva odnosno poslednja stanica nema vreme. Sredite raspored u Voznjama, pa ponovite proveru.",
-  RIDE_NOT_ACTIVE:
-    "Voznja je u statusu Nacrt ili Neaktivna, pa se ne prikazuje nigde. Vratite je u Aktivna, pa ponovite proveru.",
-}
-
 function formatDate(value: string): string {
   const [year, month, day] = value.split("-")
   return `${day}.${month}.${year}.`
@@ -122,8 +106,8 @@ export function OrphanedReservationsCard() {
                       ) : null}
                       {manualCount > 0 ? (
                         <p>
-                          Preostalih <strong>{manualCount}</strong> se ne dira — za njih se iz
-                          podataka ne vidi na koji polazak spadaju.
+                          Preostalih <strong>{manualCount}</strong> se ne dira — za njih
+                          popravka ne moze da odluci sama. Razlog svake je naveden u tabeli.
                         </p>
                       ) : null}
                     </div>
@@ -174,8 +158,8 @@ export function OrphanedReservationsCard() {
               </AlertTitle>
               <AlertDescription>
                 Putovanja od {formatDate(report.windowStartDate)} do{" "}
-                {formatDate(report.windowEndDate)}. Nisu obrisane — samo su vezane za vreme
-                polaska koje vise ne postoji.
+                {formatDate(report.windowEndDate)}. Nisu obrisane — samo ih nijedan polazak tog
+                dana vise ne dohvata. Razlog stoji uz svaku.
               </AlertDescription>
             </Alert>
 
@@ -242,7 +226,7 @@ export function OrphanedReservationsCard() {
                       </TableCell>
                       <TableCell>
                         <Badge variant={item.canRepair ? "secondary" : "destructive"}>
-                          {REASON_LABELS[item.reason] ?? item.reason}
+                          {item.reasonLabel}
                         </Badge>
                       </TableCell>
                     </TableRow>
@@ -263,21 +247,22 @@ export function OrphanedReservationsCard() {
               </Alert>
             ) : null}
 
-            {Array.from(
-              new Set(
-                report.items
-                  .filter((item) => !item.canRepair)
-                  .map((item) => item.reason)
+            {/* The wording comes from the API: the same check runs nightly and in
+                CI, and a second copy of these sentences here would be a copy
+                that drifts from what those runs report. */}
+            {report.items
+              .filter((item) => !item.canRepair)
+              .filter(
+                (item, index, items) =>
+                  items.findIndex((other) => other.reason === item.reason) === index,
               )
-            ).map((reason) => (
-              <Alert key={reason}>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>
-                  {REASON_LABELS[reason] ?? reason} — ovo se ne ispravlja automatski
-                </AlertTitle>
-                <AlertDescription>{REASON_HELP[reason]}</AlertDescription>
-              </Alert>
-            ))}
+              .map((item) => (
+                <Alert key={item.reason}>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>{item.reasonLabel} — ovo se ne ispravlja automatski</AlertTitle>
+                  <AlertDescription>{item.reasonAdvice}</AlertDescription>
+                </Alert>
+              ))}
           </>
         ) : null}
       </CardContent>

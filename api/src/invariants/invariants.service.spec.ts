@@ -26,9 +26,10 @@ describe('INVARIANTS registry', () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it('carries the four checks that used to be separate endpoints', () => {
+  it('carries the four checks that used to be separate endpoints, plus what has been added since', () => {
     expect(INVARIANTS.map((invariant) => invariant.key)).toEqual([
       'reservation.reachable',
+      'reservation.arrivalTimeCurrent',
       'schedule.matchesRoute',
       'pair.directionsAgree',
       'pair.terminiReachable'
@@ -40,6 +41,16 @@ describe('INVARIANTS registry', () => {
       expect(invariant.title.length).toBeGreaterThan(0);
       expect(invariant.description.length).toBeGreaterThan(0);
     }
+  });
+
+  // A stale arrival time breaks nothing a request can see — the passenger is
+  // simply told the wrong hour — so it is reported as a warning and repaired
+  // without asking, unlike the moves that reseat people.
+  it('keeps the arrival-time check quiet and repairable', () => {
+    const invariant = findInvariant('reservation.arrivalTimeCurrent');
+
+    expect(invariant?.severity).toBe('warning');
+    expect(invariant?.repair).toBeDefined();
   });
 
   // Placing a terminus onto the opposite route is a routing decision, so this

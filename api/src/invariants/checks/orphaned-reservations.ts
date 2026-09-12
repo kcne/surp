@@ -1,4 +1,7 @@
-import { MaterializedInstanceTimes } from '../../rides/ride-instance-materialization';
+import {
+  BaseInstanceOutcome,
+  MaterializedInstanceTimes
+} from '../../rides/ride-instance-materialization';
 
 /**
  * A reservation is only ever reached through a ride instance, and instances are
@@ -18,11 +21,56 @@ export type OrphanReason =
   | 'DEPARTURE_TIME_MOVED'
   /** Several instances run that day and nothing says which one was booked. */
   | 'AMBIGUOUS_INSTANCE'
-  /** No instance at all: a SKIP exception, a date outside the recurring range, a
-   *  weekday with no schedule, or a schedule missing its first or last time. */
-  | 'NO_INSTANCE'
   /** The ride itself is DRAFT or INACTIVE, so it materializes nowhere. */
-  | 'RIDE_NOT_ACTIVE';
+  | 'RIDE_NOT_ACTIVE'
+  /** The travel date falls outside the period the ride runs in. */
+  | 'DATE_OUTSIDE_RANGE'
+  /** The ride no longer carries a schedule for that day of the week. */
+  | 'WEEKDAY_NOT_SCHEDULED'
+  /** The day is scheduled, but its first or last station has no time entered. */
+  | 'SCHEDULE_TIME_MISSING'
+  /** Somebody marked the date as not running. */
+  | 'SKIPPED_BY_EXCEPTION'
+  /** The extra departure this reservation was booked on is gone. */
+  | 'EXTRA_DEPARTURE_REMOVED';
+
+/**
+ * What each reason asks the agency to do about it.
+ *
+ * The text lives here rather than in the settings page because the same check
+ * runs in four places — before a write, nightly, on demand and in CI — and a
+ * second copy of these sentences in the web app would be a copy that drifts.
+ * Serbian, because an agency employee reads it.
+ */
+export const ORPHAN_REASON_LABELS: Record<OrphanReason, string> = {
+  DEPARTURE_TIME_MOVED: 'Vreme polaska pomereno',
+  AMBIGUOUS_INSTANCE: 'Vise polazaka tog dana',
+  RIDE_NOT_ACTIVE: 'Voznja nije aktivna',
+  DATE_OUTSIDE_RANGE: 'Datum je van perioda voznje',
+  WEEKDAY_NOT_SCHEDULED: 'Taj dan u nedelji nije u rasporedu',
+  SCHEDULE_TIME_MISSING: 'Prva ili poslednja stanica nema vreme',
+  SKIPPED_BY_EXCEPTION: 'Upisano je da se tog dana ne vozi',
+  EXTRA_DEPARTURE_REMOVED: 'Dodatni polazak je obrisan'
+};
+
+export const ORPHAN_REASON_ADVICE: Record<OrphanReason, string> = {
+  DEPARTURE_TIME_MOVED:
+    'Tog dana voznja saobraca, ali u drugo vreme nego sto rezervacija nosi. Popravka prebacuje rezervaciju na taj polazak i zadrzava sediste kad je slobodno.',
+  AMBIGUOUS_INSTANCE:
+    'Tog dana voznja ima vise polazaka, pa se iz podataka ne vidi na koji je putnik rezervisao. Otvorite rezervaciju i izaberite polazak rucno.',
+  RIDE_NOT_ACTIVE:
+    'Voznja je u statusu Nacrt ili Neaktivna, pa se ne prikazuje nigde. Vratite je u Aktivna, pa ponovite proveru.',
+  DATE_OUTSIDE_RANGE:
+    'Datum putovanja je van perioda u kojem voznja saobraca. Produzite period u Voznjama ili prebacite putnika na drugi datum.',
+  WEEKDAY_NOT_SCHEDULED:
+    'Voznja vise nema raspored za taj dan u nedelji. Vratite taj dan u raspored ili prebacite putnika na dan kada voznja saobraca.',
+  SCHEDULE_TIME_MISSING:
+    'Tog dana prva ili poslednja stanica nema upisano vreme, pa polazak ne moze da se izracuna. Upisite vremena u rasporedu voznje, pa ponovite proveru.',
+  SKIPPED_BY_EXCEPTION:
+    'Za taj datum je upisan izuzetak da voznja ne saobraca. Ako ipak saobraca, obrisite izuzetak; ako ne saobraca, javite putniku i prebacite rezervaciju.',
+  EXTRA_DEPARTURE_REMOVED:
+    'Putnik je rezervisao na dodatni polazak koji je u medjuvremenu obrisan. Vratite taj polazak kao izuzetak ili prebacite putnika na drugi polazak.'
+};
 
 export interface ReservationToCheck {
   id: string;
@@ -44,11 +92,21 @@ export interface OrphanClassification {
 export interface RideDayInstances {
   rideIsActive: boolean;
   instances: MaterializedInstanceTimes[];
+  /** What the ride's own schedule says about the date, before exceptions. */
+  baseInstance: BaseInstanceOutcome;
+  /** Whether a SKIP exception marks the date as not running. */
+  skippedByException: boolean;
 }
 
 /**
- * Decides whether one reservation is reachable, and if not, whether a single
- * instance can claim it.
+ * Decides whether one reservation is reachable, and if not, which of the causes
+ * of unreachability it is facing.
+ *
+ * "No departure that day" is one symptom with several causes, and the agency
+ * cannot act until it knows which: a weekday dropped from the schedule needs a
+ * decision about the passenger, a missing station time needs a field filled in,
+ * and a SKIP exception may simply be correct. Reporting them as one reason left
+ * whoever opened the report to reconstruct the difference by hand.
  *
  * Returns `null` when the reservation is reachable, which is the common case.
  */
@@ -71,7 +129,7 @@ export function classifyReservation(
   }
 
   if (day.instances.length === 0) {
-    return { reason: 'NO_INSTANCE', ...none };
+    return { reason: emptyDayReason(reservation, day), ...none };
   }
 
   // More than one instance is a genuine ambiguity: an ADDITIONAL exception
@@ -83,11 +141,44 @@ export function classifyReservation(
 
   const target = day.instances[0];
 
+  // A single instance at a different time is read as a moved departure, which
+  // is what a route edit produces. A deleted ADDITIONAL exception on a date
+  // whose base run still stands looks exactly the same from here, and only the
+  // change history could tell them apart — that history is #26.
   return {
     reason: 'DEPARTURE_TIME_MOVED',
     targetDepartureTime: target.departureTime,
     targetArrivalTime: target.arrivalTime
   };
+}
+
+/**
+ * Names why a date materialized nothing.
+ *
+ * The ride's own schedule is asked first: when it does not run that date at
+ * all, that is the cause, and a SKIP sitting on top of a date that was never
+ * going to run says nothing useful. Only once the base run does stand is the
+ * SKIP what removed it.
+ */
+function emptyDayReason(reservation: ReservationToCheck, day: RideDayInstances): OrphanReason {
+  if (!day.baseInstance.runs) {
+    return day.baseInstance.gap;
+  }
+
+  if (!day.skippedByException) {
+    // The base run stands and nothing suppressed it, so the day is not empty
+    // and this branch is unreachable. Naming the skip is still the honest
+    // answer if the two ever disagree.
+    return 'SKIPPED_BY_EXCEPTION';
+  }
+
+  // A SKIP paired with an ADDITIONAL is how an agency moves a single day to a
+  // different time. Delete the ADDITIONAL and the day empties out, leaving
+  // reservations holding a departure time the base schedule never produced —
+  // which is what separates this from a day that was simply cancelled.
+  return reservation.rideDepartureTime === day.baseInstance.departureTime
+    ? 'SKIPPED_BY_EXCEPTION'
+    : 'EXTRA_DEPARTURE_REMOVED';
 }
 
 /**

@@ -1,5 +1,6 @@
 import { RideExceptionType, RideType } from '@prisma/client';
 import {
+  baseInstanceForDate,
   dayOfWeekOf,
   materializeInstanceTimesForDate,
   type MaterializationRide
@@ -146,5 +147,97 @@ describe('materializeInstanceTimesForDate', () => {
     expect(
       materializeInstanceTimesForDate(oneTime, [], '2026-09-16', dayOfWeekOf('2026-09-16'))
     ).toEqual([]);
+  });
+});
+
+describe('baseInstanceForDate', () => {
+  // Every gap below produces the same empty day, and the reachability check
+  // can only tell an agency what to do once they are told apart.
+  it('reports the times the ride runs at when the date is covered', () => {
+    expect(baseInstanceForDate(recurringRide(), TUESDAY, dayOfWeekOf(TUESDAY))).toEqual({
+      runs: true,
+      departureTime: '07:45',
+      arrivalTime: '23:00'
+    });
+  });
+
+  it('names a date before the recurring period starts', () => {
+    expect(baseInstanceForDate(recurringRide(), '2025-12-30', dayOfWeekOf('2025-12-30'))).toEqual({
+      runs: false,
+      gap: 'DATE_OUTSIDE_RANGE'
+    });
+  });
+
+  it('names a date past a shortened recurring period', () => {
+    const ride = recurringRide({ recurringEndDate: new Date('2026-09-01T00:00:00.000Z') });
+
+    expect(baseInstanceForDate(ride, TUESDAY, dayOfWeekOf(TUESDAY))).toEqual({
+      runs: false,
+      gap: 'DATE_OUTSIDE_RANGE'
+    });
+  });
+
+  it('names a weekday the ride carries no schedule for', () => {
+    const wednesday = '2026-09-16';
+
+    expect(baseInstanceForDate(recurringRide(), wednesday, dayOfWeekOf(wednesday))).toEqual({
+      runs: false,
+      gap: 'WEEKDAY_NOT_SCHEDULED'
+    });
+  });
+
+  it('names a first station left without a time', () => {
+    const ride = recurringRide({
+      daySchedules: [
+        {
+          dayOfWeek: 2,
+          stationTimes: [
+            { orderIndex: 0, time: null },
+            { orderIndex: 1, time: '23:00' }
+          ]
+        }
+      ]
+    });
+
+    expect(baseInstanceForDate(ride, TUESDAY, dayOfWeekOf(TUESDAY))).toEqual({
+      runs: false,
+      gap: 'SCHEDULE_TIME_MISSING'
+    });
+  });
+
+  it('names a last station left without a time', () => {
+    const ride = recurringRide({
+      daySchedules: [
+        {
+          dayOfWeek: 2,
+          stationTimes: [
+            { orderIndex: 0, time: '07:45' },
+            { orderIndex: 1, time: null }
+          ]
+        }
+      ]
+    });
+
+    expect(baseInstanceForDate(ride, TUESDAY, dayOfWeekOf(TUESDAY))).toEqual({
+      runs: false,
+      gap: 'SCHEDULE_TIME_MISSING'
+    });
+  });
+
+  it('treats a one-time ride moved to another date as outside its range', () => {
+    const oneTime: MaterializationRide = {
+      type: RideType.ONE_TIME,
+      recurringStartDate: null,
+      recurringEndDate: null,
+      oneTimeDate: new Date('2026-09-15T00:00:00.000Z'),
+      oneTimeDepartureTime: '09:00',
+      oneTimeArrivalTime: '18:00',
+      daySchedules: []
+    };
+
+    expect(baseInstanceForDate(oneTime, '2026-09-16', dayOfWeekOf('2026-09-16'))).toEqual({
+      runs: false,
+      gap: 'DATE_OUTSIDE_RANGE'
+    });
   });
 });
