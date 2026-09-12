@@ -48,6 +48,15 @@ export interface SeatClashItem {
    * is the shape that hides a clash from the booking check.
    */
   fromDriftedTime: boolean;
+  /**
+   * Whether either segment had to be assumed because a station it names is no
+   * longer on the route. An assumed segment covers the whole route, so it
+   * overlaps everything — the clash may be an artifact of the route edit rather
+   * than two passengers who will actually meet. Said out loud, because the two
+   * station names printed below will not match the route the agency is looking
+   * at and nothing else on the row would explain why.
+   */
+  segmentAssumed: boolean;
 }
 
 export async function findSeatClashes(
@@ -107,7 +116,8 @@ function clashItem(
     otherPassengerName: first.passengerName,
     otherPassengerPhone: first.passengerPhone,
     otherSegmentLabel: segmentLabel(first),
-    fromDriftedTime: first.drifted || second.drifted
+    fromDriftedTime: first.drifted || second.drifted,
+    segmentAssumed: !first.segmentKnown || !second.segmentKnown
   };
 }
 
@@ -126,7 +136,11 @@ export const reservationSeatUnique: Invariant = {
       violations: items.map((item) => ({
         subjectType: 'reservation' as const,
         subjectId: item.reservationId,
-        summary: `Sediste ${item.seatNumber}, ${item.travelDate}, polazak ${item.departureTime}: ${item.passengerName} (${item.segmentLabel}) i ${item.otherPassengerName} (${item.otherSegmentLabel}) putuju u isto vreme.`,
+        summary: `Sediste ${item.seatNumber}, ${item.travelDate}, polazak ${item.departureTime}: ${item.passengerName} (${item.segmentLabel}) i ${item.otherPassengerName} (${item.otherSegmentLabel}) putuju u isto vreme.${
+          item.segmentAssumed
+            ? ' Stanica sa jedne od ovih rezervacija vise nije na ruti, pa je deonica racunata kao cela ruta — proverite obe pre nego sto nekoga pomerite.'
+            : ''
+        }`,
         detail: { ...item },
         canRepair: false
       }))

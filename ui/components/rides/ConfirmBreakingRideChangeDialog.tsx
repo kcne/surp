@@ -55,7 +55,15 @@ export function ConfirmBreakingRideChangeDialog({
             Odustani
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={onConfirm}
+            onClick={(event) => {
+              // Radix closes the dialog on its own the moment Action is
+              // clicked. Left alone that unmounts the question before the
+              // answer has been written: no "Cuvanje...", no disabled button,
+              // and a save that then fails leaves nothing on screen to retry.
+              // The page closes it once the write is actually through.
+              event.preventDefault()
+              void onConfirm()
+            }}
             disabled={loading}
             className="bg-danger text-white hover:bg-danger/90"
           >

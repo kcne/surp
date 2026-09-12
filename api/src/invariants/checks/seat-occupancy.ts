@@ -66,6 +66,19 @@ export interface OccupancyScan {
 }
 
 /**
+ * The scan, built once per context and handed to all three checks.
+ *
+ * They run one after another against the same `InvariantContext`, so without
+ * this the window is queried three times over and the claim above — that the
+ * three cannot disagree about who shares a bus — holds only by luck. Keyed on
+ * the context object rather than the tenant so it cannot outlive the report it
+ * was built for: `InvariantsService` mints a fresh context per request, and a
+ * repair takes a new one before re-checking, which is what keeps a repaired
+ * violation from being read back out of this cache.
+ */
+const scanByContext = new WeakMap<InvariantContext, Promise<OccupancyScan>>();
+
+/**
  * Groups every active reservation in the window onto the departure that will
  * carry it.
  *
@@ -74,7 +87,22 @@ export interface OccupancyScan {
  * and counting it here would name the same passenger under a heading that
  * understates the problem.
  */
-export async function loadInstanceOccupancy(ctx: InvariantContext): Promise<OccupancyScan> {
+export function loadInstanceOccupancy(ctx: InvariantContext): Promise<OccupancyScan> {
+  const cached = scanByContext.get(ctx);
+
+  if (cached) {
+    return cached;
+  }
+
+  // The promise is cached, not the result, so three checks starting at once
+  // still share one load rather than racing to start their own.
+  const scan = scanInstanceOccupancy(ctx);
+  scanByContext.set(ctx, scan);
+
+  return scan;
+}
+
+async function scanInstanceOccupancy(ctx: InvariantContext): Promise<OccupancyScan> {
   const window = await loadReservationWindow(ctx);
   const byKey = new Map<string, InstanceOccupancy>();
   // One numbering per ride rather than per reservation: a busy ride carries
