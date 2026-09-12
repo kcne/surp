@@ -48,7 +48,12 @@ const RIDE_SELECT = {
       name: true,
       departureStationId: true,
       arrivalStationId: true,
-      intermediateStops: { select: { stationId: true } }
+      // Ordered, because the seat checks number the route from these to work
+      // out which reservations share a stretch of it.
+      intermediateStops: {
+        select: { stationId: true },
+        orderBy: { orderIndex: 'asc' }
+      }
     }
   },
   daySchedules: {

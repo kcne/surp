@@ -24,6 +24,7 @@ import {
   ReservationBatchItemResultDto
 } from './dto/reservations-batch.response.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
+import { RouteSegment, routeStationOrder, segmentsOverlap } from './route-segment';
 
 const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   id: true,
@@ -83,11 +84,6 @@ type RideRouteContext = {
   boardingStationIds: Set<string>;
   /** Stations on the route where a passenger may get off. */
   dropoffStationIds: Set<string>;
-};
-
-type RouteSegment = {
-  departureOrder: number;
-  arrivalOrder: number;
 };
 
 type ReservationDbClient = PrismaService | Prisma.TransactionClient;
@@ -374,14 +370,7 @@ export class ReservationsService {
       throw new BadRequestException('Ride must exist in the current tenant');
     }
 
-    const stationOrderById = new Map<string, number>();
-    stationOrderById.set(ride.line.departureStationId, 0);
-
-    ride.line.intermediateStops.forEach((stop, index) => {
-      stationOrderById.set(stop.stationId, index + 1);
-    });
-
-    stationOrderById.set(ride.line.arrivalStationId, ride.line.intermediateStops.length + 1);
+    const stationOrderById = routeStationOrder(ride.line);
 
     // The line endpoints are always usable: the route starts by boarding at the
     // departure station and ends by getting off at the arrival station.
@@ -514,7 +503,7 @@ export class ReservationsService {
         return true;
       }
 
-      const overlaps = this.segmentsOverlap(
+      const overlaps = segmentsOverlap(
         {
           departureOrder,
           arrivalOrder
@@ -613,10 +602,6 @@ export class ReservationsService {
     ].join(':');
 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
-  }
-
-  private segmentsOverlap(a: RouteSegment, b: RouteSegment): boolean {
-    return Math.max(a.departureOrder, b.departureOrder) < Math.min(a.arrivalOrder, b.arrivalOrder);
   }
 
   private toUtcDate(date: string): Date {

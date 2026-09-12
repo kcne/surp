@@ -28,7 +28,12 @@ export interface InvariantContext {
   windowDays: number;
 }
 
-export type ViolationSubject = 'reservation' | 'ride-schedule' | 'line-pair' | 'line';
+export type ViolationSubject =
+  | 'reservation'
+  | 'ride-instance'
+  | 'ride-schedule'
+  | 'line-pair'
+  | 'line';
 
 export interface Violation {
   subjectType: ViolationSubject;

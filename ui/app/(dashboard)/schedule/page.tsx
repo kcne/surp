@@ -6,15 +6,18 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Plus, CalendarClock } from "lucide-react"
 import { RideModal } from "@/components/rides/RideModal"
+import { ConfirmBreakingRideChangeDialog } from "@/components/rides/ConfirmBreakingRideChangeDialog"
 import { DeleteRideDialog } from "@/components/rides/DeleteRideDialog"
 import { RideInstancesView } from "@/components/rides/RideInstancesView"
 import { RidesDataTable } from "@/components/rides/RidesDataTable"
 import { useCrudDialogState } from "@/hooks/useCrudDialogState"
 import {
+  RideChangeNeedsConfirmationError,
   useCreateRideMutation,
   useDeleteRideMutation,
   useUpdateRideMutation,
 } from "@/infrastructure/hooks/mutations/useRideMutations"
+import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import type { Ride, RideFormData } from "@/types"
 
@@ -34,6 +37,12 @@ export default function SchedulePage() {
     deleteRideMutation.isPending
   const [isInstancesViewOpen, setIsInstancesViewOpen] = useState(false)
   const [instancesRide, setInstancesRide] = useState<Ride | null>(null)
+  // An update the server held back until somebody confirms what it breaks.
+  const [pendingChange, setPendingChange] = useState<{
+    id: string
+    payload: Partial<RideFormData>
+    confirmation: WouldBreakReservationsDto
+  } | null>(null)
   const {
     isModalOpen,
     isDeleteDialogOpen,
@@ -83,7 +92,35 @@ export default function SchedulePage() {
   }
 
   const handleUpdate = async (id: string, payload: Partial<RideFormData>) => {
-    await updateRideMutation.mutateAsync({ id, payload })
+    try {
+      await updateRideMutation.mutateAsync({ id, payload })
+    } catch (error) {
+      if (error instanceof RideChangeNeedsConfirmationError) {
+        setPendingChange({ id, payload, confirmation: error.confirmation })
+      }
+
+      // Rethrown either way, so the form stays open on the values that were
+      // typed rather than closing on a change that was never written.
+      throw error
+    }
+  }
+
+  const handleConfirmPendingChange = async () => {
+    if (!pendingChange) {
+      return
+    }
+
+    try {
+      await updateRideMutation.mutateAsync({
+        id: pendingChange.id,
+        payload: pendingChange.payload,
+        confirmBreakingChange: true,
+      })
+      setPendingChange(null)
+      closeModal()
+    } catch {
+      // The mutation already reported it; the dialog stays up to be retried.
+    }
   }
 
   const handleDeleteRide = async (id: string) => {
@@ -199,6 +236,18 @@ export default function SchedulePage() {
           loading={mutationLoading}
           onCreate={handleCreate}
           onUpdate={handleUpdate}
+        />
+
+        <ConfirmBreakingRideChangeDialog
+          open={pendingChange !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPendingChange(null)
+            }
+          }}
+          confirmation={pendingChange?.confirmation ?? null}
+          loading={mutationLoading}
+          onConfirm={handleConfirmPendingChange}
         />
 
         <DeleteRideDialog

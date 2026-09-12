@@ -23,6 +23,7 @@ import {
   toUpdateRideDto,
 } from "@/infrastructure/mappers/rideMappers"
 import { ridesListQueryKey } from "@/infrastructure/hooks/queries/useRidesListQuery"
+import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
 import type { RideFormData } from "@/types"
 
 function isRideMutationSuccess<TResponse extends { status: number }>(
@@ -34,6 +35,35 @@ function isRideMutationSuccess<TResponse extends { status: number }>(
   }
 
   return response.status >= 200 && response.status < 300
+}
+
+/**
+ * A change the server refused because it would break reservations that already
+ * exist — lowering capacity under a seat that is sold, today.
+ *
+ * It is not an error in the sense the other ones are: the request was valid and
+ * the agency may well mean it, a smaller bus really does get substituted. So it
+ * carries the server's count up to the page, which asks the question and
+ * resends with the confirmation, instead of being flattened into a red toast
+ * that says only that something failed.
+ */
+export class RideChangeNeedsConfirmationError extends Error {
+  constructor(readonly confirmation: WouldBreakReservationsDto) {
+    super(confirmation.message)
+    this.name = "RideChangeNeedsConfirmationError"
+  }
+}
+
+function asBreakingChangeConflict(error: unknown): WouldBreakReservationsDto | null {
+  const body = (error as { response?: { status?: number; data?: unknown } })?.response
+
+  if (body?.status !== 409) {
+    return null
+  }
+
+  const data = body.data as Partial<WouldBreakReservationsDto> | undefined
+
+  return data?.code === "WOULD_BREAK_RESERVATIONS" ? (data as WouldBreakReservationsDto) : null
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -121,7 +151,16 @@ export function useUpdateRideMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, payload }: { id: string; payload: Partial<RideFormData> }) => {
+    mutationFn: async ({
+      id,
+      payload,
+      confirmBreakingChange,
+    }: {
+      id: string
+      payload: Partial<RideFormData>
+      /** Set only after the agency has answered the question the 409 asked. */
+      confirmBreakingChange?: boolean
+    }) => {
       const hasExceptionsUpdate = Array.isArray(payload.exceptions)
       const hasDaySchedulesUpdate = payload.daySchedules !== undefined
 
@@ -146,9 +185,22 @@ export function useUpdateRideMutation() {
             : payload
         )
 
-        const response = payload.lineId && payload.type
-          ? await ridesControllerReplace(id, updatePayload)
-          : await ridesControllerUpdate(id, updatePayload)
+        const requestBody = confirmBreakingChange
+          ? { ...updatePayload, confirmBreakingChange: true }
+          : updatePayload
+
+        const response = await (payload.lineId && payload.type
+          ? ridesControllerReplace(id, requestBody)
+          : ridesControllerUpdate(id, requestBody)
+        ).catch((error: unknown) => {
+          const confirmation = asBreakingChangeConflict(error)
+
+          if (confirmation) {
+            throw new RideChangeNeedsConfirmationError(confirmation)
+          }
+
+          throw error
+        })
 
         const isSuccess = isUpdateRideSuccess(response)
 
@@ -202,6 +254,12 @@ export function useUpdateRideMutation() {
       invalidateRidesList(queryClient)
     },
     onError: (error) => {
+      // The page turns this one into a question, so a toast would only be a
+      // red notice next to a dialog asking the agency to decide.
+      if (error instanceof RideChangeNeedsConfirmationError) {
+        return
+      }
+
       toast.error(getErrorMessage(error, "Neuspesno azuriranje voznje"))
     },
   })

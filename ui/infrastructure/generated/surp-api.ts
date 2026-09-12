@@ -128,7 +128,8 @@ import type {
   UpdateUserDto,
   UpsertStorefrontDto,
   UserResponseDto,
-  UsersControllerListParams
+  UsersControllerListParams,
+  WouldBreakReservationsDto
 } from './model';
 
 import { customInstance } from '../orval/orval-mutator';
@@ -7368,10 +7369,15 @@ export type ridesControllerUpdateResponse404 = {
   status: 404
 }
 
+export type ridesControllerUpdateResponse409 = {
+  data: WouldBreakReservationsDto
+  status: 409
+}
+
 export type ridesControllerUpdateResponseSuccess = (ridesControllerUpdateResponse200) & {
   headers: Headers;
 };
-export type ridesControllerUpdateResponseError = (ridesControllerUpdateResponse400 | ridesControllerUpdateResponse401 | ridesControllerUpdateResponse403 | ridesControllerUpdateResponse404) & {
+export type ridesControllerUpdateResponseError = (ridesControllerUpdateResponse400 | ridesControllerUpdateResponse401 | ridesControllerUpdateResponse403 | ridesControllerUpdateResponse404 | ridesControllerUpdateResponse409) & {
   headers: Headers;
 };
 
@@ -7401,7 +7407,7 @@ export const ridesControllerUpdate = async (id: string,
 
 
 
-export const getRidesControllerUpdateMutationOptions = <TError = ErrorType<void>,
+export const getRidesControllerUpdateMutationOptions = <TError = ErrorType<void | WouldBreakReservationsDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerUpdate>>, TError,{id: string;data: UpdateRideDto}, TContext>, request?: SecondParameter<typeof customInstance>}
 ): UseMutationOptions<Awaited<ReturnType<typeof ridesControllerUpdate>>, TError,{id: string;data: UpdateRideDto}, TContext> => {
 
@@ -7430,12 +7436,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type RidesControllerUpdateMutationResult = NonNullable<Awaited<ReturnType<typeof ridesControllerUpdate>>>
     export type RidesControllerUpdateMutationBody = UpdateRideDto
-    export type RidesControllerUpdateMutationError = ErrorType<void>
+    export type RidesControllerUpdateMutationError = ErrorType<void | WouldBreakReservationsDto>
 
     /**
  * @summary Update ride fields in the current tenant.
  */
-export const useRidesControllerUpdate = <TError = ErrorType<void>,
+export const useRidesControllerUpdate = <TError = ErrorType<void | WouldBreakReservationsDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerUpdate>>, TError,{id: string;data: UpdateRideDto}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof ridesControllerUpdate>>,
@@ -7474,10 +7480,15 @@ export type ridesControllerReplaceResponse404 = {
   status: 404
 }
 
+export type ridesControllerReplaceResponse409 = {
+  data: WouldBreakReservationsDto
+  status: 409
+}
+
 export type ridesControllerReplaceResponseSuccess = (ridesControllerReplaceResponse200) & {
   headers: Headers;
 };
-export type ridesControllerReplaceResponseError = (ridesControllerReplaceResponse400 | ridesControllerReplaceResponse401 | ridesControllerReplaceResponse403 | ridesControllerReplaceResponse404) & {
+export type ridesControllerReplaceResponseError = (ridesControllerReplaceResponse400 | ridesControllerReplaceResponse401 | ridesControllerReplaceResponse403 | ridesControllerReplaceResponse404 | ridesControllerReplaceResponse409) & {
   headers: Headers;
 };
 
@@ -7507,7 +7518,7 @@ export const ridesControllerReplace = async (id: string,
 
 
 
-export const getRidesControllerReplaceMutationOptions = <TError = ErrorType<void>,
+export const getRidesControllerReplaceMutationOptions = <TError = ErrorType<void | WouldBreakReservationsDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerReplace>>, TError,{id: string;data: UpdateRideDto}, TContext>, request?: SecondParameter<typeof customInstance>}
 ): UseMutationOptions<Awaited<ReturnType<typeof ridesControllerReplace>>, TError,{id: string;data: UpdateRideDto}, TContext> => {
 
@@ -7536,12 +7547,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type RidesControllerReplaceMutationResult = NonNullable<Awaited<ReturnType<typeof ridesControllerReplace>>>
     export type RidesControllerReplaceMutationBody = UpdateRideDto
-    export type RidesControllerReplaceMutationError = ErrorType<void>
+    export type RidesControllerReplaceMutationError = ErrorType<void | WouldBreakReservationsDto>
 
     /**
  * @summary Replace ride fields in the current tenant.
  */
-export const useRidesControllerReplace = <TError = ErrorType<void>,
+export const useRidesControllerReplace = <TError = ErrorType<void | WouldBreakReservationsDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerReplace>>, TError,{id: string;data: UpdateRideDto}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof ridesControllerReplace>>,

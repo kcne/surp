@@ -545,6 +545,15 @@ export class RidesService {
     const nextStatus = dto.status ?? existing.status;
     this.validateStatusTransition(existing.status, nextStatus);
 
+    if (dto.capacity !== undefined && dto.capacity < existing.capacity) {
+      await this.ensureCapacityFitsSoldSeats(
+        auth.tenantId,
+        id,
+        dto.capacity,
+        dto.confirmBreakingChange === true
+      );
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.ride.update({
         where: {
@@ -590,6 +599,62 @@ export class RidesService {
     }
 
     return this.toRideResponse(updated);
+  }
+
+  /**
+   * Refuses to lower capacity under a seat that is already sold, unless the
+   * caller says in the request body that it means to.
+   *
+   * Capacity used to be written straight through. Taking a ride from 48 seats
+   * to 30 invalidated every seat from 31 up without a word: the reservations
+   * stayed visible, the seat numbers stayed printed on the list, and the
+   * passenger found out at the door. The same statement is available as
+   * `reservation.seatWithinCapacity`, which is what finds the ones already
+   * written; this is that statement asked before the write instead of after.
+   *
+   * Only reservations from today forward count. A seat number on a trip that
+   * has already run cannot be turned up to, and blocking an agency from
+   * correcting the record of a bus it no longer owns would be nonsense.
+   *
+   * The confirmation is a body flag, not a query parameter, so it cannot be
+   * carried along by a copied URL. Confirming is sometimes the right answer —
+   * a smaller bus really was substituted — and the passengers left over then
+   * show up in the check, which is where they belong.
+   */
+  private async ensureCapacityFitsSoldSeats(
+    tenantId: string,
+    rideId: string,
+    nextCapacity: number,
+    confirmed: boolean
+  ): Promise<void> {
+    const where = {
+      tenantId,
+      rideId,
+      status: ReservationStatus.ACTIVE,
+      travelDate: { gte: utcDateOf(formatDateOnly(new Date())!) },
+      seatNumber: { gt: nextCapacity }
+    };
+
+    const [affectedCount, highest] = await Promise.all([
+      this.prisma.reservation.count({ where }),
+      this.prisma.reservation.findFirst({
+        where,
+        select: { seatNumber: true },
+        orderBy: { seatNumber: 'desc' }
+      })
+    ]);
+
+    if (affectedCount === 0 || confirmed) {
+      return;
+    }
+
+    throw new ConflictException({
+      code: 'WOULD_BREAK_RESERVATIONS',
+      invariant: 'reservation.seatWithinCapacity',
+      affectedCount,
+      highestOccupiedSeat: highest!.seatNumber,
+      message: `Smanjenje kapaciteta na ${nextCapacity} ostavlja ${affectedCount} rezervacija na sedistu koje vise ne postoji; najvise zauzeto sediste je ${highest!.seatNumber}.`
+    });
   }
 
   async replaceDayTimes(

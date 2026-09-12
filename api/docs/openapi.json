@@ -3780,6 +3780,16 @@
           },
           "404": {
             "description": "Ride not found in current tenant."
+          },
+          "409": {
+            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with confirmBreakingChange to proceed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WouldBreakReservationsDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -3845,6 +3855,16 @@
           },
           "404": {
             "description": "Ride not found in current tenant."
+          },
+          "409": {
+            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with confirmBreakingChange to proceed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WouldBreakReservationsDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -8980,6 +9000,11 @@
             "type": "string",
             "example": "10:30"
           },
+          "confirmBreakingChange": {
+            "type": "boolean",
+            "example": false,
+            "description": "Confirms a change the server refused with WOULD_BREAK_RESERVATIONS, such as lowering capacity under a seat that is already sold."
+          },
           "daySchedules": {
             "type": "array",
             "items": {
@@ -8987,6 +9012,41 @@
             }
           }
         }
+      },
+      "WouldBreakReservationsDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "WOULD_BREAK_RESERVATIONS"
+          },
+          "invariant": {
+            "type": "string",
+            "example": "reservation.seatWithinCapacity",
+            "description": "Key of the invariant the change would violate."
+          },
+          "affectedCount": {
+            "type": "number",
+            "example": 8,
+            "description": "Reservations the change would break."
+          },
+          "highestOccupiedSeat": {
+            "type": "number",
+            "example": 38,
+            "description": "Highest seat number still sold, so the caller can see the floor."
+          },
+          "message": {
+            "type": "string",
+            "example": "Smanjenje kapaciteta na 30 ostavlja 8 rezervacija na sedistu koje vise ne postoji; najvise zauzeto sediste je 38."
+          }
+        },
+        "required": [
+          "code",
+          "invariant",
+          "affectedCount",
+          "highestOccupiedSeat",
+          "message"
+        ]
       },
       "ReplaceRideDaySchedulesDto": {
         "type": "object",
