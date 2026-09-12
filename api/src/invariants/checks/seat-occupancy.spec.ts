@@ -9,12 +9,21 @@ const prismaMock = {
   station: { findMany: jest.fn() }
 };
 
-const ctx = {
-  tenantId: 'tenant-1',
-  actorId: 'admin-1',
-  prisma: prismaMock,
-  windowDays: 30
-} as unknown as InvariantContext;
+/**
+ * A fresh context per test, because that is what one is: the three checks share
+ * the occupancy scan they build against a context, so reusing one across tests
+ * would hand the second test the first one's data. `InvariantsService` mints one
+ * per request for the same reason.
+ */
+const contextFor = () =>
+  ({
+    tenantId: 'tenant-1',
+    actorId: 'admin-1',
+    prisma: prismaMock,
+    windowDays: 30
+  }) as unknown as InvariantContext;
+
+let ctx: InvariantContext;
 
 // Travel dates are pinned relative to today so the window always contains them,
 // whenever the suite runs.
@@ -78,6 +87,7 @@ const reservation = (overrides: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   jest.clearAllMocks();
   nextId = 0;
+  ctx = contextFor();
   prismaMock.ride.findMany.mockResolvedValue([rideWith()]);
   prismaMock.station.findMany.mockResolvedValue([
     { id: 'station-bg', name: 'Beograd' },
@@ -192,6 +202,37 @@ describe('reservation.seatUnique', () => {
     expect(items).toHaveLength(3);
   });
 
+  // A station dropped from the line leaves reservations naming it unplaceable,
+  // so their segment is assumed to be the whole route and overlaps everything.
+  // The clash is worth reporting, but the agency has to be told the deonica was
+  // assumed — otherwise the two station names on the row name a route that no
+  // longer exists and the finding looks like a plain double-booking.
+  it('says so when a removed station forced the segment to be assumed', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([
+      reservation({ seatNumber: 12, arrivalStationId: 'station-ns' }),
+      reservation({
+        seatNumber: 12,
+        departureStationId: 'station-gone',
+        passenger: { firstName: 'Ana', lastName: 'Anic', phone: '+381602222222' }
+      })
+    ]);
+
+    const { items } = await findSeatClashes(ctx);
+
+    expect(items).toEqual([expect.objectContaining({ seatNumber: 12, segmentAssumed: true })]);
+  });
+
+  it('leaves segmentAssumed off when both segments are on the route', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([
+      reservation({ seatNumber: 12 }),
+      reservation({ seatNumber: 12 })
+    ]);
+
+    const { items } = await findSeatClashes(ctx);
+
+    expect(items).toEqual([expect.objectContaining({ segmentAssumed: false })]);
+  });
+
   it('keeps two departures on the same day apart', async () => {
     prismaMock.ride.findMany.mockResolvedValue([
       rideWith({
@@ -300,5 +341,33 @@ describe('instance.notOverbooked', () => {
     expect(items).toEqual([
       expect.objectContaining({ departureTime: '07:45', passengerCount: 2, excessCount: 1 })
     ]);
+  });
+});
+
+describe('the scan the three checks share', () => {
+  // The point of building the occupancy once is that the three checks cannot
+  // disagree about who shares a bus. Three separate loads would also mean three
+  // full window queries per report.
+  it('queries the window once for all three checks on one context', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([reservation({ seatNumber: 12 })]);
+
+    await findSeatClashes(ctx);
+    await findSeatsOverCapacity(ctx);
+    await findOverbookedInstances(ctx);
+
+    expect(prismaMock.reservation.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.ride.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not carry a scan across to a new context', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([reservation({ seatNumber: 12 })]);
+    await findSeatClashes(ctx);
+
+    prismaMock.ride.findMany.mockResolvedValue([rideWith({ capacity: 5 })]);
+    prismaMock.reservation.findMany.mockResolvedValue([reservation({ seatNumber: 40 })]);
+
+    await expect(findSeatsOverCapacity(contextFor())).resolves.toMatchObject({
+      items: [expect.objectContaining({ seatNumber: 40, capacity: 5 })]
+    });
   });
 });

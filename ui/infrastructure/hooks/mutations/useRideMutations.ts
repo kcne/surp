@@ -10,8 +10,6 @@ import {
   ridesControllerRemoveException,
   ridesControllerRemoveResponse,
   ridesControllerReplace,
-  ridesControllerReplaceDayTimes,
-  ridesControllerReplaceDayTimesResponse,
   ridesControllerReplaceResponse,
   ridesControllerUpdate,
   ridesControllerUpdateResponse,
@@ -19,7 +17,6 @@ import {
 import {
   toCreateRideDto,
   toCreateRideExceptionDto,
-  toReplaceRideDaySchedulesDto,
   toUpdateRideDto,
 } from "@/infrastructure/mappers/rideMappers"
 import { ridesListQueryKey } from "@/infrastructure/hooks/queries/useRidesListQuery"
@@ -95,12 +92,6 @@ function isGetRideByIdSuccess(
   return response.status === 200
 }
 
-function isReplaceDayTimesSuccess(
-  response: ridesControllerReplaceDayTimesResponse
-): response is Extract<ridesControllerReplaceDayTimesResponse, { status: 200 }> {
-  return response.status === 200
-}
-
 function isUpdateRideSuccess(
   response: ridesControllerUpdateResponse | ridesControllerReplaceResponse
 ): boolean {
@@ -162,28 +153,19 @@ export function useUpdateRideMutation() {
       confirmBreakingChange?: boolean
     }) => {
       const hasExceptionsUpdate = Array.isArray(payload.exceptions)
-      const hasDaySchedulesUpdate = payload.daySchedules !== undefined
-
-      if (hasDaySchedulesUpdate) {
-        const daySchedulesResponse = await ridesControllerReplaceDayTimes(
-          id,
-          toReplaceRideDaySchedulesDto(payload.daySchedules)
-        )
-
-        if (!isReplaceDayTimesSuccess(daySchedulesResponse)) {
-          throw new Error("Neuspesno azuriranje rasporeda vremena voznje")
-        }
-      }
 
       if (hasPatchableFields(payload)) {
-        const updatePayload = toUpdateRideDto(
-          hasDaySchedulesUpdate
-            ? {
-                ...payload,
-                daySchedules: undefined,
-              }
-            : payload
-        )
+        // The day schedules travel with the ride update instead of going ahead
+        // of it in their own request. The update is the one call that can come
+        // back asking for confirmation, and anything written before it would
+        // survive a "cancel" as half a change nobody agreed to: the departure
+        // time already moved, the capacity change abandoned, and every
+        // reservation on the old time quietly orphaned. The ride endpoint
+        // replaces the schedules inside its own transaction, so either the
+        // whole edit lands or none of it does — and it validates them against
+        // the line the ride is being moved to rather than the one it is
+        // leaving, which the dedicated day-times endpoint cannot do.
+        const updatePayload = toUpdateRideDto(payload)
 
         const requestBody = confirmBreakingChange
           ? { ...updatePayload, confirmBreakingChange: true }

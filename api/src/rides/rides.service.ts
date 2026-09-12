@@ -644,7 +644,12 @@ export class RidesService {
       })
     ]);
 
-    if (affectedCount === 0 || confirmed) {
+    // `highest` is asked for separately from the count, so the two can disagree
+    // if the last of those reservations is cancelled between the two queries.
+    // Nothing is broken in that case — there is no seat left above the new
+    // capacity — so let the write through rather than assert the row is there
+    // and turn a resolved problem into a 500.
+    if (affectedCount === 0 || !highest || confirmed) {
       return;
     }
 
@@ -652,8 +657,8 @@ export class RidesService {
       code: 'WOULD_BREAK_RESERVATIONS',
       invariant: 'reservation.seatWithinCapacity',
       affectedCount,
-      highestOccupiedSeat: highest!.seatNumber,
-      message: `Smanjenje kapaciteta na ${nextCapacity} ostavlja ${affectedCount} rezervacija na sedistu koje vise ne postoji; najvise zauzeto sediste je ${highest!.seatNumber}.`
+      highestOccupiedSeat: highest.seatNumber,
+      message: `Smanjenje kapaciteta na ${nextCapacity} ostavlja ${affectedCount} rezervacija na sedistu koje vise ne postoji; najvise zauzeto sediste je ${highest.seatNumber}.`
     });
   }
 

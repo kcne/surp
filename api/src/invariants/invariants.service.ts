@@ -74,14 +74,17 @@ export class InvariantsService {
       );
     }
 
-    const ctx = this.contextFor(auth, windowDays);
-    const outcome = await invariant.repair(ctx);
+    const outcome = await invariant.repair(this.contextFor(auth, windowDays));
 
+    // A second context on purpose: checks are free to cache the slice of data
+    // they read against the one they were given, and re-checking through the
+    // context the repair just wrote under would read the report back out of
+    // that cache and show the violations as still standing.
     return {
       key,
       repairedCount: outcome.repairedCount,
       skippedCount: outcome.skippedCount,
-      remaining: toResult(invariant, await invariant.check(ctx))
+      remaining: toResult(invariant, await invariant.check(this.contextFor(auth, windowDays)))
     };
   }
 
