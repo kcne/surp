@@ -11,6 +11,7 @@ describe('RidesService', () => {
     reservation: {
       groupBy: jest.fn(),
       count: jest.fn(),
+      findFirst: jest.fn(),
       updateMany: jest.fn()
     },
     ride: {
@@ -140,6 +141,98 @@ describe('RidesService', () => {
         status: RideStatus.DRAFT
       })
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  describe('lowering capacity under a sold seat', () => {
+    // Seats 31 to 38 are sold on a 38-seat bus; the agency is typing 30.
+    const rideOnSale = {
+      id: 'ride-1',
+      tenantId: 'tenant-1',
+      lineId: 'line-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      name: 'Ride',
+      capacity: 38,
+      type: RideType.RECURRING,
+      status: RideStatus.ACTIVE,
+      recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      line: {
+        id: 'line-1',
+        name: 'Line 1',
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b',
+        intermediateStops: []
+      },
+      daySchedules: [
+        {
+          dayOfWeek: 1,
+          stationTimes: [
+            { stationId: 'station-a', orderIndex: 0, time: '09:00' },
+            { stationId: 'station-b', orderIndex: 1, time: '10:30' }
+          ]
+        }
+      ],
+      exceptions: []
+    };
+
+    beforeEach(() => {
+      prismaMock.ride.findFirst.mockResolvedValue(rideOnSale);
+      prismaMock.$transaction.mockImplementation(async (fn: never) =>
+        (fn as unknown as (tx: unknown) => Promise<unknown>)({
+          ride: {
+            update: jest.fn(),
+            findFirst: jest.fn().mockResolvedValue({ ...rideOnSale, capacity: 30 })
+          },
+          rideDaySchedule: { create: jest.fn(), deleteMany: jest.fn() }
+        })
+      );
+    });
+
+    it('refuses, naming how many passengers it would strand', async () => {
+      prismaMock.reservation.count.mockResolvedValue(8);
+      prismaMock.reservation.findFirst.mockResolvedValue({ seatNumber: 38 });
+
+      await expect(service.update(auth, 'ride-1', { capacity: 30 })).rejects.toMatchObject({
+        response: {
+          code: 'WOULD_BREAK_RESERVATIONS',
+          invariant: 'reservation.seatWithinCapacity',
+          affectedCount: 8,
+          highestOccupiedSeat: 38
+        }
+      });
+    });
+
+    it('goes through once the caller confirms it in the body', async () => {
+      prismaMock.reservation.count.mockResolvedValue(8);
+      prismaMock.reservation.findFirst.mockResolvedValue({ seatNumber: 38 });
+
+      await expect(
+        service.update(auth, 'ride-1', { capacity: 30, confirmBreakingChange: true })
+      ).resolves.toMatchObject({ capacity: 30 });
+    });
+
+    it('asks nothing when every sold seat still fits', async () => {
+      prismaMock.reservation.count.mockResolvedValue(0);
+      prismaMock.reservation.findFirst.mockResolvedValue(null);
+
+      await expect(service.update(auth, 'ride-1', { capacity: 30 })).resolves.toMatchObject({
+        capacity: 30
+      });
+    });
+
+    it('leaves raising capacity alone', async () => {
+      await expect(
+        service.update(auth, 'ride-1', { capacity: 48 })
+      ).resolves.toBeDefined();
+
+      expect(prismaMock.reservation.count).not.toHaveBeenCalled();
+    });
   });
 
   it('rejects mixed skip and additional exceptions for same date', async () => {
