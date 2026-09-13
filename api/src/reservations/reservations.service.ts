@@ -24,7 +24,7 @@ import {
   ReservationBatchItemResultDto
 } from './dto/reservations-batch.response.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
-import { RouteSegment, routeStationOrder, segmentsOverlap } from './route-segment';
+import { RouteSegment, routeBoardingDropoffSets, routeStationOrder, segmentsOverlap } from './route-segment';
 
 const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   id: true,
@@ -371,22 +371,7 @@ export class ReservationsService {
     }
 
     const stationOrderById = routeStationOrder(ride.line);
-
-    // The line endpoints are always usable: the route starts by boarding at the
-    // departure station and ends by getting off at the arrival station.
-    // Intermediate stops may be restricted to one of the two.
-    const boardingStationIds = new Set<string>([ride.line.departureStationId]);
-    const dropoffStationIds = new Set<string>([ride.line.arrivalStationId]);
-
-    ride.line.intermediateStops.forEach((stop) => {
-      if (stop.isBoarding) {
-        boardingStationIds.add(stop.stationId);
-      }
-
-      if (stop.isDropoff) {
-        dropoffStationIds.add(stop.stationId);
-      }
-    });
+    const { boardingStationIds, dropoffStationIds } = routeBoardingDropoffSets(ride.line);
 
     return {
       rideId: ride.id,
@@ -495,11 +480,18 @@ export class ReservationsService {
     });
 
     let overlappingReservationsCount = 0;
+    let offRouteConflict = false;
     const hasOverlapSeatConflict = existing.some((item) => {
       const departureOrder = input.stationOrderById.get(item.departureStationId);
       const arrivalOrder = input.stationOrderById.get(item.arrivalStationId);
 
+      // Another active reservation on this departure names a station that is
+      // not on the current route, so its segment cannot be placed and cannot be
+      // ruled out as a collision either. Treating it as one is the safe
+      // direction to be wrong in, but the real problem is the route, not the
+      // seat this booking is asking for.
       if (departureOrder === undefined || arrivalOrder === undefined) {
+        offRouteConflict = true;
         return true;
       }
 
@@ -520,6 +512,12 @@ export class ReservationsService {
     });
 
     if (hasOverlapSeatConflict) {
+      if (offRouteConflict) {
+        throw new ConflictException(
+          'Cannot confirm seat availability: another reservation on this departure has a station that is no longer on the route. Run the reservation.stationsOnRoute integrity check to find and resolve it.'
+        );
+      }
+
       throw new ConflictException('Seat is already booked for this route segment');
     }
 

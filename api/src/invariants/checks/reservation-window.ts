@@ -49,9 +49,11 @@ const RIDE_SELECT = {
       departureStationId: true,
       arrivalStationId: true,
       // Ordered, because the seat checks number the route from these to work
-      // out which reservations share a stretch of it.
+      // out which reservations share a stretch of it. isBoarding/isDropoff ride
+      // along for the segment checks, which need to know whether a station can
+      // still be boarded at or got off at.
       intermediateStops: {
-        select: { stationId: true },
+        select: { stationId: true, isBoarding: true, isDropoff: true },
         orderBy: { orderIndex: 'asc' }
       }
     }
