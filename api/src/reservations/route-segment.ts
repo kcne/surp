@@ -64,3 +64,31 @@ export function routeStationOrder(line: {
 
   return stationOrderById;
 }
+
+/**
+ * Which stations on a line can be boarded at and which can be got off at.
+ *
+ * The line endpoints are always usable: the route starts by boarding at the
+ * departure station and ends by getting off at the arrival station.
+ * Intermediate stops may be restricted to one of the two.
+ */
+export function routeBoardingDropoffSets(line: {
+  departureStationId: string;
+  arrivalStationId: string;
+  intermediateStops: { stationId: string; isBoarding: boolean; isDropoff: boolean }[];
+}): { boardingStationIds: Set<string>; dropoffStationIds: Set<string> } {
+  const boardingStationIds = new Set<string>([line.departureStationId]);
+  const dropoffStationIds = new Set<string>([line.arrivalStationId]);
+
+  line.intermediateStops.forEach((stop) => {
+    if (stop.isBoarding) {
+      boardingStationIds.add(stop.stationId);
+    }
+
+    if (stop.isDropoff) {
+      dropoffStationIds.add(stop.stationId);
+    }
+  });
+
+  return { boardingStationIds, dropoffStationIds };
+}

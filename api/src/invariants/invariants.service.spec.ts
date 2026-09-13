@@ -30,6 +30,8 @@ describe('INVARIANTS registry', () => {
     expect(INVARIANTS.map((invariant) => invariant.key)).toEqual([
       'reservation.reachable',
       'reservation.arrivalTimeCurrent',
+      'reservation.stationsOnRoute',
+      'reservation.segmentValid',
       'reservation.seatUnique',
       'reservation.seatWithinCapacity',
       'instance.notOverbooked',
