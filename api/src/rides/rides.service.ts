@@ -337,10 +337,14 @@ export class RidesService {
     const targetDate = this.formatDate(utcDate)!;
     const targetDayOfWeek = this.getDayOfWeekFromDateString(query.date);
 
+    // A ride's own status does not follow its line: deactivating a line does
+    // not flip its rides to INACTIVE, so both facts are checked here. See
+    // ride.lineActive for the case where they disagree.
     const rides = await this.prisma.ride.findMany({
       where: {
         tenantId: auth.tenantId,
-        status: RideStatus.ACTIVE
+        status: RideStatus.ACTIVE,
+        line: { isActive: true }
       },
       select: {
         id: true,

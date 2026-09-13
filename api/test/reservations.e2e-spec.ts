@@ -196,6 +196,7 @@ describe('ReservationsController (e2e)', () => {
       id: 'ride-1',
       capacity: rideCapacity,
       line: {
+        isActive: true,
         departureStationId: 'station-a',
         arrivalStationId: 'station-d',
         intermediateStops: [
@@ -372,6 +373,40 @@ describe('ReservationsController (e2e)', () => {
     expect(response.body.message).toBe('Departure and arrival stations must exist on the ride line path');
   });
 
+  it('rejects a new reservation on a ride whose line has been deactivated', async () => {
+    prismaMock.ride.findFirst.mockResolvedValueOnce({
+      id: 'ride-1',
+      capacity: rideCapacity,
+      line: {
+        isActive: false,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-d',
+        intermediateStops: [
+          { stationId: 'station-b', orderIndex: 1, isBoarding: true, isDropoff: true },
+          { stationId: 'station-c', orderIndex: 2, isBoarding: true, isDropoff: true }
+        ]
+      }
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/reservations')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 13,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-c'
+      })
+      .expect(400);
+
+    expect(response.body.message).toBe('Ride line is deactivated and cannot take new reservations');
+  });
+
   // The boarding/drop-off flags had no coverage at this level, which is why
   // dropping them from the fixture above went unnoticed: every intermediate
   // stop silently stopped serving either role and four unrelated tests changed
@@ -382,6 +417,7 @@ describe('ReservationsController (e2e)', () => {
       id: 'ride-1',
       capacity: rideCapacity,
       line: {
+        isActive: true,
         departureStationId: 'station-a',
         arrivalStationId: 'station-d',
         intermediateStops: [
@@ -415,6 +451,7 @@ describe('ReservationsController (e2e)', () => {
       id: 'ride-1',
       capacity: rideCapacity,
       line: {
+        isActive: true,
         departureStationId: 'station-a',
         arrivalStationId: 'station-d',
         intermediateStops: [
@@ -534,6 +571,7 @@ describe('ReservationsController (e2e)', () => {
       id: 'ride-1',
       capacity: 2,
       line: {
+        isActive: true,
         departureStationId: 'station-a',
         arrivalStationId: 'station-d',
         intermediateStops: [

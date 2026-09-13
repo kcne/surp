@@ -32,12 +32,15 @@ describe('INVARIANTS registry', () => {
       'reservation.arrivalTimeCurrent',
       'reservation.stationsOnRoute',
       'reservation.segmentValid',
+      'reservation.passengerActive',
       'reservation.seatUnique',
       'reservation.seatWithinCapacity',
       'instance.notOverbooked',
       'schedule.matchesRoute',
       'pair.directionsAgree',
-      'pair.terminiReachable'
+      'pair.terminiReachable',
+      'route.stationsActive',
+      'ride.lineActive'
     ]);
   });
 

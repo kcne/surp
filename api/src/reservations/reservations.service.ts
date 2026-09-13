@@ -228,7 +228,12 @@ export class ReservationsService {
       const arrivalStationId = dto.arrivalStationId ?? existing.arrivalStationId;
       const seatNumber = dto.seatNumber ?? existing.seatNumber;
 
-      const rideContext = await this.getRideRouteContext(auth.tenantId, existing.rideId, tx);
+      // Updating never moves a reservation to a different ride (rideId isn't
+      // part of UpdateReservationDto), so this is never the "new reservation
+      // on a deactivated line" case the active-line guard exists for.
+      const rideContext = await this.getRideRouteContext(auth.tenantId, existing.rideId, tx, {
+        requireActiveLine: false
+      });
       const segment = this.validateAndResolveSegment(
         rideContext,
         departureStationId,
@@ -336,8 +341,10 @@ export class ReservationsService {
   private async getRideRouteContext(
     tenantId: string,
     rideId: string,
-    db: ReservationDbClient = this.prisma
+    db: ReservationDbClient = this.prisma,
+    options: { requireActiveLine?: boolean } = {}
   ): Promise<RideRouteContext> {
+    const { requireActiveLine = true } = options;
     const ride = await db.ride.findFirst({
       where: {
         id: rideId,
@@ -348,6 +355,7 @@ export class ReservationsService {
         capacity: true,
         line: {
           select: {
+            isActive: true,
             departureStationId: true,
             arrivalStationId: true,
             intermediateStops: {
@@ -368,6 +376,10 @@ export class ReservationsService {
 
     if (!ride) {
       throw new BadRequestException('Ride must exist in the current tenant');
+    }
+
+    if (requireActiveLine && !ride.line.isActive) {
+      throw new BadRequestException('Ride line is deactivated and cannot take new reservations');
     }
 
     const stationOrderById = routeStationOrder(ride.line);
