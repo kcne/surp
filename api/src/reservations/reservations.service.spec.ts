@@ -48,6 +48,7 @@ describe('ReservationsService', () => {
   const routeRide = {
     id: 'ride-1',
     line: {
+      isActive: true,
       departureStationId: 'station-a',
       arrivalStationId: 'station-d',
       intermediateStops: [
@@ -367,6 +368,44 @@ describe('ReservationsService', () => {
 
     expect(result.departureStationId).toBe('station-a');
     expect(result.arrivalStationId).toBe('station-d');
+  });
+
+  it('refuses to create a reservation on a ride whose line is deactivated', async () => {
+    prismaMock.ride.findFirst.mockResolvedValueOnce({
+      ...routeRide,
+      capacity: 40,
+      line: { ...routeRide.line, isActive: false }
+    });
+
+    await expect(
+      service.create(auth, {
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 21,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-d'
+      })
+    ).rejects.toThrow('Ride line is deactivated and cannot take new reservations');
+  });
+
+  it('still allows editing an existing reservation after its ride line is deactivated', async () => {
+    prismaMock.ride.findFirst.mockResolvedValueOnce({
+      ...routeRide,
+      capacity: 40,
+      line: { ...routeRide.line, isActive: false }
+    });
+
+    await service.update(auth, 'reservation-1', { seatNumber: 20 });
+
+    expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'reservation-1' },
+        data: expect.objectContaining({ seatNumber: 20 })
+      })
+    );
   });
 
   it('updates status and audit fields on cancellation', async () => {

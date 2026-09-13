@@ -29,7 +29,7 @@ const RESERVATION_SELECT = {
   seatNumber: true,
   departureStationId: true,
   arrivalStationId: true,
-  passenger: { select: { firstName: true, lastName: true, phone: true } }
+  passenger: { select: { id: true, firstName: true, lastName: true, phone: true, isActive: true } }
 } as const;
 
 const RIDE_SELECT = {
@@ -46,6 +46,7 @@ const RIDE_SELECT = {
   line: {
     select: {
       name: true,
+      isActive: true,
       departureStationId: true,
       arrivalStationId: true,
       // Ordered, because the seat checks number the route from these to work

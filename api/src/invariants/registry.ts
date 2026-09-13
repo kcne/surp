@@ -1,8 +1,11 @@
 import { Invariant } from './invariant.types';
 import { instanceNotOverbooked } from './checks/instance-not-overbooked';
 import { pairedDirectionsAgree } from './checks/paired-directions-agree';
+import { reservationPassengerActive } from './checks/passenger-active';
 import { reservationArrivalCurrent } from './checks/reservation-arrival-current';
 import { reservationReachable } from './checks/reservation-reachable';
+import { rideLineActive } from './checks/ride-line-active';
+import { routeStationsActive } from './checks/route-stations-active';
 import { reservationSegmentValid } from './checks/segment-valid';
 import { reservationSeatUnique } from './checks/seat-unique';
 import { reservationSeatWithinCapacity } from './checks/seat-within-capacity';
@@ -27,12 +30,15 @@ export const INVARIANTS: readonly Invariant[] = [
   reservationArrivalCurrent,
   reservationStationsOnRoute,
   reservationSegmentValid,
+  reservationPassengerActive,
   reservationSeatUnique,
   reservationSeatWithinCapacity,
   instanceNotOverbooked,
   scheduleMatchesRoute,
   pairedDirectionsAgree,
-  terminiReachable
+  terminiReachable,
+  routeStationsActive,
+  rideLineActive
 ];
 
 export function findInvariant(key: string): Invariant | undefined {
