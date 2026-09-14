@@ -46,7 +46,7 @@ export type StationAliasMap = Record<string, StationAlias>
  * Tenant-scoped alias tables, keyed by tenant slug.
  *
  * These are generated, not hand-written: run the prompt in
- * `docs/import/station-alias-prompt.md` against the tenant's live station list
+ * `prompts/station-alias-prompt.md` against the tenant's live station list
  * and paste the resulting object here. Keys must be `normalizeKey` output.
  */
 const ALIASES_BY_TENANT: Record<string, StationAliasMap> = {

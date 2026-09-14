@@ -18,7 +18,7 @@ export default function robots(): MetadataRoute.Robots {
 
   // AI / generative search crawlers. Explicitly allowed so they can index
   // marketing + storefront content for AI Overviews, ChatGPT, Perplexity,
-  // Claude, Gemini, Apple Intelligence, etc. See docs/ai-search-plan.md (AI-A).
+  // Claude, Gemini, Apple Intelligence, etc.
   const aiCrawlers = [
     "GPTBot",
     "ChatGPT-User",
