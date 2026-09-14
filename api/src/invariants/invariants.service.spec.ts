@@ -34,6 +34,7 @@ describe('INVARIANTS registry', () => {
       'reservation.segmentValid',
       'reservation.passengerActive',
       'reservation.groupPresent',
+      'reservation.groupIntact',
       'reservation.seatUnique',
       'reservation.seatWithinCapacity',
       'instance.notOverbooked',
