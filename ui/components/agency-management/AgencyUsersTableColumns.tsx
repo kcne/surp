@@ -11,6 +11,7 @@ const roleLabels: Record<AgencyUser["role"], string> = {
   ADMIN: "Admin",
   MANAGER: "Menadžer",
   STAFF: "Osoblje",
+  DRIVER: "Vozač",
 }
 
 export function getAgencyUsersTableColumns({

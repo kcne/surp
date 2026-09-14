@@ -15,7 +15,7 @@ export class UpdateUserDto {
   @MaxLength(120)
   email?: string;
 
-  @ApiPropertyOptional({ enum: [UserRole.MANAGER, UserRole.STAFF] })
+  @ApiPropertyOptional({ enum: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.DRIVER] })
   @IsOptional()
   @IsEnum(UserRole)
   role?: UserRole;

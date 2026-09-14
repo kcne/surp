@@ -14,12 +14,8 @@ export default function PassengerListsPage() {
     rideOptions,
     selectedRideId,
     setSelectedRideId,
-    fromDate,
-    setFromDate,
-    toDate,
-    setToDate,
-    resetFilters,
-    hasActiveFilters,
+    selectedDate,
+    setSelectedDate,
     isLoading,
     isCountsLoading,
     isError,
@@ -36,7 +32,7 @@ export default function PassengerListsPage() {
             Liste Putnika
           </h1>
           <p className="text-muted-foreground">
-            Buduće vožnje iz rasporeda i lista putnika za svaku od njih
+            Vožnje iz rasporeda i lista putnika za izabrani datum
           </p>
         </div>
 
@@ -44,12 +40,8 @@ export default function PassengerListsPage() {
           rideOptions={rideOptions}
           selectedRideId={selectedRideId}
           onSelectedRideIdChange={setSelectedRideId}
-          fromDate={fromDate}
-          onFromDateChange={setFromDate}
-          toDate={toDate}
-          onToDateChange={setToDate}
-          onReset={resetFilters}
-          hasActiveFilters={hasActiveFilters}
+          selectedDate={selectedDate}
+          onSelectedDateChange={setSelectedDate}
           resultCount={items.length}
         />
 
@@ -73,11 +65,9 @@ export default function PassengerListsPage() {
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
             <ClipboardList className="mb-3 h-10 w-10 text-muted-foreground" />
-            <p className="text-lg font-medium text-muted-foreground">Nema budućih vožnji</p>
+            <p className="text-lg font-medium text-muted-foreground">Nema vožnji za izabrani datum</p>
             <p className="text-sm text-muted-foreground">
-              {hasActiveFilters
-                ? "Promenite filtere da biste videli vožnje iz rasporeda."
-                : "Dodajte vožnju u raspored da biste videli liste putnika."}
+              Izaberite drugi datum da biste videli vožnje iz rasporeda.
             </p>
           </div>
         ) : (

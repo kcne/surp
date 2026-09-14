@@ -68,7 +68,10 @@ export function AgencyUserModal({
             ? {
                 username: user.username,
                 email: user.email,
-                role: user.role === "MANAGER" ? "MANAGER" : "STAFF",
+                role:
+                  user.role === "ADMIN" || user.role === "MANAGER" || user.role === "DRIVER"
+                    ? user.role
+                    : "STAFF",
                 isActive: user.isActive,
               }
             : undefined

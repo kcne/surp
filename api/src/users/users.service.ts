@@ -268,8 +268,8 @@ export class UsersService {
   }
 
   private assertCreateRoleAllowed(role: UserRole): void {
-    if (role === UserRole.ADMIN || role === UserRole.SUPERADMIN) {
-      throw new ForbiddenException('Assigning ADMIN or SUPERADMIN role is not allowed in this endpoint');
+    if (role === UserRole.SUPERADMIN) {
+      throw new ForbiddenException('Assigning SUPERADMIN role is not allowed in this endpoint');
     }
   }
 

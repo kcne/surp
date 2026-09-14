@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { canAccessDashboardRoute } from "@/lib/roleAccess"
 import { useAuthStore } from "@/stores/authStore"
 
 interface DashboardLayoutProps {
@@ -10,7 +11,8 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter()
-  const { hasHydrated, isAuthenticated } = useAuthStore()
+  const pathname = usePathname()
+  const { hasHydrated, isAuthenticated, user } = useAuthStore()
 
   useEffect(() => {
     if (hasHydrated && !isAuthenticated) {
@@ -18,7 +20,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [hasHydrated, isAuthenticated, router])
 
-  if (!hasHydrated || !isAuthenticated) {
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated && !canAccessDashboardRoute(user?.role, pathname)) {
+      router.replace("/passenger-lists")
+    }
+  }, [hasHydrated, isAuthenticated, pathname, router, user?.role])
+
+  if (!hasHydrated || !isAuthenticated || !canAccessDashboardRoute(user?.role, pathname)) {
     return null
   }
 

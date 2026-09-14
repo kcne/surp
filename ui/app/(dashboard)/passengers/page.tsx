@@ -9,9 +9,13 @@ import { PassengerModal } from "@/components/passengers/PassengerModal"
 import { DeletePassengerDialog } from "@/components/passengers/DeletePassengerDialog"
 import { PassengersDataTable } from "@/components/passengers/PassengersDataTable"
 import { useCrudDialogState } from "@/hooks/useCrudDialogState"
+import { isDriverRole } from "@/lib/roleAccess"
+import { useAuthStore } from "@/stores/authStore"
 import type { Passenger } from "@/types"
 
 export default function PassengersPage() {
+  const { user } = useAuthStore()
+  const isReadOnly = isDriverRole(user?.role)
   const passengersQuery = usePassengersListQuery()
   const passengers = passengersQuery.data ?? []
   const loading = passengersQuery.isLoading
@@ -40,10 +44,10 @@ export default function PassengersPage() {
               Upravljajte putnicima u sistemu
             </p>
           </div>
-          <Button onClick={openCreate}>
+          {!isReadOnly && <Button onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />
             Dodaj Putnika
-          </Button>
+          </Button>}
         </div>
 
         {loading && passengers.length === 0 ? (
@@ -58,33 +62,33 @@ export default function PassengersPage() {
             <p className="text-lg font-medium text-muted-foreground">
               Nema putnika
             </p>
-            <p className="mb-4 text-sm text-muted-foreground">
+            {!isReadOnly && <p className="mb-4 text-sm text-muted-foreground">
               Dodajte prvog putnika da biste počeli
-            </p>
-            <Button onClick={openCreate}>
+            </p>}
+            {!isReadOnly && <Button onClick={openCreate}>
               <Plus className="mr-2 h-4 w-4" />
               Dodaj Putnika
-            </Button>
+            </Button>}
           </div>
         ) : (
           <PassengersDataTable
             passengers={passengers}
-            onEdit={openEdit}
-            onDelete={openDelete}
+            onEdit={isReadOnly ? undefined : openEdit}
+            onDelete={isReadOnly ? undefined : openDelete}
           />
         )}
 
-        <PassengerModal
+        {!isReadOnly && <PassengerModal
           open={isModalOpen}
           onOpenChange={closeModal}
           passenger={selectedPassenger}
-        />
+        />}
 
-        <DeletePassengerDialog
+        {!isReadOnly && <DeletePassengerDialog
           open={isDeleteDialogOpen}
           onOpenChange={setIsDeleteDialogOpen}
           passenger={passengerToDelete}
-        />
+        />}
       </div>
     </Layout>
   )

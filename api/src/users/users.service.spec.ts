@@ -41,15 +41,29 @@ describe('UsersService', () => {
     service = new UsersService(prismaMock as never);
   });
 
-  it('rejects creating ADMIN role users', async () => {
-    await expect(
-      service.create(auth, {
-        username: 'tenant-admin-2',
-        email: 'tenant-admin-2@demo.local',
-        password: 'strong-password-123',
-        role: UserRole.ADMIN
-      })
-    ).rejects.toBeInstanceOf(ForbiddenException);
+  it('allows an admin to create another tenant admin', async () => {
+    prismaMock.user.create.mockResolvedValue({
+      id: 'admin-2',
+      tenantId: 'tenant-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      username: 'tenant-admin-2',
+      email: 'tenant-admin-2@demo.local',
+      role: UserRole.ADMIN,
+      requirePasswordChange: false,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const result = await service.create(auth, {
+      username: 'tenant-admin-2',
+      email: 'tenant-admin-2@demo.local',
+      password: 'strong-password-123',
+      role: UserRole.ADMIN
+    });
+
+    expect(result.role).toBe(UserRole.ADMIN);
   });
 
   it('maps duplicate username unique violation to conflict error', async () => {

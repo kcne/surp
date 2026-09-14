@@ -21,7 +21,7 @@ export class CreateUserDto {
   @MaxLength(128)
   password!: string;
 
-  @ApiProperty({ enum: [UserRole.MANAGER, UserRole.STAFF] })
+  @ApiProperty({ enum: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.DRIVER] })
   @IsEnum(UserRole)
   role!: UserRole;
 }

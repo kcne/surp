@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/stores/authStore"
+import { isDriverRole } from "@/lib/roleAccess"
 import {
   BarChart3,
   Building2,
@@ -15,7 +16,6 @@ import {
   Settings,
   Store,
   Ticket,
-  Upload,
   Users,
 } from "lucide-react"
 
@@ -34,11 +34,6 @@ const reservationItems = [
     title: "Liste Putnika",
     href: "/passenger-lists",
     icon: ClipboardList,
-  },
-  {
-    title: "Uvoz CSV",
-    href: "/reservations/import",
-    icon: Upload,
   },
 ]
 
@@ -89,6 +84,14 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname()
   const { user } = useAuthStore()
 
+  if (isDriverRole(user?.role)) {
+    const driverItems = reservationItems.filter(
+      (item) => item.href === "/passengers" || item.href === "/passenger-lists"
+    )
+
+    return <SidebarSections sections={[{ title: "Putnici", items: driverItems }]} pathname={pathname} onNavigate={onNavigate} />
+  }
+
   const sections = [
     {
       title: "Rezervacije",
@@ -123,6 +126,23 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
     },
   ]
 
+  return <SidebarSections sections={sections} pathname={pathname} onNavigate={onNavigate} />
+}
+
+type SidebarSection = {
+  title: string
+  items: typeof reservationItems
+}
+
+function SidebarSections({
+  sections,
+  pathname,
+  onNavigate,
+}: {
+  sections: SidebarSection[]
+  pathname: string | null
+  onNavigate?: () => void
+}) {
   // Nested routes (npr. /reservations/import) odgovaraju i roditeljskoj stavci,
   // pa aktivnom smatramo samo onu sa najduzim poklapanjem.
   const activeHref = sections

@@ -7,8 +7,8 @@ import type { Passenger } from "@/types"
 
 interface PassengersDataTableProps {
   passengers: Passenger[]
-  onEdit: (passenger: Passenger) => void
-  onDelete: (passenger: Passenger) => void
+  onEdit?: (passenger: Passenger) => void
+  onDelete?: (passenger: Passenger) => void
 }
 
 export function PassengersDataTable({
@@ -16,10 +16,7 @@ export function PassengersDataTable({
   onEdit,
   onDelete,
 }: PassengersDataTableProps) {
-  const columns = useMemo(
-    () => getPassengersTableColumns({ onEdit, onDelete }),
-    [onEdit, onDelete]
-  )
+  const columns = useMemo(() => getPassengersTableColumns({ onEdit, onDelete }), [onEdit, onDelete])
 
   return (
     <DataTable

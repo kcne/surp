@@ -120,7 +120,7 @@ export const createAgencyUserSchema = z.object({
   password: z
     .string()
     .min(8, "Lozinka mora imati najmanje 8 karaktera"),
-  role: z.enum(["MANAGER", "STAFF"], {
+  role: z.enum(["ADMIN", "MANAGER", "STAFF", "DRIVER"], {
     message: "Rola je obavezna",
   }),
   isActive: z.boolean(),
@@ -130,7 +130,7 @@ export const updateAgencyUserSchema = z.object({
   username: z.string().min(1, "Korisničko ime je obavezno"),
   email: z.string().email("Neispravan format email-a"),
   password: z.string().optional().or(z.literal("")),
-  role: z.enum(["MANAGER", "STAFF"], {
+  role: z.enum(["ADMIN", "MANAGER", "STAFF", "DRIVER"], {
     message: "Rola je obavezna",
   }),
   isActive: z.boolean(),
@@ -156,4 +156,3 @@ export const reservationSchema = z.object({
     path: ["arrivalStationId"],
   }
 )
-

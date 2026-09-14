@@ -112,6 +112,15 @@ describe('UsersController (e2e)', () => {
         };
       }
 
+      if (token === 'access-token-superadmin') {
+        return {
+          sub: 'superadmin-1',
+          tenantId: 'tenant-1',
+          role: UserRole.SUPERADMIN,
+          username: 'platform-admin'
+        };
+      }
+
       throw new Error('invalid token');
     });
     jwtServiceMock.sign.mockReturnValue('access-token');
@@ -264,6 +273,63 @@ describe('UsersController (e2e)', () => {
       .expect(201);
 
     expect(staffResponse.body.role).toBe(UserRole.STAFF);
+  });
+
+  it('allows an admin or superadmin to assign the admin role within a tenant', async () => {
+    prismaMock.user.create
+      .mockResolvedValueOnce({
+        id: 'admin-2',
+        tenantId: 'tenant-1',
+        createdById: 'admin-1',
+        updatedById: 'admin-1',
+        username: 'tenant-admin-2',
+        email: 'tenant-admin-2@demo.local',
+        role: UserRole.ADMIN,
+        requirePasswordChange: false,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .mockResolvedValueOnce({
+        id: 'admin-3',
+        tenantId: 'tenant-1',
+        createdById: 'superadmin-1',
+        updatedById: 'superadmin-1',
+        username: 'tenant-admin-3',
+        email: 'tenant-admin-3@demo.local',
+        role: UserRole.ADMIN,
+        requirePasswordChange: false,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+    const adminResponse = await request(app.getHttpServer())
+      .post('/users')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        username: 'tenant-admin-2',
+        email: 'tenant-admin-2@demo.local',
+        password: 'strong-password-123',
+        role: UserRole.ADMIN
+      })
+      .expect(201);
+
+    const superadminResponse = await request(app.getHttpServer())
+      .post('/users')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-superadmin')
+      .send({
+        username: 'tenant-admin-3',
+        email: 'tenant-admin-3@demo.local',
+        password: 'strong-password-123',
+        role: UserRole.ADMIN
+      })
+      .expect(201);
+
+    expect(adminResponse.body.role).toBe(UserRole.ADMIN);
+    expect(superadminResponse.body.role).toBe(UserRole.ADMIN);
   });
 
   it('fails when duplicate username exists in the same tenant', async () => {

@@ -2,7 +2,7 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import type { User } from "@/types"
 import { loginRequest } from "@/infrastructure/requests/auth.requests"
-import { getApiErrorMessage } from "@/infrastructure/utils/errors"
+import { getLoginErrorMessage } from "@/infrastructure/utils/errors"
 import {
   clearAuthSession,
   getAccessToken,
@@ -72,10 +72,7 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: unknown) {
           set({
             loading: false,
-            error: getApiErrorMessage(
-              error,
-              "Greška pri prijavljivanju. Molimo pokušajte ponovo."
-            ),
+            error: getLoginErrorMessage(error),
             isAuthenticated: false,
             user: null,
           })
@@ -109,4 +106,3 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 )
-

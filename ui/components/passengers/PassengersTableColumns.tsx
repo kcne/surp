@@ -2,7 +2,7 @@
 
 import type { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
-import { createActionsColumn, type RowActionHandlers } from "@/components/ui/table-column-helpers"
+import { createActionsColumn } from "@/components/ui/table-column-helpers"
 import { Mail, Phone, UserRound, Users } from "lucide-react"
 import type { Passenger } from "@/types"
 
@@ -16,7 +16,10 @@ const passengerTypeLabels: Record<Passenger["passengerType"], string> = {
 export function getPassengersTableColumns({
   onEdit,
   onDelete,
-}: RowActionHandlers<Passenger>): ColumnDef<Passenger>[] {
+}: {
+  onEdit?: (passenger: Passenger) => void
+  onDelete?: (passenger: Passenger) => void
+}): ColumnDef<Passenger>[] {
   return [
     {
       accessorFn: (row) => `${row.firstName} ${row.lastName}`,
@@ -64,6 +67,6 @@ export function getPassengersTableColumns({
         <Badge variant="secondary">{passengerTypeLabels[row.original.passengerType]}</Badge>
       ),
     },
-    createActionsColumn({ onEdit, onDelete }),
+    ...(onEdit && onDelete ? [createActionsColumn({ onEdit, onDelete })] : []),
   ]
 }

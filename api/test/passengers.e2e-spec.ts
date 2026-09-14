@@ -75,6 +75,15 @@ describe('PassengersController (e2e)', () => {
         };
       }
 
+      if (token === 'access-token-driver') {
+        return {
+          sub: 'driver-1',
+          tenantId: 'tenant-1',
+          role: UserRole.DRIVER,
+          username: 'demo-driver'
+        };
+      }
+
       throw new Error('invalid token');
     });
 
@@ -216,6 +225,26 @@ describe('PassengersController (e2e)', () => {
         'firstName must be a string'
       ])
     );
+  });
+
+  it('allows drivers to view passengers but rejects passenger changes', async () => {
+    await request(app.getHttpServer())
+      .get('/passengers?page=1&pageSize=25')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-driver')
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .post('/passengers')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-driver')
+      .send({
+        firstName: 'Mila',
+        lastName: 'Markovic',
+        phone: '+381640000111',
+        passengerType: PassengerType.ADULT
+      })
+      .expect(403);
   });
 
   it('supports passenger CRUD and search', async () => {

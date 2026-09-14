@@ -52,7 +52,7 @@ export class PassengersController {
   }
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.DRIVER)
   @ApiOperation({ summary: 'List passengers in the current tenant.' })
   @ApiOkResponse({ type: PaginatedPassengersResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure.' })

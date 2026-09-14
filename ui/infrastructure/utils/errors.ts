@@ -1,5 +1,28 @@
 import axios from "axios"
 
+const INVALID_LOGIN_CREDENTIALS_MESSAGE = "Korisničko ime ili lozinka nisu ispravni. Pokušajte ponovo."
+const LOGIN_NETWORK_ERROR_MESSAGE = "Nije moguće povezati se sa serverom. Proverite internet vezu i pokušajte ponovo."
+const LOGIN_FALLBACK_ERROR_MESSAGE = "Prijavljivanje nije uspelo. Pokušajte ponovo."
+
+/**
+ * Returns a Serbian, actionable message for failures on the login form.
+ * API error text is deliberately not exposed here, as it may be technical or
+ * arrive in a different language.
+ */
+export function getLoginErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return INVALID_LOGIN_CREDENTIALS_MESSAGE
+    }
+
+    if (!error.response) {
+      return LOGIN_NETWORK_ERROR_MESSAGE
+    }
+  }
+
+  return LOGIN_FALLBACK_ERROR_MESSAGE
+}
+
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
     const responseMessage = error.response?.data?.message

@@ -1,8 +1,11 @@
 "use client"
 
-import { Settings as SettingsIcon, ShieldAlert } from "lucide-react"
+import Link from "next/link"
+import { Settings as SettingsIcon, ShieldAlert, Upload } from "lucide-react"
 import { Layout } from "@/components/layout/Layout"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { LinePairDriftCard } from "@/components/settings/LinePairDriftCard"
 import { OrphanedReservationsCard } from "@/components/settings/OrphanedReservationsCard"
 import { ReturnRouteGapCard } from "@/components/settings/ReturnRouteGapCard"
@@ -28,6 +31,26 @@ export default function SettingsPage() {
 
         {isTenantAdmin ? (
           <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Upload className="h-4 w-4 text-primary" />
+                  Uvoz rezervacija iz CSV-a
+                </CardTitle>
+                <CardDescription>
+                  Ucitajte CSV datoteku, proverite prepoznate podatke i masovno uvezite
+                  rezervacije i putnike.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild>
+                  <Link href="/reservations/import">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Otvori uvoz CSV-a
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
             {/* Lost reservations first: they are passengers nobody can see
                 today, and every route repair below can strand more of them. */}
             <OrphanedReservationsCard />
