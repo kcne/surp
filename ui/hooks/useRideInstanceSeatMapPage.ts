@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import ExcelJS from "exceljs"
-import jsPDF from "jspdf"
-import autoTable from "jspdf-autotable"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/useRidesInstancesByDateQuery"
 import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
@@ -15,7 +13,7 @@ import {
   selectRideInstancePassengers,
   toPassengerListCells,
 } from "@/utils/passengerListHelpers"
-import { registerPdfUnicodeFont } from "@/utils/pdfFonts"
+import { createPassengerListPdf } from "@/utils/passengerListPdf"
 import type { Reservation } from "@/types"
 
 interface UseRideInstanceSeatMapPageParams {
@@ -143,9 +141,10 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   }
 
   const handleExport = async (
-    options: { fileName: string; format: "xlsx" | "pdf" } = {
+    options: { fileName: string; format: "xlsx" | "pdf"; numbering: "sequential" | "seat" } = {
       fileName: buildDefaultExportFileName(),
       format: "xlsx",
+      numbering: "sequential",
     }
   ) => {
     if (!selectedRideInstance) return
@@ -153,63 +152,13 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     const rideReservations = selectRideInstancePassengers(reservations, selectedRideInstance)
     const headers = [...PASSENGER_LIST_HEADERS]
     const listRows = await buildPassengerListRows(selectedRideInstance, rideReservations)
-    const rows = listRows.map(toPassengerListCells)
+    const rows = listRows.map((row) => toPassengerListCells(row, options.numbering))
 
     const safeBaseName = sanitizeFileNamePart(options.fileName) || buildDefaultExportFileName()
     const headingText = buildPassengerListHeading(selectedRideInstance, rideReservations.length)
 
     if (options.format === "pdf") {
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
-      await registerPdfUnicodeFont(doc)
-
-      const margin = 8
-      const headerFill: [number, number, number] = [26, 32, 51]
-      const groupTextColor: [number, number, number] = [192, 0, 0]
-
-      autoTable(doc, {
-        startY: margin,
-        margin: { left: margin, right: margin },
-        head: [[{ content: headingText, colSpan: headers.length }], headers],
-        body: rows,
-        theme: "grid",
-        styles: {
-          font: "Roboto",
-          fontStyle: "normal",
-          fontSize: 8,
-          cellPadding: { top: 1.2, bottom: 1.2, left: 1, right: 1 },
-          textColor: [0, 0, 0],
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-          halign: "center",
-          valign: "middle",
-          overflow: "ellipsize",
-        },
-        headStyles: {
-          font: "Roboto",
-          fontStyle: "bold",
-          fillColor: headerFill,
-          textColor: [255, 255, 255],
-          halign: "center",
-          valign: "middle",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: {
-          0: { cellWidth: 12, fontStyle: "bold" },
-          1: { cellWidth: 10, fontStyle: "bold", textColor: groupTextColor },
-          2: { cellWidth: 42 },
-          3: { cellWidth: 26 },
-          4: { cellWidth: 26 },
-          5: { cellWidth: 20 },
-          6: { cellWidth: 30 },
-          7: { cellWidth: 28 },
-        },
-        didParseCell: (data) => {
-          if (data.section === "head" && data.row.index === 0) {
-            data.cell.styles.fontSize = 11
-          }
-        },
-      })
+      const doc = await createPassengerListPdf({ heading: headingText, headers, rows })
       doc.save(`${safeBaseName}.pdf`)
       return
     }

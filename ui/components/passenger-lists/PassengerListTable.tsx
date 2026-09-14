@@ -10,8 +10,8 @@ interface PassengerListTableProps {
 
 /**
  * The passenger list as it is printed and exported: a dark title row stating
- * the day and the seat usage, then seat, group, passenger, route, date, phone
- * and the return-leg info. Drivers read this next to the paper sheet, so the
+ * the day and the seat usage, then row number, group, passenger, route,
+ * phone, notes and the return-leg info. Drivers read this next to the paper sheet, so the
  * column order and the emphasis mirror the PDF instead of the app's table style.
  */
 export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
@@ -21,7 +21,7 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
         {heading}
       </div>
 
-      {/* Desktop: the printed grid, one row per seat. */}
+      {/* Desktop: the printed grid, one row per passenger. */}
       <div className="hidden overflow-x-auto border border-foreground/70 md:block">
         <table className="w-full border-collapse text-center text-sm">
           <thead>
@@ -43,7 +43,7 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
                 className={cn(row.hasGroup && "bg-muted/60")}
               >
                 <td className="border border-foreground/70 px-2 py-1.5 font-bold tabular-nums">
-                  {row.seatNumber}
+                  {row.rowNumber}
                 </td>
                 <td className="border border-foreground/70 px-2 py-1.5 font-bold text-[#c00000]">
                   {row.groupLabel}
@@ -56,10 +56,10 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
                 </td>
                 <td className="border border-foreground/70 px-2 py-1.5">{row.arrivalStation}</td>
                 <td className="border border-foreground/70 px-2 py-1.5 tabular-nums">
-                  {row.date}
-                </td>
-                <td className="border border-foreground/70 px-2 py-1.5 tabular-nums">
                   {row.phone}
+                </td>
+                <td className="border border-foreground/70 px-2 py-1.5 text-left">
+                  {row.notes ?? ""}
                 </td>
                 <td className="border border-foreground/70 px-2 py-1.5 whitespace-nowrap">
                   {row.info}
@@ -70,7 +70,7 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
         </table>
       </div>
 
-      {/* Mobile: the same fields stacked, seat number kept prominent. */}
+      {/* Mobile: the same fields stacked, with the row number kept prominent. */}
       <div className="space-y-2 md:hidden">
         {rows.map((row, index) => (
           <div
@@ -82,7 +82,7 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
           >
             <div className="flex items-start gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#1a2033] text-sm font-bold tabular-nums text-white">
-                {row.seatNumber}
+                {row.rowNumber}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="font-semibold leading-tight">{row.passengerName}</p>
@@ -112,13 +112,15 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
                 <p>{row.arrivalStation}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Datum</p>
-                <p className="tabular-nums">{row.date}</p>
-              </div>
-              <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Info</p>
                 <p className="font-medium">{row.info}</p>
               </div>
+              {row.notes && (
+                <div className="col-span-2">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Napomene</p>
+                  <p>{row.notes}</p>
+                </div>
+              )}
             </div>
           </div>
         ))}

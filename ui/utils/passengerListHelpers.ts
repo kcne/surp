@@ -10,23 +10,25 @@ import type { Reservation, RideInstance } from "@/types"
  * than each deriving their own.
  */
 export const PASSENGER_LIST_HEADERS = [
-  "SED.",
+  "BR.",
   "GR",
   "PUTNIK",
   "POLAZAK",
   "DOLAZAK",
-  "DATUM",
   "TELEFON",
+  "NAPOMENE",
   "INFO",
 ] as const
 
+export type PassengerListNumbering = "sequential" | "seat"
+
 export interface PassengerListRow {
+  rowNumber: string
   seatNumber: string
   groupLabel: string
   passengerName: string
   departureStation: string
   arrivalStation: string
-  date: string
   phone: string
   info: string
   /** Set when the passenger shares a booking with someone else on this ride. */
@@ -170,7 +172,6 @@ export async function buildPassengerListRows(
   rideReservations: Reservation[],
   options: { includeCounterpartLegs?: boolean } = {}
 ): Promise<PassengerListRow[]> {
-  const dateStr = formatLocalDate(rideInstance.date)
   const groupLabelByGroupId = buildReservationGroupLabels(rideReservations)
 
   const counterpartLegs = (options.includeCounterpartLegs ?? true)
@@ -192,6 +193,7 @@ export async function buildPassengerListRows(
     const leg = counterpartLegs[index]
 
     return {
+      rowNumber: String(index + 1),
       seatNumber: String(reservation.seatNumber),
       groupLabel: reservation.groupId
         ? groupLabelByGroupId.get(reservation.groupId) ?? ""
@@ -201,7 +203,6 @@ export async function buildPassengerListRows(
         .toUpperCase(),
       departureStation: reservation.departureStation.name.toUpperCase(),
       arrivalStation: reservation.arrivalStation.name.toUpperCase(),
-      date: dateStr,
       phone: reservation.passenger.phone ?? "",
       info: leg ? `${leg.direction}: ${leg.date}` : "1 SMER",
       hasGroup: Boolean(reservation.groupId),
@@ -211,15 +212,18 @@ export async function buildPassengerListRows(
 }
 
 /** The row as the export writers consume it: one cell per header, in order. */
-export function toPassengerListCells(row: PassengerListRow): string[] {
+export function toPassengerListCells(
+  row: PassengerListRow,
+  numbering: PassengerListNumbering = "sequential"
+): string[] {
   return [
-    row.seatNumber,
+    numbering === "seat" ? row.seatNumber : row.rowNumber,
     row.groupLabel,
     row.passengerName,
     row.departureStation,
     row.arrivalStation,
-    row.date,
     row.phone,
+    row.notes ?? "",
     row.info,
   ]
 }
