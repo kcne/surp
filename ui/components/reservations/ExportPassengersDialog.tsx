@@ -131,9 +131,6 @@ export function ExportPassengersDialog({
                 <span>Po sedištima</span>
               </Label>
             </RadioGroup>
-            <p className="text-xs text-muted-foreground">
-              Kolona „Sedište” je uvek prikazana.
-            </p>
           </div>
 
           <DialogFooter>

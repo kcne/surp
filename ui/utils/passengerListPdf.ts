@@ -50,15 +50,14 @@ export async function createPassengerListPdf({
       lineWidth: 0.2,
     },
     columnStyles: {
-      0: { cellWidth: 9, fontStyle: "bold" },
-      1: { cellWidth: 10, fontStyle: "bold" },
-      2: { cellWidth: 9, fontStyle: "bold", textColor: groupTextColor },
-      3: { cellWidth: 35 },
-      4: { cellWidth: 22 },
-      5: { cellWidth: 22 },
-      6: { cellWidth: 26 },
+      0: { cellWidth: 10, fontStyle: "bold" },
+      1: { cellWidth: 10, fontStyle: "bold", textColor: groupTextColor },
+      2: { cellWidth: 40 },
+      3: { cellWidth: 24 },
+      4: { cellWidth: 24 },
+      5: { cellWidth: 28 },
+      6: { cellWidth: 30 },
       7: { cellWidth: 28 },
-      8: { cellWidth: 25 },
     },
     didParseCell: (data) => {
       if (data.section === "head" && data.row.index === 0) {

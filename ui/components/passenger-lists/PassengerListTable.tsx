@@ -10,7 +10,7 @@ interface PassengerListTableProps {
 
 /**
  * The passenger list as it is printed and exported: a dark title row stating
- * the day and the seat usage, then row number, seat, group, passenger, route,
+ * the day and the seat usage, then row number, group, passenger, route,
  * phone, notes and the return-leg info. Drivers read this next to the paper sheet, so the
  * column order and the emphasis mirror the PDF instead of the app's table style.
  */
@@ -21,7 +21,7 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
         {heading}
       </div>
 
-      {/* Desktop: the printed grid, one row per seat. */}
+      {/* Desktop: the printed grid, one row per passenger. */}
       <div className="hidden overflow-x-auto border border-foreground/70 md:block">
         <table className="w-full border-collapse text-center text-sm">
           <thead>
@@ -44,9 +44,6 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
               >
                 <td className="border border-foreground/70 px-2 py-1.5 font-bold tabular-nums">
                   {row.rowNumber}
-                </td>
-                <td className="border border-foreground/70 px-2 py-1.5 font-bold tabular-nums">
-                  {row.seatNumber}
                 </td>
                 <td className="border border-foreground/70 px-2 py-1.5 font-bold text-[#c00000]">
                   {row.groupLabel}
@@ -73,7 +70,7 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
         </table>
       </div>
 
-      {/* Mobile: the same fields stacked, seat number kept prominent. */}
+      {/* Mobile: the same fields stacked, with the row number kept prominent. */}
       <div className="space-y-2 md:hidden">
         {rows.map((row, index) => (
           <div
@@ -113,10 +110,6 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Dolazak</p>
                 <p>{row.arrivalStation}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Sedište</p>
-                <p className="tabular-nums">{row.seatNumber}</p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Info</p>

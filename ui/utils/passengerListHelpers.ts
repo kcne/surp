@@ -11,7 +11,6 @@ import type { Reservation, RideInstance } from "@/types"
  */
 export const PASSENGER_LIST_HEADERS = [
   "BR.",
-  "SED.",
   "GR",
   "PUTNIK",
   "POLAZAK",
@@ -219,7 +218,6 @@ export function toPassengerListCells(
 ): string[] {
   return [
     numbering === "seat" ? row.seatNumber : row.rowNumber,
-    row.seatNumber,
     row.groupLabel,
     row.passengerName,
     row.departureStation,
