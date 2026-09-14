@@ -156,7 +156,7 @@ Railway skips a scheduled run while the previous one still shows `Active`. A dum
 
 **A backup nobody has restored is an assumption, not a net.** Run this drill once before the first migration from #15, and quarterly after that.
 
-The scratch database has to be the **same major version as production**, not the one in `api/docker-compose.yml` — an archive from an 18.6 server does not restore into a 16 server, so drilling against the local dev database would prove nothing:
+The scratch database has to be the **same major version as production**. The local Compose database now matches production, but the drill still uses a separate container so its development volume stays untouched:
 
 ```bash
 # Throwaway PostgreSQL 18, so the dev database and its volume stay untouched
@@ -196,7 +196,7 @@ Step 3 matters: restoring over a damaged database destroys the evidence of what 
 
 ## Known drift
 
-`api/docker-compose.yml` and the CI workflow run PostgreSQL 16 while production runs 18.6. Tests therefore pass against a different major version than the one serving real reservations, which is its own small version of the problem this repo keeps hitting. Tracked separately from this service.
+The CI workflow still runs PostgreSQL 16 while local development and production run PostgreSQL 18. Tests therefore pass against a different major version than the one serving real reservations. Tracked separately from this service.
 
 ## Not here yet
 

@@ -6,6 +6,7 @@ import { Layout } from "@/components/layout/Layout"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AgencyUsersDataTable } from "@/components/agency-management/AgencyUsersDataTable"
 import { AgencyUserModal } from "@/components/agency-management/AgencyUserModal"
 import { DeleteAgencyUserDialog } from "@/components/agency-management/DeleteAgencyUserDialog"
@@ -52,7 +53,7 @@ export default function AgencyManagementPage() {
 
   const handleEdit = (targetUser: AgencyUser) => {
     if (!isEditableAgencyRole(targetUser.role)) {
-      toast.info("Admin i superadmin nalozi nisu dostupni za izmenu na ovoj stranici")
+      toast.info("Superadmin nalozi nisu dostupni za izmenu na ovoj stranici")
       return
     }
 
@@ -61,7 +62,7 @@ export default function AgencyManagementPage() {
 
   const handleDelete = (targetUser: AgencyUser) => {
     if (!isEditableAgencyRole(targetUser.role)) {
-      toast.info("Admin i superadmin nalozi nisu dostupni za deaktivaciju na ovoj stranici")
+      toast.info("Superadmin nalozi nisu dostupni za deaktivaciju na ovoj stranici")
       return
     }
 
@@ -89,6 +90,9 @@ export default function AgencyManagementPage() {
       setUserToResetPassword(null)
     }
   }
+
+  const activeUsers = users.filter((agencyUser) => agencyUser.isActive)
+  const inactiveUsers = users.filter((agencyUser) => !agencyUser.isActive)
 
   useEffect(() => {
     if (hasHydrated && !isAuthenticated) {
@@ -168,14 +172,36 @@ export default function AgencyManagementPage() {
             </Button>
           </div>
         ) : (
-          <AgencyUsersDataTable
-            users={users}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onResetPassword={handleResetPassword}
-            canResetPassword={canResetPassword}
-            currentUserId={user?.id}
-          />
+          <Tabs defaultValue="active">
+            <TabsList aria-label="Status korisničkih naloga">
+              <TabsTrigger value="active">Aktivni ({activeUsers.length})</TabsTrigger>
+              <TabsTrigger value="inactive">Deaktivirani ({inactiveUsers.length})</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="active">
+              <AgencyUsersDataTable
+                users={activeUsers}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onResetPassword={handleResetPassword}
+                canResetPassword={canResetPassword}
+                currentUserId={user?.id}
+                noResultsText="Nema aktivnih korisnika"
+              />
+            </TabsContent>
+
+            <TabsContent value="inactive">
+              <AgencyUsersDataTable
+                users={inactiveUsers}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onResetPassword={handleResetPassword}
+                canResetPassword={canResetPassword}
+                currentUserId={user?.id}
+                noResultsText="Nema deaktiviranih korisnika"
+              />
+            </TabsContent>
+          </Tabs>
         )}
 
         <AgencyUserModal

@@ -102,8 +102,10 @@ export function AgencyUserForm({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
                     <SelectItem value="MANAGER">Menadžer</SelectItem>
                     <SelectItem value="STAFF">Osoblje</SelectItem>
+                    <SelectItem value="DRIVER">Vozač (samo pregled putnika)</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />

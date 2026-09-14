@@ -14,4 +14,5 @@ export const UserResponseDtoRole = {
   ADMIN: 'ADMIN',
   MANAGER: 'MANAGER',
   STAFF: 'STAFF',
+  DRIVER: 'DRIVER',
 } as const;

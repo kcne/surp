@@ -45,7 +45,7 @@ export class LinesController {
   }
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.DRIVER)
   @ApiOperation({ summary: 'List lines in the current tenant.' })
   @ApiOkResponse({ type: PaginatedLinesResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure.' })

@@ -19,12 +19,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
+import { isDriverRole } from "@/lib/roleAccess"
 import { Check, ChevronsUpDown, Eye, EyeOff, LogIn } from "lucide-react"
 import { toast } from "sonner"
 
 const loginSchema = z.object({
   tenantSlug: z.string().min(1, "Agencija je obavezna"),
-  email: z.string().min(1, "Email je obavezan").email("Unesite ispravan email"),
+  identifier: z.string().trim().min(1, "Korisničko ime ili email su obavezni"),
   password: z.string().min(1, "Lozinka je obavezna"),
 })
 
@@ -60,7 +61,7 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
     defaultValues: {
       tenantSlug: "",
-      email: "",
+      identifier: "",
       password: "",
     },
   })
@@ -80,7 +81,13 @@ export default function LoginPage() {
       }
 
       const currentUser = useAuthStore.getState().user
-      router.replace(currentUser?.role === "SUPERADMIN" ? "/superadmin/overview" : "/reservations")
+      router.replace(
+        currentUser?.role === "SUPERADMIN"
+          ? "/superadmin/overview"
+          : isDriverRole(currentUser?.role)
+            ? "/passenger-lists"
+            : "/reservations"
+      )
     }
   }, [hasHydrated, isAuthenticated, isSandboxLogin, router])
 
@@ -90,7 +97,7 @@ export default function LoginPage() {
     }
 
     setValue("tenantSlug", sandboxTenantSlug, { shouldValidate: true })
-    setValue("email", sandboxLoginIdentifier, { shouldValidate: true })
+    setValue("identifier", sandboxLoginIdentifier, { shouldValidate: true })
     setValue("password", sandboxPassword, { shouldValidate: true })
   }, [isSandboxLogin, setValue])
 
@@ -102,10 +109,16 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormData) => {
     try {
       clearError()
-      await login(data.email, data.password, data.tenantSlug)
+      await login(data.identifier, data.password, data.tenantSlug)
       toast.success("Uspešno ste se prijavili!")
       const currentUser = useAuthStore.getState().user
-      router.push(currentUser?.role === "SUPERADMIN" ? "/superadmin/overview" : "/reservations")
+      router.push(
+        currentUser?.role === "SUPERADMIN"
+          ? "/superadmin/overview"
+          : isDriverRole(currentUser?.role)
+            ? "/passenger-lists"
+            : "/reservations"
+      )
     } catch (err) {
       toast.error("Greška pri prijavljivanju. Molimo pokušajte ponovo.")
     }
@@ -221,17 +234,18 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="identifier">Korisničko ime ili email</Label>
               <Input
-                id="email"
-                type="email"
-                  placeholder="Unesite username ili email"
-                {...register("email")}
+                id="identifier"
+                type="text"
+                autoComplete="username"
+                placeholder="Unesite korisničko ime ili email"
+                {...register("identifier")}
                 disabled={loading}
-                className={errors.email ? "border-danger" : ""}
+                className={errors.identifier ? "border-danger" : ""}
               />
-              {errors.email && (
-                <p className="text-sm text-danger">{errors.email.message}</p>
+              {errors.identifier && (
+                <p className="text-sm text-danger">{errors.identifier.message}</p>
               )}
             </div>
 
@@ -274,8 +288,6 @@ export default function LoginPage() {
     </div>
   )
 }
-
-
 
 
 

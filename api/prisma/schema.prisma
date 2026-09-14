@@ -12,6 +12,7 @@ enum UserRole {
   ADMIN
   MANAGER
   STAFF
+  DRIVER
 }
 
 enum StationCategory {

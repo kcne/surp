@@ -107,8 +107,8 @@ export class UsersService {
       throw new ForbiddenException('You cannot deactivate your own account');
     }
 
-    if (id === auth.sub && dto.role && dto.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('You cannot demote your own role');
+    if (id === auth.sub && dto.role && dto.role !== auth.role) {
+      throw new ForbiddenException('You cannot change your own role');
     }
 
     if (dto.role) {
@@ -268,8 +268,8 @@ export class UsersService {
   }
 
   private assertCreateRoleAllowed(role: UserRole): void {
-    if (role === UserRole.ADMIN || role === UserRole.SUPERADMIN) {
-      throw new ForbiddenException('Assigning ADMIN or SUPERADMIN role is not allowed in this endpoint');
+    if (role === UserRole.SUPERADMIN) {
+      throw new ForbiddenException('Assigning SUPERADMIN role is not allowed in this endpoint');
     }
   }
 

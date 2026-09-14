@@ -53,7 +53,7 @@ export class RidesController {
   }
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.DRIVER)
   @ApiOperation({ summary: 'List rides in the current tenant.' })
   @ApiOkResponse({ type: PaginatedRidesResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure.' })
@@ -67,7 +67,7 @@ export class RidesController {
   }
 
   @Get('instances')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.DRIVER)
   @ApiOperation({ summary: 'List materialized ride instances by date in the current tenant.' })
   @ApiOkResponse({ type: RideInstancesByDateResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure.' })

@@ -12,6 +12,7 @@ interface AgencyUsersDataTableProps {
   onResetPassword: (user: AgencyUser) => void
   canResetPassword: boolean
   currentUserId?: string
+  noResultsText?: string
 }
 
 export function AgencyUsersDataTable({
@@ -21,6 +22,7 @@ export function AgencyUsersDataTable({
   onResetPassword,
   canResetPassword,
   currentUserId,
+  noResultsText,
 }: AgencyUsersDataTableProps) {
   const columns = useMemo(
     () =>
@@ -38,7 +40,7 @@ export function AgencyUsersDataTable({
     <DataTable
       columns={columns}
       data={users}
-      noResultsText="Nema korisnika"
+      noResultsText={noResultsText ?? "Nema korisnika"}
       searchColumn="username"
       searchPlaceholder="Pretraži korisnike..."
     />

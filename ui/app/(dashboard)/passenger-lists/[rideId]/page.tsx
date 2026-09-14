@@ -1,8 +1,10 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useParams } from "next/navigation"
 import { FileText } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Layout } from "@/components/layout/Layout"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePassengerListDetailPage } from "@/hooks/usePassengerListDetailPage"
@@ -21,6 +23,13 @@ export default function PassengerListDetailPage() {
     isNotFound,
   } = usePassengerListDetailPage({ rideId })
   const hasOpenedPdf = useRef(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
+  const [exportAttempt, setExportAttempt] = useState(0)
+
+  const retryPdfExport = useCallback(() => {
+    setPdfError(null)
+    setExportAttempt((attempt) => attempt + 1)
+  }, [])
 
   useEffect(() => {
     if (hasOpenedPdf.current || isLoading || isRowsLoading || !rideInstance) {
@@ -34,16 +43,23 @@ export default function PassengerListDetailPage() {
       heading,
       headers: [...PASSENGER_LIST_HEADERS],
       rows: rows.map((row) => toPassengerListCells(row)),
-    }).then((doc) => {
-      if (isCurrent) {
-        window.location.replace(URL.createObjectURL(doc.output("blob")))
-      }
     })
+      .then((doc) => {
+        if (isCurrent) {
+          window.location.replace(URL.createObjectURL(doc.output("blob")))
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          hasOpenedPdf.current = false
+          setPdfError("PDF lista nije mogla biti pripremljena. Pokušajte ponovo.")
+        }
+      })
 
     return () => {
       isCurrent = false
     }
-  }, [heading, isLoading, isRowsLoading, rideInstance, rows])
+  }, [exportAttempt, heading, isLoading, isRowsLoading, rideInstance, rows])
 
   if (isNotFound) {
     return (
@@ -75,10 +91,24 @@ export default function PassengerListDetailPage() {
     <Layout>
       <div className="flex min-h-64 flex-col items-center justify-center gap-3 text-center">
         <FileText className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
-        <p className="font-medium">Otvaram listu putnika kao PDF…</p>
-        <p className="text-sm text-muted-foreground">
-          PDF će se otvoriti u ovom tabu, spreman za štampanje.
-        </p>
+        {pdfError ? (
+          <Alert variant="destructive" className="max-w-md text-left">
+            <AlertTitle>PDF nije otvoren</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>{pdfError}</p>
+              <Button type="button" variant="outline" onClick={retryPdfExport}>
+                Pokušaj ponovo
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <>
+            <p className="font-medium">Otvaram listu putnika kao PDF…</p>
+            <p className="text-sm text-muted-foreground">
+              PDF će se otvoriti u ovom tabu, spreman za štampanje.
+            </p>
+          </>
+        )}
       </div>
     </Layout>
   )

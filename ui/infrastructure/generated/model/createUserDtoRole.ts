@@ -10,6 +10,8 @@ export type CreateUserDtoRole = typeof CreateUserDtoRole[keyof typeof CreateUser
 
 
 export const CreateUserDtoRole = {
+  ADMIN: 'ADMIN',
   MANAGER: 'MANAGER',
   STAFF: 'STAFF',
+  DRIVER: 'DRIVER',
 } as const;

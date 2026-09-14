@@ -14,4 +14,5 @@ export const LoginUserDtoRole = {
   ADMIN: 'ADMIN',
   MANAGER: 'MANAGER',
   STAFF: 'STAFF',
+  DRIVER: 'DRIVER',
 } as const;

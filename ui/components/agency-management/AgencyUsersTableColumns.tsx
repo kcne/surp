@@ -11,6 +11,7 @@ const roleLabels: Record<AgencyUser["role"], string> = {
   ADMIN: "Admin",
   MANAGER: "Menadžer",
   STAFF: "Osoblje",
+  DRIVER: "Vozač",
 }
 
 export function getAgencyUsersTableColumns({
@@ -101,7 +102,7 @@ export function getAgencyUsersTableColumns({
               size="icon"
               onClick={() => onEdit(user)}
               disabled={!canEdit}
-              title={canEdit ? "Izmeni korisnika" : "Admin korisnici nisu dostupni za izmenu"}
+              title={canEdit ? "Izmeni korisnika" : "Superadmin korisnici nisu dostupni za izmenu"}
             >
               <Pencil className="h-4 w-4" />
             </Button>

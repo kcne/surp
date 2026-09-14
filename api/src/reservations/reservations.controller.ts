@@ -72,7 +72,7 @@ export class ReservationsController {
 
   @Get()
   @Throttle({ default: { limit: 1000, ttl: 60000 } })
-  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.DRIVER)
   @ApiOperation({ summary: 'List reservations in the current tenant.' })
   @ApiOkResponse({ type: PaginatedReservationsResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure.' })
@@ -87,7 +87,7 @@ export class ReservationsController {
 
   // Declared before `:id` so the literal segment is not swallowed by the param route.
   @Get('counts')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.DRIVER)
   @ApiOperation({
     summary: 'Count active reservations per ride instance over a travel-date window.'
   })

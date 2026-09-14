@@ -1,6 +1,6 @@
 import type { CreateUserDto, ResetPasswordDto, UpdateUserDto } from "@/infrastructure/generated/model"
 
-export type AgencyUserRole = "SUPERADMIN" | "ADMIN" | "MANAGER" | "STAFF"
+export type AgencyUserRole = "SUPERADMIN" | "ADMIN" | "MANAGER" | "STAFF" | "DRIVER"
 
 export type AgencyUser = {
   id: string
@@ -13,7 +13,7 @@ export type AgencyUser = {
 export type AgencyUserFormData = {
   username: string
   email: string
-  role: "MANAGER" | "STAFF"
+  role: "ADMIN" | "MANAGER" | "STAFF" | "DRIVER"
   password?: string
   isActive: boolean
 }
@@ -27,5 +27,5 @@ export type ResetAgencyUserPasswordFormData = {
 }
 
 export function isEditableAgencyRole(role: AgencyUserRole): boolean {
-  return role === "MANAGER" || role === "STAFF"
+  return role === "ADMIN" || role === "MANAGER" || role === "STAFF" || role === "DRIVER"
 }
