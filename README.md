@@ -176,4 +176,4 @@ This keeps deployment logic in Railway while preserving strict merge-time qualit
 
 ## License
 
-This project is licensed under the [Apache License 2.0](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
