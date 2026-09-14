@@ -16,12 +16,17 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
 export type ExportFormat = "xlsx" | "pdf"
+export type ExportNumbering = "sequential" | "seat"
 
 interface ExportPassengersDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultFileName: string
-  onExport: (options: { fileName: string; format: ExportFormat }) => Promise<void> | void
+  onExport: (options: {
+    fileName: string
+    format: ExportFormat
+    numbering: ExportNumbering
+  }) => Promise<void> | void
 }
 
 export function ExportPassengersDialog({
@@ -32,12 +37,14 @@ export function ExportPassengersDialog({
 }: ExportPassengersDialogProps) {
   const [fileName, setFileName] = useState(defaultFileName)
   const [format, setFormat] = useState<ExportFormat>("xlsx")
+  const [numbering, setNumbering] = useState<ExportNumbering>("sequential")
   const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
     if (open) {
       setFileName(defaultFileName)
       setFormat("xlsx")
+      setNumbering("sequential")
     }
   }, [open, defaultFileName])
 
@@ -46,7 +53,7 @@ export function ExportPassengersDialog({
     const trimmed = fileName.trim() || defaultFileName
     setIsExporting(true)
     try {
-      await onExport({ fileName: trimmed, format })
+      await onExport({ fileName: trimmed, format, numbering })
       onOpenChange(false)
     } finally {
       setIsExporting(false)
@@ -100,6 +107,33 @@ export function ExportPassengersDialog({
                 <span>PDF (.pdf)</span>
               </Label>
             </RadioGroup>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Numeracija</Label>
+            <RadioGroup
+              value={numbering}
+              onValueChange={(value) => setNumbering(value as ExportNumbering)}
+              className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+            >
+              <Label
+                htmlFor="export-numbering-sequential"
+                className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border p-3 hover:bg-muted/50"
+              >
+                <RadioGroupItem value="sequential" id="export-numbering-sequential" />
+                <span>Po redu (1, 2, 3…)</span>
+              </Label>
+              <Label
+                htmlFor="export-numbering-seat"
+                className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border p-3 hover:bg-muted/50"
+              >
+                <RadioGroupItem value="seat" id="export-numbering-seat" />
+                <span>Po sedištima</span>
+              </Label>
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground">
+              Kolona „Sedište” je uvek prikazana.
+            </p>
           </div>
 
           <DialogFooter>
