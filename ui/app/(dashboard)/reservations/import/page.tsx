@@ -11,8 +11,29 @@ import { ImportDropzone } from "@/components/reservations/import/ImportDropzone"
 import { ImportRowsTable } from "@/components/reservations/import/ImportRowsTable"
 import { ImportSummaryBar } from "@/components/reservations/import/ImportSummaryBar"
 import { useReservationsImportPage } from "@/hooks/useReservationsImportPage"
+import { useAuthStore } from "@/stores/authStore"
 
 export default function ReservationsImportPage() {
+  const { user } = useAuthStore()
+
+  if (user?.role !== "ADMIN") {
+    return (
+      <Layout>
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Potrebne su admin dozvole</AlertTitle>
+          <AlertDescription>
+            Samo tenant admin korisnici mogu da uvoze rezervacije iz CSV datoteke.
+          </AlertDescription>
+        </Alert>
+      </Layout>
+    )
+  }
+
+  return <ReservationsImportContent />
+}
+
+function ReservationsImportContent() {
   const {
     rows,
     summary,
