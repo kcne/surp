@@ -16,7 +16,7 @@ declare global {
  * `ai_source` dimenzijom za svaku stranicu.
  *
  * Tracking se ne menja u SEO ranking-u; sluzi samo za merenje stvarnog
- * AI saobracaja na sajtu (vidi docs/ai-search-plan.md, Slice AI-G).
+ * AI saobracaja na sajtu.
  */
 
 type AiSource = {
