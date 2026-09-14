@@ -107,8 +107,8 @@ export class UsersService {
       throw new ForbiddenException('You cannot deactivate your own account');
     }
 
-    if (id === auth.sub && dto.role && dto.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('You cannot demote your own role');
+    if (id === auth.sub && dto.role && dto.role !== auth.role) {
+      throw new ForbiddenException('You cannot change your own role');
     }
 
     if (dto.role) {

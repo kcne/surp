@@ -102,7 +102,7 @@ export function getAgencyUsersTableColumns({
               size="icon"
               onClick={() => onEdit(user)}
               disabled={!canEdit}
-              title={canEdit ? "Izmeni korisnika" : "Admin korisnici nisu dostupni za izmenu"}
+              title={canEdit ? "Izmeni korisnika" : "Superadmin korisnici nisu dostupni za izmenu"}
             >
               <Pencil className="h-4 w-4" />
             </Button>

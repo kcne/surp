@@ -53,7 +53,7 @@ export default function AgencyManagementPage() {
 
   const handleEdit = (targetUser: AgencyUser) => {
     if (!isEditableAgencyRole(targetUser.role)) {
-      toast.info("Admin i superadmin nalozi nisu dostupni za izmenu na ovoj stranici")
+      toast.info("Superadmin nalozi nisu dostupni za izmenu na ovoj stranici")
       return
     }
 
@@ -62,7 +62,7 @@ export default function AgencyManagementPage() {
 
   const handleDelete = (targetUser: AgencyUser) => {
     if (!isEditableAgencyRole(targetUser.role)) {
-      toast.info("Admin i superadmin nalozi nisu dostupni za deaktivaciju na ovoj stranici")
+      toast.info("Superadmin nalozi nisu dostupni za deaktivaciju na ovoj stranici")
       return
     }
 

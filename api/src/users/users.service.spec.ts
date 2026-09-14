@@ -124,6 +124,19 @@ describe('UsersService', () => {
     );
   });
 
+  it('rejects a superadmin changing their own role', async () => {
+    const superadminAuth = {
+      ...auth,
+      sub: 'superadmin-1',
+      role: UserRole.SUPERADMIN
+    };
+
+    await expect(
+      service.update(superadminAuth, superadminAuth.sub, { role: UserRole.ADMIN })
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
   it('soft deletes a tenant user by setting isActive false', async () => {
     prismaMock.user.findFirst.mockResolvedValue({ id: 'user-2' });
     prismaMock.user.update.mockResolvedValue({

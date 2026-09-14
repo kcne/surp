@@ -27,5 +27,5 @@ export type ResetAgencyUserPasswordFormData = {
 }
 
 export function isEditableAgencyRole(role: AgencyUserRole): boolean {
-  return role === "MANAGER" || role === "STAFF" || role === "DRIVER"
+  return role === "ADMIN" || role === "MANAGER" || role === "STAFF" || role === "DRIVER"
 }
