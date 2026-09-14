@@ -24,6 +24,7 @@ import {
   ReservationBatchItemResultDto
 } from './dto/reservations-batch.response.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
+import { RouteSegment, routeBoardingDropoffSets, routeStationOrder, segmentsOverlap } from './route-segment';
 
 const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   id: true,
@@ -83,11 +84,6 @@ type RideRouteContext = {
   boardingStationIds: Set<string>;
   /** Stations on the route where a passenger may get off. */
   dropoffStationIds: Set<string>;
-};
-
-type RouteSegment = {
-  departureOrder: number;
-  arrivalOrder: number;
 };
 
 type ReservationDbClient = PrismaService | Prisma.TransactionClient;
@@ -232,7 +228,12 @@ export class ReservationsService {
       const arrivalStationId = dto.arrivalStationId ?? existing.arrivalStationId;
       const seatNumber = dto.seatNumber ?? existing.seatNumber;
 
-      const rideContext = await this.getRideRouteContext(auth.tenantId, existing.rideId, tx);
+      // Updating never moves a reservation to a different ride (rideId isn't
+      // part of UpdateReservationDto), so this is never the "new reservation
+      // on a deactivated line" case the active-line guard exists for.
+      const rideContext = await this.getRideRouteContext(auth.tenantId, existing.rideId, tx, {
+        requireActiveLine: false
+      });
       const segment = this.validateAndResolveSegment(
         rideContext,
         departureStationId,
@@ -340,8 +341,10 @@ export class ReservationsService {
   private async getRideRouteContext(
     tenantId: string,
     rideId: string,
-    db: ReservationDbClient = this.prisma
+    db: ReservationDbClient = this.prisma,
+    options: { requireActiveLine?: boolean } = {}
   ): Promise<RideRouteContext> {
+    const { requireActiveLine = true } = options;
     const ride = await db.ride.findFirst({
       where: {
         id: rideId,
@@ -352,6 +355,7 @@ export class ReservationsService {
         capacity: true,
         line: {
           select: {
+            isActive: true,
             departureStationId: true,
             arrivalStationId: true,
             intermediateStops: {
@@ -374,30 +378,12 @@ export class ReservationsService {
       throw new BadRequestException('Ride must exist in the current tenant');
     }
 
-    const stationOrderById = new Map<string, number>();
-    stationOrderById.set(ride.line.departureStationId, 0);
+    if (requireActiveLine && !ride.line.isActive) {
+      throw new BadRequestException('Ride line is deactivated and cannot take new reservations');
+    }
 
-    ride.line.intermediateStops.forEach((stop, index) => {
-      stationOrderById.set(stop.stationId, index + 1);
-    });
-
-    stationOrderById.set(ride.line.arrivalStationId, ride.line.intermediateStops.length + 1);
-
-    // The line endpoints are always usable: the route starts by boarding at the
-    // departure station and ends by getting off at the arrival station.
-    // Intermediate stops may be restricted to one of the two.
-    const boardingStationIds = new Set<string>([ride.line.departureStationId]);
-    const dropoffStationIds = new Set<string>([ride.line.arrivalStationId]);
-
-    ride.line.intermediateStops.forEach((stop) => {
-      if (stop.isBoarding) {
-        boardingStationIds.add(stop.stationId);
-      }
-
-      if (stop.isDropoff) {
-        dropoffStationIds.add(stop.stationId);
-      }
-    });
+    const stationOrderById = routeStationOrder(ride.line);
+    const { boardingStationIds, dropoffStationIds } = routeBoardingDropoffSets(ride.line);
 
     return {
       rideId: ride.id,
@@ -506,15 +492,22 @@ export class ReservationsService {
     });
 
     let overlappingReservationsCount = 0;
+    let offRouteConflict = false;
     const hasOverlapSeatConflict = existing.some((item) => {
       const departureOrder = input.stationOrderById.get(item.departureStationId);
       const arrivalOrder = input.stationOrderById.get(item.arrivalStationId);
 
+      // Another active reservation on this departure names a station that is
+      // not on the current route, so its segment cannot be placed and cannot be
+      // ruled out as a collision either. Treating it as one is the safe
+      // direction to be wrong in, but the real problem is the route, not the
+      // seat this booking is asking for.
       if (departureOrder === undefined || arrivalOrder === undefined) {
+        offRouteConflict = true;
         return true;
       }
 
-      const overlaps = this.segmentsOverlap(
+      const overlaps = segmentsOverlap(
         {
           departureOrder,
           arrivalOrder
@@ -531,6 +524,12 @@ export class ReservationsService {
     });
 
     if (hasOverlapSeatConflict) {
+      if (offRouteConflict) {
+        throw new ConflictException(
+          'Cannot confirm seat availability: another reservation on this departure has a station that is no longer on the route. Run the reservation.stationsOnRoute integrity check to find and resolve it.'
+        );
+      }
+
       throw new ConflictException('Seat is already booked for this route segment');
     }
 
@@ -613,10 +612,6 @@ export class ReservationsService {
     ].join(':');
 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
-  }
-
-  private segmentsOverlap(a: RouteSegment, b: RouteSegment): boolean {
-    return Math.max(a.departureOrder, b.departureOrder) < Math.min(a.arrivalOrder, b.arrivalOrder);
   }
 
   private toUtcDate(date: string): Date {

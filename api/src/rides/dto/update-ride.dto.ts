@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { RideStatus, RideType } from '@prisma/client';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -74,6 +75,20 @@ export class UpdateRideDto {
   @IsString()
   @Matches(TIME_PATTERN, { message: 'oneTimeArrivalTime must be in HH:mm format' })
   oneTimeArrivalTime?: string;
+
+  /**
+   * Says the caller has seen what the change would break and means to make it
+   * anyway. A body field rather than a query parameter, so a copied URL can
+   * never carry it.
+   */
+  @ApiPropertyOptional({
+    example: false,
+    description:
+      'Confirms a change the server refused with WOULD_BREAK_RESERVATIONS, such as lowering capacity under a seat that is already sold.'
+  })
+  @IsOptional()
+  @IsBoolean()
+  confirmBreakingChange?: boolean;
 
   @ApiPropertyOptional({ type: [RideDayScheduleInputDto] })
   @IsOptional()

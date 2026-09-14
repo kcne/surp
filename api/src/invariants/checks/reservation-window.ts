@@ -29,7 +29,7 @@ const RESERVATION_SELECT = {
   seatNumber: true,
   departureStationId: true,
   arrivalStationId: true,
-  passenger: { select: { firstName: true, lastName: true, phone: true } }
+  passenger: { select: { id: true, firstName: true, lastName: true, phone: true, isActive: true } }
 } as const;
 
 const RIDE_SELECT = {
@@ -46,9 +46,17 @@ const RIDE_SELECT = {
   line: {
     select: {
       name: true,
+      isActive: true,
       departureStationId: true,
       arrivalStationId: true,
-      intermediateStops: { select: { stationId: true } }
+      // Ordered, because the seat checks number the route from these to work
+      // out which reservations share a stretch of it. isBoarding/isDropoff ride
+      // along for the segment checks, which need to know whether a station can
+      // still be boarded at or got off at.
+      intermediateStops: {
+        select: { stationId: true, isBoarding: true, isDropoff: true },
+        orderBy: { orderIndex: 'asc' }
+      }
     }
   },
   daySchedules: {

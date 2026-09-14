@@ -308,3 +308,4 @@ export * from './userResponseDtoCreatedById';
 export * from './userResponseDtoRole';
 export * from './userResponseDtoUpdatedById';
 export * from './usersControllerListParams';
+export * from './wouldBreakReservationsDto';

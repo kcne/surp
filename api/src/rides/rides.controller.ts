@@ -27,6 +27,7 @@ import {
   RideResponseDto
 } from './dto/ride.response.dto';
 import { UpdateRideDto } from './dto/update-ride.dto';
+import { WouldBreakReservationsDto } from './dto/would-break-reservations.dto';
 import { RidesService } from './rides.service';
 
 @ApiTags('Rides')
@@ -98,6 +99,11 @@ export class RidesController {
   @ApiNotFoundResponse({ description: 'Ride not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  @ApiConflictResponse({
+    type: WouldBreakReservationsDto,
+    description:
+      'The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with confirmBreakingChange to proceed.'
+  })
   update(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,
@@ -114,6 +120,11 @@ export class RidesController {
   @ApiNotFoundResponse({ description: 'Ride not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  @ApiConflictResponse({
+    type: WouldBreakReservationsDto,
+    description:
+      'The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with confirmBreakingChange to proceed.'
+  })
   replace(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,

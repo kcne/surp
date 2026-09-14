@@ -10,8 +10,6 @@ import {
   ridesControllerRemoveException,
   ridesControllerRemoveResponse,
   ridesControllerReplace,
-  ridesControllerReplaceDayTimes,
-  ridesControllerReplaceDayTimesResponse,
   ridesControllerReplaceResponse,
   ridesControllerUpdate,
   ridesControllerUpdateResponse,
@@ -19,10 +17,10 @@ import {
 import {
   toCreateRideDto,
   toCreateRideExceptionDto,
-  toReplaceRideDaySchedulesDto,
   toUpdateRideDto,
 } from "@/infrastructure/mappers/rideMappers"
 import { ridesListQueryKey } from "@/infrastructure/hooks/queries/useRidesListQuery"
+import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
 import type { RideFormData } from "@/types"
 
 function isRideMutationSuccess<TResponse extends { status: number }>(
@@ -34,6 +32,35 @@ function isRideMutationSuccess<TResponse extends { status: number }>(
   }
 
   return response.status >= 200 && response.status < 300
+}
+
+/**
+ * A change the server refused because it would break reservations that already
+ * exist — lowering capacity under a seat that is sold, today.
+ *
+ * It is not an error in the sense the other ones are: the request was valid and
+ * the agency may well mean it, a smaller bus really does get substituted. So it
+ * carries the server's count up to the page, which asks the question and
+ * resends with the confirmation, instead of being flattened into a red toast
+ * that says only that something failed.
+ */
+export class RideChangeNeedsConfirmationError extends Error {
+  constructor(readonly confirmation: WouldBreakReservationsDto) {
+    super(confirmation.message)
+    this.name = "RideChangeNeedsConfirmationError"
+  }
+}
+
+function asBreakingChangeConflict(error: unknown): WouldBreakReservationsDto | null {
+  const body = (error as { response?: { status?: number; data?: unknown } })?.response
+
+  if (body?.status !== 409) {
+    return null
+  }
+
+  const data = body.data as Partial<WouldBreakReservationsDto> | undefined
+
+  return data?.code === "WOULD_BREAK_RESERVATIONS" ? (data as WouldBreakReservationsDto) : null
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -62,12 +89,6 @@ function isCreateRideSuccess(
 function isGetRideByIdSuccess(
   response: ridesControllerGetByIdResponse
 ): response is Extract<ridesControllerGetByIdResponse, { status: 200 }> {
-  return response.status === 200
-}
-
-function isReplaceDayTimesSuccess(
-  response: ridesControllerReplaceDayTimesResponse
-): response is Extract<ridesControllerReplaceDayTimesResponse, { status: 200 }> {
   return response.status === 200
 }
 
@@ -121,34 +142,47 @@ export function useUpdateRideMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, payload }: { id: string; payload: Partial<RideFormData> }) => {
+    mutationFn: async ({
+      id,
+      payload,
+      confirmBreakingChange,
+    }: {
+      id: string
+      payload: Partial<RideFormData>
+      /** Set only after the agency has answered the question the 409 asked. */
+      confirmBreakingChange?: boolean
+    }) => {
       const hasExceptionsUpdate = Array.isArray(payload.exceptions)
-      const hasDaySchedulesUpdate = payload.daySchedules !== undefined
-
-      if (hasDaySchedulesUpdate) {
-        const daySchedulesResponse = await ridesControllerReplaceDayTimes(
-          id,
-          toReplaceRideDaySchedulesDto(payload.daySchedules)
-        )
-
-        if (!isReplaceDayTimesSuccess(daySchedulesResponse)) {
-          throw new Error("Neuspesno azuriranje rasporeda vremena voznje")
-        }
-      }
 
       if (hasPatchableFields(payload)) {
-        const updatePayload = toUpdateRideDto(
-          hasDaySchedulesUpdate
-            ? {
-                ...payload,
-                daySchedules: undefined,
-              }
-            : payload
-        )
+        // The day schedules travel with the ride update instead of going ahead
+        // of it in their own request. The update is the one call that can come
+        // back asking for confirmation, and anything written before it would
+        // survive a "cancel" as half a change nobody agreed to: the departure
+        // time already moved, the capacity change abandoned, and every
+        // reservation on the old time quietly orphaned. The ride endpoint
+        // replaces the schedules inside its own transaction, so either the
+        // whole edit lands or none of it does — and it validates them against
+        // the line the ride is being moved to rather than the one it is
+        // leaving, which the dedicated day-times endpoint cannot do.
+        const updatePayload = toUpdateRideDto(payload)
 
-        const response = payload.lineId && payload.type
-          ? await ridesControllerReplace(id, updatePayload)
-          : await ridesControllerUpdate(id, updatePayload)
+        const requestBody = confirmBreakingChange
+          ? { ...updatePayload, confirmBreakingChange: true }
+          : updatePayload
+
+        const response = await (payload.lineId && payload.type
+          ? ridesControllerReplace(id, requestBody)
+          : ridesControllerUpdate(id, requestBody)
+        ).catch((error: unknown) => {
+          const confirmation = asBreakingChangeConflict(error)
+
+          if (confirmation) {
+            throw new RideChangeNeedsConfirmationError(confirmation)
+          }
+
+          throw error
+        })
 
         const isSuccess = isUpdateRideSuccess(response)
 
@@ -202,6 +236,12 @@ export function useUpdateRideMutation() {
       invalidateRidesList(queryClient)
     },
     onError: (error) => {
+      // The page turns this one into a question, so a toast would only be a
+      // red notice next to a dialog asking the agency to decide.
+      if (error instanceof RideChangeNeedsConfirmationError) {
+        return
+      }
+
       toast.error(getErrorMessage(error, "Neuspesno azuriranje voznje"))
     },
   })

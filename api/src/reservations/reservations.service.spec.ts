@@ -48,6 +48,7 @@ describe('ReservationsService', () => {
   const routeRide = {
     id: 'ride-1',
     line: {
+      isActive: true,
       departureStationId: 'station-a',
       arrivalStationId: 'station-d',
       intermediateStops: [
@@ -251,6 +252,39 @@ describe('ReservationsService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('names the route problem instead of a seat collision when an existing reservation is off-route', async () => {
+    reservationStore.push({
+      id: 'reservation-existing',
+      tenantId: 'tenant-1',
+      rideId: 'ride-1',
+      passengerId: 'passenger-1',
+      travelDate: new Date('2026-03-30T00:00:00.000Z'),
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:30',
+      seatNumber: 5,
+      status: ReservationStatus.ACTIVE,
+      departureStationId: 'station-removed',
+      arrivalStationId: 'station-d'
+    });
+
+    const attempt = () =>
+      service.create(auth, {
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 12,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-c'
+      });
+
+    await expect(attempt()).rejects.toBeInstanceOf(ConflictException);
+    await expect(attempt()).rejects.toThrow(
+      'Cannot confirm seat availability: another reservation on this departure has a station that is no longer on the route. Run the reservation.stationsOnRoute integrity check to find and resolve it.'
+    );
+  });
+
   it('fails when departure or arrival is not valid for line path', async () => {
     await expect(
       service.create(auth, {
@@ -334,6 +368,44 @@ describe('ReservationsService', () => {
 
     expect(result.departureStationId).toBe('station-a');
     expect(result.arrivalStationId).toBe('station-d');
+  });
+
+  it('refuses to create a reservation on a ride whose line is deactivated', async () => {
+    prismaMock.ride.findFirst.mockResolvedValueOnce({
+      ...routeRide,
+      capacity: 40,
+      line: { ...routeRide.line, isActive: false }
+    });
+
+    await expect(
+      service.create(auth, {
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 21,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-d'
+      })
+    ).rejects.toThrow('Ride line is deactivated and cannot take new reservations');
+  });
+
+  it('still allows editing an existing reservation after its ride line is deactivated', async () => {
+    prismaMock.ride.findFirst.mockResolvedValueOnce({
+      ...routeRide,
+      capacity: 40,
+      line: { ...routeRide.line, isActive: false }
+    });
+
+    await service.update(auth, 'reservation-1', { seatNumber: 20 });
+
+    expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'reservation-1' },
+        data: expect.objectContaining({ seatNumber: 20 })
+      })
+    );
   });
 
   it('updates status and audit fields on cancellation', async () => {

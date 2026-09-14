@@ -427,6 +427,25 @@ describe('RidesController (e2e)', () => {
     expect(response.body.items[0].reservationCount).toBe(0);
   });
 
+  it('excludes rides on a deactivated line from the date query', async () => {
+    prismaMock.ride.findMany.mockResolvedValueOnce([]);
+
+    await request(app.getHttpServer())
+      .get('/rides/instances?date=2026-03-30&timezoneOffsetMinutes=0')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .expect(200);
+
+    expect(prismaMock.ride.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: RideStatus.ACTIVE,
+          line: { isActive: true }
+        })
+      })
+    );
+  });
+
   it('validates ride instances date query format', async () => {
     await request(app.getHttpServer())
       .get('/rides/instances?date=2026/03/30')

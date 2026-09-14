@@ -24,5 +24,7 @@ export interface UpdateRideDto {
   oneTimeDate?: string;
   oneTimeDepartureTime?: string;
   oneTimeArrivalTime?: string;
+  /** Confirms a change the server refused with WOULD_BREAK_RESERVATIONS, such as lowering capacity under a seat that is already sold. */
+  confirmBreakingChange?: boolean;
   daySchedules?: RideDayScheduleInputDto[];
 }
