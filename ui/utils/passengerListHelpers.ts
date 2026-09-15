@@ -31,7 +31,7 @@ export interface PassengerListRow {
   arrivalStation: string
   phone: string
   info: string
-  /** Set when the passenger shares a booking with someone else on this ride. */
+  /** Set when the reservation has a driver-facing group label. */
   hasGroup: boolean
   /** Alternates the background between groups so adjacent group labels remain distinct. */
   hasGroupOverlay: boolean
@@ -148,6 +148,35 @@ export function selectRideInstancePassengers(
 }
 
 /**
+ * Keeps every group contiguous in exports: G1 first, then G2, and so on.
+ * Labels are ranked by the lowest seat in each group, so this uses the label
+ * map directly instead of comparing strings (which would put G10 before G2).
+ * Ungrouped legacy rows are kept last until their backfill has run.
+ */
+export function sortReservationsByGroup(
+  reservations: Reservation[],
+  groupLabelByGroupId: ReadonlyMap<string, string>
+): Reservation[] {
+  const groupRankById = new Map<string, number>()
+  let rank = 0
+  groupLabelByGroupId.forEach((_label, groupId) => {
+    groupRankById.set(groupId, rank)
+    rank += 1
+  })
+
+  return [...reservations].sort((left, right) => {
+    const leftRank = left.groupId
+      ? groupRankById.get(left.groupId) ?? Number.MAX_SAFE_INTEGER
+      : Number.MAX_SAFE_INTEGER
+    const rightRank = right.groupId
+      ? groupRankById.get(right.groupId) ?? Number.MAX_SAFE_INTEGER
+      : Number.MAX_SAFE_INTEGER
+
+    return leftRank - rightRank || left.seatNumber - right.seatNumber
+  })
+}
+
+/**
  * The dark title row above the list: which day it is, how many passengers are
  * booked and how many seats are still open.
  */
@@ -175,6 +204,10 @@ export async function buildPassengerListRows(
   options: { includeCounterpartLegs?: boolean } = {}
 ): Promise<PassengerListRow[]> {
   const groupLabelByGroupId = buildReservationGroupLabels(rideReservations)
+  const orderedReservations = sortReservationsByGroup(
+    rideReservations,
+    groupLabelByGroupId
+  )
   const groupOverlayByGroupId = new Map<string, boolean>()
   groupLabelByGroupId.forEach((_label, groupId) => {
     groupOverlayByGroupId.set(groupId, groupOverlayByGroupId.size % 2 === 0)
@@ -182,7 +215,7 @@ export async function buildPassengerListRows(
 
   const counterpartLegs = (options.includeCounterpartLegs ?? true)
     ? await Promise.all(
-        rideReservations.map((reservation) =>
+        orderedReservations.map((reservation) =>
           fetchCounterpartLegForPassenger(
             reservation.passengerId,
             reservation.id,
@@ -193,9 +226,9 @@ export async function buildPassengerListRows(
           )
         )
       )
-    : rideReservations.map(() => null)
+    : orderedReservations.map(() => null)
 
-  return rideReservations.map((reservation, index) => {
+  return orderedReservations.map((reservation, index) => {
     const leg = counterpartLegs[index]
 
     return {

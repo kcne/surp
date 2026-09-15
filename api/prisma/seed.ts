@@ -401,6 +401,7 @@ async function main() {
       seatNumber: 1,
       status: 'ACTIVE',
       cancelledAt: null,
+      groupId: 'seed-group-reservation-referencing-station',
       createdById: adminUser.id,
       updatedById: adminUser.id
     },
@@ -417,6 +418,7 @@ async function main() {
       seatNumber: 1,
       status: 'ACTIVE',
       cancelledAt: null,
+      groupId: 'seed-group-reservation-referencing-station',
       createdById: adminUser.id,
       updatedById: adminUser.id
     }

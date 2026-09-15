@@ -102,7 +102,7 @@ export class ReservationsService {
     dto: CreateReservationDto
   ): Promise<ReservationResponseDto> {
     const created = await this.prisma.$transaction((tx) =>
-      this.createSingleInTransaction(tx, auth, dto)
+      this.createSingleInTransaction(tx, auth, dto, randomUUID())
     );
 
     return this.toResponse(created);
@@ -114,11 +114,32 @@ export class ReservationsService {
   ): Promise<BatchReservationsResponseDto> {
     return this.prisma.$transaction(async (tx) => {
       const results: ReservationBatchItemResultDto[] = [];
-      const groupId = dto.travelTogether && dto.items.length > 1 ? randomUUID() : null;
+      const sharedGroupId: string | undefined = dto.travelTogether ? randomUUID() : undefined;
+      const groupIdByPassengerId = new Map<string, string>();
+
+      const groupIdFor = (passengerId: string): string => {
+        if (sharedGroupId) {
+          return sharedGroupId;
+        }
+
+        const existing = groupIdByPassengerId.get(passengerId);
+        if (existing) {
+          return existing;
+        }
+
+        const created = randomUUID();
+        groupIdByPassengerId.set(passengerId, created);
+        return created;
+      };
 
       for (let index = 0; index < dto.items.length; index += 1) {
         const item = dto.items[index];
-        const created = await this.createSingleInTransaction(tx, auth, item, { groupId });
+        const created = await this.createSingleInTransaction(
+          tx,
+          auth,
+          item,
+          groupIdFor(item.passengerId)
+        );
 
         results.push({
           index,
@@ -679,7 +700,7 @@ export class ReservationsService {
     tx: Prisma.TransactionClient,
     auth: AccessTokenPayload,
     dto: CreateReservationDto,
-    options: { groupId?: string | null } = {}
+    groupId: string
   ): Promise<SelectedReservation> {
     const rideContext = await this.getRideRouteContext(auth.tenantId, dto.rideId, tx);
     await this.ensurePassengerExistsInTenant(auth.tenantId, dto.passengerId, tx);
@@ -723,7 +744,7 @@ export class ReservationsService {
           arrivalStationId: dto.arrivalStationId,
           status: ReservationStatus.ACTIVE,
           cancelledAt: null,
-          groupId: options.groupId ?? null,
+          groupId,
           notes: dto.notes?.trim() ? dto.notes.trim() : null
         },
         auth.sub
