@@ -4620,6 +4620,79 @@
         ]
       }
     },
+    "/reservations/{id}/move-seat": {
+      "post": {
+        "operationId": "ReservationsController_moveSeat",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveReservationSeatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReservationResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure or cancelled reservation."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Reservation not found in current tenant."
+          },
+          "409": {
+            "description": "The destination seat cannot be used for the route segment."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Move a reservation to another seat, swapping with an overlapping reservation when needed.",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
     "/reservations/{id}/cancel": {
       "post": {
         "operationId": "ReservationsController_cancel",
@@ -9504,6 +9577,20 @@
             "nullable": true
           }
         }
+      },
+      "MoveReservationSeatDto": {
+        "type": "object",
+        "properties": {
+          "seatNumber": {
+            "type": "integer",
+            "example": 14,
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "seatNumber"
+        ]
       },
       "DateRangeResponseDto": {
         "type": "object",

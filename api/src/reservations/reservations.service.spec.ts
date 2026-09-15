@@ -136,84 +136,96 @@ describe('ReservationsService', () => {
     prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
     prismaMock.passenger.findFirst.mockResolvedValue({ id: 'passenger-1' });
 
-    prismaMock.reservation.findMany.mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
-      return reservationStore
-        .filter((item) => {
-          if (where.tenantId && item.tenantId !== where.tenantId) {
-            return false;
-          }
-
-          if (where.rideId && item.rideId !== where.rideId) {
-            return false;
-          }
-
-          if (where.rideDepartureTime && item.rideDepartureTime !== where.rideDepartureTime) {
-            return false;
-          }
-
-          if (where.seatNumber !== undefined && item.seatNumber !== where.seatNumber) {
-            return false;
-          }
-
-          if (where.status && item.status !== where.status) {
-            return false;
-          }
-
-          if (where.travelDate && item.travelDate.toISOString() !== (where.travelDate as Date).toISOString()) {
-            return false;
-          }
-
-          if (where.id && typeof where.id === 'object' && where.id !== null && 'not' in where.id) {
-            if (item.id === (where.id as { not: string }).not) {
+    prismaMock.reservation.findMany.mockImplementation(
+      async ({ where }: { where: Record<string, unknown> }) => {
+        return reservationStore
+          .filter((item) => {
+            if (where.tenantId && item.tenantId !== where.tenantId) {
               return false;
             }
-          }
 
-          return true;
-        })
-        .map((item) => ({
-          id: item.id,
-          seatNumber: item.seatNumber,
-          departureStationId: item.departureStationId,
-          arrivalStationId: item.arrivalStationId
-        }));
-    });
+            if (where.rideId && item.rideId !== where.rideId) {
+              return false;
+            }
+
+            if (where.rideDepartureTime && item.rideDepartureTime !== where.rideDepartureTime) {
+              return false;
+            }
+
+            if (where.seatNumber !== undefined && item.seatNumber !== where.seatNumber) {
+              return false;
+            }
+
+            if (where.status && item.status !== where.status) {
+              return false;
+            }
+
+            if (
+              where.travelDate &&
+              item.travelDate.toISOString() !== (where.travelDate as Date).toISOString()
+            ) {
+              return false;
+            }
+
+            if (
+              where.id &&
+              typeof where.id === 'object' &&
+              where.id !== null &&
+              'not' in where.id
+            ) {
+              if (item.id === (where.id as { not: string }).not) {
+                return false;
+              }
+            }
+
+            return true;
+          })
+          .map((item) => ({
+            id: item.id,
+            seatNumber: item.seatNumber,
+            departureStationId: item.departureStationId,
+            arrivalStationId: item.arrivalStationId
+          }));
+      }
+    );
 
     prismaMock.reservation.findFirst.mockResolvedValue({ ...baseReservation });
 
-    prismaMock.reservation.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
-      const created = {
-        ...baseReservation,
-        id: `reservation-${reservationStore.length + 1}`,
-        passengerId: data.passengerId as string,
-        seatNumber: data.seatNumber as number,
-        departureStationId: data.departureStationId as string,
-        arrivalStationId: data.arrivalStationId as string,
-        travelDate: data.travelDate as Date,
-        rideDepartureTime: data.rideDepartureTime as string,
-        rideArrivalTime: data.rideArrivalTime as string,
-        createdById: data.createdById as string,
-        updatedById: data.updatedById as string,
-        groupId: (data.groupId as string | null | undefined) ?? null,
-        notes: (data.notes as string | null | undefined) ?? null
-      };
+    prismaMock.reservation.create.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => {
+        const created = {
+          ...baseReservation,
+          id: `reservation-${reservationStore.length + 1}`,
+          passengerId: data.passengerId as string,
+          seatNumber: data.seatNumber as number,
+          departureStationId: data.departureStationId as string,
+          arrivalStationId: data.arrivalStationId as string,
+          travelDate: data.travelDate as Date,
+          rideDepartureTime: data.rideDepartureTime as string,
+          rideArrivalTime: data.rideArrivalTime as string,
+          createdById: data.createdById as string,
+          updatedById: data.updatedById as string,
+          groupId: (data.groupId as string | null | undefined) ?? null,
+          notes: (data.notes as string | null | undefined) ?? null
+        };
 
-      reservationStore.push({
-        id: created.id,
-        tenantId: created.tenantId,
-        rideId: created.rideId,
-        passengerId: created.passengerId,
-        travelDate: created.travelDate,
-        rideDepartureTime: created.rideDepartureTime,
-        rideArrivalTime: created.rideArrivalTime,
-        seatNumber: created.seatNumber,
-        status: created.status,
-        departureStationId: created.departureStationId,
-        arrivalStationId: created.arrivalStationId
-      });
+        reservationStore.push({
+          id: created.id,
+          tenantId: created.tenantId,
+          rideId: created.rideId,
+          passengerId: created.passengerId,
+          travelDate: created.travelDate,
+          rideDepartureTime: created.rideDepartureTime,
+          rideArrivalTime: created.rideArrivalTime,
+          seatNumber: created.seatNumber,
+          status: created.status,
+          departureStationId: created.departureStationId,
+          arrivalStationId: created.arrivalStationId
+        });
 
-      return created;
-    });
+        return created;
+      }
+    );
 
     prismaMock.reservation.update.mockResolvedValue({
       ...baseReservation,
@@ -411,6 +423,7 @@ describe('ReservationsService', () => {
   it('updates status and audit fields on cancellation', async () => {
     const result = await service.cancel(auth, 'reservation-1');
 
+    expect(prismaMock.$executeRaw).toHaveBeenCalled();
     expect(prismaMock.reservation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -423,6 +436,62 @@ describe('ReservationsService', () => {
       })
     );
     expect(result.status).toBe(ReservationStatus.CANCELLED);
+  });
+
+  it('moves a reservation to a free seat under the ride-instance lock', async () => {
+    await service.moveSeat(auth, 'reservation-1', 16);
+
+    expect(prismaMock.$executeRaw).toHaveBeenCalled();
+    expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'reservation-1' },
+        data: expect.objectContaining({ seatNumber: 16, updatedById: 'admin-1' })
+      })
+    );
+  });
+
+  it('swaps seats when the destination has an overlapping reservation', async () => {
+    prismaMock.reservation.findMany
+      .mockResolvedValueOnce([{ ...baseReservation, id: 'reservation-2', seatNumber: 16 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await service.moveSeat(auth, 'reservation-1', 16);
+
+    expect(prismaMock.reservation.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: { id: 'reservation-1' },
+        data: expect.objectContaining({ seatNumber: 16 })
+      })
+    );
+    expect(prismaMock.reservation.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: 'reservation-2' },
+        data: expect.objectContaining({ seatNumber: 12 })
+      })
+    );
+  });
+
+  it('uses the source seat read after acquiring the ride-instance lock for a swap', async () => {
+    prismaMock.reservation.findFirst
+      .mockResolvedValueOnce({ ...baseReservation, seatNumber: 12 })
+      .mockResolvedValueOnce({ ...baseReservation, seatNumber: 15 });
+    prismaMock.reservation.findMany
+      .mockResolvedValueOnce([{ ...baseReservation, id: 'reservation-2', seatNumber: 16 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await service.moveSeat(auth, 'reservation-1', 16);
+
+    expect(prismaMock.reservation.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: 'reservation-2' },
+        data: expect.objectContaining({ seatNumber: 15 })
+      })
+    );
   });
 
   it('fails the whole batch and rolls back when one item fails', async () => {

@@ -9,6 +9,7 @@ import {
   reservationsControllerCancelResponse,
   reservationsControllerCreate,
   reservationsControllerCreateBatch,
+  reservationsControllerMoveSeat,
   reservationsControllerUpdate,
   reservationsControllerUpdateResponse,
 } from "@/infrastructure/generated/surp-api"
@@ -64,14 +65,15 @@ function getErrorMessage(error: unknown, fallback: string): string {
 function invalidateReservations(
   queryClient: ReturnType<typeof useQueryClient>,
   rideInstanceIds: string[]
-) {
-  rideInstanceIds.forEach((rideInstanceId) => {
-    queryClient.invalidateQueries({
-      queryKey: reservationsByRideInstanceQueryKey(rideInstanceId),
-    })
-  })
-
-  queryClient.invalidateQueries({ queryKey: ["reservations"] })
+): Promise<void> {
+  return Promise.all([
+    ...rideInstanceIds.map((rideInstanceId) =>
+      queryClient.invalidateQueries({
+        queryKey: reservationsByRideInstanceQueryKey(rideInstanceId),
+      }),
+    ),
+    queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+  ]).then(() => undefined)
 }
 
 interface CreateReservationInput {
@@ -167,6 +169,37 @@ export function useUpdateReservationMutation() {
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, "Neuspesno azuriranje rezervacije"))
+    },
+  })
+}
+
+export function useMoveReservationSeatMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      reservationId,
+      targetSeatNumber,
+      rideInstanceId,
+    }: {
+      reservationId: string
+      targetSeatNumber: number
+      rideInstanceId: string
+    }) => {
+      const response = await reservationsControllerMoveSeat(reservationId, {
+        seatNumber: targetSeatNumber,
+      })
+      if (response.status !== 200) {
+        throw new Error("Nije moguće premestiti putnika na izabrano sedište")
+      }
+      return { rideInstanceId }
+    },
+    onSuccess: async ({ rideInstanceId }) => {
+      toast.success("Sedište putnika je uspešno promenjeno")
+      await invalidateReservations(queryClient, [rideInstanceId])
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Nije moguće promeniti sedište"))
     },
   })
 }

@@ -25,3 +25,23 @@ The production database holds live reservations. See the working rules in the
 data-integrity epic (issue #15); in short: additive migrations only, checks ship
 read-only before their repairs, backfills run a dry run first, and nothing is
 written to production before the same step has run against a restored backup.
+
+## Quality gates and independent review
+
+Before considering any change complete, run the applicable lint, type-check,
+test, build, and generated-contract checks. Do not report a change as complete
+when a relevant check has not been run or is failing. At minimum, API changes
+require `pnpm --dir api lint`, `pnpm --dir api test`, and
+`pnpm --dir api test:contract`; UI changes require `pnpm --dir ui build`.
+
+New features and behavior changes must include focused automated tests for the
+new behavior, including failure cases when they affect validation, permissions,
+or data integrity. Regenerate and commit OpenAPI and UI-client artifacts when
+an API contract changes.
+
+When a feature is complete, prepare a self-contained review prompt for a fresh,
+independent agent. It must name the feature, relevant files and behavior,
+validation commands and results, and ask the reviewer to look specifically for
+correctness, regressions, data-integrity risks, test gaps, and UI/accessibility
+issues. Return this prompt in the final chat handoff; do not add it to a pull
+request unless the user explicitly asks for that.

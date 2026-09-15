@@ -4,6 +4,7 @@ import ExcelJS from "exceljs"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/useRidesInstancesByDateQuery"
 import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
+import { useMoveReservationSeatMutation } from "@/infrastructure/hooks/mutations/useReservationMutations"
 import { buildSeatMap } from "@/utils/seatHelpers"
 import { buildReservationGroupLabels } from "@/utils/reservationGroupLabels"
 import {
@@ -62,6 +63,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     [rideInstanceId, rideInstances]
   )
   const reservationsQuery = useReservationsByRideInstanceQuery(selectedRideInstance)
+  const moveSeatMutation = useMoveReservationSeatMutation()
   const reservations = useMemo(
     () => reservationsQuery.data ?? [],
     [reservationsQuery.data]
@@ -129,6 +131,15 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     }
 
     toggleSelectedSeat(seatNumber)
+  }
+
+  const handleSeatMove = (reservationId: string, targetSeatNumber: number) => {
+    if (!selectedRideInstance) return
+    moveSeatMutation.mutate({
+      reservationId,
+      targetSeatNumber,
+      rideInstanceId: selectedRideInstance.id,
+    })
   }
 
   const buildDefaultExportFileName = (): string => {
@@ -296,6 +307,8 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     localizedRideDate,
     clearSelectedSeats,
     handleSeatClick,
+    handleSeatMove,
+    isSeatMovePending: moveSeatMutation.isPending,
     handleExport,
     buildDefaultExportFileName,
     handleSingleReservationOpenChange,
