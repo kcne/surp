@@ -68,6 +68,7 @@ interface SeatProps {
   groupLabel?: string | null
   onSeatMove?: (reservationId: string, targetSeatNumber: number) => void
   isSeatMovePending: boolean
+  isDropTarget: boolean
 }
 
 function Seat({
@@ -79,6 +80,7 @@ function Seat({
   groupLabel,
   onSeatMove,
   isSeatMovePending,
+  isDropTarget,
 }: SeatProps) {
   const draggable = useDraggable({
     id: seat.reservation?.id ?? `seat-${seat.seatNumber}`,
@@ -120,6 +122,7 @@ function Seat({
         highlight === "match" && "ring-2 ring-amber-400 ring-offset-1",
         highlight === "current" && "ring-4 ring-amber-500 ring-offset-2 shadow-lg",
         draggable.isDragging && "opacity-30",
+        isDropTarget && "scale-95 border-primary bg-primary/25 ring-2 ring-primary/50 ring-offset-2",
         seat.reservation && onSeatMove && !isSeatMovePending && "cursor-grab active:cursor-grabbing",
       )}
       ref={setNodeRef}
@@ -193,6 +196,7 @@ export function SeatMap({
   const [query, setQuery] = useState("")
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
   const [activeSeat, setActiveSeat] = useState<SeatInfo | null>(null)
+  const [dropTargetSeatNumber, setDropTargetSeatNumber] = useState<number | null>(null)
   const suppressedClickSeatRef = useRef<number | null>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -265,6 +269,7 @@ export function SeatMap({
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveSeat(null)
+    setDropTargetSeatNumber(null)
     const reservationId = event.active.data.current?.reservationId as string | undefined
     const targetSeatNumber = typeof event.over?.id === "number" ? event.over.id : null
     if (!reservationId || targetSeatNumber === null) return
@@ -320,6 +325,7 @@ export function SeatMap({
         groupLabel={groupLabel}
         onSeatMove={onSeatMove}
         isSeatMovePending={isSeatMovePending}
+        isDropTarget={seat.seatNumber === dropTargetSeatNumber}
       />
     )
   }
@@ -420,7 +426,13 @@ export function SeatMap({
             sortedSeats.find((seat) => seat.reservation?.id === reservationId) ?? null,
           )
         }}
-        onDragCancel={() => setActiveSeat(null)}
+        onDragOver={(event) => {
+          setDropTargetSeatNumber(typeof event.over?.id === "number" ? event.over.id : null)
+        }}
+        onDragCancel={() => {
+          setActiveSeat(null)
+          setDropTargetSeatNumber(null)
+        }}
         onDragEnd={handleDragEnd}
       >
       <div
