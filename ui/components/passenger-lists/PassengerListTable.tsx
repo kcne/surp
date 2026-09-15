@@ -40,7 +40,7 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
             {rows.map((row, index) => (
               <tr
                 key={`${row.seatNumber}-${index}`}
-                className={cn(row.hasGroup && "bg-muted/60")}
+                className={cn(row.hasGroupOverlay && "bg-muted/60")}
               >
                 <td className="border border-foreground/70 px-2 py-1.5 font-bold tabular-nums">
                   {row.rowNumber}
@@ -77,7 +77,7 @@ export function PassengerListTable({ heading, rows }: PassengerListTableProps) {
             key={`${row.seatNumber}-${index}`}
             className={cn(
               "rounded-lg border border-foreground/70 p-3",
-              row.hasGroup && "bg-muted/60"
+              row.hasGroupOverlay && "bg-muted/60"
             )}
           >
             <div className="flex items-start gap-3">

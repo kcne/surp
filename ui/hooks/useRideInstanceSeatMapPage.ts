@@ -158,7 +158,14 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     const headingText = buildPassengerListHeading(selectedRideInstance, rideReservations.length)
 
     if (options.format === "pdf") {
-      const doc = await createPassengerListPdf({ heading: headingText, headers, rows })
+      const doc = await createPassengerListPdf({
+        heading: headingText,
+        headers,
+        rows,
+        groupedRowIndexes: new Set(
+          listRows.flatMap((row, index) => (row.hasGroupOverlay ? [index] : []))
+        ),
+      })
       doc.save(`${safeBaseName}.pdf`)
       return
     }
@@ -195,10 +202,10 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       }
     })
 
-    const groupRowFillArgb = "FFF3F4F6"
+    const groupRowFillArgb = "FFE5E7EB"
     rows.forEach((row, index) => {
       const addedRow = worksheet.addRow(row)
-      const hasGroup = listRows[index].hasGroup
+      const hasGroupOverlay = listRows[index].hasGroupOverlay
       addedRow.eachCell((cell) => {
         cell.border = {
           top: { style: "thin" },
@@ -206,7 +213,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
           bottom: { style: "thin" },
           right: { style: "thin" },
         }
-        if (hasGroup) {
+        if (hasGroupOverlay) {
           cell.fill = {
             type: "pattern",
             pattern: "solid",

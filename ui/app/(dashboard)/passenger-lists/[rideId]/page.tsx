@@ -43,6 +43,9 @@ export default function PassengerListDetailPage() {
       heading,
       headers: [...PASSENGER_LIST_HEADERS],
       rows: rows.map((row) => toPassengerListCells(row)),
+      groupedRowIndexes: new Set(
+        rows.flatMap((row, index) => (row.hasGroupOverlay ? [index] : []))
+      ),
     })
       .then((doc) => {
         if (isCurrent) {
