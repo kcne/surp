@@ -450,6 +450,23 @@ describe('ReservationsService', () => {
     );
   });
 
+  it('allows moving an existing reservation after its ride line is deactivated', async () => {
+    prismaMock.ride.findFirst.mockResolvedValueOnce({
+      ...routeRide,
+      capacity: 40,
+      line: { ...routeRide.line, isActive: false }
+    });
+
+    await service.moveSeat(auth, 'reservation-1', 16);
+
+    expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'reservation-1' },
+        data: expect.objectContaining({ seatNumber: 16 })
+      })
+    );
+  });
+
   it('swaps seats when the destination has an overlapping reservation', async () => {
     prismaMock.reservation.findMany
       .mockResolvedValueOnce([{ ...baseReservation, id: 'reservation-2', seatNumber: 16 }])

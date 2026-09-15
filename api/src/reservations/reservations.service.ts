@@ -323,7 +323,11 @@ export class ReservationsService {
         return [source];
       }
 
-      const rideContext = await this.getRideRouteContext(auth.tenantId, source.rideId, tx);
+      // Moving a seat keeps this reservation on the same ride, so a
+      // deactivated line must not prevent the change.
+      const rideContext = await this.getRideRouteContext(auth.tenantId, source.rideId, tx, {
+        requireActiveLine: false
+      });
       const sourceSegment = this.validateAndResolveSegment(
         rideContext,
         source.departureStationId,
