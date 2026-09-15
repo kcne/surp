@@ -6,6 +6,8 @@ interface PassengerListPdfOptions {
   heading: string
   headers: string[]
   rows: string[][]
+  /** Zero-based body-row indexes for reservations made as a group. */
+  groupedRowIndexes?: ReadonlySet<number>
 }
 
 /** Builds the printable passenger list used by both exports and the driver link. */
@@ -13,6 +15,7 @@ export async function createPassengerListPdf({
   heading,
   headers,
   rows,
+  groupedRowIndexes,
 }: PassengerListPdfOptions): Promise<jsPDF> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
   await registerPdfUnicodeFont(doc)
@@ -62,6 +65,12 @@ export async function createPassengerListPdf({
     didParseCell: (data) => {
       if (data.section === "head" && data.row.index === 0) {
         data.cell.styles.fontSize = 11
+      }
+
+      // Keep the driver-facing PDF consistent with the Excel export: grouped
+      // passengers share a subtle band, while individual bookings stay white.
+      if (data.section === "body" && groupedRowIndexes?.has(data.row.index)) {
+        data.cell.styles.fillColor = [229, 231, 235]
       }
     },
   })

@@ -33,6 +33,8 @@ export interface PassengerListRow {
   info: string
   /** Set when the passenger shares a booking with someone else on this ride. */
   hasGroup: boolean
+  /** Alternates the background between groups so adjacent group labels remain distinct. */
+  hasGroupOverlay: boolean
   notes: string | null
 }
 
@@ -173,6 +175,10 @@ export async function buildPassengerListRows(
   options: { includeCounterpartLegs?: boolean } = {}
 ): Promise<PassengerListRow[]> {
   const groupLabelByGroupId = buildReservationGroupLabels(rideReservations)
+  const groupOverlayByGroupId = new Map<string, boolean>()
+  groupLabelByGroupId.forEach((_label, groupId) => {
+    groupOverlayByGroupId.set(groupId, groupOverlayByGroupId.size % 2 === 0)
+  })
 
   const counterpartLegs = (options.includeCounterpartLegs ?? true)
     ? await Promise.all(
@@ -206,6 +212,9 @@ export async function buildPassengerListRows(
       phone: reservation.passenger.phone ?? "",
       info: leg ? `${leg.direction}: ${leg.date}` : "1 SMER",
       hasGroup: Boolean(reservation.groupId),
+      hasGroupOverlay: reservation.groupId
+        ? groupOverlayByGroupId.get(reservation.groupId) ?? false
+        : false,
       notes: reservation.notes ?? null,
     }
   })
