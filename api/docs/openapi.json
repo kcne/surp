@@ -6087,7 +6087,8 @@
               "SUPERADMIN",
               "ADMIN",
               "MANAGER",
-              "STAFF"
+              "STAFF",
+              "DRIVER"
             ]
           }
         },
@@ -6223,7 +6224,8 @@
               "SUPERADMIN",
               "ADMIN",
               "MANAGER",
-              "STAFF"
+              "STAFF",
+              "DRIVER"
             ]
           },
           "requirePasswordChange": {

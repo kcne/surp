@@ -24,7 +24,12 @@ import {
   ReservationBatchItemResultDto
 } from './dto/reservations-batch.response.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
-import { RouteSegment, routeBoardingDropoffSets, routeStationOrder, segmentsOverlap } from './route-segment';
+import {
+  RouteSegment,
+  routeBoardingDropoffSets,
+  routeStationOrder,
+  segmentsOverlap
+} from './route-segment';
 
 const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   id: true,
@@ -346,7 +351,7 @@ export class ReservationsService {
           reservation.departureStationId,
           reservation.arrivalStationId
         );
-        return this.segmentsOverlap(sourceSegment, destinationSegment);
+        return segmentsOverlap(sourceSegment, destinationSegment);
       });
 
       const excludedReservationIds = destination ? [source.id, destination.id] : [source.id];
