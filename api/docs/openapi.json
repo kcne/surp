@@ -4669,6 +4669,12 @@
           "400": {
             "description": "Validation failure or cancelled reservation."
           },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
           "404": {
             "description": "Reservation not found in current tenant."
           },
@@ -6081,8 +6087,7 @@
               "SUPERADMIN",
               "ADMIN",
               "MANAGER",
-              "STAFF",
-              "DRIVER"
+              "STAFF"
             ]
           }
         },
@@ -6218,8 +6223,7 @@
               "SUPERADMIN",
               "ADMIN",
               "MANAGER",
-              "STAFF",
-              "DRIVER"
+              "STAFF"
             ]
           },
           "requirePasswordChange": {
@@ -9576,7 +9580,7 @@
         "type": "object",
         "properties": {
           "seatNumber": {
-            "type": "number",
+            "type": "integer",
             "example": 14,
             "minimum": 1,
             "maximum": 100

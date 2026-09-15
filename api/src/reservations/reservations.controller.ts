@@ -158,6 +158,8 @@ export class ReservationsController {
     description: 'The destination seat cannot be used for the route segment.'
   })
   @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
   moveSeat(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,

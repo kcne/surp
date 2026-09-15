@@ -65,14 +65,15 @@ function getErrorMessage(error: unknown, fallback: string): string {
 function invalidateReservations(
   queryClient: ReturnType<typeof useQueryClient>,
   rideInstanceIds: string[]
-) {
-  rideInstanceIds.forEach((rideInstanceId) => {
-    queryClient.invalidateQueries({
-      queryKey: reservationsByRideInstanceQueryKey(rideInstanceId),
-    })
-  })
-
-  queryClient.invalidateQueries({ queryKey: ["reservations"] })
+): Promise<void> {
+  return Promise.all([
+    ...rideInstanceIds.map((rideInstanceId) =>
+      queryClient.invalidateQueries({
+        queryKey: reservationsByRideInstanceQueryKey(rideInstanceId),
+      }),
+    ),
+    queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+  ]).then(() => undefined)
 }
 
 interface CreateReservationInput {
@@ -193,9 +194,9 @@ export function useMoveReservationSeatMutation() {
       }
       return { rideInstanceId }
     },
-    onSuccess: ({ rideInstanceId }) => {
+    onSuccess: async ({ rideInstanceId }) => {
       toast.success("Sedište putnika je uspešno promenjeno")
-      invalidateReservations(queryClient, [rideInstanceId])
+      await invalidateReservations(queryClient, [rideInstanceId])
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, "Nije moguće promeniti sedište"))

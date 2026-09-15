@@ -8826,6 +8826,16 @@ export type reservationsControllerMoveSeatResponse400 = {
   status: 400
 }
 
+export type reservationsControllerMoveSeatResponse401 = {
+  data: void
+  status: 401
+}
+
+export type reservationsControllerMoveSeatResponse403 = {
+  data: void
+  status: 403
+}
+
 export type reservationsControllerMoveSeatResponse404 = {
   data: void
   status: 404
@@ -8839,7 +8849,7 @@ export type reservationsControllerMoveSeatResponse409 = {
 export type reservationsControllerMoveSeatResponseSuccess = (reservationsControllerMoveSeatResponse200) & {
   headers: Headers;
 };
-export type reservationsControllerMoveSeatResponseError = (reservationsControllerMoveSeatResponse400 | reservationsControllerMoveSeatResponse404 | reservationsControllerMoveSeatResponse409) & {
+export type reservationsControllerMoveSeatResponseError = (reservationsControllerMoveSeatResponse400 | reservationsControllerMoveSeatResponse401 | reservationsControllerMoveSeatResponse403 | reservationsControllerMoveSeatResponse404 | reservationsControllerMoveSeatResponse409) & {
   headers: Headers;
 };
 

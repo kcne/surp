@@ -423,6 +423,7 @@ describe('ReservationsService', () => {
   it('updates status and audit fields on cancellation', async () => {
     const result = await service.cancel(auth, 'reservation-1');
 
+    expect(prismaMock.$executeRaw).toHaveBeenCalled();
     expect(prismaMock.reservation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -469,6 +470,26 @@ describe('ReservationsService', () => {
       expect.objectContaining({
         where: { id: 'reservation-2' },
         data: expect.objectContaining({ seatNumber: 12 })
+      })
+    );
+  });
+
+  it('uses the source seat read after acquiring the ride-instance lock for a swap', async () => {
+    prismaMock.reservation.findFirst
+      .mockResolvedValueOnce({ ...baseReservation, seatNumber: 12 })
+      .mockResolvedValueOnce({ ...baseReservation, seatNumber: 15 });
+    prismaMock.reservation.findMany
+      .mockResolvedValueOnce([{ ...baseReservation, id: 'reservation-2', seatNumber: 16 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await service.moveSeat(auth, 'reservation-1', 16);
+
+    expect(prismaMock.reservation.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: 'reservation-2' },
+        data: expect.objectContaining({ seatNumber: 15 })
       })
     );
   });

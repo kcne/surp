@@ -296,6 +296,18 @@ export class ReservationsService {
     targetSeatNumber: number
   ): Promise<ReservationResponseDto[]> {
     const moved = await this.prisma.$transaction(async (tx) => {
+      // This first read only identifies the advisory-lock scope. Read the
+      // source again after the lock, since another move may have completed
+      // while this transaction was waiting for it.
+      const sourceBeforeLock = await this.getReservationOrThrow(auth.tenantId, id, tx);
+
+      await this.acquireRideInstanceLock(tx, {
+        tenantId: auth.tenantId,
+        rideId: sourceBeforeLock.rideId,
+        travelDate: sourceBeforeLock.travelDate,
+        rideDepartureTime: sourceBeforeLock.rideDepartureTime
+      });
+
       const source = await this.getReservationOrThrow(auth.tenantId, id, tx);
 
       if (source.status === ReservationStatus.CANCELLED) {
@@ -312,13 +324,6 @@ export class ReservationsService {
         source.departureStationId,
         source.arrivalStationId
       );
-
-      await this.acquireRideInstanceLock(tx, {
-        tenantId: auth.tenantId,
-        rideId: source.rideId,
-        travelDate: source.travelDate,
-        rideDepartureTime: source.rideDepartureTime
-      });
 
       const activeReservations = await tx.reservation.findMany({
         where: {
@@ -404,28 +409,38 @@ export class ReservationsService {
     id: string,
     strict: boolean = false
   ): Promise<ReservationResponseDto> {
-    const existing = await this.getReservationOrThrow(auth.tenantId, id);
+    const cancelled = await this.prisma.$transaction(async (tx) => {
+      const reservationBeforeLock = await this.getReservationOrThrow(auth.tenantId, id, tx);
 
-    if (existing.status === ReservationStatus.CANCELLED) {
-      if (strict) {
-        throw new BadRequestException('Reservation is already cancelled');
+      await this.acquireRideInstanceLock(tx, {
+        tenantId: auth.tenantId,
+        rideId: reservationBeforeLock.rideId,
+        travelDate: reservationBeforeLock.travelDate,
+        rideDepartureTime: reservationBeforeLock.rideDepartureTime
+      });
+
+      const existing = await this.getReservationOrThrow(auth.tenantId, id, tx);
+      if (existing.status === ReservationStatus.CANCELLED) {
+        if (strict) {
+          throw new BadRequestException('Reservation is already cancelled');
+        }
+
+        return existing;
       }
 
-      return this.toResponse(existing);
-    }
-
-    const cancelled = await this.prisma.reservation.update({
-      where: {
-        id
-      },
-      data: withUpdateAudit(
-        {
-          status: ReservationStatus.CANCELLED,
-          cancelledAt: new Date()
+      return tx.reservation.update({
+        where: {
+          id
         },
-        auth.sub
-      ),
-      select: SAFE_RESERVATION_SELECT
+        data: withUpdateAudit(
+          {
+            status: ReservationStatus.CANCELLED,
+            cancelledAt: new Date()
+          },
+          auth.sub
+        ),
+        select: SAFE_RESERVATION_SELECT
+      });
     });
 
     return this.toResponse(cancelled);

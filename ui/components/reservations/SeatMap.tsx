@@ -5,6 +5,7 @@ import {
   DndContext,
   DragEndEvent,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   useDraggable,
   useDroppable,
@@ -200,6 +201,7 @@ export function SeatMap({
   const suppressedClickSeatRef = useRef<number | null>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
   )
 
   const sortedSeats = useMemo(
