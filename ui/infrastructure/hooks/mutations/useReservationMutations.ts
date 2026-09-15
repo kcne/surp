@@ -73,6 +73,7 @@ function invalidateReservations(
       }),
     ),
     queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+    queryClient.invalidateQueries({ queryKey: ["passenger-list", "rows"] }),
   ]).then(() => undefined)
 }
 
@@ -163,9 +164,13 @@ export function useUpdateReservationMutation() {
 
       return response.data
     },
-    onSuccess: () => {
+    onSuccess: async (_reservation, { payload }) => {
       toast.success("Rezervacija je uspesno azurirana")
-      queryClient.invalidateQueries({ queryKey: ["reservations"] })
+      await queryClient.invalidateQueries({ queryKey: ["reservations"] })
+
+      if (payload.seatNumber !== undefined) {
+        await queryClient.invalidateQueries({ queryKey: ["passenger-list", "rows"] })
+      }
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, "Neuspesno azuriranje rezervacije"))

@@ -21,6 +21,7 @@ type ReservationStoreItem = {
   cancelledAt: Date | null;
   departureStationId: string;
   arrivalStationId: string;
+  groupId: string | null;
   createdAt: Date;
   updatedAt: Date;
   ride: {
@@ -65,6 +66,7 @@ describe('ReservationsController (e2e)', () => {
     cancelledAt: null,
     departureStationId: 'station-a',
     arrivalStationId: 'station-c',
+    groupId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ride: {
@@ -266,6 +268,7 @@ describe('ReservationsController (e2e)', () => {
         travelDate: data.travelDate as Date,
         rideDepartureTime: data.rideDepartureTime as string,
         rideArrivalTime: data.rideArrivalTime as string,
+        groupId: data.groupId as string,
         createdById: data.createdById as string,
         updatedById: data.updatedById as string
       };
@@ -323,6 +326,26 @@ describe('ReservationsController (e2e)', () => {
       .expect(403);
 
     expect(response.body.message).toBe('Tenant mismatch between token and request context');
+  });
+
+  it('assigns a group to a single reservation', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/reservations')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 11,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-c'
+      })
+      .expect(201);
+
+    expect(response.body.groupId).toEqual(expect.any(String));
   });
 
   it('fails when seat already booked for overlapping segment', async () => {

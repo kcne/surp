@@ -331,6 +331,15 @@ export class InternalSandboxService {
           continue;
         }
 
+        const groupIdForPassenger = (passengerIndex: number) =>
+          [
+            'sandbox-group',
+            ride.id,
+            travelDate.toISOString().slice(0, 10),
+            departure.times[0],
+            passengerIndex
+          ].join(':');
+
         for (let seatNumber = 1; seatNumber <= activeSeatCount; seatNumber += 1) {
           reservationIndex += 1;
           const passengerIndex = ((reservationIndex - 1) % passengers.length) + 1;
@@ -348,6 +357,7 @@ export class InternalSandboxService {
             cancelledAt: null,
             departureStationId,
             arrivalStationId,
+            groupId: groupIdForPassenger(passengerIndex),
             createdById: userId,
             updatedById: userId
           });
@@ -371,6 +381,7 @@ export class InternalSandboxService {
             cancelledAt: new Date(),
             departureStationId,
             arrivalStationId,
+            groupId: groupIdForPassenger(passengerIndex),
             createdById: userId,
             updatedById: userId
           });

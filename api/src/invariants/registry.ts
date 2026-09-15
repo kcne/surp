@@ -2,6 +2,7 @@ import { Invariant } from './invariant.types';
 import { instanceNotOverbooked } from './checks/instance-not-overbooked';
 import { pairedDirectionsAgree } from './checks/paired-directions-agree';
 import { reservationPassengerActive } from './checks/passenger-active';
+import { reservationGroupPresent } from './checks/group-present';
 import { reservationArrivalCurrent } from './checks/reservation-arrival-current';
 import { reservationReachable } from './checks/reservation-reachable';
 import { rideLineActive } from './checks/ride-line-active';
@@ -31,6 +32,7 @@ export const INVARIANTS: readonly Invariant[] = [
   reservationStationsOnRoute,
   reservationSegmentValid,
   reservationPassengerActive,
+  reservationGroupPresent,
   reservationSeatUnique,
   reservationSeatWithinCapacity,
   instanceNotOverbooked,

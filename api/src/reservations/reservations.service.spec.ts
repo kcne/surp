@@ -380,6 +380,7 @@ describe('ReservationsService', () => {
 
     expect(result.departureStationId).toBe('station-a');
     expect(result.arrivalStationId).toBe('station-d');
+    expect(result.groupId).toEqual(expect.any(String));
   });
 
   it('refuses to create a reservation on a ride whose line is deactivated', async () => {
@@ -598,7 +599,7 @@ describe('ReservationsService', () => {
     expect(new Set(groupIds).size).toBe(1);
   });
 
-  it('leaves groupId null when travelTogether is false', async () => {
+  it('assigns one group per passenger when travelTogether is false', async () => {
     const result = await service.createBatch(auth, {
       travelTogether: false,
       items: [
@@ -614,7 +615,7 @@ describe('ReservationsService', () => {
         },
         {
           rideId: 'ride-1',
-          passengerId: 'passenger-1',
+          passengerId: 'passenger-2',
           travelDate: '2026-03-30',
           rideDepartureTime: '09:00',
           rideArrivalTime: '10:30',
@@ -625,10 +626,44 @@ describe('ReservationsService', () => {
       ]
     });
 
-    expect(result.items.every((item) => item.reservation?.groupId === null)).toBe(true);
+    const groupIds = result.items.map((item) => item.reservation?.groupId);
+    expect(groupIds.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
+    expect(new Set(groupIds).size).toBe(2);
   });
 
-  it('leaves groupId null when travelTogether is true but only one item is supplied', async () => {
+  it('reuses the passenger group for several seats when travelTogether is false', async () => {
+    const result = await service.createBatch(auth, {
+      travelTogether: false,
+      items: [
+        {
+          rideId: 'ride-1',
+          passengerId: 'passenger-1',
+          travelDate: '2026-03-30',
+          rideDepartureTime: '09:00',
+          rideArrivalTime: '10:30',
+          seatNumber: 9,
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-c'
+        },
+        {
+          rideId: 'ride-1',
+          passengerId: 'passenger-1',
+          travelDate: '2026-03-30',
+          rideDepartureTime: '09:00',
+          rideArrivalTime: '10:30',
+          seatNumber: 10,
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-c'
+        }
+      ]
+    });
+
+    const groupIds = result.items.map((item) => item.reservation?.groupId);
+    expect(groupIds[0]).toEqual(expect.any(String));
+    expect(groupIds[1]).toBe(groupIds[0]);
+  });
+
+  it('assigns a group when a batch contains only one item', async () => {
     const result = await service.createBatch(auth, {
       travelTogether: true,
       items: [
@@ -645,7 +680,7 @@ describe('ReservationsService', () => {
       ]
     });
 
-    expect(result.items[0].reservation?.groupId).toBeNull();
+    expect(result.items[0].reservation?.groupId).toEqual(expect.any(String));
   });
 
   it('fails when route segment capacity is exhausted', async () => {

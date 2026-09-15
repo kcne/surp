@@ -155,6 +155,33 @@ Example S3-compatible CORS policy:
 | prisma:migrate:dev | pnpm prisma:migrate:dev | Create/apply local migration |
 | prisma:migrate:deploy | pnpm prisma:migrate:deploy | Apply migrations in deployment |
 | prisma:seed | pnpm prisma:seed | Seed baseline data |
+| reservations:groups:backfill | pnpm reservations:groups:backfill | Dry-run or apply the legacy reservation-group backfill |
+
+### Reservation group backfill
+
+Deploy the reservation write-path change before running this backfill, so new
+rows already receive a group while legacy rows are being processed. Existing
+non-null `groupId` values are never overwritten.
+
+Run the default read-only inspection first:
+
+```bash
+DATABASE_URL='<restored-backup-url>' pnpm reservations:groups:backfill
+```
+
+Apply it to a restored production backup and run the integrity checks before
+using the same command against production:
+
+```bash
+DATABASE_URL='<restored-backup-url>' \
+APPLY=1 \
+ACTOR_USER_ID='<admin-user-id>' \
+pnpm reservations:groups:backfill
+```
+
+`BATCH_SIZE` defaults to 250 passenger groups and accepts values from 1 to
+1000. A successful second apply reports zero updated reservations; the
+`reservation.groupPresent` invariant must also report zero violations.
 
 ## Validation Checklist (Slice 18 and Slice 19)
 
