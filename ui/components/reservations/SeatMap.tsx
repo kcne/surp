@@ -192,7 +192,7 @@ export function SeatMap({
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState("")
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
-  const [activeReservationName, setActiveReservationName] = useState<string | null>(null)
+  const [activeSeat, setActiveSeat] = useState<SeatInfo | null>(null)
   const suppressedClickSeatRef = useRef<number | null>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -264,7 +264,7 @@ export function SeatMap({
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
-    setActiveReservationName(null)
+    setActiveSeat(null)
     const reservationId = event.active.data.current?.reservationId as string | undefined
     const targetSeatNumber = typeof event.over?.id === "number" ? event.over.id : null
     if (!reservationId || targetSeatNumber === null) return
@@ -416,12 +416,11 @@ export function SeatMap({
         sensors={sensors}
         onDragStart={(event) => {
           const reservationId = event.active.data.current?.reservationId as string | undefined
-          const reservation = sortedSeats.find((seat) => seat.reservation?.id === reservationId)?.reservation
-          setActiveReservationName(
-            reservation ? `${reservation.passenger.firstName} ${reservation.passenger.lastName}` : null,
+          setActiveSeat(
+            sortedSeats.find((seat) => seat.reservation?.id === reservationId) ?? null,
           )
         }}
-        onDragCancel={() => setActiveReservationName(null)}
+        onDragCancel={() => setActiveSeat(null)}
         onDragEnd={handleDragEnd}
       >
       <div
@@ -463,9 +462,19 @@ export function SeatMap({
       </div>
 
         <DragOverlay dropAnimation={null}>
-          {activeReservationName ? (
-            <div className="w-28 rounded-lg border-2 border-primary bg-primary/15 p-1.5 text-left text-[11px] font-semibold text-primary shadow-lg">
-              {activeReservationName}
+          {activeSeat?.reservation ? (
+            <div className="flex h-[4.5rem] w-28 flex-col rounded-lg border-2 border-primary bg-primary/20 p-1.5 text-left text-foreground shadow-lg">
+              <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-blue-900">
+                #{activeSeat.seatNumber}
+              </span>
+              <span className="mt-0.5 line-clamp-2 text-[11px] font-semibold leading-tight text-blue-900">
+                {activeSeat.reservation.passenger.firstName} {activeSeat.reservation.passenger.lastName}
+              </span>
+              {activeSeat.reservation.passenger.phone && (
+                <span className="mt-auto truncate text-[10px] leading-tight tabular-nums text-blue-800">
+                  {activeSeat.reservation.passenger.phone}
+                </span>
+              )}
             </div>
           ) : null}
         </DragOverlay>
