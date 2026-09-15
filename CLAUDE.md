@@ -43,4 +43,5 @@ When a feature is complete, prepare a self-contained review prompt for a fresh,
 independent agent. It must name the feature, relevant files and behavior,
 validation commands and results, and ask the reviewer to look specifically for
 correctness, regressions, data-integrity risks, test gaps, and UI/accessibility
-issues. Add this prompt to the pull request before handoff.
+issues. Return this prompt in the final chat handoff; do not add it to a pull
+request unless the user explicitly asks for that.
