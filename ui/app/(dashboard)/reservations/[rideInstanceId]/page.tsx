@@ -41,6 +41,8 @@ export default function SeatMapPage() {
     localizedRideDate,
     clearSelectedSeats,
     handleSeatClick,
+    handleSeatMove,
+    isSeatMovePending,
     handleExport,
     buildDefaultExportFileName,
     handleSingleReservationOpenChange,
@@ -102,6 +104,8 @@ export default function SeatMapPage() {
             allowMultiSelect
             selectedSeats={selectedSeats}
             groupLabelByGroupId={groupLabelByGroupId}
+            onSeatMove={handleSeatMove}
+            isSeatMovePending={isSeatMovePending}
           />
         ) : null}
 

@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -26,6 +37,7 @@ import {
 } from './dto/reservation.response.dto';
 import { BatchReservationsResponseDto } from './dto/reservations-batch.response.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
+import { MoveReservationSeatDto } from './dto/move-reservation-seat.dto';
 import { ReservationsService } from './reservations.service';
 
 @ApiTags('Reservations')
@@ -109,7 +121,10 @@ export class ReservationsController {
   @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
-  getById(@Req() request: RequestWithAuth, @Param('id') id: string): Promise<ReservationResponseDto> {
+  getById(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string
+  ): Promise<ReservationResponseDto> {
     return this.reservationsService.getById(request.auth!, id);
   }
 
@@ -130,6 +145,27 @@ export class ReservationsController {
     return this.reservationsService.update(request.auth!, id, dto);
   }
 
+  @Post(':id/move-seat')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({
+    summary:
+      'Move a reservation to another seat, swapping with an overlapping reservation when needed.'
+  })
+  @ApiOkResponse({ type: ReservationResponseDto, isArray: true })
+  @ApiBadRequestResponse({ description: 'Validation failure or cancelled reservation.' })
+  @ApiConflictResponse({
+    description: 'The destination seat cannot be used for the route segment.'
+  })
+  @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
+  moveSeat(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: MoveReservationSeatDto
+  ): Promise<ReservationResponseDto[]> {
+    return this.reservationsService.moveSeat(request.auth!, id, dto.seatNumber);
+  }
+
   @Post(':id/cancel')
   @HttpCode(200)
   @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
@@ -139,7 +175,10 @@ export class ReservationsController {
   @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
-  cancel(@Req() request: RequestWithAuth, @Param('id') id: string): Promise<ReservationResponseDto> {
+  cancel(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string
+  ): Promise<ReservationResponseDto> {
     return this.reservationsService.cancel(request.auth!, id);
   }
 
@@ -150,7 +189,10 @@ export class ReservationsController {
   @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
-  remove(@Req() request: RequestWithAuth, @Param('id') id: string): Promise<ReservationResponseDto> {
+  remove(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string
+  ): Promise<ReservationResponseDto> {
     return this.reservationsService.softDelete(request.auth!, id);
   }
 }

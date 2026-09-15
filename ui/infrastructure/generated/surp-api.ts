@@ -58,6 +58,7 @@ import type {
   LogoutDto,
   LogoutResponseDto,
   MarketingLeadResponseDto,
+  MoveReservationSeatDto,
   OrphanedReservationRepairResultDto,
   OrphanedReservationReportDto,
   PaginatedLinesResponseDto,
@@ -8810,6 +8811,107 @@ export const useReservationsControllerRemove = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getReservationsControllerRemoveMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Move a reservation to another seat, swapping with an overlapping reservation when needed.
+ */
+export type reservationsControllerMoveSeatResponse200 = {
+  data: ReservationResponseDto[]
+  status: 200
+}
+
+export type reservationsControllerMoveSeatResponse400 = {
+  data: void
+  status: 400
+}
+
+export type reservationsControllerMoveSeatResponse404 = {
+  data: void
+  status: 404
+}
+
+export type reservationsControllerMoveSeatResponse409 = {
+  data: void
+  status: 409
+}
+
+export type reservationsControllerMoveSeatResponseSuccess = (reservationsControllerMoveSeatResponse200) & {
+  headers: Headers;
+};
+export type reservationsControllerMoveSeatResponseError = (reservationsControllerMoveSeatResponse400 | reservationsControllerMoveSeatResponse404 | reservationsControllerMoveSeatResponse409) & {
+  headers: Headers;
+};
+
+export type reservationsControllerMoveSeatResponse = (reservationsControllerMoveSeatResponseSuccess | reservationsControllerMoveSeatResponseError)
+
+export const getReservationsControllerMoveSeatUrl = (id: string,) => {
+
+
+  
+
+  return `/reservations/${id}/move-seat`
+}
+
+export const reservationsControllerMoveSeat = async (id: string,
+    moveReservationSeatDto: MoveReservationSeatDto, options?: RequestInit): Promise<reservationsControllerMoveSeatResponse> => {
+  
+  return customInstance<reservationsControllerMoveSeatResponse>(getReservationsControllerMoveSeatUrl(id),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      moveReservationSeatDto,)
+  }
+);}
+  
+
+
+
+export const getReservationsControllerMoveSeatMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reservationsControllerMoveSeat>>, TError,{id: string;data: MoveReservationSeatDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof reservationsControllerMoveSeat>>, TError,{id: string;data: MoveReservationSeatDto}, TContext> => {
+
+const mutationKey = ['reservationsControllerMoveSeat'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reservationsControllerMoveSeat>>, {id: string;data: MoveReservationSeatDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reservationsControllerMoveSeat(id,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReservationsControllerMoveSeatMutationResult = NonNullable<Awaited<ReturnType<typeof reservationsControllerMoveSeat>>>
+    export type ReservationsControllerMoveSeatMutationBody = MoveReservationSeatDto
+    export type ReservationsControllerMoveSeatMutationError = ErrorType<void>
+
+    /**
+ * @summary Move a reservation to another seat, swapping with an overlapping reservation when needed.
+ */
+export const useReservationsControllerMoveSeat = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reservationsControllerMoveSeat>>, TError,{id: string;data: MoveReservationSeatDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reservationsControllerMoveSeat>>,
+        TError,
+        {id: string;data: MoveReservationSeatDto},
+        TContext
+      > => {
+      return useMutation(getReservationsControllerMoveSeatMutationOptions(options), queryClient);
     }
     
 /**

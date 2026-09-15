@@ -73,6 +73,7 @@ export * from './loginUserDtoRole';
 export * from './logoutDto';
 export * from './logoutResponseDto';
 export * from './marketingLeadResponseDto';
+export * from './moveReservationSeatDto';
 export * from './occupancyPointResponseDto';
 export * from './occupancySummaryResponseDto';
 export * from './orphanedReservationItemDto';

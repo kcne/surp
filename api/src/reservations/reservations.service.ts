@@ -92,7 +92,10 @@ type ReservationDbClient = PrismaService | Prisma.TransactionClient;
 export class ReservationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(auth: AccessTokenPayload, dto: CreateReservationDto): Promise<ReservationResponseDto> {
+  async create(
+    auth: AccessTokenPayload,
+    dto: CreateReservationDto
+  ): Promise<ReservationResponseDto> {
     const created = await this.prisma.$transaction((tx) =>
       this.createSingleInTransaction(tx, auth, dto)
     );
@@ -256,7 +259,7 @@ export class ReservationsService {
         segment,
         stationOrderById: rideContext.stationOrderById,
         capacity: rideContext.capacity,
-        excludeReservationId: existing.id
+        excludeReservationIds: [existing.id]
       });
 
       return tx.reservation.update({
@@ -280,6 +283,116 @@ export class ReservationsService {
     });
 
     return this.toResponse(updated);
+  }
+
+  /**
+   * Moves a reservation without briefly freeing either seat.  A destination
+   * occupied on the same route segment is swapped in the same transaction,
+   * so drag-and-drop can never leave two passengers assigned to one seat.
+   */
+  async moveSeat(
+    auth: AccessTokenPayload,
+    id: string,
+    targetSeatNumber: number
+  ): Promise<ReservationResponseDto[]> {
+    const moved = await this.prisma.$transaction(async (tx) => {
+      const source = await this.getReservationOrThrow(auth.tenantId, id, tx);
+
+      if (source.status === ReservationStatus.CANCELLED) {
+        throw new BadRequestException('Cancelled reservation cannot be moved');
+      }
+
+      if (source.seatNumber === targetSeatNumber) {
+        return [source];
+      }
+
+      const rideContext = await this.getRideRouteContext(auth.tenantId, source.rideId, tx);
+      const sourceSegment = this.validateAndResolveSegment(
+        rideContext,
+        source.departureStationId,
+        source.arrivalStationId
+      );
+
+      await this.acquireRideInstanceLock(tx, {
+        tenantId: auth.tenantId,
+        rideId: source.rideId,
+        travelDate: source.travelDate,
+        rideDepartureTime: source.rideDepartureTime
+      });
+
+      const activeReservations = await tx.reservation.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          rideId: source.rideId,
+          travelDate: source.travelDate,
+          rideDepartureTime: source.rideDepartureTime,
+          status: ReservationStatus.ACTIVE
+        },
+        select: SAFE_RESERVATION_SELECT
+      });
+
+      const destination = activeReservations.find((reservation) => {
+        if (reservation.id === source.id || reservation.seatNumber !== targetSeatNumber) {
+          return false;
+        }
+
+        const destinationSegment = this.validateAndResolveSegment(
+          rideContext,
+          reservation.departureStationId,
+          reservation.arrivalStationId
+        );
+        return this.segmentsOverlap(sourceSegment, destinationSegment);
+      });
+
+      const excludedReservationIds = destination ? [source.id, destination.id] : [source.id];
+      await this.ensureSeatAndCapacityAreAvailable(tx, {
+        tenantId: auth.tenantId,
+        rideId: source.rideId,
+        travelDate: source.travelDate,
+        rideDepartureTime: source.rideDepartureTime,
+        seatNumber: targetSeatNumber,
+        segment: sourceSegment,
+        stationOrderById: rideContext.stationOrderById,
+        capacity: rideContext.capacity,
+        excludeReservationIds: excludedReservationIds
+      });
+
+      if (destination) {
+        const destinationSegment = this.validateAndResolveSegment(
+          rideContext,
+          destination.departureStationId,
+          destination.arrivalStationId
+        );
+        await this.ensureSeatAndCapacityAreAvailable(tx, {
+          tenantId: auth.tenantId,
+          rideId: source.rideId,
+          travelDate: source.travelDate,
+          rideDepartureTime: source.rideDepartureTime,
+          seatNumber: source.seatNumber,
+          segment: destinationSegment,
+          stationOrderById: rideContext.stationOrderById,
+          capacity: rideContext.capacity,
+          excludeReservationIds: excludedReservationIds
+        });
+      }
+
+      const updateSeat = (reservationId: string, seatNumber: number) =>
+        tx.reservation.update({
+          where: { id: reservationId },
+          data: withUpdateAudit({ seatNumber }, auth.sub),
+          select: SAFE_RESERVATION_SELECT
+        });
+
+      const updatedSource = await updateSeat(source.id, targetSeatNumber);
+      if (!destination) {
+        return [updatedSource];
+      }
+
+      const updatedDestination = await updateSeat(destination.id, source.seatNumber);
+      return [updatedSource, updatedDestination];
+    });
+
+    return moved.map((reservation) => this.toResponse(reservation));
   }
 
   async cancel(auth: AccessTokenPayload, id: string): Promise<ReservationResponseDto> {
@@ -409,11 +522,15 @@ export class ReservationsService {
     const arrivalOrder = stationOrderById.get(arrivalStationId);
 
     if (departureOrder === undefined || arrivalOrder === undefined) {
-      throw new BadRequestException('Departure and arrival stations must exist on the ride line path');
+      throw new BadRequestException(
+        'Departure and arrival stations must exist on the ride line path'
+      );
     }
 
     if (departureOrder >= arrivalOrder) {
-      throw new BadRequestException('Departure station must come before arrival station on line path');
+      throw new BadRequestException(
+        'Departure station must come before arrival station on line path'
+      );
     }
 
     if (!route.boardingStationIds.has(departureStationId)) {
@@ -453,16 +570,16 @@ export class ReservationsService {
   private async ensureSeatAndCapacityAreAvailable(
     db: ReservationDbClient,
     input: {
-    tenantId: string;
-    rideId: string;
-    travelDate: Date;
-    rideDepartureTime: string;
-    seatNumber: number;
-    segment: RouteSegment;
-    stationOrderById: Map<string, number>;
-    capacity: number;
-    excludeReservationId?: string;
-  }
+      tenantId: string;
+      rideId: string;
+      travelDate: Date;
+      rideDepartureTime: string;
+      seatNumber: number;
+      segment: RouteSegment;
+      stationOrderById: Map<string, number>;
+      capacity: number;
+      excludeReservationIds?: string[];
+    }
   ): Promise<void> {
     if (input.seatNumber > input.capacity) {
       throw new ConflictException('Seat number exceeds ride capacity');
@@ -475,10 +592,10 @@ export class ReservationsService {
         travelDate: input.travelDate,
         rideDepartureTime: input.rideDepartureTime,
         status: ReservationStatus.ACTIVE,
-        ...(input.excludeReservationId
+        ...(input.excludeReservationIds?.length
           ? {
               id: {
-                not: input.excludeReservationId
+                notIn: input.excludeReservationIds
               }
             }
           : {})

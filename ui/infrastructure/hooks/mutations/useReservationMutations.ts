@@ -9,6 +9,7 @@ import {
   reservationsControllerCancelResponse,
   reservationsControllerCreate,
   reservationsControllerCreateBatch,
+  reservationsControllerMoveSeat,
   reservationsControllerUpdate,
   reservationsControllerUpdateResponse,
 } from "@/infrastructure/generated/surp-api"
@@ -167,6 +168,37 @@ export function useUpdateReservationMutation() {
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, "Neuspesno azuriranje rezervacije"))
+    },
+  })
+}
+
+export function useMoveReservationSeatMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      reservationId,
+      targetSeatNumber,
+      rideInstanceId,
+    }: {
+      reservationId: string
+      targetSeatNumber: number
+      rideInstanceId: string
+    }) => {
+      const response = await reservationsControllerMoveSeat(reservationId, {
+        seatNumber: targetSeatNumber,
+      })
+      if (response.status !== 200) {
+        throw new Error("Nije moguće premestiti putnika na izabrano sedište")
+      }
+      return { rideInstanceId }
+    },
+    onSuccess: ({ rideInstanceId }) => {
+      toast.success("Sedište putnika je uspešno promenjeno")
+      invalidateReservations(queryClient, [rideInstanceId])
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Nije moguće promeniti sedište"))
     },
   })
 }

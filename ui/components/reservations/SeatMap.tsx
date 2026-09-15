@@ -1,6 +1,16 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core"
 import { ArrowDown, ArrowUp, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +24,8 @@ interface SeatMapProps {
   allowMultiSelect?: boolean
   selectedSeats?: number[]
   groupLabelByGroupId?: Map<string, string>
+  onSeatMove?: (reservationId: string, targetSeatNumber: number) => void
+  isSeatMovePending?: boolean
 }
 
 function normalize(value: string): string {
@@ -54,9 +66,30 @@ interface SeatProps {
   allowMultiSelect: boolean
   highlight?: "match" | "current" | null
   groupLabel?: string | null
+  onSeatMove?: (reservationId: string, targetSeatNumber: number) => void
+  isSeatMovePending: boolean
 }
 
-function Seat({ seat, isSelected, onClick, allowMultiSelect, highlight, groupLabel }: SeatProps) {
+function Seat({
+  seat,
+  isSelected,
+  onClick,
+  allowMultiSelect,
+  highlight,
+  groupLabel,
+  onSeatMove,
+  isSeatMovePending,
+}: SeatProps) {
+  const draggable = useDraggable({
+    id: seat.reservation?.id ?? `seat-${seat.seatNumber}`,
+    data: { reservationId: seat.reservation?.id },
+    disabled: !seat.reservation || !onSeatMove || isSeatMovePending,
+  })
+  const droppable = useDroppable({ id: seat.seatNumber, disabled: !onSeatMove || isSeatMovePending })
+  const setNodeRef = (node: HTMLButtonElement | null) => {
+    draggable.setNodeRef(node)
+    droppable.setNodeRef(node)
+  }
   const displayStatus: SeatVisualStatus =
     isSelected && seat.status === "available" ? "selected" : seat.status
   const fullName = seat.reservation
@@ -77,6 +110,8 @@ function Seat({ seat, isSelected, onClick, allowMultiSelect, highlight, groupLab
     <button
       type="button"
       data-seat-number={seat.seatNumber}
+      {...draggable.attributes}
+      {...draggable.listeners}
       aria-pressed={displayStatus === "selected"}
       aria-label={`Sedište ${seat.seatNumber}: ${title}`}
       className={cn(
@@ -84,7 +119,10 @@ function Seat({ seat, isSelected, onClick, allowMultiSelect, highlight, groupLab
         getSeatClasses(displayStatus, true),
         highlight === "match" && "ring-2 ring-amber-400 ring-offset-1",
         highlight === "current" && "ring-4 ring-amber-500 ring-offset-2 shadow-lg",
+        draggable.isDragging && "opacity-30",
+        seat.reservation && onSeatMove && !isSeatMovePending && "cursor-grab active:cursor-grabbing",
       )}
+      ref={setNodeRef}
       onClick={onClick}
       title={title}
     >
@@ -147,11 +185,18 @@ export function SeatMap({
   allowMultiSelect = false,
   selectedSeats = [],
   groupLabelByGroupId,
+  onSeatMove,
+  isSeatMovePending = false,
 }: SeatMapProps) {
   const gridRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState("")
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
+  const [activeReservationName, setActiveReservationName] = useState<string | null>(null)
+  const suppressedClickSeatRef = useRef<number | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  )
 
   const sortedSeats = useMemo(
     () => [...seats].sort((a, b) => a.seatNumber - b.seatNumber),
@@ -218,6 +263,19 @@ export function SeatMap({
     }
   }
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveReservationName(null)
+    const reservationId = event.active.data.current?.reservationId as string | undefined
+    const targetSeatNumber = typeof event.over?.id === "number" ? event.over.id : null
+    if (!reservationId || targetSeatNumber === null) return
+
+    const sourceSeat = sortedSeats.find((seat) => seat.reservation?.id === reservationId)
+    if (!sourceSeat || sourceSeat.seatNumber === targetSeatNumber) return
+
+    suppressedClickSeatRef.current = sourceSeat.seatNumber
+    onSeatMove?.(reservationId, targetSeatNumber)
+  }
+
   // 2+2 layout: each column of 4 seats arranged top-window, top-aisle, [aisle gap], bottom-aisle, bottom-window
   const cols: {
     topWindow: SeatInfo | null
@@ -250,10 +308,18 @@ export function SeatMap({
         key={seat.seatNumber}
         seat={seat}
         isSelected={isSelected}
-        onClick={() => onSeatClick(seat.seatNumber, seat.reservation)}
+        onClick={() => {
+          if (suppressedClickSeatRef.current === seat.seatNumber) {
+            suppressedClickSeatRef.current = null
+            return
+          }
+          onSeatClick(seat.seatNumber, seat.reservation)
+        }}
         allowMultiSelect={allowMultiSelect}
         highlight={highlight}
         groupLabel={groupLabel}
+        onSeatMove={onSeatMove}
+        isSeatMovePending={isSeatMovePending}
       />
     )
   }
@@ -340,6 +406,24 @@ export function SeatMap({
         )}
       </div>
 
+      {onSeatMove && (
+        <p className="text-xs text-muted-foreground">
+          Prevucite rezervisano sedište na drugo mesto da premestite putnika ili zamenite mesta.
+        </p>
+      )}
+
+      <DndContext
+        sensors={sensors}
+        onDragStart={(event) => {
+          const reservationId = event.active.data.current?.reservationId as string | undefined
+          const reservation = sortedSeats.find((seat) => seat.reservation?.id === reservationId)?.reservation
+          setActiveReservationName(
+            reservation ? `${reservation.passenger.firstName} ${reservation.passenger.lastName}` : null,
+          )
+        }}
+        onDragCancel={() => setActiveReservationName(null)}
+        onDragEnd={handleDragEnd}
+      >
       <div
         ref={gridRef}
         className="w-full overflow-x-auto rounded-2xl border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-4 sm:p-6"
@@ -377,6 +461,15 @@ export function SeatMap({
           Prolaz označen isprekidanom linijom · Raspored 2 + 2
         </p>
       </div>
+
+        <DragOverlay dropAnimation={null}>
+          {activeReservationName ? (
+            <div className="w-28 rounded-lg border-2 border-primary bg-primary/15 p-1.5 text-left text-[11px] font-semibold text-primary shadow-lg">
+              {activeReservationName}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
