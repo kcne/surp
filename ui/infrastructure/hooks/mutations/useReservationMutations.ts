@@ -6,6 +6,7 @@ import {
 } from "@/infrastructure/generated/model"
 import {
   reservationsControllerCancel,
+  reservationsControllerAssignGroup,
   reservationsControllerCancelResponse,
   reservationsControllerCreate,
   reservationsControllerCreateBatch,
@@ -70,7 +71,7 @@ function invalidateReservations(
     ...rideInstanceIds.map((rideInstanceId) =>
       queryClient.invalidateQueries({
         queryKey: reservationsByRideInstanceQueryKey(rideInstanceId),
-      }),
+      })
     ),
     queryClient.invalidateQueries({ queryKey: ["reservations"] }),
     queryClient.invalidateQueries({ queryKey: ["passenger-list", "rows"] }),
@@ -93,7 +94,9 @@ export function useCreateReservationMutation() {
 
   return useMutation({
     mutationFn: async ({ data, rideInstance }: CreateReservationInput) => {
-      const response = await reservationsControllerCreate(toCreateReservationDto(data, rideInstance))
+      const response = await reservationsControllerCreate(
+        toCreateReservationDto(data, rideInstance)
+      )
 
       if (!isReservationMutationSuccess(response)) {
         throw new Error("Neuspesno kreiranje rezervacije")
@@ -168,9 +171,7 @@ export function useUpdateReservationMutation() {
       toast.success("Rezervacija je uspesno azurirana")
       await queryClient.invalidateQueries({ queryKey: ["reservations"] })
 
-      if (payload.seatNumber !== undefined) {
-        await queryClient.invalidateQueries({ queryKey: ["passenger-list", "rows"] })
-      }
+      await queryClient.invalidateQueries({ queryKey: ["passenger-list", "rows"] })
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, "Neuspesno azuriranje rezervacije"))
@@ -183,18 +184,28 @@ export function useAssignReservationGroupMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ reservations, groupId }: { reservations: { id: string; rideInstanceId: string }[]; groupId: string }) => {
-      for (const reservation of reservations) {
-        const response = await reservationsControllerUpdate(reservation.id, { groupId })
-        if (!isUpdateReservationSuccess(response)) throw new Error("Nije moguće povezati rezervacije u grupu")
-      }
+    mutationFn: async ({
+      reservations,
+      groupId,
+    }: {
+      reservations: { id: string; rideInstanceId: string }[]
+      groupId: string
+    }) => {
+      const response = await reservationsControllerAssignGroup({
+        reservationIds: reservations.map(({ id }) => id),
+        groupId,
+      })
+      if (response.status !== 200) throw new Error("Nije moguće povezati rezervacije u grupu")
       return reservations
     },
     onSuccess: async (reservations) => {
       toast.success("Rezervacije su povezane u grupu")
-      await invalidateReservations(queryClient, [...new Set(reservations.map(({ rideInstanceId }) => rideInstanceId))])
+      await invalidateReservations(queryClient, [
+        ...new Set(reservations.map(({ rideInstanceId }) => rideInstanceId)),
+      ])
     },
-    onError: (error) => toast.error(getErrorMessage(error, "Nije moguće povezati rezervacije u grupu")),
+    onError: (error) =>
+      toast.error(getErrorMessage(error, "Nije moguće povezati rezervacije u grupu")),
   })
 }
 

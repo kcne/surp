@@ -25,6 +25,7 @@ import {
 } from './dto/reservations-batch.response.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { CancellationPreviewDto, CancellationPreviewResponseDto } from './dto/cancellation-preview.dto';
+import { AssignReservationGroupDto } from './dto/assign-reservation-group.dto';
 import {
   RouteSegment,
   routeBoardingDropoffSets,
@@ -94,6 +95,7 @@ type RideRouteContext = {
 };
 
 type ReservationDbClient = PrismaService | Prisma.TransactionClient;
+const LEGACY_RETURN_LOOKUP_DAYS = 90;
 
 @Injectable()
 export class ReservationsService {
@@ -117,20 +119,21 @@ export class ReservationsService {
     return this.prisma.$transaction(async (tx) => {
       const results: ReservationBatchItemResultDto[] = [];
       const sharedGroupId: string | undefined = dto.travelTogether ? randomUUID() : undefined;
-      const groupIdByPassengerId = new Map<string, string>();
+      const groupIdByRideInstancePassenger = new Map<string, string>();
 
-      const groupIdFor = (passengerId: string): string => {
+      const groupIdFor = (item: CreateReservationDto): string => {
         if (sharedGroupId) {
           return sharedGroupId;
         }
 
-        const existing = groupIdByPassengerId.get(passengerId);
+        const key = `${item.rideId}:${item.travelDate}:${item.rideDepartureTime}:${item.passengerId}`;
+        const existing = groupIdByRideInstancePassenger.get(key);
         if (existing) {
           return existing;
         }
 
         const created = randomUUID();
-        groupIdByPassengerId.set(passengerId, created);
+        groupIdByRideInstancePassenger.set(key, created);
         return created;
       };
 
@@ -140,7 +143,7 @@ export class ReservationsService {
           tx,
           auth,
           item,
-          groupIdFor(item.passengerId)
+          groupIdFor(item)
         );
 
         results.push({
@@ -284,7 +287,10 @@ export class ReservationsService {
               passengerId: item.passengerId,
               departureStationId: item.arrivalStationId,
               arrivalStationId: item.departureStationId,
-              travelDate: { gte: item.travelDate },
+              travelDate: {
+                gte: item.travelDate,
+                lte: new Date(item.travelDate.getTime() + LEGACY_RETURN_LOOKUP_DAYS * 86_400_000)
+              },
               id: { not: item.id }
             }))
           },
@@ -306,6 +312,37 @@ export class ReservationsService {
       outboundReservations: outbound.map((item) => this.toResponse(item)),
       returnReservations: Array.from(new Map(returns.map((item) => [item.id, item])).values()).map((item) => this.toResponse(item))
     };
+  }
+
+  async assignGroup(
+    auth: AccessTokenPayload,
+    dto: AssignReservationGroupDto
+  ): Promise<ReservationResponseDto[]> {
+    const ids = [...new Set(dto.reservationIds)];
+    return this.prisma.$transaction(async (tx) => {
+      const reservations = await tx.reservation.findMany({
+        where: { tenantId: auth.tenantId, id: { in: ids }, status: ReservationStatus.ACTIVE },
+        select: SAFE_RESERVATION_SELECT
+      });
+      if (reservations.length !== ids.length) {
+        throw new NotFoundException('One or more active reservations were not found');
+      }
+      const departures = new Set(
+        reservations.map((item) => `${item.rideId}:${item.travelDate.toISOString()}:${item.rideDepartureTime}`)
+      );
+      if (departures.size !== 1) {
+        throw new BadRequestException('Reservations must belong to the same departure');
+      }
+      await tx.reservation.updateMany({
+        where: { tenantId: auth.tenantId, id: { in: ids }, status: ReservationStatus.ACTIVE },
+        data: withUpdateAudit({ groupId: dto.groupId }, auth.sub)
+      });
+      const updated = await tx.reservation.findMany({
+        where: { tenantId: auth.tenantId, id: { in: ids } },
+        select: SAFE_RESERVATION_SELECT
+      });
+      return updated.map((item) => this.toResponse(item));
+    });
   }
 
   async update(

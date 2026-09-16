@@ -4493,6 +4493,56 @@
         ]
       }
     },
+    "/reservations/assign-group": {
+      "post": {
+        "operationId": "ReservationsController_assignGroup",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignReservationGroupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReservationResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Atomically assign active reservations on one departure to a group.",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
     "/reservations/{id}": {
       "get": {
         "operationId": "ReservationsController_getById",
@@ -9650,6 +9700,27 @@
         "required": [
           "outboundReservations",
           "returnReservations"
+        ]
+      },
+      "AssignReservationGroupDto": {
+        "type": "object",
+        "properties": {
+          "reservationIds": {
+            "minItems": 2,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "reservationIds",
+          "groupId"
         ]
       },
       "UpdateReservationDto": {

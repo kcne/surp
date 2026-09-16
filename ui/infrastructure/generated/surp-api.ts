@@ -25,6 +25,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AssignReservationGroupDto,
   BatchReservationsResponseDto,
   CancellationPreviewDto,
   CancellationPreviewResponseDto,
@@ -8558,6 +8559,89 @@ export const useReservationsControllerCancellationPreview = <TError = ErrorType<
         TContext
       > => {
       return useMutation(getReservationsControllerCancellationPreviewMutationOptions(options), queryClient);
+    }
+
+/**
+ * @summary Atomically assign active reservations on one departure to a group.
+ */
+export type reservationsControllerAssignGroupResponse200 = {
+  data: ReservationResponseDto[]
+  status: 200
+}
+
+export type reservationsControllerAssignGroupResponseSuccess = (reservationsControllerAssignGroupResponse200) & {
+  headers: Headers;
+};
+;
+
+export type reservationsControllerAssignGroupResponse = (reservationsControllerAssignGroupResponseSuccess)
+
+export const getReservationsControllerAssignGroupUrl = () => {
+
+
+
+
+  return `/reservations/assign-group`
+}
+
+export const reservationsControllerAssignGroup = async (assignReservationGroupDto: AssignReservationGroupDto, options?: RequestInit): Promise<reservationsControllerAssignGroupResponse> => {
+
+  return customInstance<reservationsControllerAssignGroupResponse>(getReservationsControllerAssignGroupUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      assignReservationGroupDto,)
+  }
+);}
+
+
+
+
+export const getReservationsControllerAssignGroupMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reservationsControllerAssignGroup>>, TError,{data: AssignReservationGroupDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof reservationsControllerAssignGroup>>, TError,{data: AssignReservationGroupDto}, TContext> => {
+
+const mutationKey = ['reservationsControllerAssignGroup'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reservationsControllerAssignGroup>>, {data: AssignReservationGroupDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reservationsControllerAssignGroup(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReservationsControllerAssignGroupMutationResult = NonNullable<Awaited<ReturnType<typeof reservationsControllerAssignGroup>>>
+    export type ReservationsControllerAssignGroupMutationBody = AssignReservationGroupDto
+    export type ReservationsControllerAssignGroupMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Atomically assign active reservations on one departure to a group.
+ */
+export const useReservationsControllerAssignGroup = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reservationsControllerAssignGroup>>, TError,{data: AssignReservationGroupDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reservationsControllerAssignGroup>>,
+        TError,
+        {data: AssignReservationGroupDto},
+        TContext
+      > => {
+      return useMutation(getReservationsControllerAssignGroupMutationOptions(options), queryClient);
     }
 
 /**
