@@ -6,20 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface UpdateReservationDto {
-  /** Booking group shared by reservations travelling together. */
-  groupId?: string;
-  passengerId?: string;
+export interface AssignReservationGroupDto {
   /**
-   * @minimum 1
-   * @maximum 100
+   * @minItems 2
+   * @maxItems 100
    */
-  seatNumber?: number;
-  departureStationId?: string;
-  arrivalStationId?: string;
-  /**
-   * @maxLength 500
-   * @nullable
-   */
-  notes?: string | null;
+  reservationIds: string[];
+  groupId: string;
 }

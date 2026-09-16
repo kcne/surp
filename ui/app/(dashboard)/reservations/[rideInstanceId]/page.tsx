@@ -7,6 +7,11 @@ import { SeatMap } from "@/components/reservations/SeatMap"
 import { ReservationModal } from "@/components/reservations/ReservationModal"
 import { RideInstanceSummaryCard } from "@/components/reservations/RideInstanceSummaryCard"
 import { SelectedSeatsBar } from "@/components/reservations/SelectedSeatsBar"
+import { BulkReservationCancelDialog } from "@/components/reservations/BulkReservationCancelDialog"
+import {
+  useAssignReservationGroupMutation,
+  useCancelReservationsMutation,
+} from "@/infrastructure/hooks/mutations/useReservationMutations"
 import { ExportPassengersDialog } from "@/components/reservations/ExportPassengersDialog"
 import {
   Breadcrumb,
@@ -31,6 +36,7 @@ export default function SeatMapPage() {
     loading,
     selectedSeat,
     selectedSeats,
+    selectedReservations,
     selectedRideInstance,
     reservationToEdit,
     isReservationModalOpen,
@@ -48,9 +54,15 @@ export default function SeatMapPage() {
     handleSingleReservationOpenChange,
     refetchReservations,
     setIsMultiReservationModalOpen,
+    isBulkCancelOpen,
+    setIsBulkCancelOpen,
+    openSelectedReservationForEdit,
   } = useRideInstanceSeatMapPage({ rideInstanceId })
 
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
+  const assignGroupMutation = useAssignReservationGroupMutation()
+  const cancelReservationsMutation = useCancelReservationsMutation()
+  const selectionType = selectedReservations.length > 0 ? "reserved" : "available"
 
   if (!selectedRideInstance) {
     return (
@@ -114,6 +126,42 @@ export default function SeatMapPage() {
           onRemoveSeat={(seatNumber) => handleSeatClick(seatNumber)}
           onClear={clearSelectedSeats}
           onReserve={() => setIsMultiReservationModalOpen(true)}
+          selectionType={selectionType}
+          onEdit={openSelectedReservationForEdit}
+          onAssignGroup={() => {
+            void assignGroupMutation
+              .mutateAsync({
+                reservations: selectedReservations.map((reservation) => ({
+                  id: reservation.id,
+                  rideInstanceId: reservation.rideInstanceId,
+                })),
+                groupId: crypto.randomUUID(),
+              })
+              .then(() => clearSelectedSeats())
+          }}
+          onCancel={() => setIsBulkCancelOpen(true)}
+        />
+
+        <BulkReservationCancelDialog
+          open={isBulkCancelOpen}
+          onOpenChange={setIsBulkCancelOpen}
+          selected={selectedReservations}
+          reservations={reservations}
+          labels={groupLabelByGroupId}
+          loading={cancelReservationsMutation.isPending}
+          onConfirm={(items) => {
+            void cancelReservationsMutation
+              .mutateAsync({
+                reservations: items.map((item) => ({
+                  id: item.id,
+                  rideInstanceId: item.rideInstanceId,
+                })),
+              })
+              .then(() => {
+                setIsBulkCancelOpen(false)
+                clearSelectedSeats()
+              })
+          }}
         />
 
         <ReservationModal

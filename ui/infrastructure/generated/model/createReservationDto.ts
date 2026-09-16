@@ -7,6 +7,8 @@
  */
 
 export interface CreateReservationDto {
+  /** Links both legs of a round-trip booking. */
+  roundTripId?: string;
   rideId: string;
   passengerId: string;
   travelDate: string;

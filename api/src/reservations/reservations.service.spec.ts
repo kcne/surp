@@ -28,7 +28,8 @@ describe('ReservationsService', () => {
       groupBy: jest.fn(),
       count: jest.fn(),
       findFirst: jest.fn(),
-      update: jest.fn()
+      update: jest.fn(),
+      updateMany: jest.fn()
     },
     ride: {
       findFirst: jest.fn()
@@ -74,6 +75,7 @@ describe('ReservationsService', () => {
     departureStationId: 'station-a',
     arrivalStationId: 'station-c',
     groupId: null,
+    roundTripId: null,
     notes: null,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -439,6 +441,84 @@ describe('ReservationsService', () => {
     expect(result.status).toBe(ReservationStatus.CANCELLED);
   });
 
+  it('includes explicitly linked return reservations in a cancellation preview', async () => {
+    const outbound = { ...baseReservation, roundTripId: 'round-trip-1' };
+    const returnLeg = {
+      ...baseReservation,
+      id: 'reservation-return',
+      rideId: 'ride-return',
+      departureStationId: 'station-c',
+      arrivalStationId: 'station-a',
+      roundTripId: 'round-trip-1'
+    };
+    prismaMock.reservation.findMany
+      .mockResolvedValueOnce([outbound])
+      .mockResolvedValueOnce([returnLeg]);
+
+    const result = await service.cancellationPreview(auth, {
+      reservationIds: ['reservation-1'],
+      scope: 'selected'
+    });
+
+    expect(result.outboundReservations.map((item) => item.id)).toEqual(['reservation-1']);
+    expect(result.returnReservations.map((item) => item.id)).toEqual(['reservation-return']);
+    expect(prismaMock.reservation.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({ roundTripId: { in: ['round-trip-1'] } })
+      })
+    );
+  });
+
+  it('assigns a group to active reservations from one departure atomically', async () => {
+    const groupId = 'dd1d9d6b-d10c-4cab-bb6f-a50d59f0f5da';
+    const first = { ...baseReservation, groupId: 'old-group' };
+    const second = {
+      ...baseReservation,
+      id: 'reservation-2',
+      passengerId: 'passenger-2',
+      seatNumber: 13,
+      groupId: 'old-group'
+    };
+    prismaMock.reservation.findMany
+      .mockResolvedValueOnce([first, second])
+      .mockResolvedValueOnce([{ ...first, groupId }, { ...second, groupId }]);
+    prismaMock.reservation.updateMany.mockResolvedValue({ count: 2 });
+
+    const result = await service.assignGroup(auth, {
+      reservationIds: ['reservation-1', 'reservation-2'],
+      groupId
+    });
+
+    expect(prismaMock.reservation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId: 'tenant-1',
+          id: { in: ['reservation-1', 'reservation-2'] },
+          status: ReservationStatus.ACTIVE
+        },
+        data: expect.objectContaining({ groupId, updatedById: 'admin-1' })
+      })
+    );
+    expect(result.map((item) => item.groupId)).toEqual([groupId, groupId]);
+  });
+
+  it('rejects group assignment across departures before making any update', async () => {
+    prismaMock.reservation.findMany.mockResolvedValueOnce([
+      baseReservation,
+      { ...baseReservation, id: 'reservation-2', rideDepartureTime: '15:00' }
+    ]);
+
+    await expect(
+      service.assignGroup(auth, {
+        reservationIds: ['reservation-1', 'reservation-2'],
+        groupId: 'dd1d9d6b-d10c-4cab-bb6f-a50d59f0f5da'
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prismaMock.reservation.updateMany).not.toHaveBeenCalled();
+  });
+
   it('moves a reservation to a free seat under the ride-instance lock', async () => {
     await service.moveSeat(auth, 'reservation-1', 16);
 
@@ -661,6 +741,39 @@ describe('ReservationsService', () => {
     const groupIds = result.items.map((item) => item.reservation?.groupId);
     expect(groupIds[0]).toEqual(expect.any(String));
     expect(groupIds[1]).toBe(groupIds[0]);
+  });
+
+  it('does not reuse a passenger group across different departures in one batch', async () => {
+    const result = await service.createBatch(auth, {
+      travelTogether: false,
+      items: [
+        {
+          rideId: 'ride-1',
+          passengerId: 'passenger-1',
+          travelDate: '2026-03-30',
+          rideDepartureTime: '09:00',
+          rideArrivalTime: '10:30',
+          seatNumber: 9,
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-c'
+        },
+        {
+          rideId: 'ride-1',
+          passengerId: 'passenger-1',
+          travelDate: '2026-03-31',
+          rideDepartureTime: '09:00',
+          rideArrivalTime: '10:30',
+          seatNumber: 9,
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-c'
+        }
+      ]
+    });
+
+    const groupIds = result.items.map((item) => item.reservation?.groupId);
+    expect(groupIds[0]).toEqual(expect.any(String));
+    expect(groupIds[1]).toEqual(expect.any(String));
+    expect(groupIds[1]).not.toBe(groupIds[0]);
   });
 
   it('assigns a group when a batch contains only one item', async () => {

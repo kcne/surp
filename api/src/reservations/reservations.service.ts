@@ -24,6 +24,8 @@ import {
   ReservationBatchItemResultDto
 } from './dto/reservations-batch.response.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
+import { CancellationPreviewDto, CancellationPreviewResponseDto } from './dto/cancellation-preview.dto';
+import { AssignReservationGroupDto } from './dto/assign-reservation-group.dto';
 import {
   RouteSegment,
   routeBoardingDropoffSets,
@@ -47,6 +49,7 @@ const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   departureStationId: true,
   arrivalStationId: true,
   groupId: true,
+  roundTripId: true,
   notes: true,
   createdAt: true,
   updatedAt: true,
@@ -92,6 +95,7 @@ type RideRouteContext = {
 };
 
 type ReservationDbClient = PrismaService | Prisma.TransactionClient;
+const LEGACY_RETURN_LOOKUP_DAYS = 90;
 
 @Injectable()
 export class ReservationsService {
@@ -115,20 +119,21 @@ export class ReservationsService {
     return this.prisma.$transaction(async (tx) => {
       const results: ReservationBatchItemResultDto[] = [];
       const sharedGroupId: string | undefined = dto.travelTogether ? randomUUID() : undefined;
-      const groupIdByPassengerId = new Map<string, string>();
+      const groupIdByRideInstancePassenger = new Map<string, string>();
 
-      const groupIdFor = (passengerId: string): string => {
+      const groupIdFor = (item: CreateReservationDto): string => {
         if (sharedGroupId) {
           return sharedGroupId;
         }
 
-        const existing = groupIdByPassengerId.get(passengerId);
+        const key = `${item.rideId}:${item.travelDate}:${item.rideDepartureTime}:${item.passengerId}`;
+        const existing = groupIdByRideInstancePassenger.get(key);
         if (existing) {
           return existing;
         }
 
         const created = randomUUID();
-        groupIdByPassengerId.set(passengerId, created);
+        groupIdByRideInstancePassenger.set(key, created);
         return created;
       };
 
@@ -138,7 +143,7 @@ export class ReservationsService {
           tx,
           auth,
           item,
-          groupIdFor(item.passengerId)
+          groupIdFor(item)
         );
 
         results.push({
@@ -236,6 +241,110 @@ export class ReservationsService {
     return this.toResponse(reservation);
   }
 
+  async cancellationPreview(
+    auth: AccessTokenPayload,
+    dto: CancellationPreviewDto
+  ): Promise<CancellationPreviewResponseDto> {
+    const selected = await this.prisma.reservation.findMany({
+      where: { tenantId: auth.tenantId, id: { in: dto.reservationIds }, status: ReservationStatus.ACTIVE },
+      select: SAFE_RESERVATION_SELECT
+    });
+    if (selected.length !== new Set(dto.reservationIds).size) {
+      throw new NotFoundException('One or more active reservations were not found');
+    }
+
+    const groupIds = selected.map((item) => item.groupId).filter((id): id is string => Boolean(id));
+    const outbound = dto.scope === 'groups' && groupIds.length > 0
+      ? await this.prisma.reservation.findMany({
+          where: { tenantId: auth.tenantId, status: ReservationStatus.ACTIVE, groupId: { in: groupIds } },
+          select: SAFE_RESERVATION_SELECT
+        })
+      : selected;
+
+    const roundTripIds = outbound
+      .map((item) => item.roundTripId)
+      .filter((id): id is string => Boolean(id));
+    const linkedReturns = roundTripIds.length > 0
+      ? await this.prisma.reservation.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            status: ReservationStatus.ACTIVE,
+            roundTripId: { in: roundTripIds },
+            id: { notIn: outbound.map((item) => item.id) }
+          },
+          select: SAFE_RESERVATION_SELECT
+        })
+      : [];
+    // Legacy reservations have no explicit link. Keep the old, bounded
+    // heuristic only for those records until they are retired/backfilled.
+    const legacyOutbound = outbound.filter((item) => !item.roundTripId);
+    const candidates = legacyOutbound.length > 0
+      ? await this.prisma.reservation.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            status: ReservationStatus.ACTIVE,
+            OR: legacyOutbound.map((item) => ({
+              passengerId: item.passengerId,
+              departureStationId: item.arrivalStationId,
+              arrivalStationId: item.departureStationId,
+              travelDate: {
+                gte: item.travelDate,
+                lte: new Date(item.travelDate.getTime() + LEGACY_RETURN_LOOKUP_DAYS * 86_400_000)
+              },
+              id: { not: item.id }
+            }))
+          },
+          select: SAFE_RESERVATION_SELECT
+        })
+      : [];
+    const matched = legacyOutbound.flatMap((item) => {
+      const match = candidates
+        .filter((candidate) => candidate.passengerId === item.passengerId && candidate.departureStationId === item.arrivalStationId && candidate.arrivalStationId === item.departureStationId)
+        .sort((left, right) => (left.seatNumber === item.seatNumber ? -1 : 0) - (right.seatNumber === item.seatNumber ? -1 : 0) || left.travelDate.getTime() - right.travelDate.getTime() || left.rideDepartureTime.localeCompare(right.rideDepartureTime))[0];
+      return match ? [match] : [];
+    });
+    const returnGroupIds = matched.map((item) => item.groupId).filter((id): id is string => Boolean(id));
+    const legacyReturns = dto.scope === 'groups' && returnGroupIds.length > 0
+      ? candidates.filter((item) => item.groupId && returnGroupIds.includes(item.groupId))
+      : matched;
+    const returns = [...linkedReturns, ...legacyReturns];
+    return {
+      outboundReservations: outbound.map((item) => this.toResponse(item)),
+      returnReservations: Array.from(new Map(returns.map((item) => [item.id, item])).values()).map((item) => this.toResponse(item))
+    };
+  }
+
+  async assignGroup(
+    auth: AccessTokenPayload,
+    dto: AssignReservationGroupDto
+  ): Promise<ReservationResponseDto[]> {
+    const ids = [...new Set(dto.reservationIds)];
+    return this.prisma.$transaction(async (tx) => {
+      const reservations = await tx.reservation.findMany({
+        where: { tenantId: auth.tenantId, id: { in: ids }, status: ReservationStatus.ACTIVE },
+        select: SAFE_RESERVATION_SELECT
+      });
+      if (reservations.length !== ids.length) {
+        throw new NotFoundException('One or more active reservations were not found');
+      }
+      const departures = new Set(
+        reservations.map((item) => `${item.rideId}:${item.travelDate.toISOString()}:${item.rideDepartureTime}`)
+      );
+      if (departures.size !== 1) {
+        throw new BadRequestException('Reservations must belong to the same departure');
+      }
+      await tx.reservation.updateMany({
+        where: { tenantId: auth.tenantId, id: { in: ids }, status: ReservationStatus.ACTIVE },
+        data: withUpdateAudit({ groupId: dto.groupId }, auth.sub)
+      });
+      const updated = await tx.reservation.findMany({
+        where: { tenantId: auth.tenantId, id: { in: ids } },
+        select: SAFE_RESERVATION_SELECT
+      });
+      return updated.map((item) => this.toResponse(item));
+    });
+  }
+
   async update(
     auth: AccessTokenPayload,
     id: string,
@@ -294,6 +403,7 @@ export class ReservationsService {
         },
         data: withUpdateAudit(
           {
+            ...(dto.groupId !== undefined ? { groupId: dto.groupId } : {}),
             ...(dto.passengerId ? { passengerId: dto.passengerId } : {}),
             ...(dto.seatNumber !== undefined ? { seatNumber: dto.seatNumber } : {}),
             ...(dto.departureStationId ? { departureStationId: dto.departureStationId } : {}),
@@ -749,7 +859,8 @@ export class ReservationsService {
           status: ReservationStatus.ACTIVE,
           cancelledAt: null,
           groupId,
-          notes: dto.notes?.trim() ? dto.notes.trim() : null
+          notes: dto.notes?.trim() ? dto.notes.trim() : null,
+          roundTripId: dto.roundTripId ?? null
         },
         auth.sub
       ),
@@ -801,6 +912,7 @@ export class ReservationsService {
       departureStationId: reservation.departureStationId,
       arrivalStationId: reservation.arrivalStationId,
       groupId: reservation.groupId,
+      roundTripId: reservation.roundTripId,
       notes: reservation.notes,
       ride: {
         id: reservation.ride.id,

@@ -38,6 +38,8 @@ import {
 import { BatchReservationsResponseDto } from './dto/reservations-batch.response.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { MoveReservationSeatDto } from './dto/move-reservation-seat.dto';
+import { CancellationPreviewDto, CancellationPreviewResponseDto } from './dto/cancellation-preview.dto';
+import { AssignReservationGroupDto } from './dto/assign-reservation-group.dto';
 import { ReservationsService } from './reservations.service';
 
 @ApiTags('Reservations')
@@ -112,6 +114,30 @@ export class ReservationsController {
     @Query() query: ListReservationCountsQueryDto
   ): Promise<ReservationCountsResponseDto> {
     return this.reservationsService.countsByRideInstance(request.auth!, query);
+  }
+
+  @Post('cancellation-preview')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({ summary: 'Preview selected/group cancellation including matching return legs.' })
+  @ApiOkResponse({ type: CancellationPreviewResponseDto })
+  cancellationPreview(
+    @Req() request: RequestWithAuth,
+    @Body() dto: CancellationPreviewDto
+  ): Promise<CancellationPreviewResponseDto> {
+    return this.reservationsService.cancellationPreview(request.auth!, dto);
+  }
+
+  @Post('assign-group')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({ summary: 'Atomically assign active reservations on one departure to a group.' })
+  @ApiOkResponse({ type: ReservationResponseDto, isArray: true })
+  assignGroup(
+    @Req() request: RequestWithAuth,
+    @Body() dto: AssignReservationGroupDto
+  ): Promise<ReservationResponseDto[]> {
+    return this.reservationsService.assignGroup(request.auth!, dto);
   }
 
   @Get(':id')

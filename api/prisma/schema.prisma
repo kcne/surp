@@ -388,6 +388,7 @@ model Reservation {
   departureStationId String
   arrivalStationId   String
   groupId            String?
+  roundTripId        String?
   notes              String?           @db.Text
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
@@ -407,6 +408,7 @@ model Reservation {
   @@index([arrivalStationId])
   @@index([updatedById])
   @@index([tenantId, rideId, travelDate, rideDepartureTime, groupId])
+  @@index([tenantId, roundTripId, status])
 }
 
 model Passenger {

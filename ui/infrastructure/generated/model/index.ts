@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './assignReservationGroupDto';
 export * from './auditItemResponseDto';
 export * from './auditItemResponseDtoAction';
 export * from './auditItemResponseDtoActorUserId';
@@ -13,6 +14,9 @@ export * from './auditItemResponseDtoCreatedById';
 export * from './auditItemResponseDtoEntity';
 export * from './auditItemResponseDtoUpdatedById';
 export * from './batchReservationsResponseDto';
+export * from './cancellationPreviewDto';
+export * from './cancellationPreviewDtoScope';
+export * from './cancellationPreviewResponseDto';
 export * from './checkPassengerDuplicatesDto';
 export * from './completeStorefrontAssetUploadDto';
 export * from './completeTicketAttachmentDto';

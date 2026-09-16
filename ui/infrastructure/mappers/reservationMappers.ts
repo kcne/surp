@@ -51,7 +51,10 @@ function toFallbackRideInstance(dto: ReservationResponseDto): RideInstance {
   }
 }
 
-export function toReservation(dto: ReservationResponseDto, rideInstance?: RideInstance): Reservation {
+export function toReservation(
+  dto: ReservationResponseDto,
+  rideInstance?: RideInstance
+): Reservation {
   const resolvedRideInstance = rideInstance ?? toFallbackRideInstance(dto)
 
   return {
@@ -81,6 +84,7 @@ export function toReservation(dto: ReservationResponseDto, rideInstance?: RideIn
     },
     status: toReservationStatus(dto.status),
     groupId: dto.groupId ?? null,
+    roundTripId: dto.roundTripId ?? null,
     notes: dto.notes ?? null,
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
@@ -101,6 +105,7 @@ export function toCreateReservationDto(
     seatNumber: data.seatNumber,
     departureStationId: data.departureStationId,
     arrivalStationId: data.arrivalStationId,
+    ...(data.roundTripId ? { roundTripId: data.roundTripId } : {}),
     ...(trimmedNotes ? { notes: trimmedNotes } : {}),
   }
 }
