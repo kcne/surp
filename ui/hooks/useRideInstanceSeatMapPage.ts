@@ -51,6 +51,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false)
   const [isMultiReservationModalOpen, setIsMultiReservationModalOpen] = useState(false)
   const [reservationToEdit, setReservationToEdit] = useState<Reservation | null>(null)
+  const [isBulkCancelOpen, setIsBulkCancelOpen] = useState(false)
   const ridesQuery = useRidesListQuery()
   const rides = ridesQuery.data || []
   const rideInstancesQuery = useRidesInstancesByDateQuery(selectedDate, rides)
@@ -123,13 +124,17 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   }
 
   const handleSeatClick = (seatNumber: number, reservation?: Reservation) => {
-    if (reservation) {
-      setReservationToEdit(reservation)
-      setSelectedSeat(seatNumber)
-      setIsReservationModalOpen(true)
+    const selectingReserved = Boolean(reservation)
+    const selectedReservationExists = selectedSeats.some((selected) =>
+      reservations.some((candidate) => candidate.status === "active" && candidate.seatNumber === selected)
+    )
+    if (selectedSeats.length > 0 && selectedReservationExists !== selectingReserved) {
+      // A different seat type begins a new command. This keeps the bottom bar
+      // unambiguous without asking the operator to clear the old selection.
+      setSelectedSeats([seatNumber])
+      setSelectedSeat(null)
       return
     }
-
     toggleSelectedSeat(seatNumber)
   }
 
@@ -285,6 +290,18 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     }
   }
 
+  const selectedReservations = useMemo(() => reservations.filter((reservation) =>
+    reservation.status === "active" && selectedSeats.includes(reservation.seatNumber)
+  ), [reservations, selectedSeats])
+
+  const openSelectedReservationForEdit = () => {
+    const reservation = selectedReservations[0]
+    if (!reservation) return
+    setReservationToEdit(reservation)
+    setSelectedSeat(reservation.seatNumber)
+    setIsReservationModalOpen(true)
+  }
+
   return {
     selectedDate,
     seatMap,
@@ -297,6 +314,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       rideInstancesQuery.isLoading,
     selectedSeat,
     selectedSeats,
+    selectedReservations,
     selectedRideInstance,
     reservationToEdit,
     isReservationModalOpen,
@@ -314,5 +332,8 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     handleSingleReservationOpenChange,
     refetchReservations: reservationsQuery.refetch,
     setIsMultiReservationModalOpen,
+    isBulkCancelOpen,
+    setIsBulkCancelOpen,
+    openSelectedReservationForEdit,
   }
 }

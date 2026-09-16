@@ -1,6 +1,6 @@
 "use client"
 
-import { Armchair, Eraser, Ticket, X } from "lucide-react"
+import { Armchair, Eraser, Pencil, Ticket, Users, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -9,6 +9,10 @@ interface SelectedSeatsBarProps {
   onRemoveSeat: (seatNumber: number) => void
   onClear: () => void
   onReserve: () => void
+  selectionType?: "available" | "reserved"
+  onEdit?: () => void
+  onAssignGroup?: () => void
+  onCancel?: () => void
   className?: string
 }
 
@@ -17,6 +21,10 @@ export function SelectedSeatsBar({
   onRemoveSeat,
   onClear,
   onReserve,
+  selectionType = "available",
+  onEdit,
+  onAssignGroup,
+  onCancel,
   className,
 }: SelectedSeatsBarProps) {
   if (selectedSeats.length === 0) return null
@@ -42,9 +50,7 @@ export function SelectedSeatsBar({
                 {sortedSeats.length === 1 ? "izabrano sedište" : "izabrana sedišta"}
               </span>
             </p>
-            <p className="text-[11px] text-muted-foreground">
-              Kliknite × da uklonite pojedinačno sedište
-            </p>
+            <p className="text-[11px] text-muted-foreground">{selectionType === "reserved" ? "Izaberite akciju za rezervacije" : "Kliknite × da uklonite pojedinačno sedište"}</p>
           </div>
         </div>
 
@@ -68,10 +74,11 @@ export function SelectedSeatsBar({
             <Eraser className="mr-1.5 h-3.5 w-3.5" />
             Očisti
           </Button>
-          <Button size="sm" onClick={onReserve}>
-            <Ticket className="mr-1.5 h-3.5 w-3.5" />
-            Rezerviši ({sortedSeats.length})
-          </Button>
+          {selectionType === "available" ? <Button size="sm" onClick={onReserve}><Ticket className="mr-1.5 h-3.5 w-3.5" />Rezerviši ({sortedSeats.length})</Button> : <>
+            {sortedSeats.length === 1 && <Button size="sm" onClick={onEdit}><Pencil className="mr-1.5 h-3.5 w-3.5" />Izmeni</Button>}
+            {sortedSeats.length > 1 && <Button variant="outline" size="sm" onClick={onAssignGroup}><Users className="mr-1.5 h-3.5 w-3.5" />Poveži u grupu</Button>}
+            <Button variant="destructive" size="sm" onClick={onCancel}>Otkaži ({sortedSeats.length})</Button>
+          </>}
         </div>
       </div>
     </div>

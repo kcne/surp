@@ -184,6 +184,7 @@ export interface Reservation {
   arrivalStation: Station
   status: 'active' | 'cancelled'
   groupId?: string | null
+  roundTripId?: string | null
   notes?: string | null
   createdAt?: string
   updatedAt?: string
@@ -197,6 +198,7 @@ export type ReservationFormData = {
   arrivalStationId: string
   status?: 'active' | 'cancelled'
   notes?: string
+  roundTripId?: string
 }
 
 // Seat Map Types

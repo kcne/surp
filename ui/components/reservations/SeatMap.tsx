@@ -93,8 +93,8 @@ function Seat({
     draggable.setNodeRef(node)
     droppable.setNodeRef(node)
   }
-  const displayStatus: SeatVisualStatus =
-    isSelected && seat.status === "available" ? "selected" : seat.status
+  // Selection is an operator mode, independent of whether the seat is free or booked.
+  const displayStatus: SeatVisualStatus = isSelected ? "selected" : seat.status
   const fullName = seat.reservation
     ? `${seat.reservation.passenger.firstName} ${seat.reservation.passenger.lastName}`
     : "Slobodno"

@@ -178,6 +178,26 @@ export function useUpdateReservationMutation() {
   })
 }
 
+/** Puts existing bookings into one operator-selected travel group. */
+export function useAssignReservationGroupMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ reservations, groupId }: { reservations: { id: string; rideInstanceId: string }[]; groupId: string }) => {
+      for (const reservation of reservations) {
+        const response = await reservationsControllerUpdate(reservation.id, { groupId })
+        if (!isUpdateReservationSuccess(response)) throw new Error("Nije moguće povezati rezervacije u grupu")
+      }
+      return reservations
+    },
+    onSuccess: async (reservations) => {
+      toast.success("Rezervacije su povezane u grupu")
+      await invalidateReservations(queryClient, [...new Set(reservations.map(({ rideInstanceId }) => rideInstanceId))])
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Nije moguće povezati rezervacije u grupu")),
+  })
+}
+
 export function useMoveReservationSeatMutation() {
   const queryClient = useQueryClient()
 
