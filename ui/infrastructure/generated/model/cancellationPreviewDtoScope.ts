@@ -6,20 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface UpdateReservationDto {
-  /** Booking group shared by reservations travelling together. */
-  groupId?: string;
-  passengerId?: string;
-  /**
-   * @minimum 1
-   * @maximum 100
-   */
-  seatNumber?: number;
-  departureStationId?: string;
-  arrivalStationId?: string;
-  /**
-   * @maxLength 500
-   * @nullable
-   */
-  notes?: string | null;
-}
+export type CancellationPreviewDtoScope = typeof CancellationPreviewDtoScope[keyof typeof CancellationPreviewDtoScope];
+
+
+export const CancellationPreviewDtoScope = {
+  selected: 'selected',
+  groups: 'groups',
+} as const;

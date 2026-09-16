@@ -1,4 +1,10 @@
-import type { Passenger, PassengerFormData, Reservation, ReservationFormData, RideInstance } from "@/types"
+import type {
+  Passenger,
+  PassengerFormData,
+  Reservation,
+  ReservationFormData,
+  RideInstance,
+} from "@/types"
 import type { UseFormReturn } from "react-hook-form"
 import { buildReturnRequests } from "@/utils/reservationReturnHelpers"
 import { toast } from "sonner"
@@ -22,11 +28,16 @@ interface UseReservationSubmissionParams {
   setSelectedPassenger: (passenger: Passenger | null) => void
   setNewPassenger: (passenger: Passenger | null) => void
   setShowPassengerForm: (open: boolean) => void
-  setPerSeatPassengers: (updater: (prev: Record<number, Passenger | null>) => Record<number, Passenger | null>) => void
+  setPerSeatPassengers: (
+    updater: (prev: Record<number, Passenger | null>) => Record<number, Passenger | null>
+  ) => void
   addPassengerTargetSeat: number | null
   setAddPassengerTargetSeat: (seat: number | null) => void
   selectedRideInstance: RideInstance | null
-  createReservation: (payload: { data: ReservationFormData; rideInstance: RideInstance }) => Promise<void>
+  createReservation: (payload: {
+    data: ReservationFormData
+    rideInstance: RideInstance
+  }) => Promise<void>
   createReservationsBatch: (payload: {
     data: ReservationFormData[]
     rideInstance: RideInstance
@@ -77,6 +88,10 @@ export function useReservationSubmission({
       throw new Error("Voznja nije izabrana")
     }
 
+    const roundTripId = isReturnTicket ? crypto.randomUUID() : undefined
+    const linkedOutboundRequests = roundTripId
+      ? outboundRequests.map((request) => ({ ...request, roundTripId }))
+      : outboundRequests
     let returnRequests: ReservationFormData[] = []
 
     if (isReturnTicket) {
@@ -85,7 +100,7 @@ export function useReservationSubmission({
       }
 
       returnRequests = buildReturnRequests({
-        outboundRequests,
+        outboundRequests: linkedOutboundRequests,
         returnInstance: selectedReturnRideInstance,
         returnDepartureStationId: form.getValues("arrivalStationId"),
         returnArrivalStationId: form.getValues("departureStationId"),
@@ -93,14 +108,14 @@ export function useReservationSubmission({
       })
     }
 
-    if (outboundRequests.length === 1 && !isMultiReservation) {
+    if (linkedOutboundRequests.length === 1 && !isMultiReservation) {
       await createReservation({
-        data: outboundRequests[0],
+        data: linkedOutboundRequests[0],
         rideInstance: selectedRideInstance,
       })
     } else {
       await createReservationsBatch({
-        data: outboundRequests,
+        data: linkedOutboundRequests,
         rideInstance: selectedRideInstance,
         travelTogether,
       })
@@ -159,10 +174,7 @@ export function useReservationSubmission({
 
   const handlePerSeatSubmit = async () => {
     try {
-      const isStationsValid = await form.trigger([
-        "departureStationId",
-        "arrivalStationId",
-      ])
+      const isStationsValid = await form.trigger(["departureStationId", "arrivalStationId"])
 
       if (!isStationsValid) {
         return

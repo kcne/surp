@@ -4446,6 +4446,53 @@
         ]
       }
     },
+    "/reservations/cancellation-preview": {
+      "post": {
+        "operationId": "ReservationsController_cancellationPreview",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancellationPreviewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancellationPreviewResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Preview selected/group cancellation including matching return legs.",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
     "/reservations/{id}": {
       "get": {
         "operationId": "ReservationsController_getById",
@@ -9173,6 +9220,11 @@
       "CreateReservationDto": {
         "type": "object",
         "properties": {
+          "roundTripId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Links both legs of a round-trip booking."
+          },
           "rideId": {
             "type": "string",
             "example": "ride-id-123"
@@ -9343,6 +9395,11 @@
             "nullable": true,
             "description": "Correlation id shared by reservations created together as a group"
           },
+          "roundTripId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Correlation id shared by both round-trip legs"
+          },
           "notes": {
             "type": "string",
             "nullable": true,
@@ -9385,6 +9442,7 @@
           "departureStationId",
           "arrivalStationId",
           "groupId",
+          "roundTripId",
           "notes",
           "ride",
           "passenger",
@@ -9549,9 +9607,59 @@
           "items"
         ]
       },
+      "CancellationPreviewDto": {
+        "type": "object",
+        "properties": {
+          "reservationIds": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "selected",
+              "groups"
+            ]
+          }
+        },
+        "required": [
+          "reservationIds",
+          "scope"
+        ]
+      },
+      "CancellationPreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "outboundReservations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReservationResponseDto"
+            }
+          },
+          "returnReservations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReservationResponseDto"
+            }
+          }
+        },
+        "required": [
+          "outboundReservations",
+          "returnReservations"
+        ]
+      },
       "UpdateReservationDto": {
         "type": "object",
         "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Booking group shared by reservations travelling together."
+          },
           "passengerId": {
             "type": "string",
             "example": "passenger-id-123"

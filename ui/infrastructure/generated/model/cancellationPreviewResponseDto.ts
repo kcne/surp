@@ -5,21 +5,9 @@
  * Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.
  * OpenAPI spec version: 0.1.0
  */
+import type { ReservationResponseDto } from './reservationResponseDto';
 
-export interface UpdateReservationDto {
-  /** Booking group shared by reservations travelling together. */
-  groupId?: string;
-  passengerId?: string;
-  /**
-   * @minimum 1
-   * @maximum 100
-   */
-  seatNumber?: number;
-  departureStationId?: string;
-  arrivalStationId?: string;
-  /**
-   * @maxLength 500
-   * @nullable
-   */
-  notes?: string | null;
+export interface CancellationPreviewResponseDto {
+  outboundReservations: ReservationResponseDto[];
+  returnReservations: ReservationResponseDto[];
 }

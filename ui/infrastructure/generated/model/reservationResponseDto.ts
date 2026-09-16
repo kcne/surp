@@ -41,6 +41,11 @@ export interface ReservationResponseDto {
    */
   groupId: string | null;
   /**
+   * Correlation id shared by both round-trip legs
+   * @nullable
+   */
+  roundTripId: string | null;
+  /**
    * Per-reservation note shown in driver passenger lists
    * @nullable
    */

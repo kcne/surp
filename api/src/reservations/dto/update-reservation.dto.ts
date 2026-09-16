@@ -1,8 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 
 export class UpdateReservationDto {
+  @ApiPropertyOptional({ format: 'uuid', description: 'Booking group shared by reservations travelling together.' })
+  @IsOptional()
+  @IsUUID()
+  groupId?: string;
   @ApiPropertyOptional({ example: 'passenger-id-123' })
   @IsOptional()
   @IsString()
