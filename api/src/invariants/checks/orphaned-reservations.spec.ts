@@ -85,6 +85,16 @@ describe('classifyReservation', () => {
     expect(result?.reason).toBe('RIDE_NOT_ACTIVE');
   });
 
+  it('does not treat a matching timetable as reachable when the ride is inactive', () => {
+    const result = classifyReservation(reservation(), day({ rideIsActive: false }));
+
+    expect(result).toEqual({
+      reason: 'RIDE_NOT_ACTIVE',
+      targetDepartureTime: null,
+      targetArrivalTime: null
+    });
+  });
+
   // Every case below used to arrive as one undifferentiated NO_INSTANCE, which
   // told an agency that the bus does not run without telling it what to do.
   it('separates a travel date that fell outside the recurring period', () => {
