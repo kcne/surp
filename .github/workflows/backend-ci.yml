@@ -81,6 +81,11 @@ jobs:
       - name: Apply migrations
         run: pnpm prisma:migrate:deploy
 
+      - name: Data invariants
+        run: |
+          pnpm prisma:seed
+          pnpm invariants:check --fail-on=critical --run-fixtures
+
       - name: Run quality gates
         run: pnpm quality:gates
 

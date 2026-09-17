@@ -125,18 +125,21 @@ export function classifyReservation(
   reservation: ReservationToCheck,
   day: RideDayInstances
 ): OrphanClassification | null {
+  const none = { targetDepartureTime: null, targetArrivalTime: null };
+
+  // Materialization describes the timetable independently of whether the ride
+  // is operational. An inactive ride can therefore still have a matching
+  // derived time, but it has no reachable departure in the application.
+  if (!day.rideIsActive) {
+    return { reason: 'RIDE_NOT_ACTIVE', ...none };
+  }
+
   const matched = day.instances.some(
     (instance) => instance.departureTime === reservation.rideDepartureTime
   );
 
   if (matched) {
     return null;
-  }
-
-  const none = { targetDepartureTime: null, targetArrivalTime: null };
-
-  if (!day.rideIsActive) {
-    return { reason: 'RIDE_NOT_ACTIVE', ...none };
   }
 
   if (day.instances.length === 0) {

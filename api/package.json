@@ -23,6 +23,7 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "pnpm prisma db seed",
+    "invariants:check": "ts-node --transpile-only scripts/check-invariants.ts",
     "seed:prod:once": "ts-node --transpile-only scripts/prod-bootstrap-once.ts",
     "reservations:groups:backfill": "ts-node --transpile-only scripts/backfill-reservation-groups.ts",
     "schedules:realign": "ts-node --transpile-only scripts/realign-ride-day-schedules.ts"
