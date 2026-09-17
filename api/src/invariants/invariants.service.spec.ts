@@ -28,6 +28,7 @@ describe('INVARIANTS registry', () => {
 
   it('carries the four checks that used to be separate endpoints, plus what has been added since', () => {
     expect(INVARIANTS.map((invariant) => invariant.key)).toEqual([
+      'backup.fresh',
       'reservation.reachable',
       'reservation.arrivalTimeCurrent',
       'reservation.stationsOnRoute',

@@ -99,6 +99,11 @@ enum MarketingLeadDeparturesPerDay {
   FIFTY_PLUS
 }
 
+enum InvariantRunStatus {
+  COMPLETED
+  FAILED
+}
+
 model HealthCheckLog {
   id        String   @id @default(cuid())
   message   String
@@ -158,8 +163,31 @@ model Tenant {
   ticketComments              TicketComment[]
   ticketAttachments           TicketAttachment[]
   storefront                  AgencyStorefront?
+  invariantRuns               InvariantRun[]
 
   @@index([isActive])
+}
+
+model InvariantRun {
+  id                  String             @id @default(cuid())
+  tenantId            String
+  status              InvariantRunStatus
+  startedAt           DateTime
+  completedAt         DateTime
+  windowDays          Int                @default(30)
+  invariantCount      Int                @default(0)
+  violatedCount       Int                @default(0)
+  totalViolationCount Int                @default(0)
+  results             Json
+  error               String?            @db.Text
+  ticketId            String?
+  emailSentAt         DateTime?
+  alertError          String?            @db.Text
+  createdAt           DateTime           @default(now())
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, completedAt])
+  @@index([status, completedAt])
 }
 
 model AgencyStorefront {

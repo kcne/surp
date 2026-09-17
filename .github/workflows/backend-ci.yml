@@ -55,6 +55,7 @@ jobs:
       JWT_ACCESS_TOKEN_SECRET: test-secret-that-is-at-least-thirty-two-chars
       JWT_ACCESS_TOKEN_TTL_SECONDS: 900
       JWT_REFRESH_TOKEN_TTL_SECONDS: 1209600
+      BACKUP_FRESHNESS_CHECK_ENABLED: false
 
     steps:
       - name: Checkout

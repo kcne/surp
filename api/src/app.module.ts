@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { envValidationSchema } from './config/env.validation';
 import { HealthModule } from './health/health.module';
@@ -24,6 +25,7 @@ import { StationsModule } from './stations/stations.module';
 import { StorefrontAdminModule } from './storefront-admin/storefront-admin.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { UsersModule } from './users/users.module';
+import { InvariantsModule } from './invariants/invariants.module';
 
 @Module({
   imports: [
@@ -37,7 +39,9 @@ import { UsersModule } from './users/users.module';
         limit: 100
       }
     ]),
+    ScheduleModule.forRoot(),
     PrismaModule,
+    InvariantsModule,
     HealthModule,
     InternalSandboxModule,
     AuthModule,
