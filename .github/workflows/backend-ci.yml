@@ -84,7 +84,7 @@ jobs:
       - name: Data invariants
         run: |
           pnpm prisma:seed
-          pnpm invariants:check --fail-on=critical
+          pnpm invariants:check --fail-on=critical --run-fixtures
 
       - name: Run quality gates
         run: pnpm quality:gates

@@ -27,7 +27,7 @@ GitHub Actions workflows enforcing these gates:
 Backend CI seeds the database after migrations, then runs:
 
 ```bash
-pnpm invariants:check --fail-on=critical
+pnpm invariants:check --fail-on=critical --run-fixtures
 ```
 
 The command checks every registered invariant for every tenant. It exits with
@@ -36,8 +36,8 @@ seeded database contains a violation at or above the requested threshold.
 `--fail-on=warning` makes warnings fail too; `critical` leaves warnings visible
 in the report without blocking the build.
 
-Before checking the clean seed, the command exercises rollback-isolated
-database fixtures for every write-path incident in the data-integrity epic:
+With `--run-fixtures`, the command first exercises rollback-isolated database
+fixtures for every write-path incident in the data-integrity epic:
 first/last schedule time changes, weekday and recurring-range removal, ride
 deactivation, SKIP and deleted ADDITIONAL exceptions, capacity reduction,
 ride-line replacement, route reorder, boarding/drop-off changes, and station,

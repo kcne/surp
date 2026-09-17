@@ -26,11 +26,15 @@ function blocksBuild(severity: InvariantSeverity, failOn: FailOn): boolean {
 }
 
 async function main() {
-  const failOn = failOnFromArgs(process.argv.slice(2));
-  const fixtureResults = await runIncidentFixtures(prisma);
+  const args = process.argv.slice(2);
+  const failOn = failOnFromArgs(args);
 
-  for (const result of fixtureResults) {
-    console.log(`fixture PASS  ${result.name} -> ${result.invariantKey}`);
+  if (args.includes('--run-fixtures')) {
+    const fixtureResults = await runIncidentFixtures(prisma);
+
+    for (const result of fixtureResults) {
+      console.log(`fixture PASS  ${result.name} -> ${result.invariantKey}`);
+    }
   }
 
   const tenants = await prisma.tenant.findMany({
