@@ -12,59 +12,54 @@ import { ChangeNeedsConfirmationError } from "@/infrastructure/utils/breaking-ch
  * answers, and send them back with the confirmation. Four copies had already
  * drifted on what to close afterwards, which is the sort of difference nobody
  * notices until one screen leaves a modal open over a change that did land.
+ *
+ * Confirmations accumulate by step rather than being one flag, because an edit
+ * can be several requests and each can be refused for its own reason. Answering
+ * the question about the ride must not silently answer an unasked question
+ * about an exception, so each refusal comes back as its own dialog.
  */
 interface ConfirmableUpdate<TVariables> {
-  update: (
-    variables: TVariables & { confirmBreakingChange?: boolean }
-  ) => Promise<unknown>
+  update: (variables: TVariables, confirmedSteps: string[]) => Promise<unknown>
   /** Run after a confirmed update lands — usually closing the form. */
   onConfirmed?: () => void
 }
 
-export function useConfirmableUpdate<TVariables extends object>({
+export function useConfirmableUpdate<TVariables>({
   update,
   onConfirmed,
 }: ConfirmableUpdate<TVariables>) {
   const [pending, setPending] = useState<{
     variables: TVariables
+    confirmedSteps: string[]
     confirmation: WouldBreakReservationsDto
     partiallyApplied: boolean
   } | null>(null)
 
-  const run = async (variables: TVariables) => {
+  const attempt = async (variables: TVariables, confirmedSteps: string[]) => {
     try {
-      await update(variables)
+      await update(variables, confirmedSteps)
+      setPending(null)
     } catch (error) {
       if (error instanceof ChangeNeedsConfirmationError) {
         setPending({
           variables,
+          // The refused step joins the ones already answered, so a retry
+          // carries every answer given so far and no answer that was not.
+          confirmedSteps: [...confirmedSteps, error.step],
           confirmation: error.confirmation,
           partiallyApplied: error.partiallyApplied,
         })
       }
 
-      // Rethrown either way, so the form stays open on the values that were
-      // typed rather than closing on a change that was never written.
       throw error
     }
   }
 
-  const confirm = async () => {
-    if (!pending) {
-      return
-    }
-
-    try {
-      await update({ ...pending.variables, confirmBreakingChange: true })
-      setPending(null)
-      onConfirmed?.()
-    } catch {
-      // The mutation already reported it; the dialog stays up to be retried.
-    }
-  }
-
   return {
-    run,
+    // Rethrows, so the form stays open on the values that were typed rather
+    // than closing on a change that was never written.
+    run: (variables: TVariables) => attempt(variables, []),
+
     /** Spread onto `ConfirmBreakingChangeDialog`, which needs only `loading`. */
     dialogProps: {
       open: pending !== null,
@@ -75,7 +70,19 @@ export function useConfirmableUpdate<TVariables extends object>({
       },
       confirmation: pending?.confirmation ?? null,
       partiallyApplied: pending?.partiallyApplied ?? false,
-      onConfirm: confirm,
+      onConfirm: async () => {
+        if (!pending) {
+          return
+        }
+
+        try {
+          await attempt(pending.variables, pending.confirmedSteps)
+          onConfirmed?.()
+        } catch {
+          // Either the next refusal, now showing in this same dialog, or an
+          // ordinary failure the mutation has already reported.
+        }
+      },
     },
   }
 }

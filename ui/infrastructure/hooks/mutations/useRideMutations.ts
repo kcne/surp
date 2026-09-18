@@ -26,6 +26,9 @@ import {
   throwBreakingChangeConflict,
 } from "@/infrastructure/utils/breaking-change"
 
+/** The confirmation key for the ride request itself; exceptions key by id. */
+const RIDE_STEP = "ride"
+
 function isRideMutationSuccess<TResponse extends { status: number }>(
   response: TResponse,
   expectedStatus?: number
@@ -119,13 +122,18 @@ export function useUpdateRideMutation() {
     mutationFn: async ({
       id,
       payload,
-      confirmBreakingChange,
+      confirmedSteps,
     }: {
       id: string
       payload: Partial<RideFormData>
-      /** Set only after the agency has answered the question the 409 asked. */
-      confirmBreakingChange?: boolean
+      /**
+       * The steps the agency has already answered a 409 about, by key. An edit
+       * is several requests and each can be refused on its own terms, so a
+       * confirmation applies to the one request it was given for.
+       */
+      confirmedSteps?: string[]
     }) => {
+      const isConfirmed = (step: string) => confirmedSteps?.includes(step) === true
       const hasExceptionsUpdate = Array.isArray(payload.exceptions)
       let rideUpdateLanded = false
 
@@ -140,12 +148,14 @@ export function useUpdateRideMutation() {
         // is being moved to rather than the one it is leaving.
         //
         // Exceptions cannot join it — they are their own endpoints — so they
-        // follow, and they can be refused too. Once this call has landed a
-        // later refusal is no longer a clean "nothing happened", which is what
-        // `rideUpdateLanded` tells the dialog to say.
+        // follow, and they can be refused too. Two things follow from that:
+        // once this call has landed a later refusal is no longer a clean
+        // "nothing happened", which `rideUpdateLanded` tells the dialog to say;
+        // and each request is confirmed under its own key, so answering for
+        // this one never answers for an exception nobody was asked about.
         const updatePayload = toUpdateRideDto(payload)
 
-        const requestBody = confirmBreakingChange
+        const requestBody = isConfirmed(RIDE_STEP)
           ? { ...updatePayload, confirmBreakingChange: true }
           : updatePayload
 
@@ -153,9 +163,7 @@ export function useUpdateRideMutation() {
           payload.lineId && payload.type
             ? ridesControllerReplace(id, requestBody)
             : ridesControllerUpdate(id, requestBody)
-        ).catch((error: unknown) => {
-          throwBreakingChangeConflict(error)
-        })
+        ).catch((error: unknown) => throwBreakingChangeConflict(error, RIDE_STEP))
 
         const isSuccess = isUpdateRideSuccess(response)
 
@@ -182,19 +190,21 @@ export function useUpdateRideMutation() {
         const toAdd = nextExceptions.filter((exception) => !existingIds.has(exception.id))
 
         for (const exception of toRemove) {
+          const step = `exception:remove:${exception.id}`
           const removeResponse = await ridesControllerRemoveException(id, exception.id, {
-            confirmBreakingChange,
-          }).catch((error: unknown) => throwBreakingChangeConflict(error, rideUpdateLanded))
+            confirmBreakingChange: isConfirmed(step),
+          }).catch((error: unknown) => throwBreakingChangeConflict(error, step, rideUpdateLanded))
           if (!isRideMutationSuccess(removeResponse)) {
             throw new Error("Neuspesno uklanjanje izuzetka voznje")
           }
         }
 
         for (const exception of toAdd) {
+          const step = `exception:add:${exception.id}`
           const addResponse = await ridesControllerAddException(id, {
             ...toCreateRideExceptionDto(exception),
-            confirmBreakingChange,
-          }).catch((error: unknown) => throwBreakingChangeConflict(error, rideUpdateLanded))
+            confirmBreakingChange: isConfirmed(step),
+          }).catch((error: unknown) => throwBreakingChangeConflict(error, step, rideUpdateLanded))
           if (!isRideMutationSuccess(addResponse)) {
             throw new Error("Neuspesno dodavanje izuzetka voznje")
           }

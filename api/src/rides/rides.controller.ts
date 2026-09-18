@@ -7,10 +7,12 @@ import {
   ApiHeader,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiExtraModels,
   ApiOperation,
   ApiQuery,
   ApiTags,
-  ApiUnauthorizedResponse
+  ApiUnauthorizedResponse,
+  getSchemaPath
 } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { RequestWithAuth } from '../auth/auth.types';
@@ -28,6 +30,7 @@ import {
 } from './dto/ride.response.dto';
 import { UpdateRideDto } from './dto/update-ride.dto';
 import { WouldBreakReservationsDto } from './dto/would-break-reservations.dto';
+import { RideExceptionConflictDto } from './dto/exception-conflict.dto';
 import { ConfirmBreakingChangeDto } from '../invariants/dto/confirm-breaking-change.dto';
 import { RidesService } from './rides.service';
 
@@ -164,10 +167,16 @@ export class RidesController {
   @ApiOperation({ summary: 'Add a ride exception (skip/additional) in the current tenant.' })
   @ApiOkResponse({ type: RideExceptionResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure or invalid exception combination.' })
+  @ApiExtraModels(WouldBreakReservationsDto, RideExceptionConflictDto)
   @ApiConflictResponse({
-    type: WouldBreakReservationsDto,
     description:
-      'A SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS. A duplicate or conflicting exception is also 409, but returns the standard error body without that code.'
+      'Either a SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable, or a duplicate or conflicting exception, which is not.',
+    schema: {
+      oneOf: [
+        { $ref: getSchemaPath(WouldBreakReservationsDto) },
+        { $ref: getSchemaPath(RideExceptionConflictDto) }
+      ]
+    }
   })
   @ApiNotFoundResponse({ description: 'Ride not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })

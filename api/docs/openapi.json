@@ -3887,11 +3887,18 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "A SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS. A duplicate or conflicting exception is also 409, but returns the standard error body without that code.",
+            "description": "Either a SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable, or a duplicate or conflicting exception, which is not.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WouldBreakReservationsDto"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/WouldBreakReservationsDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RideExceptionConflictDto"
+                    }
+                  ]
                 }
               }
             }
@@ -8864,6 +8871,28 @@
         },
         "required": [
           "daySchedules"
+        ]
+      },
+      "RideExceptionConflictDto": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number",
+            "example": 409
+          },
+          "message": {
+            "type": "string",
+            "example": "Skip exception for this date already exists"
+          },
+          "error": {
+            "type": "string",
+            "example": "Conflict"
+          }
+        },
+        "required": [
+          "statusCode",
+          "message",
+          "error"
         ]
       },
       "CreateRideExceptionDto": {

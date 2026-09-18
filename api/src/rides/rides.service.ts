@@ -704,18 +704,20 @@ export class RidesService {
 
     const exceptionDate = this.parseDateOnly(dto.date);
 
-    // Ahead of the guard, not inside it: both refusals are a 409, and a caller
-    // that cannot tell "this exception already exists" from "this exception
-    // breaks reservations" will offer the agency a confirmation button that
-    // cannot work. Leaving them here keeps one shape per reason.
-    await this.ensureExceptionIsNew(auth.tenantId, rideId, exceptionDate, dto);
-
     const created = await guardProspectiveWrite(
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       dto.type === RideExceptionType.SKIP ? PROSPECTIVE_INVARIANTS.rideException : [],
       dto.confirmBreakingChange === true,
       async (tx) => {
+        // Inside the transaction, so the read that proves the exception is new
+        // and the write that makes it exist cannot be separated. `RideException`
+        // carries no unique constraint, so this read is the only thing standing
+        // between two identical requests and two identical rows — which is what
+        // the serializable isolation is for: the second transaction's insert
+        // collides with the predicate this read locked, and Postgres aborts it.
+        await this.ensureExceptionIsNew(tx, auth.tenantId, rideId, exceptionDate, dto);
+
         return tx.rideException.create({
           data: withCreateAudit(
             {
@@ -749,12 +751,13 @@ export class RidesService {
   }
 
   private async ensureExceptionIsNew(
+    tx: Prisma.TransactionClient,
     tenantId: string,
     rideId: string,
     exceptionDate: Date,
     dto: CreateRideExceptionDto
   ): Promise<void> {
-    const existingOnDate = await this.prisma.rideException.findMany({
+    const existingOnDate = await tx.rideException.findMany({
       where: {
         tenantId,
         rideId,

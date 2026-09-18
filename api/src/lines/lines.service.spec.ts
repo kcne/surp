@@ -8,7 +8,7 @@ import {
 } from '@prisma/client';
 import { LinesService } from './lines.service';
 
-type FindManyArgs = { select?: Record<string, unknown> };
+type FindManyArgs = { select?: Record<string, unknown>; where?: { id?: unknown } };
 type FindMany = (args: FindManyArgs) => Promise<unknown>;
 
 /**
@@ -18,7 +18,7 @@ type FindMany = (args: FindManyArgs) => Promise<unknown>;
  * ride's line, realignment asks for its day schedules, so they are told apart
  * by what they select rather than by a second mock.
  */
-function withCleanInvariantReads<T extends object>(tx: T): T {
+function withCleanInvariantReads<T extends object>(tx: T, readRouteStations: FindMany): T {
   const existing = tx as T & {
     reservation?: Record<string, unknown>;
     station?: Record<string, unknown>;
@@ -33,7 +33,11 @@ function withCleanInvariantReads<T extends object>(tx: T): T {
     },
     station: {
       ...existing.station,
-      findMany: existing.station?.findMany ?? jest.fn().mockResolvedValue([])
+      // Route validation asks for named stations by id; the invariants ask for
+      // the whole tenant to turn ids into names. Only the first has to answer.
+      findMany: jest.fn(async (args: FindManyArgs = {}) =>
+        args.where?.id ? readRouteStations(args) : []
+      )
     },
     ride: {
       ...existing.ride,
@@ -261,7 +265,7 @@ describe('LinesService', () => {
     };
 
     prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
-      callback(withCleanInvariantReads(tx))
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
     );
 
     const result = await service.remove(auth, 'line-1', true);
@@ -346,7 +350,7 @@ describe('LinesService', () => {
     };
 
     prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
-      callback(withCleanInvariantReads(tx))
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
     );
 
     await service.update(auth, 'line-1', {
@@ -411,7 +415,7 @@ describe('LinesService', () => {
     };
 
     prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
-      callback(withCleanInvariantReads(tx))
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
     );
 
     await service.update(auth, 'line-1', { isActive: false });
@@ -464,7 +468,7 @@ describe('LinesService', () => {
     };
 
     prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
-      callback(withCleanInvariantReads(tx))
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
     );
 
     await service.replaceStops(auth, 'line-1', [
@@ -519,7 +523,7 @@ describe('LinesService', () => {
     };
 
     prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
-      callback(withCleanInvariantReads(tx))
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
     );
 
     await service.update(auth, 'line-1', {
@@ -597,7 +601,7 @@ describe('LinesService', () => {
     };
 
     prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
-      callback(withCleanInvariantReads(tx))
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
     );
 
     await service.update(auth, 'line-1', {
@@ -659,7 +663,7 @@ describe('LinesService', () => {
     };
 
     prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
-      callback(withCleanInvariantReads(tx))
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
     );
 
     await service.update(auth, 'line-1', {
@@ -676,12 +680,16 @@ describe('LinesService', () => {
   });
 
   it('does not touch other lines when the line is not part of a pair', async () => {
-    prismaMock.line.findFirst.mockResolvedValue({
+    // The update reads the line inside its own transaction now, so the
+    // unpaired fixture belongs on the transaction client.
+    const unpairedLine = {
       ...baseLine,
       directionMode: LineDirectionMode.SINGLE,
       pairKey: null,
       intermediateStops: []
-    });
+    };
+
+    prismaMock.line.findFirst.mockResolvedValue(unpairedLine);
 
     prismaMock.station.findMany
       .mockResolvedValueOnce([
@@ -692,9 +700,9 @@ describe('LinesService', () => {
 
     const tx = {
       line: {
-        update: jest.fn().mockResolvedValue(baseLine),
+        update: jest.fn().mockResolvedValue(unpairedLine),
         updateMany: jest.fn(),
-        findFirst: jest.fn().mockResolvedValue(baseLine),
+        findFirst: jest.fn().mockResolvedValue(unpairedLine),
         findMany: jest.fn()
       },
       lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
@@ -703,7 +711,7 @@ describe('LinesService', () => {
     };
 
     prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
-      callback(withCleanInvariantReads(tx))
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
     );
 
     await service.update(auth, 'line-1', {

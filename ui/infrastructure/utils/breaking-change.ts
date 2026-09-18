@@ -14,6 +14,16 @@ export class ChangeNeedsConfirmationError extends Error {
   constructor(
     readonly confirmation: WouldBreakReservationsDto,
     /**
+     * Which request in the edit was refused.
+     *
+     * An edit can be several requests — the ride, then each exception — and
+     * each can be refused for its own reason. Confirming carries this key back
+     * so only the request that was actually shown to somebody is confirmed;
+     * a later one raises its own question instead of riding along on an answer
+     * given about something else.
+     */
+    readonly step = "update",
+    /**
      * True when an earlier request in the same edit already landed, so the
      * dialog can stop promising that cancelling leaves nothing behind.
      */
@@ -45,11 +55,15 @@ export function asBreakingChangeConflict(error: unknown): WouldBreakReservations
   return data as WouldBreakReservationsDto
 }
 
-export function throwBreakingChangeConflict(error: unknown, partiallyApplied = false): never {
+export function throwBreakingChangeConflict(
+  error: unknown,
+  step = "update",
+  partiallyApplied = false
+): never {
   const confirmation = asBreakingChangeConflict(error)
 
   if (confirmation) {
-    throw new ChangeNeedsConfirmationError(confirmation, partiallyApplied)
+    throw new ChangeNeedsConfirmationError(confirmation, step, partiallyApplied)
   }
 
   throw error

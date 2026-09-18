@@ -22,7 +22,11 @@ export function PassengerModal({ open, onOpenChange, passenger }: PassengerModal
   const isEdit = !!passenger
   const loading = createPassengerMutation.isPending || updatePassengerMutation.isPending
   const confirmableUpdate = useConfirmableUpdate<{ id: string; payload: PassengerFormData }>({
-    update: (variables) => updatePassengerMutation.mutateAsync(variables),
+    update: (variables, confirmedSteps) =>
+      updatePassengerMutation.mutateAsync({
+        ...variables,
+        confirmBreakingChange: confirmedSteps.length > 0,
+      }),
     onConfirmed: () => onOpenChange(false),
   })
 

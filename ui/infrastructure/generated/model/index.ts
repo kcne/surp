@@ -204,6 +204,7 @@ export * from './reservationStationSummaryDto';
 export * from './resetPasswordDto';
 export * from './rideDayScheduleInputDto';
 export * from './rideDayScheduleResponseDto';
+export * from './rideExceptionConflictDto';
 export * from './rideExceptionResponseDto';
 export * from './rideExceptionResponseDtoArrivalTime';
 export * from './rideExceptionResponseDtoCreatedById';

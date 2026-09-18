@@ -105,6 +105,15 @@ type LineWithStops = {
  */
 type ResolvedLineStop = LineStopMutableValues;
 
+/**
+ * Either the plain client or the transaction a guarded write is running in.
+ * A route edit derives its proposed state from what it reads, so those reads
+ * belong in the same snapshot as the write — otherwise a concurrent route
+ * change can land in between and the edit reconciles ride schedules against
+ * stations the line no longer has.
+ */
+type LineReadClient = Pick<PrismaService, 'line' | 'station'> | Prisma.TransactionClient;
+
 @Injectable()
 export class LinesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -263,39 +272,6 @@ export class LinesService {
   }
 
   async update(auth: AccessTokenPayload, id: string, dto: UpdateLineDto): Promise<LineResponseDto> {
-    const existing = await this.getLineOrThrow(auth.tenantId, id);
-    const nextNameInput = dto.name;
-    const hasNameUpdate = typeof nextNameInput === 'string';
-    const resolvedName = hasNameUpdate ? nextNameInput.trim() || existing.name : existing.name;
-
-    const departureStationId = dto.departureStationId ?? existing.departureStationId;
-    const arrivalStationId = dto.arrivalStationId ?? existing.arrivalStationId;
-
-    const stations = await this.ensureRouteStationsInTenant(
-      auth.tenantId,
-      departureStationId,
-      arrivalStationId
-    );
-
-    const nextStops =
-      dto.intermediateStops !== undefined
-        ? await this.resolveIntermediateStops(
-            auth.tenantId,
-            departureStationId,
-            arrivalStationId,
-            dto.intermediateStops
-          )
-        : existing.intermediateStops;
-
-    this.ensureStopsDoNotUseRouteEndpoints(departureStationId, arrivalStationId, nextStops);
-
-    const directionMode = dto.directionMode ?? existing.directionMode;
-    const direction = dto.direction ?? existing.direction;
-    const pairKey =
-      dto.pairKey !== undefined ? this.normalizePairKey(dto.pairKey) : (existing.pairKey ?? null);
-
-    this.validateDirectionMetadata(directionMode, direction, pairKey);
-
     try {
       const updated = await guardProspectiveWrite(
         this.prisma,
@@ -303,6 +279,49 @@ export class LinesService {
         PROSPECTIVE_INVARIANTS.lineUpdate,
         dto.confirmBreakingChange === true,
         async (tx) => {
+          // Read inside the transaction, not before it. Every value below is
+          // derived from the line as it stands, and a concurrent route edit
+          // committing in between would leave this one reconciling ride
+          // schedules against stations the line no longer has.
+          const existing = await this.getLineOrThrow(auth.tenantId, id, tx);
+          const nextNameInput = dto.name;
+          const hasNameUpdate = typeof nextNameInput === 'string';
+          const resolvedName = hasNameUpdate
+            ? nextNameInput.trim() || existing.name
+            : existing.name;
+
+          const departureStationId = dto.departureStationId ?? existing.departureStationId;
+          const arrivalStationId = dto.arrivalStationId ?? existing.arrivalStationId;
+
+          const stations = await this.ensureRouteStationsInTenant(
+            auth.tenantId,
+            departureStationId,
+            arrivalStationId,
+            tx
+          );
+
+          const nextStops =
+            dto.intermediateStops !== undefined
+              ? await this.resolveIntermediateStops(
+                  auth.tenantId,
+                  departureStationId,
+                  arrivalStationId,
+                  dto.intermediateStops,
+                  tx
+                )
+              : existing.intermediateStops;
+
+          this.ensureStopsDoNotUseRouteEndpoints(departureStationId, arrivalStationId, nextStops);
+
+          const directionMode = dto.directionMode ?? existing.directionMode;
+          const direction = dto.direction ?? existing.direction;
+          const pairKey =
+            dto.pairKey !== undefined
+              ? this.normalizePairKey(dto.pairKey)
+              : (existing.pairKey ?? null);
+
+          this.validateDirectionMetadata(directionMode, direction, pairKey);
+
           await tx.line.update({
             where: {
               id
@@ -596,9 +615,10 @@ export class LinesService {
 
   private async getLineOrThrow(
     tenantId: string,
-    id: string
+    id: string,
+    db: LineReadClient = this.prisma
   ): Promise<LineWithStops & SelectedLine> {
-    const line = await this.prisma.line.findFirst({
+    const line = await db.line.findFirst({
       where: {
         id,
         tenantId
@@ -616,13 +636,14 @@ export class LinesService {
   private async ensureRouteStationsInTenant(
     tenantId: string,
     departureStationId: string,
-    arrivalStationId: string
+    arrivalStationId: string,
+    db: LineReadClient = this.prisma
   ): Promise<{ departure: { id: string; name: string }; arrival: { id: string; name: string } }> {
     if (departureStationId === arrivalStationId) {
       throw new BadRequestException('Departure and arrival stations must be different');
     }
 
-    const stations = await this.prisma.station.findMany({
+    const stations = await db.station.findMany({
       where: {
         tenantId,
         id: {
@@ -653,7 +674,8 @@ export class LinesService {
     tenantId: string,
     departureStationId: string,
     arrivalStationId: string,
-    stops: LineStopInputDto[]
+    stops: LineStopInputDto[],
+    db: LineReadClient = this.prisma
   ): Promise<ResolvedLineStop[]> {
     if (!stops.length) {
       return [];
@@ -678,7 +700,7 @@ export class LinesService {
     this.ensureStopsDoNotUseRouteEndpoints(departureStationId, arrivalStationId, stops);
 
     const stationIds = [...stationSet];
-    const stations = await this.prisma.station.findMany({
+    const stations = await db.station.findMany({
       where: {
         tenantId,
         id: {

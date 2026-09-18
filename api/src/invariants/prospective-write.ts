@@ -69,14 +69,15 @@ export async function guardProspectiveWrite<TResult>(
   confirmed: boolean,
   write: (tx: Prisma.TransactionClient) => Promise<TResult>
 ): Promise<TResult> {
-  // Nothing to compare. The write still needs its transaction — several of
-  // these callbacks rewrite a route and its schedules together — but not the
-  // serializable isolation and two full scans it would never read.
-  if (confirmed || invariants.length === 0) {
-    return prisma.$transaction(write);
-  }
-
   return runSerializable(prisma, async (tx) => {
+    // Nothing to compare, but still serializable: the callbacks do their own
+    // read-then-write — an exception that must not already exist, a route read
+    // to derive the next one from — and those need the isolation whether or
+    // not an invariant is being measured. Only the two scans are skipped.
+    if (confirmed || invariants.length === 0) {
+      return write(tx);
+    }
+
     const before = await checkInvariants(tx, scope, invariants);
     const result = await write(tx);
     const after = await checkInvariants(tx, scope, invariants);
@@ -122,11 +123,18 @@ function addedViolations(before: Violation[], after: Violation[]): Violation[] {
  * Runs the guard at `Serializable`.
  *
  * `RepeatableRead` is not enough here. Lowering capacity to 20 and selling seat
- * 45 touch no common row, so both transactions commit happily and the
- * invariant this guard exists to protect is broken by the pair of them — the
- * textbook write skew, and a plausible Monday morning at a busy counter.
- * Serializable makes Postgres abort one of them instead; one retry covers the
- * ordinary case, and a second failure surfaces rather than looping.
+ * 45 touch no common row, so both transactions commit happily and the invariant
+ * this guard exists to protect is broken by the pair of them — the textbook
+ * write skew, and a plausible Monday morning at a busy counter. Serializable
+ * makes Postgres abort one of them instead; one retry covers the ordinary case,
+ * and a second failure surfaces rather than looping.
+ *
+ * Note what this does not buy. Postgres only serializes against other
+ * serializable transactions, and booking still runs at the default isolation
+ * with its own advisory lock on the ride instance. So this closes the race
+ * between two guarded writes, and leaves the one between a guarded write and a
+ * concurrent booking open. Closing that means putting both sides on the same
+ * protocol, which is a change to the booking path, not to this file.
  */
 async function runSerializable<TResult>(
   prisma: PrismaService,

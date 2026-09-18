@@ -188,7 +188,7 @@ describe('guardProspectiveWrite', () => {
     expect(first.contexts[0]).not.toBe(first.contexts[1]);
   });
 
-  it('skips invariant reads after explicit confirmation, but keeps the transaction', async () => {
+  it('skips the invariant reads after explicit confirmation', async () => {
     const { prisma, transactions } = prismaDouble();
     const reachable = invariantReporting('reservation.reachable', [], [violation('new')]);
     const check = jest.spyOn(reachable, 'check');
@@ -200,10 +200,9 @@ describe('guardProspectiveWrite', () => {
 
     expect(check).not.toHaveBeenCalled();
     expect(transactions).toHaveLength(1);
-    expect(transactions[0].options).toBeUndefined();
   });
 
-  it('does not pay for serializable isolation when there is nothing to check', async () => {
+  it('keeps the isolation even when there is nothing to check', async () => {
     const { prisma, transactions } = prismaDouble();
     const write = jest.fn().mockResolvedValue('written');
 
@@ -211,7 +210,11 @@ describe('guardProspectiveWrite', () => {
       'written'
     );
 
-    expect(transactions[0].options).toBeUndefined();
+    // The callbacks do their own read-then-write — the exception that must not
+    // already exist — so the isolation is not the checks' to skip.
+    expect(transactions[0].options?.isolationLevel).toBe(
+      Prisma.TransactionIsolationLevel.Serializable
+    );
   });
 
   it('runs the compared write serializably', async () => {

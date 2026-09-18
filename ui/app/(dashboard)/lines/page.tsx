@@ -47,7 +47,11 @@ export default function LinesPage() {
   }
 
   const confirmableUpdate = useConfirmableUpdate<{ id: string; payload: UpdateLineDto }>({
-    update: (variables) => updateLineMutation.mutateAsync(variables),
+    update: (variables, confirmedSteps) =>
+      updateLineMutation.mutateAsync({
+        ...variables,
+        confirmBreakingChange: confirmedSteps.length > 0,
+      }),
     onConfirmed: closeModal,
   })
 
@@ -118,7 +122,10 @@ export default function LinesPage() {
             onUpdate={handleUpdate}
           />
 
-          <ConfirmBreakingChangeDialog {...confirmableUpdate.dialogProps} loading={mutationLoading} />
+          <ConfirmBreakingChangeDialog
+            {...confirmableUpdate.dialogProps}
+            loading={mutationLoading}
+          />
 
           <DeleteLineDialog
             open={isDeleteDialogOpen}
