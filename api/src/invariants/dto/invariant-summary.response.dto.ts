@@ -65,6 +65,13 @@ export class InvariantSummaryItemDto {
       'Start of the unbroken run of checks in which this invariant has been failing. Absent when it is currently clean. This is the date a postmortem asks for.'
   })
   failingSince?: string;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'True when the failing streak continues beyond the retained response window, so failingSince means at least since that instant.'
+  })
+  failingSinceIsLowerBound!: boolean;
 }
 
 export class InvariantSummaryDto {
@@ -123,6 +130,13 @@ export class InvariantHistoryViolationDto extends InvariantViolationDto {
       'The earliest stored run that reported this exact violation without a clean run in between.'
   })
   firstSeenAt!: string;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'True when the same violation continues beyond the retained response window, so firstSeenAt is only a lower bound.'
+  })
+  firstSeenAtIsLowerBound!: boolean;
 }
 
 export class InvariantDetailDto {
@@ -143,6 +157,13 @@ export class InvariantDetailDto {
 
   @ApiProperty({ example: true })
   hasRepair!: boolean;
+
+  @ApiProperty({
+    example: true,
+    description:
+      'Whether the latest stored run covered this check. False when the check was added after that run.'
+  })
+  checked!: boolean;
 
   @ApiPropertyOptional({
     type: InvariantRunSummaryDto,

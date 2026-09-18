@@ -17,6 +17,8 @@ export interface InvariantDetailDto {
   manualAdvice: string;
   severity: InvariantDetailDtoSeverity;
   hasRepair: boolean;
+  /** Whether the latest stored run covered this check. False when the check was added after that run. */
+  checked: boolean;
   /** The run the violations below come from. */
   lastRun?: InvariantRunSummaryDto;
   scannedCount: number;

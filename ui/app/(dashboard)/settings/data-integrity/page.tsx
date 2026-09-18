@@ -29,7 +29,7 @@ export default function DataIntegrityPage() {
           <ShieldAlert className="h-4 w-4" />
           <AlertTitle>Potrebne su admin dozvole</AlertTitle>
           <AlertDescription>
-            Samo tenant admin korisnici mogu da vide provere podataka.
+            Samo administratori agencije mogu da vide provere podataka.
           </AlertDescription>
         </Alert>
       </Layout>
@@ -125,8 +125,8 @@ function SummaryBanner({
         <AlertTriangle className="h-4 w-4" />
         <AlertTitle>Nijedna provera jos nije pokrenuta</AlertTitle>
         <AlertDescription>
-          Ovih {summary.invariantCount} provera nema nijedan zapisan rezultat za ovu agenciju.
-          Pokrenite &quot;Proveri sve&quot; da biste dobili prvo stanje.
+          Broj dostupnih provera: {summary.invariantCount}. Nijedna jos nema zapisan rezultat za ovu
+          agenciju. Pokrenite &quot;Proveri sve&quot; da biste dobili prvo stanje.
         </AlertDescription>
       </Alert>
     )
@@ -151,11 +151,11 @@ function SummaryBanner({
       <AlertTriangle className="h-4 w-4" />
       <AlertTitle>
         {summary.criticalViolatedCount > 0
-          ? `${summary.criticalViolatedCount} kriticnih provera prijavljuje problem`
-          : `${summary.violatedCount} provera prijavljuje problem`}
+          ? `Broj kriticnih provera sa problemima: ${summary.criticalViolatedCount}`
+          : `Broj provera sa problemima: ${summary.violatedCount}`}
       </AlertTitle>
       <AlertDescription>
-        Ukupno {summary.totalViolationCount} problema. {ranLine}
+        Ukupan broj problema: {summary.totalViolationCount}. {ranLine}
       </AlertDescription>
     </Alert>
   )

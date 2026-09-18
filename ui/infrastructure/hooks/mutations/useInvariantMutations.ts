@@ -31,10 +31,10 @@ export function useCheckInvariantsMutation() {
     },
     onSuccess: (summary) => {
       if (summary.totalViolationCount === 0) {
-        toast.success(`Provereno ${summary.invariantCount} provera, sve je u redu`)
+        toast.success(`Provere zavrsene: ${summary.invariantCount}; sve je u redu`)
       } else {
         toast.warning(
-          `${summary.violatedCount} od ${summary.invariantCount} provera prijavljuje probleme`
+          `Broj provera sa problemima: ${summary.violatedCount} od ${summary.invariantCount}`
         )
       }
 
@@ -78,11 +78,11 @@ export function useRepairInvariantMutation() {
       if (result.repairedCount === 0) {
         toast.success("Nije bilo sta da se popravi")
       } else {
-        toast.success(`Popravljeno ${result.repairedCount}`)
+        toast.success(`Broj popravljenih stavki: ${result.repairedCount}`)
       }
 
       if (result.skippedCount > 0) {
-        toast.warning(`Preskoceno ${result.skippedCount} — treba ih resiti rucno`)
+        toast.warning(`Broj stavki za rucnu obradu: ${result.skippedCount}`)
       }
 
       queryClient.invalidateQueries({ queryKey: invariantSummaryQueryKey })

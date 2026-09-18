@@ -79,20 +79,15 @@ export function InvariantSummaryTable({ items }: { items: InvariantSummaryItemDt
                 <TableCell className="whitespace-nowrap text-muted-foreground">
                   {item.failingSince ? (
                     <span title={`Od ${formatRunDate(item.failingSince)}`}>
+                      {item.failingSinceIsLowerBound ? "najmanje " : ""}
                       {formatDuration(item.failingSince)}
                     </span>
                   ) : (
                     <span>&mdash;</span>
                   )}
                 </TableCell>
-                <TableCell className="w-10 text-right">
-                  <Link
-                    href={`/settings/data-integrity/${encodeURIComponent(item.key)}`}
-                    aria-label={`Otvori proveru: ${item.title}`}
-                    className="inline-flex rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </Link>
+                <TableCell className="w-10 text-right" aria-hidden="true">
+                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
                 </TableCell>
               </TableRow>
             )

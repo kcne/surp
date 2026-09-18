@@ -11,6 +11,7 @@ import {
 import { Cron } from '@nestjs/schedule';
 import { InvariantReportDto, InvariantResultDto } from './dto/invariant.response.dto';
 import { InvariantAlertEmailService } from './invariant-alert-email.service';
+import { invariantResultsForStorage, pruneExpiredInvariantRuns } from './invariant-run-storage';
 import { InvariantsService } from './invariants.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -25,6 +26,7 @@ type MonitoredTenant = {
 };
 
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
+const ALERT_DELIVERY_PENDING = 'pending: alert delivery not completed';
 
 @Injectable()
 export class InvariantRunnerService {
@@ -40,6 +42,10 @@ export class InvariantRunnerService {
   @Cron('0 2 * * *', { name: 'daily-invariant-run', timeZone: 'UTC' })
   async runDaily(): Promise<void> {
     if (!this.config.get<boolean>('INVARIANT_SCHEDULE_ENABLED', true)) return;
+
+    // Retention applies to inactive tenants too; otherwise disabling a tenant
+    // would also disable deletion of its historical passenger snapshots.
+    await pruneExpiredInvariantRuns(this.prisma);
 
     const runDate = utcDay(new Date());
     const tenants = await this.prisma.tenant.findMany({
@@ -131,7 +137,11 @@ export class InvariantRunnerService {
         invariantCount: report.invariantCount,
         violatedCount: report.violatedCount,
         totalViolationCount: report.totalViolationCount,
-        results: report.results as unknown as Prisma.InputJsonValue
+        results: invariantResultsForStorage(report.results),
+        // A completed result is not an alerted result yet. If the process exits
+        // before delivery finishes, this sentinel keeps the run out of the next
+        // baseline so the notification is retried.
+        alertError: changedResults.length > 0 ? ALERT_DELIVERY_PENDING : null
       }
     });
 
@@ -146,7 +156,7 @@ export class InvariantRunnerService {
       data: {
         ticketId,
         emailSentAt,
-        alertError: alertErrors.length > 0 ? alertErrors.join('\n') : undefined
+        alertError: alertErrors.length > 0 ? alertErrors.join('\n') : null
       }
     });
   }

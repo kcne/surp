@@ -84,7 +84,7 @@ export const reservationStationsOnRoute: Invariant = {
   key: 'reservation.stationsOnRoute',
   title: 'Stanice rezervacije su na ruti',
   description:
-    'Rezervacija cuva dve stanice, a njihov redosled i ulogu odredjuje trenutna ruta linije pri svakom citanju. Kada se stanica ukloni sa linije ili linija promeni rutu, rezervacija ostaje da postoji, ali se ne moze sacuvati nikakvom izmenom niti vise licno provaljuje da je jos uvek dostizna.',
+    'Rezervacija cuva dve stanice, a njihov redosled i ulogu odredjuje trenutna ruta linije pri svakom citanju. Kada se stanica ukloni sa linije ili linija promeni rutu, rezervacija ostaje u bazi, ali vise ne moze pouzdano da se prikaze ni izmeni.',
   manualAdvice:
     'Ako je stanica uklonjena sa rute greskom, vratite je na liniju. U suprotnom otvorite rezervaciju i prepisite je na stanice koje su danas na ruti, pa obavestite putnika o promeni.',
   severity: 'critical',

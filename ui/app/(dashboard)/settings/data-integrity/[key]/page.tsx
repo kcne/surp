@@ -45,7 +45,7 @@ export default function InvariantDetailPage() {
           <ShieldAlert className="h-4 w-4" />
           <AlertTitle>Potrebne su admin dozvole</AlertTitle>
           <AlertDescription>
-            Samo tenant admin korisnici mogu da vide provere podataka.
+            Samo administratori agencije mogu da vide provere podataka.
           </AlertDescription>
         </Alert>
       </Layout>
@@ -83,7 +83,7 @@ function InvariantDetailContent({ invariantKey }: { invariantKey: string }) {
               {detail ? (
                 <InvariantStatusBadge
                   status={invariantStatus({
-                    checked: Boolean(lastRun),
+                    checked: detail.checked,
                     violationCount: detail.violationCount,
                     severity: detail.severity,
                   })}
@@ -117,7 +117,7 @@ function InvariantDetailContent({ invariantKey }: { invariantKey: string }) {
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">{detail.description}</p>
 
-                {!lastRun ? (
+                {!detail.checked || !lastRun ? (
                   <Alert>
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>Ova provera jos nije pokrenuta</AlertTitle>
@@ -131,7 +131,7 @@ function InvariantDetailContent({ invariantKey }: { invariantKey: string }) {
                     <CheckCircle2 className="h-4 w-4" />
                     <AlertTitle>Nema problema</AlertTitle>
                     <AlertDescription>
-                      Provereno {detail.scannedCount} stavki, poslednja provera{" "}
+                      Broj proverenih stavki: {detail.scannedCount}. Poslednja provera{" "}
                       {formatRunMoment(ranAt)} ({triggerLabel(lastRun.trigger)}).
                     </AlertDescription>
                   </Alert>
@@ -139,12 +139,12 @@ function InvariantDetailContent({ invariantKey }: { invariantKey: string }) {
                   <Alert variant={detail.severity === "critical" ? "destructive" : "default"}>
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>
-                      {detail.violationCount} od {detail.scannedCount} provereno sa problemom
+                      Problemi: {detail.violationCount} od {detail.scannedCount} pregledanih stavki
                     </AlertTitle>
                     <AlertDescription>
                       Poslednja provera {formatRunMoment(ranAt)} ({triggerLabel(lastRun.trigger)}).
                       {detail.repairableCount > 0
-                        ? ` Popravka moze da resi ${detail.repairableCount}.`
+                        ? ` Broj stavki koje popravka moze da resi: ${detail.repairableCount}.`
                         : " Nijedan se ne ispravlja automatski."}
                     </AlertDescription>
                   </Alert>
@@ -155,8 +155,8 @@ function InvariantDetailContent({ invariantKey }: { invariantKey: string }) {
                     <Wrench className="h-4 w-4" />
                     <AlertTitle>
                       {detail.repairableCount > 0
-                        ? `${manualCount} se ne ispravlja automatski`
-                        : "Ovo se ne ispravlja automatski"}
+                        ? `Broj stavki za rucnu obradu: ${manualCount}`
+                        : "Potrebna je rucna obrada"}
                     </AlertTitle>
                     <AlertDescription>{detail.manualAdvice}</AlertDescription>
                   </Alert>
@@ -176,16 +176,17 @@ function InvariantDetailContent({ invariantKey }: { invariantKey: string }) {
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          Popraviti {detail.repairableCount} stavki?
-                        </AlertDialogTitle>
+                        <AlertDialogTitle>Pokrenuti automatsku popravku?</AlertDialogTitle>
                         <AlertDialogDescription asChild>
                           <div className="space-y-2">
-                            <p>{detail.manualAdvice}</p>
+                            <p>
+                              Popravka ce automatski obraditi {detail.repairableCount} stavki koje
+                              sistem moze bezbedno da ispravi bez dodatne odluke.
+                            </p>
                             {manualCount > 0 ? (
                               <p>
-                                Preostalih <strong>{manualCount}</strong> se ne dira — za njih
-                                popravka ne moze da odluci sama.
+                                Broj stavki koje ostaju za rucnu obradu: <strong>{manualCount}</strong>.
+                                Za njih popravka ne moze sama da donese odluku.
                               </p>
                             ) : null}
                             <p>

@@ -78,7 +78,7 @@ describe('reservation.groupIntact', () => {
     expect(items[0].cancelledLegs.map((l) => l.reservationId)).toEqual(['res-back']);
   });
 
-  it('reports a mixed group as a critical, unrepaired violation naming both legs and the phone', async () => {
+  it('reports a mixed group as a critical, unrepaired violation without copying the phone', async () => {
     prismaMock.reservation.findMany
       .mockResolvedValueOnce([{ groupId: 'group-1' }])
       .mockResolvedValueOnce([
@@ -93,7 +93,7 @@ describe('reservation.groupIntact', () => {
     expect(violation.canRepair).toBe(false);
     expect(violation.subjectType).toBe('reservation-group');
     expect(violation.subjectId).toBe('group-1');
-    expect(violation.summary).toContain('+381601234567');
+    expect(violation.summary).not.toContain('+381601234567');
     expect(violation.summary).toContain('aktivna');
     expect(violation.summary).toContain('otkazana');
     expect(reservationGroupIntact.repair).toBeUndefined();

@@ -22,4 +22,6 @@ export interface InvariantSummaryItemDto {
   hasRepair: boolean;
   /** Start of the unbroken run of checks in which this invariant has been failing. Absent when it is currently clean. This is the date a postmortem asks for. */
   failingSince?: string;
+  /** True when the failing streak continues beyond the retained response window, so failingSince means at least since that instant. */
+  failingSinceIsLowerBound: boolean;
 }

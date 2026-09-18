@@ -6744,6 +6744,11 @@
             "type": "string",
             "example": "2026-09-02T02:01:44.000Z",
             "description": "Start of the unbroken run of checks in which this invariant has been failing. Absent when it is currently clean. This is the date a postmortem asks for."
+          },
+          "failingSinceIsLowerBound": {
+            "type": "boolean",
+            "example": false,
+            "description": "True when the failing streak continues beyond the retained response window, so failingSince means at least since that instant."
           }
         },
         "required": [
@@ -6756,7 +6761,8 @@
           "scannedCount",
           "violationCount",
           "repairableCount",
-          "hasRepair"
+          "hasRepair",
+          "failingSinceIsLowerBound"
         ]
       },
       "InvariantSummaryDto": {
@@ -6831,6 +6837,11 @@
             "type": "string",
             "example": "2026-09-02T02:01:44.000Z",
             "description": "The earliest stored run that reported this exact violation without a clean run in between."
+          },
+          "firstSeenAtIsLowerBound": {
+            "type": "boolean",
+            "example": false,
+            "description": "True when the same violation continues beyond the retained response window, so firstSeenAt is only a lower bound."
           }
         },
         "required": [
@@ -6839,7 +6850,8 @@
           "summary",
           "detail",
           "canRepair",
-          "firstSeenAt"
+          "firstSeenAt",
+          "firstSeenAtIsLowerBound"
         ]
       },
       "InvariantHistoryPointDto": {
@@ -6915,6 +6927,11 @@
             "type": "boolean",
             "example": true
           },
+          "checked": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether the latest stored run covered this check. False when the check was added after that run."
+          },
           "lastRun": {
             "description": "The run the violations below come from.",
             "allOf": [
@@ -6957,6 +6974,7 @@
           "manualAdvice",
           "severity",
           "hasRepair",
+          "checked",
           "scannedCount",
           "violationCount",
           "repairableCount",

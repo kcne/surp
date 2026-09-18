@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useState } from "react"
+import { Fragment, useId, useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -32,6 +32,7 @@ export function InvariantViolationsTable({
   violations: InvariantHistoryViolationDto[]
 }) {
   const [expanded, setExpanded] = useState<string | null>(null)
+  const detailsIdPrefix = useId()
 
   return (
     <div className="overflow-x-auto rounded-md border">
@@ -47,9 +48,10 @@ export function InvariantViolationsTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {violations.map((violation) => {
+          {violations.map((violation, index) => {
             const rowKey = `${violation.subjectType}:${violation.subjectId}`
             const isExpanded = expanded === rowKey
+            const detailsId = `${detailsIdPrefix}-details-${index}`
 
             return (
               <Fragment key={rowKey}>
@@ -59,10 +61,13 @@ export function InvariantViolationsTable({
                       type="button"
                       onClick={() => setExpanded(isExpanded ? null : rowKey)}
                       aria-expanded={isExpanded}
+                      aria-controls={detailsId}
                       aria-label={
-                        isExpanded ? "Sakrij podatke problema" : "Prikazi podatke problema"
+                        isExpanded
+                          ? `Sakrij podatke problema: ${violation.summary}`
+                          : `Prikazi podatke problema: ${violation.summary}`
                       }
-                      className="inline-flex rounded p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="inline-flex h-11 w-11 items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {isExpanded ? (
                         <ChevronDown className="h-4 w-4" />
@@ -79,6 +84,7 @@ export function InvariantViolationsTable({
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     <span title={`Od ${formatRunDate(violation.firstSeenAt)}`}>
+                      {violation.firstSeenAtIsLowerBound ? "najmanje " : ""}
                       {formatDuration(violation.firstSeenAt)}
                     </span>
                   </TableCell>
@@ -95,7 +101,12 @@ export function InvariantViolationsTable({
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableCell />
                     <TableCell colSpan={3}>
-                      <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+                      <dl
+                        id={detailsId}
+                        role="region"
+                        aria-label={`Podaci problema: ${violation.summary}`}
+                        className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2"
+                      >
                         {Object.entries(violation.detail ?? {}).map(([field, value]) => (
                           <div key={field} className="flex gap-2">
                             <dt className="shrink-0 text-muted-foreground">{field}</dt>

@@ -67,4 +67,21 @@ describe('pair.terminiReachable', () => {
 
     expect(new Set(violations.map((violation) => violation.subjectId)).size).toBe(violations.length);
   });
+
+  it('reports no gap when each terminus is present on the opposite route', async () => {
+    const [outbound, inbound] = pairWithBothTerminiUnreachable();
+    prismaMock.line.findMany.mockResolvedValue([
+      outbound,
+      {
+        ...inbound,
+        departureStationId: outbound.arrivalStationId,
+        arrivalStationId: outbound.departureStationId
+      }
+    ]);
+
+    const { gaps, scannedPairCount } = await findReturnRouteGaps(ctx);
+
+    expect(scannedPairCount).toBe(1);
+    expect(gaps).toEqual([]);
+  });
 });

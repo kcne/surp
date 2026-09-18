@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { InvariantRunStatus, InvariantRunTrigger, Prisma } from '@prisma/client';
+import { InvariantRunStatus, InvariantRunTrigger } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   InvariantDetailDto,
@@ -10,6 +10,7 @@ import {
 } from './dto/invariant-summary.response.dto';
 import { InvariantResultDto, InvariantViolationDto } from './dto/invariant.response.dto';
 import { Invariant } from './invariant.types';
+import { invariantResultsForStorage, pruneExpiredInvariantRuns } from './invariant-run-storage';
 import { InvariantScope, InvariantsService } from './invariants.service';
 import { INVARIANTS, findInvariant } from './registry';
 
@@ -21,6 +22,12 @@ import { INVARIANTS, findInvariant } from './registry';
  * stays one small query.
  */
 const HISTORY_RUN_LIMIT = 60;
+const HISTORY_QUERY_LIMIT = HISTORY_RUN_LIMIT + 1;
+
+type StreakStart = {
+  at?: string;
+  isLowerBound: boolean;
+};
 
 /** A stored run, reduced to what the page reads back out of it. */
 type StoredRun = {
@@ -67,6 +74,8 @@ export class InvariantHistoryService {
    * next morning.
    */
   async runNow(scope: InvariantScope): Promise<InvariantSummaryDto> {
+    await pruneExpiredInvariantRuns(this.prisma, scope.tenantId);
+
     const run = await this.prisma.invariantRun.create({
       data: {
         tenantId: scope.tenantId,
@@ -103,7 +112,7 @@ export class InvariantHistoryService {
         invariantCount: report.invariantCount,
         violatedCount: report.violatedCount,
         totalViolationCount: report.totalViolationCount,
-        results: report.results as unknown as Prisma.InputJsonValue
+        results: invariantResultsForStorage(report.results)
       }
     });
 
@@ -132,17 +141,23 @@ export class InvariantHistoryService {
       manualAdvice: invariant.manualAdvice,
       severity: invariant.severity,
       hasRepair: Boolean(invariant.repair),
+      checked: Boolean(result),
       lastRun: latest ? toRunSummary(latest) : undefined,
       scannedCount: result?.scannedCount ?? 0,
       violationCount: result?.violationCount ?? 0,
       repairableCount: result?.repairableCount ?? 0,
       // `latest` is necessarily set wherever there are violations to date:
       // they were read out of it.
-      violations: (result?.violations ?? []).map((violation) => ({
-        ...violation,
-        firstSeenAt: firstSeenAt(runs, key, violation, isoOf(latest!))
-      })),
-      history: runs.map((run) => toHistoryPoint(run, key))
+      violations: (result?.violations ?? []).map((violation) => {
+        const firstSeen = firstSeenAt(runs, key, violation);
+
+        return {
+          ...violation,
+          firstSeenAt: firstSeen.at ?? isoOf(latest!),
+          firstSeenAtIsLowerBound: firstSeen.isLowerBound
+        };
+      }),
+      history: runs.slice(0, HISTORY_RUN_LIMIT).map((run) => toHistoryPoint(run, key))
     };
   }
 
@@ -172,7 +187,10 @@ export class InvariantHistoryService {
     const runs = await this.prisma.invariantRun.findMany({
       where: { tenantId, status: InvariantRunStatus.COMPLETED, completedAt: { not: null } },
       orderBy: { completedAt: 'desc' },
-      take: HISTORY_RUN_LIMIT,
+      // One extra row tells the caller whether a streak continues past the
+      // visible window. Without it the oldest visible date looks exact when it
+      // may only mean "at least since".
+      take: HISTORY_QUERY_LIMIT,
       select: {
         id: true,
         trigger: true,
@@ -193,6 +211,7 @@ export class InvariantHistoryService {
 function toSummaryItem(invariant: Invariant, runs: StoredRun[]): InvariantSummaryItemDto {
   const latest = runs[0];
   const result = latest ? resultFor(latest, invariant.key) : undefined;
+  const failure = failingSince(runs, invariant.key);
 
   return {
     key: invariant.key,
@@ -207,7 +226,8 @@ function toSummaryItem(invariant: Invariant, runs: StoredRun[]): InvariantSummar
     violationCount: result?.violationCount ?? 0,
     repairableCount: result?.repairableCount ?? 0,
     hasRepair: Boolean(invariant.repair),
-    failingSince: failingSince(runs, invariant.key)
+    failingSince: failure.at,
+    failingSinceIsLowerBound: failure.isLowerBound
   };
 }
 
@@ -219,10 +239,10 @@ function toSummaryItem(invariant: Invariant, runs: StoredRun[]): InvariantSummar
  * ever seen. A run that predates the check stops the walk: it says nothing
  * about the check, and reading it as clean would date the problem to it.
  */
-function failingSince(runs: StoredRun[], key: string): string | undefined {
+function failingSince(runs: StoredRun[], key: string): StreakStart {
   let since: string | undefined;
 
-  for (const run of runs) {
+  for (const run of runs.slice(0, HISTORY_RUN_LIMIT)) {
     const result = resultFor(run, key);
 
     if (!result || result.violationCount === 0) break;
@@ -230,18 +250,23 @@ function failingSince(runs: StoredRun[], key: string): string | undefined {
     since = isoOf(run);
   }
 
-  return since;
+  return {
+    at: since,
+    isLowerBound:
+      Boolean(since) &&
+      runs.length > HISTORY_RUN_LIMIT &&
+      Boolean(resultFor(runs[HISTORY_RUN_LIMIT], key)?.violationCount)
+  };
 }
 
 function firstSeenAt(
   runs: StoredRun[],
   key: string,
-  violation: InvariantViolationDto,
-  fallback: string
-): string {
-  let since = fallback;
+  violation: InvariantViolationDto
+): StreakStart {
+  let since: string | undefined;
 
-  for (const run of runs) {
+  for (const run of runs.slice(0, HISTORY_RUN_LIMIT)) {
     const result = resultFor(run, key);
     const present = result?.violations.some(
       (stored) =>
@@ -253,7 +278,18 @@ function firstSeenAt(
     since = isoOf(run);
   }
 
-  return since;
+  const olderResult = runs[HISTORY_RUN_LIMIT]
+    ? resultFor(runs[HISTORY_RUN_LIMIT], key)
+    : undefined;
+  const continuesPastWindow = olderResult?.violations.some(
+    (stored) =>
+      stored.subjectType === violation.subjectType && stored.subjectId === violation.subjectId
+  );
+
+  return {
+    at: since,
+    isLowerBound: Boolean(since) && Boolean(continuesPastWindow)
+  };
 }
 
 function toRunSummary(run: StoredRun): InvariantRunSummaryDto {

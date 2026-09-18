@@ -33,8 +33,8 @@ export function InvariantHistoryTable({ points }: { points: InvariantHistoryPoin
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Provera</TableHead>
-            <TableHead>Pokrenuto</TableHead>
+            <TableHead>Vreme provere</TableHead>
+            <TableHead>Pokrenuo</TableHead>
             <TableHead className="text-right">Problema</TableHead>
             <TableHead className="text-right">Provereno</TableHead>
           </TableRow>

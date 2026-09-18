@@ -126,7 +126,7 @@ export const reservationGroupIntact: Invariant = {
   description:
     'Karta u oba smera se cuva kao vise rezervacija sa istim groupId, svaka na svojoj voznji. Otkazivanje van grupne putanje (#9) menja samo jednu od njih, pa putnik ostaje sa potvrdjenim jednim smerom i nevidljivim drugim.',
   manualAdvice:
-    'Pozovite putnika i dogovorite se: ili otkazite i preostali smer, ili ponovo upisite otkazani. Koje od to dvoje je ono sto je putnik trazio ne vidi se iz podataka.',
+    'Pozovite putnika i dogovorite se: ili otkazite i preostali smer, ili ponovo upisite otkazani. Sta je od toga putnik trazio ne vidi se iz podataka.',
   severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
@@ -136,7 +136,6 @@ export const reservationGroupIntact: Invariant = {
       scannedCount: scannedReservationCount,
       violations: items.map((item) => {
         const passengerName = item.legs[0].passengerName;
-        const passengerPhone = item.legs[0].passengerPhone;
         const activeSummary = item.activeLegs
           .map((leg) => `${leg.lineName} ${leg.travelDate} ${leg.departureTime} (aktivna)`)
           .join(', ');
@@ -147,7 +146,7 @@ export const reservationGroupIntact: Invariant = {
         return {
           subjectType: 'reservation-group' as const,
           subjectId: item.groupId,
-          summary: `${passengerName} (${passengerPhone}): jedan smer je otkazan a drugi nije — ${activeSummary}; ${cancelledSummary}.`,
+          summary: `${passengerName}: jedan smer je otkazan a drugi nije — ${activeSummary}; ${cancelledSummary}.`,
           detail: { ...item },
           canRepair: false
         };

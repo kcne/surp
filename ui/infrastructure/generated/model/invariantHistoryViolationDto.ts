@@ -16,4 +16,6 @@ export interface InvariantHistoryViolationDto {
   canRepair: boolean;
   /** The earliest stored run that reported this exact violation without a clean run in between. */
   firstSeenAt: string;
+  /** True when the same violation continues beyond the retained response window, so firstSeenAt is only a lower bound. */
+  firstSeenAtIsLowerBound: boolean;
 }
