@@ -14,6 +14,7 @@ import { reservationSeatWithinCapacity } from './checks/seat-within-capacity';
 import { scheduleMatchesRoute } from './checks/schedule-matches-route';
 import { reservationStationsOnRoute } from './checks/stations-on-route';
 import { terminiReachable } from './checks/termini-reachable';
+import { backupFresh } from './checks/backup-fresh';
 
 /**
  * Every invariant the system knows about.
@@ -28,6 +29,7 @@ import { terminiReachable } from './checks/termini-reachable';
  * their own settings card, which is why the fifth needed this instead.
  */
 export const INVARIANTS: readonly Invariant[] = [
+  backupFresh,
   reservationReachable,
   reservationArrivalCurrent,
   reservationStationsOnRoute,

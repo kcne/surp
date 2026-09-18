@@ -8,6 +8,8 @@
 
 export interface ReturnRouteGapItemDto {
   pairKey: string;
+  /** The direction this gap is about. Both directions of one pair can be reported at once. */
+  lineId: string;
   lineName: string;
   oppositeLineName: string;
   /** Terminus stations of this line that appear nowhere on the opposite direction, so return tickets to or from them cannot be booked. */

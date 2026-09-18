@@ -1,14 +1,14 @@
 import { UserRole } from '@prisma/client';
-import { InvariantsService } from './invariants.service';
+import { InvariantsService, scopeOf } from './invariants.service';
 import { CheckResult, Invariant, Violation } from './invariant.types';
 import { INVARIANTS, findInvariant } from './registry';
 
-const auth = {
+const scope = scopeOf({
   sub: 'admin-1',
   tenantId: 'tenant-1',
   role: UserRole.ADMIN,
   tenantSlug: 'tenant-one'
-} as never;
+} as never);
 
 const violation = (overrides: Partial<Violation> = {}): Violation => ({
   subjectType: 'reservation',
@@ -28,6 +28,7 @@ describe('INVARIANTS registry', () => {
 
   it('carries the four checks that used to be separate endpoints, plus what has been added since', () => {
     expect(INVARIANTS.map((invariant) => invariant.key)).toEqual([
+      'backup.fresh',
       'reservation.reachable',
       'reservation.arrivalTimeCurrent',
       'reservation.stationsOnRoute',
@@ -114,7 +115,7 @@ describe('InvariantsService', () => {
       stub('b.broken', { violations: [violation(), violation({ canRepair: false })], scannedCount: 12 })
     ]);
 
-    const report = await service.checkAll(auth);
+    const report = await service.checkAll(scope);
 
     expect(report.invariantCount).toBe(2);
     expect(report.violatedCount).toBe(1);
@@ -127,7 +128,7 @@ describe('InvariantsService', () => {
   it('reports what was scanned even when nothing is wrong', async () => {
     useRegistry([stub('a.clean', { violations: [], scannedCount: 201 })]);
 
-    const [result] = (await service.checkAll(auth)).results;
+    const [result] = (await service.checkAll(scope)).results;
 
     expect(result.violationCount).toBe(0);
     expect(result.scannedCount).toBe(201);
@@ -141,7 +142,7 @@ describe('InvariantsService', () => {
       })
     ]);
 
-    const [result] = (await service.checkAll(auth)).results;
+    const [result] = (await service.checkAll(scope)).results;
 
     expect(result.violationCount).toBe(2);
     expect(result.repairableCount).toBe(1);
@@ -152,7 +153,7 @@ describe('InvariantsService', () => {
     const one = stub('a.clean', { violations: [], scannedCount: 0 });
     useRegistry([one]);
 
-    await service.checkAll(auth, 7);
+    await service.checkAll(scope, 7);
 
     expect(one.check).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: 'tenant-1', actorId: 'admin-1', windowDays: 7 })
@@ -164,7 +165,7 @@ describe('InvariantsService', () => {
     const other = stub('b.broken', { violations: [violation()], scannedCount: 5 });
     useRegistry([one, other]);
 
-    const result = await service.checkOne(auth, 'b.broken');
+    const result = await service.checkOne(scope, 'b.broken');
 
     expect(result.key).toBe('b.broken');
     expect(one.check).not.toHaveBeenCalled();
@@ -173,7 +174,7 @@ describe('InvariantsService', () => {
   it('rejects an unknown key rather than reporting a clean check', async () => {
     useRegistry([stub('a.clean', { violations: [], scannedCount: 0 })]);
 
-    await expect(service.checkOne(auth, 'a.imaginary')).rejects.toThrow('Unknown invariant');
+    await expect(service.checkOne(scope, 'a.imaginary')).rejects.toThrow('Unknown invariant');
   });
 
   // A report-only check has no repair on purpose; offering one would mean
@@ -181,7 +182,7 @@ describe('InvariantsService', () => {
   it('refuses to repair a check that has no repair', async () => {
     useRegistry([stub('a.reported', { violations: [violation()], scannedCount: 1 })]);
 
-    await expect(service.repair(auth, 'a.reported')).rejects.toThrow('reported only');
+    await expect(service.repair(scope, 'a.reported')).rejects.toThrow('reported only');
   });
 
   // Reporting what was attempted would hide a repair that half-worked, which is
@@ -204,7 +205,7 @@ describe('InvariantsService', () => {
     };
     useRegistry([invariant]);
 
-    const result = await service.repair(auth, 'a.fixable');
+    const result = await service.repair(scope, 'a.fixable');
 
     expect(result.repairedCount).toBe(1);
     expect(result.skippedCount).toBe(1);

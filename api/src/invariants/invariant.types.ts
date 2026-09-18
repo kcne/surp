@@ -34,7 +34,8 @@ export type ViolationSubject =
   | 'ride-instance'
   | 'ride-schedule'
   | 'line-pair'
-  | 'line';
+  | 'line'
+  | 'system';
 
 export interface Violation {
   subjectType: ViolationSubject;

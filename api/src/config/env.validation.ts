@@ -21,6 +21,19 @@ export const envValidationSchema = Joi.object({
   RESEND_API_KEY: Joi.string().trim().min(1).optional(),
   RESEND_FROM: Joi.string().trim().min(1).optional(),
   EMAIL_TIMEOUT_MS: Joi.number().integer().min(1000).max(60000).default(10000),
+  INVARIANT_SCHEDULE_ENABLED: Joi.boolean().truthy('true').falsy('false').default(true),
+  BACKUP_FRESHNESS_CHECK_ENABLED: Joi.boolean().truthy('true').falsy('false').default(true),
+  // The backup key travels on every signed GetObject, so production must not
+  // reach the bucket over plain HTTP. Local stacks (MinIO, LocalStack) still can.
+  BACKUP_S3_ENDPOINT: Joi.when('NODE_ENV', {
+    is: 'production',
+    then: Joi.string().uri({ scheme: ['https'] }).optional(),
+    otherwise: Joi.string().uri({ scheme: ['http', 'https'] }).optional()
+  }),
+  BACKUP_S3_REGION: Joi.string().trim().min(1).default('auto'),
+  BACKUP_S3_BUCKET: Joi.string().trim().min(1).optional(),
+  BACKUP_S3_ACCESS_KEY_ID: Joi.string().trim().min(1).optional(),
+  BACKUP_S3_SECRET_ACCESS_KEY: Joi.string().trim().min(1).optional(),
   MARKETING_EMAIL_LOGO_URL: Joi.string().uri({ scheme: ['http', 'https'] }).optional(),
   MARKETING_LEADS_EMAIL_TO: Joi.when('NODE_ENV', {
     is: 'production',

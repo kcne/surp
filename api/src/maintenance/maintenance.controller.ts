@@ -18,7 +18,7 @@ import {
   InvariantReportDto,
   InvariantResultDto
 } from '../invariants/dto/invariant.response.dto';
-import { InvariantsService } from '../invariants/invariants.service';
+import { InvariantsService, scopeOf } from '../invariants/invariants.service';
 import {
   OrphanedReservationReportDto,
   OrphanedReservationRepairResultDto
@@ -153,7 +153,7 @@ export class MaintenanceController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
   checkInvariants(@Req() request: RequestWithAuth): Promise<InvariantReportDto> {
-    return this.invariantsService.checkAll(request.auth!);
+    return this.invariantsService.checkAll(scopeOf(request.auth!));
   }
 
   @Get('invariants/:key')
@@ -168,7 +168,7 @@ export class MaintenanceController {
     @Req() request: RequestWithAuth,
     @Param('key') key: string
   ): Promise<InvariantResultDto> {
-    return this.invariantsService.checkOne(request.auth!, key);
+    return this.invariantsService.checkOne(scopeOf(request.auth!), key);
   }
 
   @Post('invariants/:key/repair')
@@ -187,6 +187,6 @@ export class MaintenanceController {
     @Req() request: RequestWithAuth,
     @Param('key') key: string
   ): Promise<InvariantRepairResultDto> {
-    return this.invariantsService.repair(request.auth!, key);
+    return this.invariantsService.repair(scopeOf(request.auth!), key);
   }
 }

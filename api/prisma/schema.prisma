@@ -99,6 +99,12 @@ enum MarketingLeadDeparturesPerDay {
   FIFTY_PLUS
 }
 
+enum InvariantRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
 model HealthCheckLog {
   id        String   @id @default(cuid())
   message   String
@@ -158,8 +164,41 @@ model Tenant {
   ticketComments              TicketComment[]
   ticketAttachments           TicketAttachment[]
   storefront                  AgencyStorefront?
+  invariantRuns               InvariantRun[]
 
   @@index([isActive])
+}
+
+/**
+ * One scheduled pass of every invariant for one tenant.
+ *
+ * The row is claimed before the checks run, not written after them: `runDate`
+ * is unique per tenant, so when the API runs on more than one replica the
+ * second replica's insert loses and that replica skips the tenant instead of
+ * duplicating the run, the BUG ticket and the email.
+ */
+model InvariantRun {
+  id                  String             @id @default(cuid())
+  tenantId            String
+  runDate             DateTime           @db.Date
+  status              InvariantRunStatus
+  startedAt           DateTime
+  completedAt         DateTime?
+  windowDays          Int                @default(30)
+  invariantCount      Int                @default(0)
+  violatedCount       Int                @default(0)
+  totalViolationCount Int                @default(0)
+  results             Json
+  error               String?            @db.Text
+  ticketId            String?
+  emailSentAt         DateTime?
+  alertError          String?            @db.Text
+  createdAt           DateTime           @default(now())
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, runDate])
+  @@index([tenantId, completedAt])
+  @@index([status, completedAt])
 }
 
 model AgencyStorefront {
