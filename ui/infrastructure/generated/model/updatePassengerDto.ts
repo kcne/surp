@@ -8,6 +8,8 @@
 import type { UpdatePassengerDtoPassengerType } from './updatePassengerDtoPassengerType';
 
 export interface UpdatePassengerDto {
+  /** Confirms a change previously refused with WOULD_BREAK_RESERVATIONS. */
+  confirmBreakingChange?: boolean;
   firstName?: string;
   lastName?: string;
   phone?: string;

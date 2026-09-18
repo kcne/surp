@@ -10,8 +10,9 @@ import {
   type OrphanReason
 } from './orphaned-reservations';
 import { loadReservationWindow } from './reservation-window';
-import { CheckResult, Invariant, InvariantContext, RepairResult } from '../invariant.types';
+import { CheckResult, InvariantContext, ProspectiveInvariant, RepairResult } from '../invariant.types';
 import { loadStationNames } from './tenant-lookups';
+import { serbianPlural } from '../serbian-plural';
 
 /**
  * A reservation is only ever reached through a ride instance, and instances are
@@ -308,7 +309,7 @@ export async function scanForOrphans(ctx: InvariantContext): Promise<{
   };
 }
 
-export const reservationReachable: Invariant = {
+export const reservationReachable: ProspectiveInvariant = {
   key: 'reservation.reachable',
   title: 'Rezervacija se vidi na svom polasku',
   description:
@@ -316,6 +317,9 @@ export const reservationReachable: Invariant = {
   manualAdvice:
     'Popravka vraca samo rezervacije za koje tog dana postoji tacno jedan polazak. Za ostale otvorite taj datum u voznjama: ako polaska nema, napravite ga ili pozovite putnika; ako ih ima vise, prebacite rezervaciju rucno na onaj koji je putnik kupio; ako je autobus pun, povecajte kapacitet ili ponudite drugi termin.',
   severity: 'critical',
+
+  breakingChangeMessage: (count) =>
+    `Ova izmena cini ${serbianPlural(count, 'rezervaciju nevidljivom', 'rezervacije nevidljivim', 'rezervacija nevidljivim')}.`,
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const report = await buildOrphanReport(ctx);

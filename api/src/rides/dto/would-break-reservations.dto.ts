@@ -19,18 +19,14 @@ export class WouldBreakReservationsDto {
   })
   invariant!: string;
 
-  @ApiProperty({ example: 8, description: 'Reservations the change would break.' })
+  @ApiProperty({
+    example: 8,
+    description: 'New invariant violations the proposed change would introduce.'
+  })
   affectedCount!: number;
 
   @ApiProperty({
-    example: 38,
-    description: 'Highest seat number still sold, so the caller can see the floor.'
-  })
-  highestOccupiedSeat!: number;
-
-  @ApiProperty({
-    example:
-      'Smanjenje kapaciteta na 30 ostavlja 8 rezervacija na sedistu koje vise ne postoji; najvise zauzeto sediste je 38.'
+    example: 'Ova izmena cini 8 rezervacija nevidljivim.'
   })
   message!: string;
 }

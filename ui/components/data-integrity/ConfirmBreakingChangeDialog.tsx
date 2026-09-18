@@ -13,40 +13,41 @@ import {
 import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
 import { AlertTriangle, X } from "lucide-react"
 
-/**
- * Asks the question the server refused to answer on its own.
- *
- * Lowering a ride's capacity under a seat that is already sold is sometimes
- * exactly right — a smaller bus was substituted — and sometimes a typo that
- * quietly invalidates every seat above the new number. Only the agency knows
- * which, so the change is held until somebody says so, with the count of
- * affected passengers in front of them.
- */
-interface ConfirmBreakingRideChangeDialogProps {
+interface ConfirmBreakingChangeDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   confirmation: WouldBreakReservationsDto | null
+  /** An earlier part of the same edit was already saved before the refusal. */
+  partiallyApplied?: boolean
   loading?: boolean
   onConfirm: () => Promise<void> | void
 }
 
-export function ConfirmBreakingRideChangeDialog({
+export function ConfirmBreakingChangeDialog({
   open,
   onOpenChange,
   confirmation,
+  partiallyApplied = false,
   loading = false,
   onConfirm,
-}: ConfirmBreakingRideChangeDialogProps) {
+}: ConfirmBreakingChangeDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Ova izmena pogadja postojece rezervacije</AlertDialogTitle>
+          <AlertDialogTitle>Ova izmena pogadja postojece podatke</AlertDialogTitle>
           <AlertDialogDescription>
-            {confirmation?.message}
-            {" "}
-            Ako ipak nastavite, te rezervacije ostaju upisane i prikazuju se u proveri podataka
-            dok ih ne resite.
+            {/* The server's sentence already carries the count, in Serbian that
+                agrees with it — repeating it here only risks disagreeing. */}
+            <span className="block font-medium text-foreground">{confirmation?.message}</span>
+            <span className="mt-2 block">
+              Ako ipak nastavite, problem ostaje vidljiv u proveri podataka dok ga ne resite.
+            </span>
+            {partiallyApplied && (
+              <span className="mt-2 block">
+                Deo izmene je vec sacuvan. Ako odustanete, taj deo ostaje sacuvan.
+              </span>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -56,11 +57,6 @@ export function ConfirmBreakingRideChangeDialog({
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={(event) => {
-              // Radix closes the dialog on its own the moment Action is
-              // clicked. Left alone that unmounts the question before the
-              // answer has been written: no "Cuvanje...", no disabled button,
-              // and a save that then fails leaves nothing on screen to retry.
-              // The page closes it once the write is actually through.
               event.preventDefault()
               void onConfirm()
             }}

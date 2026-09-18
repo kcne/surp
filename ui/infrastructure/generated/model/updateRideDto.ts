@@ -10,6 +10,8 @@ import type { UpdateRideDtoStatus } from './updateRideDtoStatus';
 import type { UpdateRideDtoType } from './updateRideDtoType';
 
 export interface UpdateRideDto {
+  /** Confirms a change previously refused with WOULD_BREAK_RESERVATIONS. */
+  confirmBreakingChange?: boolean;
   name?: string;
   lineId?: string;
   /**
@@ -24,7 +26,5 @@ export interface UpdateRideDto {
   oneTimeDate?: string;
   oneTimeDepartureTime?: string;
   oneTimeArrivalTime?: string;
-  /** Confirms a change the server refused with WOULD_BREAK_RESERVATIONS, such as lowering capacity under a seat that is already sold. */
-  confirmBreakingChange?: boolean;
   daySchedules?: RideDayScheduleInputDto[];
 }

@@ -3,6 +3,7 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
+import { PROSPECTIVE_INVARIANTS, guardProspectiveWrite } from '../invariants/prospective-write';
 import { CreateStationDto } from './dto/create-station.dto';
 import { ListStationsQueryDto } from './dto/list-stations.query.dto';
 import { PaginatedStationsResponseDto, StationResponseDto } from './dto/station.response.dto';
@@ -122,23 +123,32 @@ export class StationsService {
   ): Promise<StationResponseDto> {
     await this.ensureTenantStationExists(auth.tenantId, id);
 
-    return this.prisma.station.update({
-      where: {
-        id
-      },
-      data: withUpdateAudit(
-        {
-          ...(typeof dto.name === 'string' ? { name: dto.name.trim() } : {}),
-          ...(typeof dto.address === 'string' ? { address: dto.address.trim() } : {}),
-          ...(dto.category !== undefined ? { category: dto.category } : {}),
-          ...(typeof dto.contactPhone === 'string' ? { contactPhone: dto.contactPhone.trim() } : {}),
-          ...(typeof dto.notes === 'string' ? { notes: dto.notes.trim() } : {}),
-          ...(typeof dto.isActive === 'boolean' ? { isActive: dto.isActive } : {})
-        },
-        auth.sub
-      ),
-      select: this.safeStationSelect
-    });
+    return guardProspectiveWrite(
+      this.prisma,
+      { tenantId: auth.tenantId, actorId: auth.sub },
+      dto.isActive === false ? PROSPECTIVE_INVARIANTS.stationDeactivation : [],
+      dto.confirmBreakingChange === true,
+      (tx) =>
+        tx.station.update({
+          where: {
+            id
+          },
+          data: withUpdateAudit(
+            {
+              ...(typeof dto.name === 'string' ? { name: dto.name.trim() } : {}),
+              ...(typeof dto.address === 'string' ? { address: dto.address.trim() } : {}),
+              ...(dto.category !== undefined ? { category: dto.category } : {}),
+              ...(typeof dto.contactPhone === 'string'
+                ? { contactPhone: dto.contactPhone.trim() }
+                : {}),
+              ...(typeof dto.notes === 'string' ? { notes: dto.notes.trim() } : {}),
+              ...(typeof dto.isActive === 'boolean' ? { isActive: dto.isActive } : {})
+            },
+            auth.sub
+          ),
+          select: this.safeStationSelect
+        })
+    );
   }
 
   async remove(auth: AccessTokenPayload, id: string): Promise<StationResponseDto> {

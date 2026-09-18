@@ -3,13 +3,14 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
-import { CheckPassengerDuplicatesDto, PassengerDuplicatesResponseDto } from './dto/check-passenger-duplicates.dto';
+import { PROSPECTIVE_INVARIANTS, guardProspectiveWrite } from '../invariants/prospective-write';
+import {
+  CheckPassengerDuplicatesDto,
+  PassengerDuplicatesResponseDto
+} from './dto/check-passenger-duplicates.dto';
 import { CreatePassengerDto } from './dto/create-passenger.dto';
 import { ListPassengersQueryDto } from './dto/list-passengers.query.dto';
-import {
-  PaginatedPassengersResponseDto,
-  PassengerResponseDto
-} from './dto/passenger.response.dto';
+import { PaginatedPassengersResponseDto, PassengerResponseDto } from './dto/passenger.response.dto';
 import { UpdatePassengerDto } from './dto/update-passenger.dto';
 import { normalizeNameForMatch, normalizePhoneForMatch } from './passenger-match.util';
 
@@ -186,24 +187,35 @@ export class PassengersService {
   ): Promise<PassengerResponseDto> {
     await this.ensureTenantPassengerExists(auth.tenantId, id);
 
-    return this.prisma.passenger.update({
-      where: {
-        id
-      },
-      data: withUpdateAudit(
-        {
-          ...(typeof dto.firstName === 'string' ? { firstName: capitalizeName(dto.firstName) } : {}),
-          ...(typeof dto.lastName === 'string' ? { lastName: capitalizeName(dto.lastName) } : {}),
-          ...(typeof dto.phone === 'string' ? { phone: dto.phone.trim() } : {}),
-          ...(typeof dto.email === 'string' ? { email: dto.email.trim() } : {}),
-          ...(dto.passengerType !== undefined ? { passengerType: dto.passengerType } : {}),
-          ...(typeof dto.isActive === 'boolean' ? { isActive: dto.isActive } : {}),
-          ...(typeof dto.notes === 'string' ? { notes: dto.notes.trim() } : {})
-        },
-        auth.sub
-      ),
-      select: this.safePassengerSelect
-    });
+    return guardProspectiveWrite(
+      this.prisma,
+      { tenantId: auth.tenantId, actorId: auth.sub },
+      dto.isActive === false ? PROSPECTIVE_INVARIANTS.passengerDeactivation : [],
+      dto.confirmBreakingChange === true,
+      (tx) =>
+        tx.passenger.update({
+          where: {
+            id
+          },
+          data: withUpdateAudit(
+            {
+              ...(typeof dto.firstName === 'string'
+                ? { firstName: capitalizeName(dto.firstName) }
+                : {}),
+              ...(typeof dto.lastName === 'string'
+                ? { lastName: capitalizeName(dto.lastName) }
+                : {}),
+              ...(typeof dto.phone === 'string' ? { phone: dto.phone.trim() } : {}),
+              ...(typeof dto.email === 'string' ? { email: dto.email.trim() } : {}),
+              ...(dto.passengerType !== undefined ? { passengerType: dto.passengerType } : {}),
+              ...(typeof dto.isActive === 'boolean' ? { isActive: dto.isActive } : {}),
+              ...(typeof dto.notes === 'string' ? { notes: dto.notes.trim() } : {})
+            },
+            auth.sub
+          ),
+          select: this.safePassengerSelect
+        })
+    );
   }
 
   async remove(auth: AccessTokenPayload, id: string): Promise<PassengerResponseDto> {

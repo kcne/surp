@@ -1,4 +1,5 @@
-import { CheckResult, Invariant, InvariantContext } from '../invariant.types';
+import { CheckResult, InvariantContext, ProspectiveInvariant } from '../invariant.types';
+import { serbianPlural } from '../serbian-plural';
 
 /**
  * Every station a route names — departure, arrival, or an intermediate stop —
@@ -66,7 +67,7 @@ export async function findRoutesWithInactiveStations(
   return { items, scannedLineCount: lines.length };
 }
 
-export const routeStationsActive: Invariant = {
+export const routeStationsActive: ProspectiveInvariant = {
   key: 'route.stationsActive',
   title: 'Stanice na ruti su aktivne',
   description:
@@ -74,6 +75,9 @@ export const routeStationsActive: Invariant = {
   manualAdvice:
     'Ili vratite stanicu medju aktivne, ili je uklonite sa rute linije. Dok je ovako, linija saobraca preko stanice koje nema u operativnoj listi.',
   severity: 'critical',
+
+  breakingChangeMessage: (count) =>
+    `Ova izmena ostavlja ${serbianPlural(count, 'liniju', 'linije', 'linija')} sa neaktivnom stanicom.`,
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const { items, scannedLineCount } = await findRoutesWithInactiveStations(ctx);
@@ -83,6 +87,9 @@ export const routeStationsActive: Invariant = {
       violations: items.map((item) => ({
         subjectType: 'line' as const,
         subjectId: item.lineId,
+        // Deactivating a second station on a line already carrying one is a
+        // new problem, even though the line is already in the report.
+        magnitude: item.inactiveStationNames.length,
         summary: `Linija "${item.lineName}" saobraca preko deaktivirane stanice: ${item.inactiveStationNames.join(', ')}.`,
         detail: { ...item },
         canRepair: false

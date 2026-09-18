@@ -7,12 +7,19 @@ const prismaMock = {
   station: { findMany: jest.fn() }
 };
 
-const ctx = {
-  tenantId: 'tenant-1',
-  actorId: 'admin-1',
-  prisma: prismaMock,
-  windowDays: 30
-} as unknown as InvariantContext;
+// A context per test, not per file: checks sharing one context share one load
+// of the reservation window, so reusing it across tests would answer the second
+// test from the first one's rows.
+let ctx: InvariantContext;
+
+beforeEach(() => {
+  ctx = {
+    tenantId: 'tenant-1',
+    actorId: 'admin-1',
+    prisma: prismaMock,
+    windowDays: 30
+  } as unknown as InvariantContext;
+});
 
 // Travel dates are pinned relative to today so the window always contains them,
 // whenever the suite runs.

@@ -1,14 +1,14 @@
 "use client"
 
-import {
-  FormModalShell,
-} from "@/components/forms/FormModalShell"
+import { FormModalShell } from "@/components/forms/FormModalShell"
 import { PassengerForm } from "@/components/passengers/PassengerForm"
 import {
   useCreatePassengerMutation,
   useUpdatePassengerMutation,
 } from "@/infrastructure/hooks/mutations/usePassengerMutations"
 import type { Passenger, PassengerFormData } from "@/types"
+import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
+import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
 
 interface PassengerModalProps {
   open: boolean
@@ -16,19 +16,23 @@ interface PassengerModalProps {
   passenger?: Passenger | null
 }
 
-export function PassengerModal({
-  open,
-  onOpenChange,
-  passenger,
-}: PassengerModalProps) {
+export function PassengerModal({ open, onOpenChange, passenger }: PassengerModalProps) {
   const createPassengerMutation = useCreatePassengerMutation()
   const updatePassengerMutation = useUpdatePassengerMutation()
   const isEdit = !!passenger
   const loading = createPassengerMutation.isPending || updatePassengerMutation.isPending
+  const confirmableUpdate = useConfirmableUpdate<{ id: string; payload: PassengerFormData }>({
+    update: (variables, confirmedSteps) =>
+      updatePassengerMutation.mutateAsync({
+        ...variables,
+        confirmBreakingChange: confirmedSteps.length > 0,
+      }),
+    onConfirmed: () => onOpenChange(false),
+  })
 
   const handleSubmit = async (data: PassengerFormData) => {
     if (isEdit && passenger) {
-      await updatePassengerMutation.mutateAsync({ id: passenger.id, payload: data })
+      await confirmableUpdate.run({ id: passenger.id, payload: data })
     } else {
       await createPassengerMutation.mutateAsync(data)
     }
@@ -37,16 +41,16 @@ export function PassengerModal({
   }
 
   return (
-    <FormModalShell
-      open={open}
-      onOpenChange={onOpenChange}
-      title={isEdit ? "Izmeni Putnika" : "Dodaj Novog Putnika"}
-      description={isEdit
-        ? "Ažurirajte informacije o putniku."
-        : "Unesite informacije o novom putniku."}
-      contentClassName="sm:max-w-[720px]"
-    >
-
+    <>
+      <FormModalShell
+        open={open}
+        onOpenChange={onOpenChange}
+        title={isEdit ? "Izmeni Putnika" : "Dodaj Novog Putnika"}
+        description={
+          isEdit ? "Ažurirajte informacije o putniku." : "Unesite informacije o novom putniku."
+        }
+        contentClassName="sm:max-w-[720px]"
+      >
         <PassengerForm
           key={passenger?.id || "new-passenger"}
           initialData={
@@ -67,6 +71,9 @@ export function PassengerModal({
           onCancel={() => onOpenChange(false)}
           loading={loading}
         />
-    </FormModalShell>
+      </FormModalShell>
+
+      <ConfirmBreakingChangeDialog {...confirmableUpdate.dialogProps} loading={loading} />
+    </>
   )
 }

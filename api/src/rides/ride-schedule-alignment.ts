@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { withCreateAudit } from '../prisma/audit-write.helper';
+import { TotalRow } from '../prisma/total-row.type';
 
 /**
  * A ride day schedule must mirror its line route exactly — `validateDaySchedules`
@@ -21,11 +22,16 @@ export interface RouteShapedLine {
   intermediateStops: Array<{ stationId: string; orderIndex: number }>;
 }
 
-export interface ScheduleStationTime {
-  stationId: string;
-  orderIndex: number;
-  time: string | null;
-}
+export type ScheduleStationTime = TotalRow<
+  Prisma.RideDayScheduleStationTimeUncheckedCreateInput,
+  | 'id'
+  | 'tenantId'
+  | 'rideDayScheduleId'
+  | 'createdById'
+  | 'updatedById'
+  | 'createdAt'
+  | 'updatedAt'
+>;
 
 /** Station ids along a line, in travel order. */
 export function routeStationIdsOf(line: RouteShapedLine): string[] {
@@ -126,7 +132,7 @@ export function describeScheduleDrift(
   return {
     addedStationIds: routeStationIds.filter((stationId) => !scheduleStationIds.has(stationId)),
     removedStationIds: orderedScheduleIds.filter((stationId) => !routeSet.has(stationId)),
-    reorderedStationIds: findReorderedStationIds(survivingScheduleOrder, survivingRouteOrder),
+    reorderedStationIds: findReorderedStationIds(survivingScheduleOrder, survivingRouteOrder)
   };
 }
 
@@ -158,6 +164,14 @@ export interface AlignedStationTime {
   time: string | null;
   /** True when the time was derived rather than carried over from the schedule. */
   isEstimated: boolean;
+}
+
+function toTotalStationTime(stationTime: AlignedStationTime): ScheduleStationTime {
+  return {
+    stationId: stationTime.stationId,
+    orderIndex: stationTime.orderIndex,
+    time: stationTime.time
+  };
 }
 
 /**
@@ -283,13 +297,12 @@ export async function realignDaySchedulesTx(
     return { realignedScheduleCount: 0, estimatedTimeCount: 0, reorderedScheduleIds: [] };
   }
 
-  const rows: Array<{
-    tenantId: string;
-    rideDayScheduleId: string;
-    stationId: string;
-    orderIndex: number;
-    time: string | null;
-  }> = [];
+  const rows: Array<
+    ScheduleStationTime & {
+      tenantId: string;
+      rideDayScheduleId: string;
+    }
+  > = [];
 
   let estimatedTimeCount = 0;
   const reorderedScheduleIds: string[] = [];
@@ -307,13 +320,11 @@ export async function realignDaySchedulesTx(
       reorderedScheduleIds.push(schedule.rideDayScheduleId);
     }
 
-    aligned.forEach((stationTime) => {
+    aligned.forEach((alignedStationTime) => {
       rows.push({
         tenantId: input.tenantId,
         rideDayScheduleId: schedule.rideDayScheduleId,
-        stationId: stationTime.stationId,
-        orderIndex: stationTime.orderIndex,
-        time: stationTime.time,
+        ...toTotalStationTime(alignedStationTime)
       });
     });
   }
@@ -321,20 +332,20 @@ export async function realignDaySchedulesTx(
   await tx.rideDayScheduleStationTime.deleteMany({
     where: {
       rideDayScheduleId: {
-        in: input.schedules.map((schedule) => schedule.rideDayScheduleId),
+        in: input.schedules.map((schedule) => schedule.rideDayScheduleId)
       },
-      tenantId: input.tenantId,
-    },
+      tenantId: input.tenantId
+    }
   });
 
   await tx.rideDayScheduleStationTime.createMany({
-    data: rows.map((row) => withCreateAudit(row, input.actorId)),
+    data: rows.map((row) => withCreateAudit(row, input.actorId))
   });
 
   return {
     realignedScheduleCount: input.schedules.length,
     estimatedTimeCount,
-    reorderedScheduleIds,
+    reorderedScheduleIds
   };
 }
 
@@ -356,8 +367,8 @@ export async function realignDayScheduleTx(
       {
         rideDayScheduleId: input.rideDayScheduleId,
         stationTimes: input.stationTimes,
-        routeStationIds: input.routeStationIds,
-      },
-    ],
+        routeStationIds: input.routeStationIds
+      }
+    ]
   });
 }

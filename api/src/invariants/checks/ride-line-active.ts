@@ -1,5 +1,6 @@
 import { RideStatus } from '@prisma/client';
-import { CheckResult, Invariant, InvariantContext } from '../invariant.types';
+import { CheckResult, InvariantContext, ProspectiveInvariant } from '../invariant.types';
+import { serbianPlural } from '../serbian-plural';
 
 /**
  * No ACTIVE ride sits on a deactivated line.
@@ -58,7 +59,7 @@ export async function findActiveRidesOnInactiveLines(
   return { items, scannedRideCount: rides.length };
 }
 
-export const rideLineActive: Invariant = {
+export const rideLineActive: ProspectiveInvariant = {
   key: 'ride.lineActive',
   title: 'Voznja je na aktivnoj liniji',
   description:
@@ -66,6 +67,9 @@ export const rideLineActive: Invariant = {
   manualAdvice:
     'Odlucite sta je tacno: ako linija vise ne saobraca, deaktivirajte i voznje na njoj; ako saobraca, vratite liniju medju aktivne.',
   severity: 'warning',
+
+  breakingChangeMessage: (count) =>
+    `Ova izmena ostavlja ${serbianPlural(count, 'voznju', 'voznje', 'voznji')} na neaktivnoj liniji.`,
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const { items, scannedRideCount } = await findActiveRidesOnInactiveLines(ctx);

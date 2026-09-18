@@ -1,15 +1,9 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { PassengerType } from '@prisma/client';
-import {
-  IsBoolean,
-  IsEmail,
-  IsEnum,
-  IsOptional,
-  IsString,
-  MaxLength
-} from 'class-validator';
+import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ConfirmBreakingChangeDto } from '../../invariants/dto/confirm-breaking-change.dto';
 
-export class UpdatePassengerDto {
+export class UpdatePassengerDto extends ConfirmBreakingChangeDto {
   @ApiPropertyOptional({ example: 'Mila' })
   @IsOptional()
   @IsString()

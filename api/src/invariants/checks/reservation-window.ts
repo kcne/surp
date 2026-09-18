@@ -92,7 +92,33 @@ export interface ReservationWindow {
   dayOf(ride: WindowedRide, travelDate: string): RideDayInstances;
 }
 
-export async function loadReservationWindow(ctx: InvariantContext): Promise<ReservationWindow> {
+/**
+ * One window per context, shared by every check running against it.
+ *
+ * Five invariants on a ride update meant five identical scans of the same
+ * rows, and a prospective write runs the whole set twice. Keyed by context for
+ * the same reason `seat-occupancy` is: a fresh context per request, and a new
+ * one before a repair re-checks, is what keeps a repaired violation from being
+ * read back out of this cache.
+ */
+const windowByContext = new WeakMap<InvariantContext, Promise<ReservationWindow>>();
+
+export function loadReservationWindow(ctx: InvariantContext): Promise<ReservationWindow> {
+  const cached = windowByContext.get(ctx);
+
+  if (cached) {
+    return cached;
+  }
+
+  // The promise is cached, not the result, so checks starting at once share
+  // one load rather than racing to start their own.
+  const window = buildReservationWindow(ctx);
+  windowByContext.set(ctx, window);
+
+  return window;
+}
+
+async function buildReservationWindow(ctx: InvariantContext): Promise<ReservationWindow> {
   const today = formatDateOnly(new Date())!;
   const windowStart = utcDateOf(today);
   const windowEnd = new Date(windowStart);

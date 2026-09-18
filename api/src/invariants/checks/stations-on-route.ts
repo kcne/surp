@@ -1,8 +1,9 @@
 import { formatDateOnly } from '../../rides/ride-instance-materialization';
-import { CheckResult, Invariant, InvariantContext } from '../invariant.types';
+import { CheckResult, InvariantContext, ProspectiveInvariant } from '../invariant.types';
 import { findOffRouteStationIds } from './orphaned-reservations';
 import { loadReservationWindow } from './reservation-window';
 import { loadStationNames, stationNamer } from './tenant-lookups';
+import { serbianPlural } from '../serbian-plural';
 
 /**
  * Both stations a reservation names are still somewhere on its line's route.
@@ -80,7 +81,7 @@ export async function findReservationsOffRoute(ctx: InvariantContext): Promise<{
   return { items, scannedReservationCount: window.reservations.length };
 }
 
-export const reservationStationsOnRoute: Invariant = {
+export const reservationStationsOnRoute: ProspectiveInvariant = {
   key: 'reservation.stationsOnRoute',
   title: 'Stanice rezervacije su na ruti',
   description:
@@ -88,6 +89,9 @@ export const reservationStationsOnRoute: Invariant = {
   manualAdvice:
     'Ako je stanica uklonjena sa rute greskom, vratite je na liniju. U suprotnom otvorite rezervaciju i prepisite je na stanice koje su danas na ruti, pa obavestite putnika o promeni.',
   severity: 'critical',
+
+  breakingChangeMessage: (count) =>
+    `Ova izmena ostavlja ${serbianPlural(count, 'rezervaciju', 'rezervacije', 'rezervacija')} sa stanicom van rute.`,
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const { items, scannedReservationCount } = await findReservationsOffRoute(ctx);

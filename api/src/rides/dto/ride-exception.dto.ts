@@ -1,10 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { RideExceptionType } from '@prisma/client';
 import { IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
+import { ConfirmBreakingChangeDto } from '../../invariants/dto/confirm-breaking-change.dto';
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-export class CreateRideExceptionDto {
+export class CreateRideExceptionDto extends ConfirmBreakingChangeDto {
   @ApiProperty({ example: '2026-03-20' })
   @IsDateString()
   date!: string;

@@ -19,6 +19,7 @@ import { ListStationsQueryDto } from './dto/list-stations.query.dto';
 import { PaginatedStationsResponseDto, StationResponseDto } from './dto/station.response.dto';
 import { UpdateStationDto } from './dto/update-station.dto';
 import { StationsService } from './stations.service';
+import { WouldBreakReservationsDto } from '../rides/dto/would-break-reservations.dto';
 
 @ApiTags('Stations')
 @ApiBearerAuth('access-token')
@@ -78,6 +79,10 @@ export class StationsController {
   @ApiNotFoundResponse({ description: 'Station not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  @ApiConflictResponse({
+    type: WouldBreakReservationsDto,
+    description: 'Deactivating the station would leave an active line using it.'
+  })
   update(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,
@@ -94,6 +99,10 @@ export class StationsController {
   @ApiNotFoundResponse({ description: 'Station not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  @ApiConflictResponse({
+    type: WouldBreakReservationsDto,
+    description: 'Deactivating the station would leave an active line using it.'
+  })
   replace(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,

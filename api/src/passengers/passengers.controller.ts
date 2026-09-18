@@ -1,7 +1,21 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiForbiddenResponse,
   ApiHeader,
   ApiNotFoundResponse,
@@ -19,12 +33,10 @@ import {
 } from './dto/check-passenger-duplicates.dto';
 import { CreatePassengerDto } from './dto/create-passenger.dto';
 import { ListPassengersQueryDto } from './dto/list-passengers.query.dto';
-import {
-  PaginatedPassengersResponseDto,
-  PassengerResponseDto
-} from './dto/passenger.response.dto';
+import { PaginatedPassengersResponseDto, PassengerResponseDto } from './dto/passenger.response.dto';
 import { UpdatePassengerDto } from './dto/update-passenger.dto';
 import { PassengersService } from './passengers.service';
+import { WouldBreakReservationsDto } from '../rides/dto/would-break-reservations.dto';
 
 @ApiTags('Passengers')
 @ApiBearerAuth('access-token')
@@ -116,6 +128,10 @@ export class PassengersController {
   @ApiNotFoundResponse({ description: 'Passenger not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  @ApiConflictResponse({
+    type: WouldBreakReservationsDto,
+    description: 'Deactivating the passenger would leave active reservations behind.'
+  })
   update(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,
@@ -132,6 +148,10 @@ export class PassengersController {
   @ApiNotFoundResponse({ description: 'Passenger not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  @ApiConflictResponse({
+    type: WouldBreakReservationsDto,
+    description: 'Deactivating the passenger would leave active reservations behind.'
+  })
   replace(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,

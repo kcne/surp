@@ -10,6 +10,8 @@ import type { UpdateLineDtoDirection } from './updateLineDtoDirection';
 import type { UpdateLineDtoDirectionMode } from './updateLineDtoDirectionMode';
 
 export interface UpdateLineDto {
+  /** Confirms a change previously refused with WOULD_BREAK_RESERVATIONS. */
+  confirmBreakingChange?: boolean;
   name?: string;
   departureStationId?: string;
   arrivalStationId?: string;

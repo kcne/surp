@@ -10,9 +10,10 @@ import {
   ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ConfirmBreakingChangeDto } from '../../invariants/dto/confirm-breaking-change.dto';
 import { LineStopInputDto } from './line-stop.dto';
 
-export class UpdateLineDto {
+export class UpdateLineDto extends ConfirmBreakingChangeDto {
   @ApiPropertyOptional({ example: 'Central - North Updated' })
   @IsOptional()
   @IsString()

@@ -8,6 +8,8 @@
 import type { CreateRideExceptionDtoType } from './createRideExceptionDtoType';
 
 export interface CreateRideExceptionDto {
+  /** Confirms a change previously refused with WOULD_BREAK_RESERVATIONS. */
+  confirmBreakingChange?: boolean;
   date: string;
   type: CreateRideExceptionDtoType;
   departureTime?: string;
