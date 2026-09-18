@@ -28,6 +28,18 @@ describe('backup.fresh', () => {
     });
   });
 
+  it('treats a heartbeat exactly at the 26 hour limit as stale', async () => {
+    const result = await checkBackupFreshness(configured, now, async () =>
+      JSON.stringify({ completedAt: '2026-09-16T10:00:00.000Z' })
+    );
+    expect(result.violations[0].detail).toMatchObject({ reason: 'STALE', ageHours: 26 });
+  });
+
+  it('reports a heartbeat that is valid JSON but not an object', async () => {
+    const result = await checkBackupFreshness(configured, now, async () => 'null');
+    expect(result.violations[0].detail).toEqual({ reason: 'INVALID_HEARTBEAT' });
+  });
+
   it('reports missing configuration instead of silently skipping the check', async () => {
     const result = await checkBackupFreshness({}, now);
     expect(result.violations[0].detail).toEqual({ reason: 'NOT_CONFIGURED' });

@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { InvariantRunnerService, newlyViolatedResults } from './invariant-runner.service';
 import { InvariantResultDto } from './dto/invariant.response.dto';
 
@@ -82,22 +83,50 @@ describe('InvariantRunnerService', () => {
     return { service, prisma, invariants, email };
   }
 
+  /** The update that carries the run's outcome, as opposed to its alert state. */
+  const outcomeUpdate = (prisma: { invariantRun: { update: jest.Mock } }) =>
+    prisma.invariantRun.update.mock.calls[0][0].data;
+
+  it('claims the day before running any check', async () => {
+    const { service, prisma, invariants } = setup(undefined, []);
+
+    await service.runDaily();
+
+    expect(prisma.invariantRun.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'RUNNING', tenantId: 'tenant-1' })
+      })
+    );
+    const claimOrder = prisma.invariantRun.create.mock.invocationCallOrder[0];
+    expect(claimOrder).toBeLessThan(invariants.checkAll.mock.invocationCallOrder[0]);
+  });
+
+  it('skips a tenant another replica has already claimed for today', async () => {
+    const { service, prisma, invariants } = setup(undefined, []);
+    prisma.invariantRun.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('claimed', { code: 'P2002', clientVersion: 'test' })
+    );
+
+    await expect(service.runDaily()).resolves.toBeUndefined();
+
+    expect(invariants.checkAll).not.toHaveBeenCalled();
+    expect(prisma.ticket.create).not.toHaveBeenCalled();
+  });
+
   it('stores the run and sends both channels on the first new violation', async () => {
     const current = [result('reservation.reachable', ['one'])];
     const { service, prisma, email } = setup(undefined, current);
 
     await service.runDaily();
 
-    expect(prisma.invariantRun.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'COMPLETED', totalViolationCount: 1 })
-      })
+    expect(outcomeUpdate(prisma)).toEqual(
+      expect.objectContaining({ status: 'COMPLETED', totalViolationCount: 1 })
     );
     expect(prisma.ticket.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ category: 'BUG', status: 'OPEN' }) })
     );
-    expect(email.send).toHaveBeenCalledWith('Prevoznik', ['admin@example.com'], current);
-    expect(prisma.invariantRun.update).toHaveBeenCalledWith(
+    expect(email.send).toHaveBeenCalledWith('Prevoznik', ['admin@example.com'], current, true);
+    expect(prisma.invariantRun.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ ticketId: 'ticket-1' }) })
     );
   });
@@ -108,21 +137,46 @@ describe('InvariantRunnerService', () => {
 
     await service.runDaily();
 
-    expect(prisma.invariantRun.create).toHaveBeenCalledTimes(1);
     expect(prisma.ticket.create).not.toHaveBeenCalled();
     expect(email.send).not.toHaveBeenCalled();
-    expect(prisma.invariantRun.update).not.toHaveBeenCalled();
+    expect(prisma.invariantRun.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes its baseline only from runs whose alerts went out', async () => {
+    const { service, prisma } = setup(undefined, [result('reservation.reachable', ['one'])]);
+
+    await service.runDaily();
+
+    expect(prisma.invariantRun.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'COMPLETED', alertError: null })
+      })
+    );
+  });
+
+  it('tells admins the details are on the run when the ticket could not be opened', async () => {
+    const current = [result('reservation.reachable', ['one'])];
+    const { service, prisma, email } = setup(undefined, current);
+    prisma.ticket.create.mockRejectedValue(new Error('ticket table locked'));
+
+    await service.runDaily();
+
+    expect(email.send).toHaveBeenCalledWith('Prevoznik', ['admin@example.com'], current, false);
+    expect(prisma.invariantRun.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ alertError: 'ticket: ticket table locked' })
+      })
+    );
   });
 
   it('stores a failed run when an invariant throws', async () => {
     const { service, prisma, invariants } = setup(undefined, []);
-    const failure = new Error('database timeout');
-    invariants.checkAll.mockRejectedValue(failure);
+    invariants.checkAll.mockRejectedValue(new Error('database timeout'));
 
     await service.runDaily();
 
-    expect(prisma.invariantRun.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ status: 'FAILED', error: 'database timeout', results: [] })
-    });
+    expect(outcomeUpdate(prisma)).toEqual(
+      expect.objectContaining({ status: 'FAILED', error: 'database timeout' })
+    );
   });
 });

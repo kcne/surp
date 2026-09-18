@@ -16,6 +16,20 @@ import { INVARIANTS, findInvariant } from './registry';
  */
 const DEFAULT_WINDOW_DAYS = 30;
 
+/**
+ * Who a check runs as. Checks need a tenant and someone to attribute a repair
+ * to, and nothing else from a token — the scheduled runner has no request
+ * behind it, so taking the whole payload would leave it fabricating one.
+ */
+export interface InvariantScope {
+  tenantId: string;
+  actorId: string;
+}
+
+export function scopeOf(auth: AccessTokenPayload): InvariantScope {
+  return { tenantId: auth.tenantId, actorId: auth.sub };
+}
+
 @Injectable()
 export class InvariantsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -27,8 +41,8 @@ export class InvariantsService {
    * they are not on a request path, and a single check that fails should not
    * arrive tangled with three others' queries.
    */
-  async checkAll(auth: AccessTokenPayload, windowDays = DEFAULT_WINDOW_DAYS): Promise<InvariantReportDto> {
-    const ctx = this.contextFor(auth, windowDays);
+  async checkAll(scope: InvariantScope, windowDays = DEFAULT_WINDOW_DAYS): Promise<InvariantReportDto> {
+    const ctx = this.contextFor(scope, windowDays);
     const results: InvariantResultDto[] = [];
 
     for (const invariant of INVARIANTS) {
@@ -46,12 +60,12 @@ export class InvariantsService {
   }
 
   async checkOne(
-    auth: AccessTokenPayload,
+    scope: InvariantScope,
     key: string,
     windowDays = DEFAULT_WINDOW_DAYS
   ): Promise<InvariantResultDto> {
     const invariant = this.requireInvariant(key);
-    const ctx = this.contextFor(auth, windowDays);
+    const ctx = this.contextFor(scope, windowDays);
 
     return toResult(invariant, await invariant.check(ctx));
   }
@@ -62,7 +76,7 @@ export class InvariantsService {
    * the failure this whole area exists to prevent.
    */
   async repair(
-    auth: AccessTokenPayload,
+    scope: InvariantScope,
     key: string,
     windowDays = DEFAULT_WINDOW_DAYS
   ): Promise<InvariantRepairResultDto> {
@@ -74,7 +88,7 @@ export class InvariantsService {
       );
     }
 
-    const outcome = await invariant.repair(this.contextFor(auth, windowDays));
+    const outcome = await invariant.repair(this.contextFor(scope, windowDays));
 
     // A second context on purpose: checks are free to cache the slice of data
     // they read against the one they were given, and re-checking through the
@@ -84,7 +98,7 @@ export class InvariantsService {
       key,
       repairedCount: outcome.repairedCount,
       skippedCount: outcome.skippedCount,
-      remaining: toResult(invariant, await invariant.check(this.contextFor(auth, windowDays)))
+      remaining: toResult(invariant, await invariant.check(this.contextFor(scope, windowDays)))
     };
   }
 
@@ -98,10 +112,10 @@ export class InvariantsService {
     return invariant;
   }
 
-  private contextFor(auth: AccessTokenPayload, windowDays: number): InvariantContext {
+  private contextFor(scope: InvariantScope, windowDays: number): InvariantContext {
     return {
-      tenantId: auth.tenantId,
-      actorId: auth.sub,
+      tenantId: scope.tenantId,
+      actorId: scope.actorId,
       prisma: this.prisma,
       windowDays
     };

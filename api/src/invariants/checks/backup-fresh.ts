@@ -19,9 +19,9 @@ export async function checkBackupFreshness(
     return result('Provera rezervne kopije nije podesena na serveru.', { reason: 'NOT_CONFIGURED' });
   }
 
-  let heartbeat: BackupHeartbeat;
+  let parsed: unknown;
   try {
-    heartbeat = JSON.parse(await readHeartbeat(config)) as BackupHeartbeat;
+    parsed = JSON.parse(await readHeartbeat(config));
   } catch (error) {
     return result('Poslednja uspesna rezervna kopija ne moze da se procita.', {
       reason: 'UNREADABLE_HEARTBEAT',
@@ -29,6 +29,15 @@ export async function checkBackupFreshness(
     });
   }
 
+  // `null` and arrays survive JSON.parse, and a property read on `null` would
+  // throw out of the check and take the rest of checkAll down with it.
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return result('Zapis o poslednjoj rezervnoj kopiji nije ispravan objekat.', {
+      reason: 'INVALID_HEARTBEAT'
+    });
+  }
+
+  const heartbeat = parsed as BackupHeartbeat;
   if (typeof heartbeat.completedAt !== 'string') {
     return result('Zapis o poslednjoj rezervnoj kopiji nema ispravno vreme zavrsetka.', {
       reason: 'INVALID_HEARTBEAT'
@@ -44,7 +53,7 @@ export async function checkBackupFreshness(
     });
   }
 
-  if (ageMs <= MAX_BACKUP_AGE_MS) {
+  if (ageMs < MAX_BACKUP_AGE_MS) {
     return { scannedCount: 1, violations: [] };
   }
 

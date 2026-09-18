@@ -100,6 +100,7 @@ enum MarketingLeadDeparturesPerDay {
 }
 
 enum InvariantRunStatus {
+  RUNNING
   COMPLETED
   FAILED
 }
@@ -168,12 +169,21 @@ model Tenant {
   @@index([isActive])
 }
 
+/**
+ * One scheduled pass of every invariant for one tenant.
+ *
+ * The row is claimed before the checks run, not written after them: `runDate`
+ * is unique per tenant, so when the API runs on more than one replica the
+ * second replica's insert loses and that replica skips the tenant instead of
+ * duplicating the run, the BUG ticket and the email.
+ */
 model InvariantRun {
   id                  String             @id @default(cuid())
   tenantId            String
+  runDate             DateTime           @db.Date
   status              InvariantRunStatus
   startedAt           DateTime
-  completedAt         DateTime
+  completedAt         DateTime?
   windowDays          Int                @default(30)
   invariantCount      Int                @default(0)
   violatedCount       Int                @default(0)
@@ -186,6 +196,7 @@ model InvariantRun {
   createdAt           DateTime           @default(now())
   tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, runDate])
   @@index([tenantId, completedAt])
   @@index([status, completedAt])
 }

@@ -18,6 +18,13 @@ import { loadPairs, loadStationNames, stationNamer } from './tenant-lookups';
 
 export interface ReturnRouteGapItem {
   pairKey: string;
+  /**
+   * The direction this gap is about. Both directions of one pair can be
+   * unreachable at once, and without this the two gaps share an identity — the
+   * daily runner would then read the second one as already reported and send no
+   * alert for it.
+   */
+  lineId: string;
   lineName: string;
   oppositeLineName: string;
   unreachableStationNames: string[];
@@ -44,6 +51,7 @@ export async function findReturnRouteGaps(
 
       gaps.push({
         pairKey,
+        lineId: line.id,
         lineName: name,
         oppositeLineName: otherName,
         unreachableStationNames: unreachable.map(toName)
@@ -68,7 +76,7 @@ export const terminiReachable: Invariant = {
       scannedCount: scannedPairCount,
       violations: gaps.map((gap) => ({
         subjectType: 'line-pair' as const,
-        subjectId: gap.pairKey,
+        subjectId: `${gap.pairKey}:${gap.lineId}`,
         summary: `Linija "${gap.lineName}" zavrsava na stanici koju "${gap.oppositeLineName}" ne dodiruje: ${gap.unreachableStationNames.join(', ')}.`,
         detail: { ...gap },
         canRepair: false

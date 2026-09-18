@@ -8,7 +8,17 @@ export class InvariantAlertEmailService {
 
   constructor(private readonly config: ConfigService) {}
 
-  async send(tenantName: string, recipients: string[], results: InvariantResultDto[]): Promise<boolean> {
+  /**
+   * `ticketOpened` decides the closing line. Ticket creation and this email are
+   * two independent deliveries, and telling admins to open a ticket that failed
+   * to be created sends them looking for something that is not there.
+   */
+  async send(
+    tenantName: string,
+    recipients: string[],
+    results: InvariantResultDto[],
+    ticketOpened: boolean
+  ): Promise<boolean> {
     const apiKey = this.config.get<string>('RESEND_API_KEY');
     const from = this.config.get<string>('RESEND_FROM');
     if (!apiKey || !from || recipients.length === 0) {
@@ -24,6 +34,9 @@ export class InvariantAlertEmailService {
 
     try {
       const lines = results.map((result) => `${result.title}: ${result.violationCount}`);
+      const closing = ticketOpened
+        ? 'Detalji su otvoreni kao BUG tiket u SURP-u.'
+        : 'Detalji su zabelezeni uz rezultat dnevne provere u SURP-u.';
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -36,11 +49,11 @@ export class InvariantAlertEmailService {
             '',
             ...lines,
             '',
-            'Detalji su otvoreni kao BUG tiket u SURP-u.'
+            closing
           ].join('\n'),
           html: `<p>Dnevna provera za <strong>${escapeHtml(tenantName)}</strong> pronasla je novu promenu:</p><ul>${results
             .map((result) => `<li>${escapeHtml(result.title)}: ${result.violationCount}</li>`)
-            .join('')}</ul><p>Detalji su otvoreni kao BUG tiket u SURP-u.</p>`
+            .join('')}</ul><p>${escapeHtml(closing)}</p>`
         }),
         signal: controller.signal
       });

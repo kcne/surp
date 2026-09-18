@@ -4,6 +4,12 @@ export class ReturnRouteGapItemDto {
   @ApiProperty({ example: 'pair-abc' })
   pairKey!: string;
 
+  @ApiProperty({
+    example: 'line-abc',
+    description: 'The direction this gap is about. Both directions of one pair can be reported at once.'
+  })
+  lineId!: string;
+
   @ApiProperty({ example: 'Novi Sad - Istanbul Balbus' })
   lineName!: string;
 

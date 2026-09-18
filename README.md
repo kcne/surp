@@ -124,14 +124,14 @@ Required environment variables:
 12. `MARKETING_LEADS_EMAIL_TO=<lead-recipient-email>`
 13. `INVARIANT_SCHEDULE_ENABLED=true` (set to `false` to disable daily checks and alerts)
 14. `BACKUP_FRESHNESS_CHECK_ENABLED=true` (set to `false` only where backup storage is intentionally unavailable)
-15. `BACKUP_S3_ENDPOINT=<backup-bucket-endpoint>`
+15. `BACKUP_S3_ENDPOINT=<backup-bucket-endpoint>` (must be `https://` in production; the signed request carries the backup key)
 16. `BACKUP_S3_REGION=auto`
 17. `BACKUP_S3_BUCKET=<backup-bucket-name>`
 18. `BACKUP_S3_ACCESS_KEY_ID=<read-only-backup-key-id>`
 19. `BACKUP_S3_SECRET_ACCESS_KEY=<read-only-backup-secret>`
 
 The API backup credentials only need `GetObject` for `latest.json`. Keep them separate from both the backup writer credentials and the ticket-image bucket credentials.
-The invariant job runs daily at 02:00 UTC for every active tenant.
+The invariant job runs daily at 02:00 UTC for every active tenant. Each tenant's run is claimed under a unique `(tenantId, runDate)` row before the checks start, so running the API on more than one replica does not duplicate the run, the BUG ticket or the email.
 
 ### UI service settings
 
