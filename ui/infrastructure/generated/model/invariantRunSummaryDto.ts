@@ -5,12 +5,14 @@
  * Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.
  * OpenAPI spec version: 0.1.0
  */
-import type { ReturnRouteGapItemDto } from './returnRouteGapItemDto';
+import type { InvariantRunSummaryDtoTrigger } from './invariantRunSummaryDtoTrigger';
 
-export interface ReturnRouteGapReportDto {
-  /** @minimum 0 */
-  scannedPairCount: number;
-  /** @minimum 0 */
-  gapCount: number;
-  items: ReturnRouteGapItemDto[];
+export interface InvariantRunSummaryDto {
+  id: string;
+  trigger: InvariantRunSummaryDtoTrigger;
+  startedAt: string;
+  /** When the run finished. Absent while a run is still going. */
+  completedAt?: string;
+  /** Days ahead the time-windowed checks covered. */
+  windowDays: number;
 }

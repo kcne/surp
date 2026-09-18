@@ -6,12 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ReturnRouteGapItemDto {
-  pairKey: string;
-  /** The direction this gap is about. Both directions of one pair can be reported at once. */
-  lineId: string;
-  lineName: string;
-  oppositeLineName: string;
-  /** Terminus stations of this line that appear nowhere on the opposite direction, so return tickets to or from them cannot be booked. */
-  unreachableStationNames: string[];
-}
+/**
+ * Check-specific fields backing the detail row in Settings.
+ */
+export type InvariantHistoryViolationDtoDetail = { [key: string]: unknown };

@@ -88,6 +88,7 @@ describe('InvariantsService', () => {
     key,
     title: `title ${key}`,
     description: `description ${key}`,
+    manualAdvice: `advice ${key}`,
     severity: 'warning',
     check: jest.fn(async () => result),
     ...(repair ? { repair } : {})
@@ -193,6 +194,7 @@ describe('InvariantsService', () => {
       key: 'a.fixable',
       title: 'title',
       description: 'description',
+      manualAdvice: 'advice',
       severity: 'critical',
       check: jest.fn(async (): Promise<CheckResult> => ({
         violations: repaired ? [violation({ canRepair: false })] : [violation(), violation()],

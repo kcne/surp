@@ -313,6 +313,8 @@ export const reservationReachable: Invariant = {
   title: 'Rezervacija se vidi na svom polasku',
   description:
     'Rezervacija se vezuje za polazak preko vremena polaska, a to vreme se racuna iz prve stanice na ruti. Kada se ruta ili raspored promene, polazak dobija novo vreme i rezervacija nestaje sa svih spiskova, iako je i dalje u bazi i i dalje drzi sediste.',
+  manualAdvice:
+    'Popravka vraca samo rezervacije za koje tog dana postoji tacno jedan polazak. Za ostale otvorite taj datum u voznjama: ako polaska nema, napravite ga ili pozovite putnika; ako ih ima vise, prebacite rezervaciju rucno na onaj koji je putnik kupio; ako je autobus pun, povecajte kapacitet ili ponudite drugi termin.',
   severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

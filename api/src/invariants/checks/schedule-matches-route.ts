@@ -142,13 +142,23 @@ export async function realignDriftedSchedules(ctx: InvariantContext): Promise<Re
   return { drifted, estimatedTimeCount, reorderedScheduleCount };
 }
 
-const DAY_LABELS = ['nedeljom', 'ponedeljkom', 'utorkom', 'sredom', 'cetvrtkom', 'petkom', 'subotom'];
+const DAY_LABELS = [
+  'nedeljom',
+  'ponedeljkom',
+  'utorkom',
+  'sredom',
+  'cetvrtkom',
+  'petkom',
+  'subotom'
+];
 
 export const scheduleMatchesRoute: Invariant = {
   key: 'schedule.matchesRoute',
   title: 'Raspored voznje prati rutu linije',
   description:
     'Raspored voznje drzi svoju kopiju liste stanica. Kada se stanica doda ili ukloni sa linije, ta kopija ostaje stara i voznja ne moze da se izmeni dok se ne uskladi.',
+  manualAdvice:
+    'Popravka prepisuje raspored po ruti i zadrzava vremena stanica koje na ruti ostaju. Stanice koje su na ruti nove ostaju bez vremena, pa ih posle popravke upisite rucno.',
   severity: 'warning',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

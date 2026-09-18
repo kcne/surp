@@ -59,7 +59,8 @@ describe('InvariantRunnerService', () => {
       invariantRun: {
         findFirst: jest.fn().mockResolvedValue(previousResults ? { results: previousResults } : null),
         create: jest.fn().mockResolvedValue({ id: 'run-1' }),
-        update: jest.fn().mockResolvedValue({})
+        update: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 })
       },
       ticket: { create: jest.fn().mockResolvedValue({ id: 'ticket-1' }) }
     };
@@ -120,14 +121,20 @@ describe('InvariantRunnerService', () => {
     await service.runDaily();
 
     expect(outcomeUpdate(prisma)).toEqual(
-      expect.objectContaining({ status: 'COMPLETED', totalViolationCount: 1 })
+      expect.objectContaining({
+        status: 'COMPLETED',
+        totalViolationCount: 1,
+        alertError: 'pending: alert delivery not completed'
+      })
     );
     expect(prisma.ticket.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ category: 'BUG', status: 'OPEN' }) })
     );
     expect(email.send).toHaveBeenCalledWith('Prevoznik', ['admin@example.com'], current, true);
     expect(prisma.invariantRun.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ ticketId: 'ticket-1' }) })
+      expect.objectContaining({
+        data: expect.objectContaining({ ticketId: 'ticket-1', alertError: null })
+      })
     );
   });
 
@@ -150,6 +157,33 @@ describe('InvariantRunnerService', () => {
     expect(prisma.invariantRun.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ status: 'COMPLETED', alertError: null })
+      })
+    );
+  });
+
+  // A manual run from Settings alerts nobody. Counting it as the baseline
+  // would let an admin pressing "Proveri sve" cancel that night's email about
+  // everything that run happened to see.
+  it('ignores manual runs when deciding what admins have been told', async () => {
+    const { service, prisma } = setup(undefined, [result('reservation.reachable', ['one'])]);
+
+    await service.runDaily();
+
+    expect(prisma.invariantRun.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ trigger: 'SCHEDULED' })
+      })
+    );
+  });
+
+  it('records the nightly run as scheduled, so the page can tell it apart', async () => {
+    const { service, prisma } = setup(undefined, [result('reservation.reachable', ['one'])]);
+
+    await service.runDaily();
+
+    expect(prisma.invariantRun.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ trigger: 'SCHEDULED' })
       })
     );
   });
@@ -179,7 +213,20 @@ describe('InvariantRunnerService', () => {
     // a delivery that failed: recording it as an alert error would reopen this
     // same ticket every night.
     expect(prisma.invariantRun.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ alertError: undefined }) })
+      expect.objectContaining({ data: expect.objectContaining({ alertError: null }) })
+    );
+  });
+
+  it('prunes expired run snapshots before querying active tenants', async () => {
+    const { service, prisma } = setup(undefined, []);
+
+    await service.runDaily();
+
+    expect(prisma.invariantRun.deleteMany).toHaveBeenCalledWith({
+      where: { createdAt: { lt: expect.any(Date) } }
+    });
+    expect(prisma.invariantRun.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
+      prisma.tenant.findMany.mock.invocationCallOrder[0]
     );
   });
 

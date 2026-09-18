@@ -22,15 +22,24 @@ describe('reservation.groupPresent', () => {
     prismaMock.reservation.findMany.mockResolvedValue([]);
   });
 
-  it('scans every reservation in the tenant and selects only missing groups', async () => {
+  it('scans active reservations from today onward and selects only missing groups', async () => {
     await findReservationsWithoutGroup(ctx);
 
     expect(prismaMock.reservation.count).toHaveBeenCalledWith({
-      where: { tenantId: 'tenant-1' }
+      where: {
+        tenantId: 'tenant-1',
+        status: 'ACTIVE',
+        travelDate: { gte: expect.any(Date) }
+      }
     });
     expect(prismaMock.reservation.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { tenantId: 'tenant-1', groupId: null }
+        where: {
+          tenantId: 'tenant-1',
+          status: 'ACTIVE',
+          travelDate: { gte: expect.any(Date) },
+          groupId: null
+        }
       })
     );
   });

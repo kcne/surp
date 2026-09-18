@@ -5,12 +5,11 @@
  * Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.
  * OpenAPI spec version: 0.1.0
  */
-import type { PairDriftItemDto } from './pairDriftItemDto';
 
-export interface PairDriftReportDto {
-  /** @minimum 0 */
-  scannedPairCount: number;
-  /** @minimum 0 */
-  driftedPairCount: number;
-  items: PairDriftItemDto[];
-}
+export type InvariantSummaryItemDtoSeverity = typeof InvariantSummaryItemDtoSeverity[keyof typeof InvariantSummaryItemDtoSeverity];
+
+
+export const InvariantSummaryItemDtoSeverity = {
+  critical: 'critical',
+  warning: 'warning',
+} as const;

@@ -1,4 +1,5 @@
-import { formatDateOnly } from '../../rides/ride-instance-materialization';
+import { ReservationStatus } from '@prisma/client';
+import { formatDateOnly, utcDateOf } from '../../rides/ride-instance-materialization';
 import { CheckResult, Invariant, InvariantContext } from '../invariant.types';
 
 export interface ReservationWithoutGroupItem {
@@ -14,17 +15,24 @@ export interface ReservationWithoutGroupItem {
 
 /**
  * Finds legacy or incorrectly-created reservations that cannot receive a
- * driver-facing G1/G2/... label. Unlike the time-windowed operational checks,
- * this scans every status and date because the database invariant applies to
- * every reservation row, including history.
+ * driver-facing G1/G2/... label. Only active reservations from today onward
+ * are actionable: recreating a cancelled or historical reservation would make
+ * a duplicate booking rather than repair one.
  */
 export async function findReservationsWithoutGroup(
   ctx: InvariantContext
 ): Promise<{ items: ReservationWithoutGroupItem[]; scannedReservationCount: number }> {
+  const today = utcDateOf(formatDateOnly(new Date())!);
+  const activeFuture = {
+    tenantId: ctx.tenantId,
+    status: ReservationStatus.ACTIVE,
+    travelDate: { gte: today }
+  };
+
   const [scannedReservationCount, reservations] = await Promise.all([
-    ctx.prisma.reservation.count({ where: { tenantId: ctx.tenantId } }),
+    ctx.prisma.reservation.count({ where: activeFuture }),
     ctx.prisma.reservation.findMany({
-      where: { tenantId: ctx.tenantId, groupId: null },
+      where: { ...activeFuture, groupId: null },
       select: {
         id: true,
         travelDate: true,
@@ -61,7 +69,9 @@ export const reservationGroupPresent: Invariant = {
   key: 'reservation.groupPresent',
   title: 'Svaka rezervacija pripada grupi',
   description:
-    'Rezervacija bez grupe nema oznaku G1, G2 i tako dalje na mapi sedista i u spisku putnika. Ova provera obuhvata i istorijske i otkazane rezervacije.',
+    'Aktivna buduca rezervacija bez grupe nema oznaku G1, G2 i tako dalje na mapi sedista i u spisku putnika.',
+  manualAdvice:
+    'Ove aktivne rezervacije su upisane pre nego sto su grupe uvedene. Ako rezervacija treba da bude deo povratne karte, otkazite je i upisite ponovo kao povratnu; jednosmerne mozete ostaviti kako jesu, njima samo nedostaje oznaka grupe na mapi sedista.',
   severity: 'warning',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

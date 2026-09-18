@@ -1,15 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { Settings as SettingsIcon, ShieldAlert, Upload } from "lucide-react"
+import { ShieldCheck, Settings as SettingsIcon, ShieldAlert, Upload } from "lucide-react"
 import { Layout } from "@/components/layout/Layout"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { LinePairDriftCard } from "@/components/settings/LinePairDriftCard"
-import { OrphanedReservationsCard } from "@/components/settings/OrphanedReservationsCard"
-import { ReturnRouteGapCard } from "@/components/settings/ReturnRouteGapCard"
-import { ScheduleDriftCard } from "@/components/settings/ScheduleDriftCard"
 import { useAuthStore } from "@/stores/authStore"
 
 export default function SettingsPage() {
@@ -51,14 +47,30 @@ export default function SettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-            {/* Lost reservations first: they are passengers nobody can see
-                today, and every route repair below can strand more of them. */}
-            <OrphanedReservationsCard />
-            {/* Pair sync next: it changes routes, which is what makes
-                schedules drift in the first place. */}
-            <LinePairDriftCard />
-            <ReturnRouteGapCard />
-            <ScheduleDriftCard />
+
+            {/* One page for every check. Four of these used to be their own card
+                here, each with its own "Proveri" button; at sixteen provera that
+                does not fit on a screen, let alone in a head. */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  Ispravnost podataka
+                </CardTitle>
+                <CardDescription>
+                  Izgubljene rezervacije, dupla sedista, rute i rasporedi koji se razilaze —
+                  sve provere na jednom mestu, sa istorijom i popravkama tamo gde su bezbedne.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild>
+                  <Link href="/settings/data-integrity">
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    Otvori provere podataka
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         ) : (
           <Alert>

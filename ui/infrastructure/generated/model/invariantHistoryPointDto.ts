@@ -5,12 +5,14 @@
  * Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.
  * OpenAPI spec version: 0.1.0
  */
-import type { OrphanedReservationItemDto } from './orphanedReservationItemDto';
+import type { InvariantHistoryPointDtoTrigger } from './invariantHistoryPointDtoTrigger';
 
-export interface OrphanedReservationRepairResultDto {
-  repairedCount: number;
-  seatChangedCount: number;
-  /** Orphans left untouched because no single instance could claim them. */
-  skippedCount: number;
-  items: OrphanedReservationItemDto[];
+export interface InvariantHistoryPointDto {
+  runId: string;
+  trigger: InvariantHistoryPointDtoTrigger;
+  checkedAt: string;
+  /** Whether the run covered this check. A run predating the check did not. */
+  checked: boolean;
+  violationCount: number;
+  scannedCount: number;
 }

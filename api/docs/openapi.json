@@ -1567,9 +1567,9 @@
         ]
       }
     },
-    "/maintenance/schedule-drift": {
+    "/maintenance/invariants/summary": {
       "get": {
-        "operationId": "MaintenanceController_getScheduleDrift",
+        "operationId": "MaintenanceController_getInvariantSummary",
         "parameters": [
           {
             "name": "X-Tenant-Slug",
@@ -1587,7 +1587,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ScheduleDriftReportDto"
+                  "$ref": "#/components/schemas/InvariantSummaryDto"
                 }
               }
             }
@@ -1604,272 +1604,14 @@
             "access-token": []
           }
         ],
-        "summary": "Report ride day schedules that no longer match their line route in the current tenant.",
+        "summary": "Report every data integrity check as of the last stored run, with the date each failing check started failing. Runs nothing: opening the page must not start sixteen table scans, and the honest answer is what the last check found plus when it ran.",
         "tags": [
           "Maintenance"
         ]
       }
     },
-    "/maintenance/schedule-drift/realign": {
+    "/maintenance/invariants/check": {
       "post": {
-        "operationId": "MaintenanceController_realignSchedules",
-        "parameters": [
-          {
-            "name": "X-Tenant-Slug",
-            "in": "header",
-            "description": "Tenant slug that must match authenticated token tenant.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScheduleRealignResultDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid access token."
-          },
-          "403": {
-            "description": "Insufficient role for this resource."
-          }
-        },
-        "security": [
-          {
-            "access-token": []
-          }
-        ],
-        "summary": "Rewrite drifted ride day schedules to match their line route. Existing station times are preserved by station; stations new to a route are created without a time.",
-        "tags": [
-          "Maintenance"
-        ]
-      }
-    },
-    "/maintenance/pair-drift": {
-      "get": {
-        "operationId": "MaintenanceController_getPairDrift",
-        "parameters": [
-          {
-            "name": "X-Tenant-Slug",
-            "in": "header",
-            "description": "Tenant slug that must match authenticated token tenant.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PairDriftReportDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid access token."
-          },
-          "403": {
-            "description": "Insufficient role for this resource."
-          }
-        },
-        "security": [
-          {
-            "access-token": []
-          }
-        ],
-        "summary": "Report paired lines whose two directions no longer carry the same intermediate stops.",
-        "tags": [
-          "Maintenance"
-        ]
-      }
-    },
-    "/maintenance/pair-drift/sync": {
-      "post": {
-        "operationId": "MaintenanceController_syncPairs",
-        "parameters": [
-          {
-            "name": "X-Tenant-Slug",
-            "in": "header",
-            "description": "Tenant slug that must match authenticated token tenant.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PairSyncResultDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid access token."
-          },
-          "403": {
-            "description": "Insufficient role for this resource."
-          }
-        },
-        "security": [
-          {
-            "access-token": []
-          }
-        ],
-        "summary": "Give both directions of a paired line the same intermediate stops, keeping each direction own endpoints. Pairs whose directions genuinely disagree are skipped.",
-        "tags": [
-          "Maintenance"
-        ]
-      }
-    },
-    "/maintenance/return-route-gaps": {
-      "get": {
-        "operationId": "MaintenanceController_getReturnRouteGaps",
-        "parameters": [
-          {
-            "name": "X-Tenant-Slug",
-            "in": "header",
-            "description": "Tenant slug that must match authenticated token tenant.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReturnRouteGapReportDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid access token."
-          },
-          "403": {
-            "description": "Insufficient role for this resource."
-          }
-        },
-        "security": [
-          {
-            "access-token": []
-          }
-        ],
-        "summary": "Report paired lines where one direction ends at a station the other never calls at, which blocks return tickets through that station. Reported only; placing a terminus onto the opposite route is a routing decision.",
-        "tags": [
-          "Maintenance"
-        ]
-      }
-    },
-    "/maintenance/orphaned-reservations": {
-      "get": {
-        "operationId": "MaintenanceController_getOrphanedReservations",
-        "parameters": [
-          {
-            "name": "X-Tenant-Slug",
-            "in": "header",
-            "description": "Tenant slug that must match authenticated token tenant.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrphanedReservationReportDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid access token."
-          },
-          "403": {
-            "description": "Insufficient role for this resource."
-          }
-        },
-        "security": [
-          {
-            "access-token": []
-          }
-        ],
-        "summary": "Report active reservations in the next 30 days that no ride instance can reach, usually because a route edit moved the instance departure time away from the one stored on the reservation.",
-        "tags": [
-          "Maintenance"
-        ]
-      }
-    },
-    "/maintenance/orphaned-reservations/repair": {
-      "post": {
-        "operationId": "MaintenanceController_repairOrphanedReservations",
-        "parameters": [
-          {
-            "name": "X-Tenant-Slug",
-            "in": "header",
-            "description": "Tenant slug that must match authenticated token tenant.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrphanedReservationRepairResultDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid access token."
-          },
-          "403": {
-            "description": "Insufficient role for this resource."
-          }
-        },
-        "security": [
-          {
-            "access-token": []
-          }
-        ],
-        "summary": "Move unreachable reservations onto the single ride instance that runs on their travel date. Each keeps its seat where that seat is still free, otherwise it takes the lowest free one. Dates with no instance, or with more than one, are left untouched.",
-        "tags": [
-          "Maintenance"
-        ]
-      }
-    },
-    "/maintenance/invariants": {
-      "get": {
         "operationId": "MaintenanceController_checkInvariants",
         "parameters": [
           {
@@ -1888,7 +1630,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InvariantReportDto"
+                  "$ref": "#/components/schemas/InvariantSummaryDto"
                 }
               }
             }
@@ -1905,7 +1647,7 @@
             "access-token": []
           }
         ],
-        "summary": "Run every data integrity check for the current tenant and report them in one shape. Each result carries what was scanned alongside what was wrong, so a clean check is distinguishable from one that examined nothing.",
+        "summary": "Run every data integrity check now and store the result as a manual run, so history and the last-run time reflect it. Returns the same summary the page loads with.",
         "tags": [
           "Maintenance"
         ]
@@ -1913,7 +1655,7 @@
     },
     "/maintenance/invariants/{key}": {
       "get": {
-        "operationId": "MaintenanceController_checkInvariant",
+        "operationId": "MaintenanceController_getInvariant",
         "parameters": [
           {
             "name": "X-Tenant-Slug",
@@ -1940,7 +1682,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InvariantResultDto"
+                  "$ref": "#/components/schemas/InvariantDetailDto"
                 }
               }
             }
@@ -1960,7 +1702,7 @@
             "access-token": []
           }
         ],
-        "summary": "Run a single data integrity check for the current tenant.",
+        "summary": "One check in full: its violations as of the last stored run, each dated to when it first appeared, plus the run-by-run counts behind it. Reads stored runs rather than checking again.",
         "tags": [
           "Maintenance"
         ]
@@ -6912,537 +6654,332 @@
           "intermediateStops"
         ]
       },
-      "ScheduleDriftItemDto": {
-        "type": "object",
-        "properties": {
-          "rideId": {
-            "type": "string",
-            "example": "ride-1"
-          },
-          "rideName": {
-            "type": "string",
-            "example": "Novi Sad - Istanbul Balbus"
-          },
-          "lineId": {
-            "type": "string",
-            "example": "line-1"
-          },
-          "lineName": {
-            "type": "string",
-            "example": "Novi Sad - Istanbul Balbus"
-          },
-          "dayOfWeek": {
-            "type": "number",
-            "example": 1,
-            "minimum": 0,
-            "maximum": 6
-          },
-          "scheduleStationCount": {
-            "type": "number",
-            "example": 20,
-            "description": "Station count currently stored on the day schedule."
-          },
-          "routeStationCount": {
-            "type": "number",
-            "example": 22,
-            "description": "Station count on the line route."
-          },
-          "addedStationNames": {
-            "description": "Station names on the route that the schedule is missing.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "removedStationNames": {
-            "description": "Station names on the schedule that are no longer on the route.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "reorderedStationNames": {
-            "description": "Station names the route moved past one another. Their existing times are kept, so after realignment the schedule may read out of sequence and needs review.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "rideId",
-          "rideName",
-          "lineId",
-          "lineName",
-          "dayOfWeek",
-          "scheduleStationCount",
-          "routeStationCount",
-          "addedStationNames",
-          "removedStationNames",
-          "reorderedStationNames"
-        ]
-      },
-      "ScheduleDriftReportDto": {
-        "type": "object",
-        "properties": {
-          "scannedScheduleCount": {
-            "type": "number",
-            "example": 12,
-            "minimum": 0
-          },
-          "driftedScheduleCount": {
-            "type": "number",
-            "example": 3,
-            "minimum": 0
-          },
-          "affectedRideCount": {
-            "type": "number",
-            "example": 2,
-            "minimum": 0
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ScheduleDriftItemDto"
-            }
-          }
-        },
-        "required": [
-          "scannedScheduleCount",
-          "driftedScheduleCount",
-          "affectedRideCount",
-          "items"
-        ]
-      },
-      "ScheduleRealignResultDto": {
-        "type": "object",
-        "properties": {
-          "realignedScheduleCount": {
-            "type": "number",
-            "example": 3,
-            "minimum": 0,
-            "description": "Day schedules rewritten to match their route."
-          },
-          "affectedRideCount": {
-            "type": "number",
-            "example": 2,
-            "minimum": 0
-          },
-          "estimatedTimeCount": {
-            "type": "number",
-            "example": 4,
-            "minimum": 0,
-            "description": "Station times filled with an estimate rather than a known value. Estimates are a starting point and should be reviewed in the schedule screen."
-          },
-          "reorderedScheduleCount": {
-            "type": "number",
-            "example": 1,
-            "minimum": 0,
-            "description": "Schedules whose stops changed order. Their times were carried over unchanged and may now run backwards, so they need review rather than an estimate."
-          },
-          "items": {
-            "description": "What was repaired.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ScheduleDriftItemDto"
-            }
-          }
-        },
-        "required": [
-          "realignedScheduleCount",
-          "affectedRideCount",
-          "estimatedTimeCount",
-          "reorderedScheduleCount",
-          "items"
-        ]
-      },
-      "PairDriftLineDto": {
+      "InvariantRunSummaryDto": {
         "type": "object",
         "properties": {
           "id": {
             "type": "string",
-            "example": "line-1"
+            "example": "clx9run123"
           },
-          "name": {
+          "trigger": {
             "type": "string",
-            "example": "Novi Sad - Istanbul Balbus"
+            "enum": [
+              "SCHEDULED",
+              "MANUAL"
+            ],
+            "example": "SCHEDULED"
           },
-          "stopCount": {
+          "startedAt": {
+            "type": "string",
+            "example": "2026-09-18T02:00:11.000Z"
+          },
+          "completedAt": {
+            "type": "string",
+            "example": "2026-09-18T02:01:44.000Z",
+            "description": "When the run finished. Absent while a run is still going."
+          },
+          "windowDays": {
             "type": "number",
-            "example": 20,
-            "description": "Intermediate stop count on this direction."
-          },
-          "missingStationNames": {
-            "description": "Stations the other direction has that this one is missing.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "example": 30,
+            "description": "Days ahead the time-windowed checks covered."
           }
         },
         "required": [
           "id",
-          "name",
-          "stopCount",
-          "missingStationNames"
+          "trigger",
+          "startedAt",
+          "windowDays"
         ]
       },
-      "PairDriftItemDto": {
+      "InvariantSummaryItemDto": {
         "type": "object",
         "properties": {
-          "pairKey": {
+          "key": {
             "type": "string",
-            "example": "pair-abc"
+            "example": "reservation.reachable"
           },
-          "outbound": {
-            "$ref": "#/components/schemas/PairDriftLineDto"
-          },
-          "inbound": {
-            "$ref": "#/components/schemas/PairDriftLineDto"
-          },
-          "canAutoSync": {
-            "type": "boolean",
-            "example": true,
-            "description": "True when one direction is simply missing stops the other has, which can be synced automatically."
-          },
-          "conflictReason": {
+          "title": {
             "type": "string",
-            "nullable": true,
-            "description": "Why the pair cannot be synced automatically, when it cannot."
-          }
-        },
-        "required": [
-          "pairKey",
-          "outbound",
-          "inbound",
-          "canAutoSync",
-          "conflictReason"
-        ]
-      },
-      "PairDriftReportDto": {
-        "type": "object",
-        "properties": {
-          "scannedPairCount": {
-            "type": "number",
-            "example": 5,
-            "minimum": 0
+            "example": "Rezervacija se vidi na svom polasku"
           },
-          "driftedPairCount": {
-            "type": "number",
-            "example": 2,
-            "minimum": 0
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PairDriftItemDto"
-            }
-          }
-        },
-        "required": [
-          "scannedPairCount",
-          "driftedPairCount",
-          "items"
-        ]
-      },
-      "PairSyncResultDto": {
-        "type": "object",
-        "properties": {
-          "syncedPairCount": {
-            "type": "number",
-            "example": 2,
-            "minimum": 0
-          },
-          "addedStopCount": {
-            "type": "number",
-            "example": 3,
-            "minimum": 0,
-            "description": "Stops added across both directions."
-          },
-          "realignedScheduleCount": {
-            "type": "number",
-            "example": 2,
-            "minimum": 0,
-            "description": "Ride day schedules realigned as a result of the route changes."
-          },
-          "skippedPairCount": {
-            "type": "number",
-            "example": 0,
-            "minimum": 0,
-            "description": "Pairs left untouched because their directions genuinely disagree."
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PairDriftItemDto"
-            }
-          }
-        },
-        "required": [
-          "syncedPairCount",
-          "addedStopCount",
-          "realignedScheduleCount",
-          "skippedPairCount",
-          "items"
-        ]
-      },
-      "ReturnRouteGapItemDto": {
-        "type": "object",
-        "properties": {
-          "pairKey": {
+          "description": {
             "type": "string",
-            "example": "pair-abc"
+            "example": "Rezervacija se vezuje za polazak preko vremena polaska..."
           },
-          "lineId": {
+          "manualAdvice": {
             "type": "string",
-            "example": "line-abc",
-            "description": "The direction this gap is about. Both directions of one pair can be reported at once."
+            "example": "Popravka vraca samo rezervacije za koje tog dana postoji tacno jedan polazak...",
+            "description": "What a person should do about what a repair cannot or would not fix."
           },
-          "lineName": {
-            "type": "string",
-            "example": "Novi Sad - Istanbul Balbus"
-          },
-          "oppositeLineName": {
-            "type": "string",
-            "example": "Istanbul Balbus - Novi Sad"
-          },
-          "unreachableStationNames": {
-            "description": "Terminus stations of this line that appear nowhere on the opposite direction, so return tickets to or from them cannot be booked.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "pairKey",
-          "lineId",
-          "lineName",
-          "oppositeLineName",
-          "unreachableStationNames"
-        ]
-      },
-      "ReturnRouteGapReportDto": {
-        "type": "object",
-        "properties": {
-          "scannedPairCount": {
-            "type": "number",
-            "example": 5,
-            "minimum": 0
-          },
-          "gapCount": {
-            "type": "number",
-            "example": 2,
-            "minimum": 0
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReturnRouteGapItemDto"
-            }
-          }
-        },
-        "required": [
-          "scannedPairCount",
-          "gapCount",
-          "items"
-        ]
-      },
-      "OrphanedReservationItemDto": {
-        "type": "object",
-        "properties": {
-          "reservationId": {
-            "type": "string",
-            "example": "reservation-id-123"
-          },
-          "passengerName": {
-            "type": "string",
-            "example": "Marko Markovic"
-          },
-          "passengerPhone": {
-            "type": "string",
-            "example": "+381601234567"
-          },
-          "travelDate": {
-            "type": "string",
-            "example": "2026-09-15"
-          },
-          "rideName": {
-            "type": "string",
-            "example": "Istanbul Balbus - Novi Sad"
-          },
-          "lineName": {
-            "type": "string",
-            "example": "Montenegro - Novi Sad"
-          },
-          "departureStationName": {
-            "type": "string",
-            "example": "Agencija"
-          },
-          "arrivalStationName": {
-            "type": "string",
-            "example": "Novi Sad"
-          },
-          "currentDepartureTime": {
-            "type": "string",
-            "example": "07:45",
-            "description": "Departure time stored on the reservation."
-          },
-          "targetDepartureTime": {
-            "type": "string",
-            "example": "07:30",
-            "nullable": true,
-            "description": "Departure time of the single instance that can claim it, when there is one."
-          },
-          "targetArrivalTime": {
-            "type": "string",
-            "example": "23:00",
-            "nullable": true
-          },
-          "seatNumber": {
-            "type": "number",
-            "example": 12
-          },
-          "targetSeatNumber": {
-            "type": "number",
-            "example": 31,
-            "nullable": true,
-            "description": "Seat the reservation would take after repair. Differs from seatNumber when the original seat was sold again while this reservation was invisible; null when the target instance is full."
-          },
-          "reason": {
+          "severity": {
             "type": "string",
             "enum": [
-              "DEPARTURE_TIME_MOVED",
-              "AMBIGUOUS_INSTANCE",
-              "RIDE_NOT_ACTIVE",
-              "DATE_OUTSIDE_RANGE",
-              "WEEKDAY_NOT_SCHEDULED",
-              "SCHEDULE_TIME_MISSING",
-              "SKIPPED_BY_EXCEPTION",
-              "EXTRA_DEPARTURE_REMOVED"
+              "critical",
+              "warning"
             ],
-            "example": "DEPARTURE_TIME_MOVED",
-            "description": "Which cause of unreachability this is. \"No departure that day\" has several, and an agency can only act once it knows which one."
+            "example": "critical"
           },
-          "reasonLabel": {
-            "type": "string",
-            "example": "Vreme polaska pomereno",
-            "description": "Short Serbian name for the reason, for a table cell."
-          },
-          "reasonAdvice": {
-            "type": "string",
-            "example": "Tog dana voznja saobraca, ali u drugo vreme nego sto rezervacija nosi. Popravka prebacuje rezervaciju na taj polazak i zadrzava sediste kad je slobodno.",
-            "description": "What the agency should do about this row, in Serbian. Usually the advice for the reason, but a row whose target departure has no free seat says so instead."
-          },
-          "canRepair": {
+          "checked": {
             "type": "boolean",
-            "example": true
+            "example": true,
+            "description": "Whether the last stored run covered this check at all. False for a check added since that run, which reports no count rather than a clean one."
           },
-          "offRouteStationNames": {
-            "example": [],
-            "description": "Reservation stations that are no longer on the ride route, if any.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "reservationId",
-          "passengerName",
-          "passengerPhone",
-          "travelDate",
-          "rideName",
-          "lineName",
-          "departureStationName",
-          "arrivalStationName",
-          "currentDepartureTime",
-          "targetDepartureTime",
-          "targetArrivalTime",
-          "seatNumber",
-          "targetSeatNumber",
-          "reason",
-          "reasonLabel",
-          "reasonAdvice",
-          "canRepair",
-          "offRouteStationNames"
-        ]
-      },
-      "OrphanedReservationReportDto": {
-        "type": "object",
-        "properties": {
-          "windowStartDate": {
-            "type": "string",
-            "example": "2026-09-10"
-          },
-          "windowEndDate": {
-            "type": "string",
-            "example": "2026-10-10"
-          },
-          "scannedReservationCount": {
+          "scannedCount": {
             "type": "number",
-            "example": 201,
-            "description": "Active reservations travelling inside the window."
+            "example": 201
           },
-          "orphanedCount": {
+          "violationCount": {
             "type": "number",
             "example": 93
           },
           "repairableCount": {
             "type": "number",
-            "example": 93,
-            "description": "Orphans a single instance can claim."
+            "example": 93
           },
-          "seatChangeCount": {
-            "type": "number",
-            "example": 40,
-            "description": "Repairable orphans whose seat number would change."
+          "hasRepair": {
+            "type": "boolean",
+            "example": true
           },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OrphanedReservationItemDto"
-            }
+          "failingSince": {
+            "type": "string",
+            "example": "2026-09-02T02:01:44.000Z",
+            "description": "Start of the unbroken run of checks in which this invariant has been failing. Absent when it is currently clean. This is the date a postmortem asks for."
+          },
+          "failingSinceIsLowerBound": {
+            "type": "boolean",
+            "example": false,
+            "description": "True when the failing streak continues beyond the retained response window, so failingSince means at least since that instant."
           }
         },
         "required": [
-          "windowStartDate",
-          "windowEndDate",
-          "scannedReservationCount",
-          "orphanedCount",
+          "key",
+          "title",
+          "description",
+          "manualAdvice",
+          "severity",
+          "checked",
+          "scannedCount",
+          "violationCount",
           "repairableCount",
-          "seatChangeCount",
-          "items"
+          "hasRepair",
+          "failingSinceIsLowerBound"
         ]
       },
-      "OrphanedReservationRepairResultDto": {
+      "InvariantSummaryDto": {
         "type": "object",
         "properties": {
-          "repairedCount": {
+          "lastRun": {
+            "description": "The last completed run. Absent when no check has ever run for this tenant.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InvariantRunSummaryDto"
+              }
+            ]
+          },
+          "invariantCount": {
+            "type": "number",
+            "example": 16,
+            "description": "Invariants the system knows about right now."
+          },
+          "violatedCount": {
+            "type": "number",
+            "example": 1,
+            "description": "Invariants reporting at least one violation."
+          },
+          "criticalViolatedCount": {
+            "type": "number",
+            "example": 1,
+            "description": "Violated invariants whose severity is critical. Drives the page-level state."
+          },
+          "totalViolationCount": {
             "type": "number",
             "example": 93
           },
-          "seatChangedCount": {
-            "type": "number",
-            "example": 40
-          },
-          "skippedCount": {
-            "type": "number",
-            "example": 0,
-            "description": "Orphans left untouched because no single instance could claim them."
-          },
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/OrphanedReservationItemDto"
+              "$ref": "#/components/schemas/InvariantSummaryItemDto"
             }
           }
         },
         "required": [
-          "repairedCount",
-          "seatChangedCount",
-          "skippedCount",
+          "invariantCount",
+          "violatedCount",
+          "criticalViolatedCount",
+          "totalViolationCount",
           "items"
+        ]
+      },
+      "InvariantHistoryViolationDto": {
+        "type": "object",
+        "properties": {
+          "subjectType": {
+            "type": "string",
+            "example": "reservation"
+          },
+          "subjectId": {
+            "type": "string",
+            "example": "reservation-id-123"
+          },
+          "summary": {
+            "type": "string",
+            "example": "Marko Markovic, 2026-09-15, polazak 07:45 vise ne postoji."
+          },
+          "detail": {
+            "type": "object",
+            "description": "Check-specific fields backing the detail row in Settings."
+          },
+          "canRepair": {
+            "type": "boolean",
+            "example": true
+          },
+          "firstSeenAt": {
+            "type": "string",
+            "example": "2026-09-02T02:01:44.000Z",
+            "description": "The earliest stored run that reported this exact violation without a clean run in between."
+          },
+          "firstSeenAtIsLowerBound": {
+            "type": "boolean",
+            "example": false,
+            "description": "True when the same violation continues beyond the retained response window, so firstSeenAt is only a lower bound."
+          }
+        },
+        "required": [
+          "subjectType",
+          "subjectId",
+          "summary",
+          "detail",
+          "canRepair",
+          "firstSeenAt",
+          "firstSeenAtIsLowerBound"
+        ]
+      },
+      "InvariantHistoryPointDto": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "example": "clx9run123"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "SCHEDULED",
+              "MANUAL"
+            ],
+            "example": "SCHEDULED"
+          },
+          "checkedAt": {
+            "type": "string",
+            "example": "2026-09-18T02:01:44.000Z"
+          },
+          "checked": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether the run covered this check. A run predating the check did not."
+          },
+          "violationCount": {
+            "type": "number",
+            "example": 93
+          },
+          "scannedCount": {
+            "type": "number",
+            "example": 201
+          }
+        },
+        "required": [
+          "runId",
+          "trigger",
+          "checkedAt",
+          "checked",
+          "violationCount",
+          "scannedCount"
+        ]
+      },
+      "InvariantDetailDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "reservation.reachable"
+          },
+          "title": {
+            "type": "string",
+            "example": "Rezervacija se vidi na svom polasku"
+          },
+          "description": {
+            "type": "string",
+            "example": "Rezervacija se vezuje za polazak preko vremena polaska..."
+          },
+          "manualAdvice": {
+            "type": "string",
+            "example": "Popravka vraca samo rezervacije za koje tog dana postoji..."
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "warning"
+            ],
+            "example": "critical"
+          },
+          "hasRepair": {
+            "type": "boolean",
+            "example": true
+          },
+          "checked": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether the latest stored run covered this check. False when the check was added after that run."
+          },
+          "lastRun": {
+            "description": "The run the violations below come from.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InvariantRunSummaryDto"
+              }
+            ]
+          },
+          "scannedCount": {
+            "type": "number",
+            "example": 201
+          },
+          "violationCount": {
+            "type": "number",
+            "example": 93
+          },
+          "repairableCount": {
+            "type": "number",
+            "example": 93
+          },
+          "violations": {
+            "description": "Violations as of the last run, each dated to when it first appeared.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvariantHistoryViolationDto"
+            }
+          },
+          "history": {
+            "description": "Stored runs, newest first, so a count can be read as a trend rather than a number.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvariantHistoryPointDto"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "title",
+          "description",
+          "manualAdvice",
+          "severity",
+          "hasRepair",
+          "checked",
+          "scannedCount",
+          "violationCount",
+          "repairableCount",
+          "violations",
+          "history"
         ]
       },
       "InvariantViolationDto": {
@@ -7536,47 +7073,6 @@
           "repairableCount",
           "hasRepair",
           "violations"
-        ]
-      },
-      "InvariantReportDto": {
-        "type": "object",
-        "properties": {
-          "checkedAt": {
-            "type": "string",
-            "example": "2026-09-11T01:40:55.000Z"
-          },
-          "windowDays": {
-            "type": "number",
-            "example": 30,
-            "description": "Days ahead the time-windowed checks covered."
-          },
-          "invariantCount": {
-            "type": "number",
-            "example": 4
-          },
-          "violatedCount": {
-            "type": "number",
-            "example": 1,
-            "description": "Invariants reporting at least one violation."
-          },
-          "totalViolationCount": {
-            "type": "number",
-            "example": 93
-          },
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/InvariantResultDto"
-            }
-          }
-        },
-        "required": [
-          "checkedAt",
-          "windowDays",
-          "invariantCount",
-          "violatedCount",
-          "totalViolationCount",
-          "results"
         ]
       },
       "InvariantRepairResultDto": {

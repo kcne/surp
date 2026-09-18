@@ -71,6 +71,8 @@ export const routeStationsActive: Invariant = {
   title: 'Stanice na ruti su aktivne',
   description:
     'Deaktiviranje stanice ne proverava da li je stanica jos uvek deo neke rute. Linija moze i dalje da saobraca preko stanice koja vise nije u operativnoj listi stanica.',
+  manualAdvice:
+    'Ili vratite stanicu medju aktivne, ili je uklonite sa rute linije. Dok je ovako, linija saobraca preko stanice koje nema u operativnoj listi.',
   severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

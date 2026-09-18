@@ -1,9 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InvariantRunStatus, Prisma, TicketCategory, TicketStatus, UserRole } from '@prisma/client';
+import {
+  InvariantRunStatus,
+  InvariantRunTrigger,
+  Prisma,
+  TicketCategory,
+  TicketStatus,
+  UserRole
+} from '@prisma/client';
 import { Cron } from '@nestjs/schedule';
 import { InvariantReportDto, InvariantResultDto } from './dto/invariant.response.dto';
 import { InvariantAlertEmailService } from './invariant-alert-email.service';
+import { invariantResultsForStorage, pruneExpiredInvariantRuns } from './invariant-run-storage';
 import { InvariantsService } from './invariants.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -18,6 +26,7 @@ type MonitoredTenant = {
 };
 
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
+const ALERT_DELIVERY_PENDING = 'pending: alert delivery not completed';
 
 @Injectable()
 export class InvariantRunnerService {
@@ -33,6 +42,10 @@ export class InvariantRunnerService {
   @Cron('0 2 * * *', { name: 'daily-invariant-run', timeZone: 'UTC' })
   async runDaily(): Promise<void> {
     if (!this.config.get<boolean>('INVARIANT_SCHEDULE_ENABLED', true)) return;
+
+    // Retention applies to inactive tenants too; otherwise disabling a tenant
+    // would also disable deletion of its historical passenger snapshots.
+    await pruneExpiredInvariantRuns(this.prisma);
 
     const runDate = utcDay(new Date());
     const tenants = await this.prisma.tenant.findMany({
@@ -77,6 +90,7 @@ export class InvariantRunnerService {
         data: {
           tenantId: tenant.id,
           runDate,
+          trigger: InvariantRunTrigger.SCHEDULED,
           status: InvariantRunStatus.RUNNING,
           startedAt,
           results: []
@@ -123,7 +137,11 @@ export class InvariantRunnerService {
         invariantCount: report.invariantCount,
         violatedCount: report.violatedCount,
         totalViolationCount: report.totalViolationCount,
-        results: report.results as unknown as Prisma.InputJsonValue
+        results: invariantResultsForStorage(report.results),
+        // A completed result is not an alerted result yet. If the process exits
+        // before delivery finishes, this sentinel keeps the run out of the next
+        // baseline so the notification is retried.
+        alertError: changedResults.length > 0 ? ALERT_DELIVERY_PENDING : null
       }
     });
 
@@ -138,7 +156,7 @@ export class InvariantRunnerService {
       data: {
         ticketId,
         emailSentAt,
-        alertError: alertErrors.length > 0 ? alertErrors.join('\n') : undefined
+        alertError: alertErrors.length > 0 ? alertErrors.join('\n') : null
       }
     });
   }
@@ -152,10 +170,19 @@ export class InvariantRunnerService {
    * re-send instead of going quiet. The cost is a repeat alert for anything that
    * did get through on the half of the delivery that worked, which is the
    * cheaper of the two failures.
+   *
+   * Scheduled runs only. A manual run from Settings alerts nobody, so counting
+   * it as the baseline would mean an admin pressing "Proveri sve" quietly
+   * cancels tonight's email about everything that run happened to see.
    */
   private async alertBaseline(tenantId: string): Promise<StoredResult[]> {
     const previous = await this.prisma.invariantRun.findFirst({
-      where: { tenantId, status: InvariantRunStatus.COMPLETED, alertError: null },
+      where: {
+        tenantId,
+        trigger: InvariantRunTrigger.SCHEDULED,
+        status: InvariantRunStatus.COMPLETED,
+        alertError: null
+      },
       orderBy: { completedAt: 'desc' },
       select: { results: true }
     });

@@ -130,7 +130,9 @@ export const reservationSegmentValid: Invariant = {
   key: 'reservation.segmentValid',
   title: 'Deonica rezervacije je i dalje ispravna',
   description:
-    'Polazna stanica mora biti pre dolazne na ruti, polazna mora biti stanica za ukrcavanje, a dolazna stanica za iskrcavanje. Ovo se provjerava samo pri upisu; ako se ove osobine stanice promene posle prodaje karte, rezervacija ostaje aktivna iako bi danas bila odbijena.',
+    'Polazna stanica mora biti pre dolazne na ruti, polazna mora biti stanica za ukrcavanje, a dolazna stanica za iskrcavanje. Ovo se proverava samo pri upisu; ako se ove osobine stanice promene posle prodaje karte, rezervacija ostaje aktivna iako bi danas bila odbijena.',
+  manualAdvice:
+    'Otvorite rezervaciju i ispravite stanice prema danasnjoj ruti: polazna mora biti pre dolazne, sa polazne se sme ukrcati, a na dolaznoj iskrcati. Ako je stanica greskom oznacena da nema ukrcavanje ili iskrcavanje, ispravite to na liniji.',
   severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

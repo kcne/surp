@@ -105,6 +105,11 @@ enum InvariantRunStatus {
   FAILED
 }
 
+enum InvariantRunTrigger {
+  SCHEDULED
+  MANUAL
+}
+
 model HealthCheckLog {
   id        String   @id @default(cuid())
   message   String
@@ -170,34 +175,46 @@ model Tenant {
 }
 
 /**
- * One scheduled pass of every invariant for one tenant.
- *
- * The row is claimed before the checks run, not written after them: `runDate`
- * is unique per tenant, so when the API runs on more than one replica the
- * second replica's insert loses and that replica skips the tenant instead of
- * duplicating the run, the BUG ticket and the email.
+ * One pass of every invariant for one tenant, scheduled or asked for from
+ * Settings.
+ * A scheduled row is claimed before the checks run, not written after them:
+ * `runDate` is unique per tenant, so when the API runs on more than one replica
+ * the second replica's insert loses and that replica skips the tenant instead
+ * of duplicating the run, the BUG ticket and the email.
+ * A manual run leaves `runDate` empty. It is not competing for a day, and
+ * Postgres counts NULLs as distinct, so an admin pressing the button twice gets
+ * two rows rather than a constraint error.
  */
 model InvariantRun {
-  id                  String             @id @default(cuid())
+  id                  String              @id @default(cuid())
   tenantId            String
-  runDate             DateTime           @db.Date
+  /**
+   * Empty for manual runs; the claimed day for scheduled ones.
+   */
+  runDate             DateTime?           @db.Date
+  trigger             InvariantRunTrigger @default(SCHEDULED)
+  /**
+   * The admin who pressed the button; empty for scheduled runs.
+   */
+  triggeredById       String?
   status              InvariantRunStatus
   startedAt           DateTime
   completedAt         DateTime?
-  windowDays          Int                @default(30)
-  invariantCount      Int                @default(0)
-  violatedCount       Int                @default(0)
-  totalViolationCount Int                @default(0)
+  windowDays          Int                 @default(30)
+  invariantCount      Int                 @default(0)
+  violatedCount       Int                 @default(0)
+  totalViolationCount Int                 @default(0)
   results             Json
-  error               String?            @db.Text
+  error               String?             @db.Text
   ticketId            String?
   emailSentAt         DateTime?
-  alertError          String?            @db.Text
-  createdAt           DateTime           @default(now())
-  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  alertError          String?             @db.Text
+  createdAt           DateTime            @default(now())
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, runDate])
   @@index([tenantId, completedAt])
+  @@index([tenantId, startedAt])
   @@index([status, completedAt])
 }
 

@@ -6,11 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface PairDriftLineDto {
-  id: string;
-  name: string;
-  /** Intermediate stop count on this direction. */
-  stopCount: number;
-  /** Stations the other direction has that this one is missing. */
-  missingStationNames: string[];
-}
+export type InvariantRunSummaryDtoTrigger = typeof InvariantRunSummaryDtoTrigger[keyof typeof InvariantRunSummaryDtoTrigger];
+
+
+export const InvariantRunSummaryDtoTrigger = {
+  SCHEDULED: 'SCHEDULED',
+  MANUAL: 'MANUAL',
+} as const;
