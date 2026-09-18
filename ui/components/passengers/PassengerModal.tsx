@@ -1,7 +1,5 @@
 "use client"
 
-import { useState } from "react"
-
 import { FormModalShell } from "@/components/forms/FormModalShell"
 import { PassengerForm } from "@/components/passengers/PassengerForm"
 import {
@@ -9,9 +7,8 @@ import {
   useUpdatePassengerMutation,
 } from "@/infrastructure/hooks/mutations/usePassengerMutations"
 import type { Passenger, PassengerFormData } from "@/types"
-import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
-import { ChangeNeedsConfirmationError } from "@/infrastructure/utils/breaking-change"
 import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
+import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
 
 interface PassengerModalProps {
   open: boolean
@@ -24,45 +21,19 @@ export function PassengerModal({ open, onOpenChange, passenger }: PassengerModal
   const updatePassengerMutation = useUpdatePassengerMutation()
   const isEdit = !!passenger
   const loading = createPassengerMutation.isPending || updatePassengerMutation.isPending
-  const [pendingChange, setPendingChange] = useState<{
-    payload: PassengerFormData
-    confirmation: WouldBreakReservationsDto
-  } | null>(null)
+  const confirmableUpdate = useConfirmableUpdate<{ id: string; payload: PassengerFormData }>({
+    update: (variables) => updatePassengerMutation.mutateAsync(variables),
+    onConfirmed: () => onOpenChange(false),
+  })
 
   const handleSubmit = async (data: PassengerFormData) => {
     if (isEdit && passenger) {
-      try {
-        await updatePassengerMutation.mutateAsync({ id: passenger.id, payload: data })
-      } catch (error) {
-        if (error instanceof ChangeNeedsConfirmationError) {
-          setPendingChange({ payload: data, confirmation: error.confirmation })
-        }
-
-        throw error
-      }
+      await confirmableUpdate.run({ id: passenger.id, payload: data })
     } else {
       await createPassengerMutation.mutateAsync(data)
     }
 
     onOpenChange(false)
-  }
-
-  const handleConfirmPendingChange = async () => {
-    if (!pendingChange || !passenger) {
-      return
-    }
-
-    try {
-      await updatePassengerMutation.mutateAsync({
-        id: passenger.id,
-        payload: pendingChange.payload,
-        confirmBreakingChange: true,
-      })
-      setPendingChange(null)
-      onOpenChange(false)
-    } catch {
-      // The mutation reports ordinary failures; keep the dialog open for retry.
-    }
   }
 
   return (
@@ -98,17 +69,7 @@ export function PassengerModal({ open, onOpenChange, passenger }: PassengerModal
         />
       </FormModalShell>
 
-      <ConfirmBreakingChangeDialog
-        open={pendingChange !== null}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) {
-            setPendingChange(null)
-          }
-        }}
-        confirmation={pendingChange?.confirmation ?? null}
-        loading={loading}
-        onConfirm={handleConfirmPendingChange}
-      />
+      <ConfirmBreakingChangeDialog {...confirmableUpdate.dialogProps} loading={loading} />
     </>
   )
 }

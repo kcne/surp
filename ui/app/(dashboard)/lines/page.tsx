@@ -1,7 +1,5 @@
 "use client"
 
-import { useState } from "react"
-
 import { Layout } from "@/components/layout/Layout"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -19,9 +17,8 @@ import {
 import { useLinesListQuery } from "@/infrastructure/hooks/queries/useLinesListQuery"
 import type { CreateLineDto, UpdateLineDto } from "@/infrastructure/generated/model"
 import type { Line } from "@/types"
-import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
-import { ChangeNeedsConfirmationError } from "@/infrastructure/utils/breaking-change"
 import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
+import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
 
 export default function LinesPage() {
   const linesQuery = useLinesListQuery()
@@ -33,11 +30,6 @@ export default function LinesPage() {
   const error = linesQuery.error
   const mutationLoading =
     createLineMutation.isPending || updateLineMutation.isPending || deleteLineMutation.isPending
-  const [pendingChange, setPendingChange] = useState<{
-    id: string
-    payload: UpdateLineDto
-    confirmation: WouldBreakReservationsDto
-  } | null>(null)
   const {
     isModalOpen,
     isDeleteDialogOpen,
@@ -54,35 +46,13 @@ export default function LinesPage() {
     await createLineMutation.mutateAsync(payload)
   }
 
-  const handleUpdate = async (id: string, payload: UpdateLineDto) => {
-    try {
-      await updateLineMutation.mutateAsync({ id, payload })
-    } catch (error) {
-      if (error instanceof ChangeNeedsConfirmationError) {
-        setPendingChange({ id, payload, confirmation: error.confirmation })
-      }
+  const confirmableUpdate = useConfirmableUpdate<{ id: string; payload: UpdateLineDto }>({
+    update: (variables) => updateLineMutation.mutateAsync(variables),
+    onConfirmed: closeModal,
+  })
 
-      throw error
-    }
-  }
-
-  const handleConfirmPendingChange = async () => {
-    if (!pendingChange) {
-      return
-    }
-
-    try {
-      await updateLineMutation.mutateAsync({
-        id: pendingChange.id,
-        payload: pendingChange.payload,
-        confirmBreakingChange: true,
-      })
-      setPendingChange(null)
-      closeModal()
-    } catch {
-      // The mutation reports ordinary failures; keep the dialog open for retry.
-    }
-  }
+  const handleUpdate = (id: string, payload: UpdateLineDto) =>
+    confirmableUpdate.run({ id, payload })
 
   const handleDelete = async (id: string) => {
     await deleteLineMutation.mutateAsync(id)
@@ -148,17 +118,7 @@ export default function LinesPage() {
             onUpdate={handleUpdate}
           />
 
-          <ConfirmBreakingChangeDialog
-            open={pendingChange !== null}
-            onOpenChange={(open) => {
-              if (!open) {
-                setPendingChange(null)
-              }
-            }}
-            confirmation={pendingChange?.confirmation ?? null}
-            loading={mutationLoading}
-            onConfirm={handleConfirmPendingChange}
-          />
+          <ConfirmBreakingChangeDialog {...confirmableUpdate.dialogProps} loading={mutationLoading} />
 
           <DeleteLineDialog
             open={isDeleteDialogOpen}

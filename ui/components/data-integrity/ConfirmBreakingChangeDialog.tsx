@@ -17,6 +17,8 @@ interface ConfirmBreakingChangeDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   confirmation: WouldBreakReservationsDto | null
+  /** An earlier part of the same edit was already saved before the refusal. */
+  partiallyApplied?: boolean
   loading?: boolean
   onConfirm: () => Promise<void> | void
 }
@@ -25,6 +27,7 @@ export function ConfirmBreakingChangeDialog({
   open,
   onOpenChange,
   confirmation,
+  partiallyApplied = false,
   loading = false,
   onConfirm,
 }: ConfirmBreakingChangeDialogProps) {
@@ -34,13 +37,17 @@ export function ConfirmBreakingChangeDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Ova izmena pogadja postojece podatke</AlertDialogTitle>
           <AlertDialogDescription>
-            <span className="block font-medium text-foreground">
-              {confirmation?.affectedCount ?? 0} pogodjenih stavki
-            </span>
+            {/* The server's sentence already carries the count, in Serbian that
+                agrees with it — repeating it here only risks disagreeing. */}
+            <span className="block font-medium text-foreground">{confirmation?.message}</span>
             <span className="mt-2 block">
-              {confirmation?.message} Ako ipak nastavite, problem ostaje vidljiv u proveri podataka
-              dok ga ne resite.
+              Ako ipak nastavite, problem ostaje vidljiv u proveri podataka dok ga ne resite.
             </span>
+            {partiallyApplied && (
+              <span className="mt-2 block">
+                Deo izmene je vec sacuvan. Ako odustanete, taj deo ostaje sacuvan.
+              </span>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

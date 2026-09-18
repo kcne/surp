@@ -1,5 +1,6 @@
-import { CheckResult, Invariant, InvariantContext } from '../invariant.types';
+import { CheckResult, InvariantContext, ProspectiveInvariant } from '../invariant.types';
 import { loadInstanceOccupancy } from './seat-occupancy';
+import { serbianPlural } from '../serbian-plural';
 
 /**
  * No passenger holds a seat number the bus does not have.
@@ -61,7 +62,7 @@ export async function findSeatsOverCapacity(
   return { items, scannedReservationCount: scan.scannedReservationCount };
 }
 
-export const reservationSeatWithinCapacity: Invariant = {
+export const reservationSeatWithinCapacity: ProspectiveInvariant = {
   key: 'reservation.seatWithinCapacity',
   title: 'Sediste postoji u autobusu',
   description:
@@ -69,6 +70,9 @@ export const reservationSeatWithinCapacity: Invariant = {
   manualAdvice:
     'Ili vratite kapacitet voznje na stari broj mesta, ili prebacite putnika na sediste koje u autobusu postoji i javite mu novi broj.',
   severity: 'critical',
+
+  breakingChangeMessage: (count) =>
+    `Ova izmena ostavlja ${serbianPlural(count, 'rezervaciju', 'rezervacije', 'rezervacija')} sa sedistem koje ne postoji.`,
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const { items, scannedReservationCount } = await findSeatsOverCapacity(ctx);

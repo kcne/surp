@@ -17,9 +17,8 @@ import {
 import { useStationsListQuery } from "@/infrastructure/hooks/queries/useStationsListQuery"
 import type { CreateStationDto, UpdateStationDto } from "@/infrastructure/generated/model"
 import type { StationListItem } from "@/infrastructure/hooks/queries/useStationsListQuery"
-import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
-import { ChangeNeedsConfirmationError } from "@/infrastructure/utils/breaking-change"
 import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
+import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
 
 export default function StationsPage() {
   const stationsQuery = useStationsListQuery()
@@ -34,11 +33,6 @@ export default function StationsPage() {
     updateStationMutation.isPending ||
     deleteStationMutation.isPending
   const [isViewMode, setIsViewMode] = useState(false)
-  const [pendingChange, setPendingChange] = useState<{
-    id: string
-    payload: UpdateStationDto
-    confirmation: WouldBreakReservationsDto
-  } | null>(null)
   const {
     isModalOpen,
     isDeleteDialogOpen,
@@ -55,35 +49,13 @@ export default function StationsPage() {
     await createStationMutation.mutateAsync(payload)
   }
 
-  const handleUpdate = async (id: string, payload: UpdateStationDto) => {
-    try {
-      await updateStationMutation.mutateAsync({ id, payload })
-    } catch (error) {
-      if (error instanceof ChangeNeedsConfirmationError) {
-        setPendingChange({ id, payload, confirmation: error.confirmation })
-      }
+  const confirmableUpdate = useConfirmableUpdate<{ id: string; payload: UpdateStationDto }>({
+    update: (variables) => updateStationMutation.mutateAsync(variables),
+    onConfirmed: () => handleModalClose(),
+  })
 
-      throw error
-    }
-  }
-
-  const handleConfirmPendingChange = async () => {
-    if (!pendingChange) {
-      return
-    }
-
-    try {
-      await updateStationMutation.mutateAsync({
-        id: pendingChange.id,
-        payload: pendingChange.payload,
-        confirmBreakingChange: true,
-      })
-      setPendingChange(null)
-      handleModalClose()
-    } catch {
-      // The mutation reports ordinary failures; keep the dialog open for retry.
-    }
-  }
+  const handleUpdate = (id: string, payload: UpdateStationDto) =>
+    confirmableUpdate.run({ id, payload })
 
   const handleDelete = async (id: string) => {
     await deleteStationMutation.mutateAsync(id)
@@ -178,17 +150,7 @@ export default function StationsPage() {
           onUpdate={handleUpdate}
         />
 
-        <ConfirmBreakingChangeDialog
-          open={pendingChange !== null}
-          onOpenChange={(open) => {
-            if (!open) {
-              setPendingChange(null)
-            }
-          }}
-          confirmation={pendingChange?.confirmation ?? null}
-          loading={mutationLoading}
-          onConfirm={handleConfirmPendingChange}
-        />
+        <ConfirmBreakingChangeDialog {...confirmableUpdate.dialogProps} loading={mutationLoading} />
 
         <DeleteStationDialog
           open={isDeleteDialogOpen}

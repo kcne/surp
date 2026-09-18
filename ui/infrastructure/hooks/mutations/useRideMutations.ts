@@ -37,18 +37,6 @@ function isRideMutationSuccess<TResponse extends { status: number }>(
   return response.status >= 200 && response.status < 300
 }
 
-/**
- * A change the server refused because it would break reservations that already
- * exist — lowering capacity under a seat that is sold, today.
- *
- * It is not an error in the sense the other ones are: the request was valid and
- * the agency may well mean it, a smaller bus really does get substituted. So it
- * carries the server's count up to the page, which asks the question and
- * resends with the confirmation, instead of being flattened into a red toast
- * that says only that something failed.
- */
-export { ChangeNeedsConfirmationError as RideChangeNeedsConfirmationError }
-
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) {
     return error.message
@@ -139,18 +127,22 @@ export function useUpdateRideMutation() {
       confirmBreakingChange?: boolean
     }) => {
       const hasExceptionsUpdate = Array.isArray(payload.exceptions)
+      let rideUpdateLanded = false
 
       if (hasPatchableFields(payload)) {
         // The day schedules travel with the ride update instead of going ahead
-        // of it in their own request. The update is the one call that can come
-        // back asking for confirmation, and anything written before it would
-        // survive a "cancel" as half a change nobody agreed to: the departure
-        // time already moved, the capacity change abandoned, and every
-        // reservation on the old time quietly orphaned. The ride endpoint
-        // replaces the schedules inside its own transaction, so either the
-        // whole edit lands or none of it does — and it validates them against
-        // the line the ride is being moved to rather than the one it is
-        // leaving, which the dedicated day-times endpoint cannot do.
+        // of it in their own request: anything written before it would survive
+        // a "cancel" as half a change nobody agreed to — the departure time
+        // already moved, the capacity change abandoned, and every reservation
+        // on the old time quietly orphaned. The ride endpoint replaces the
+        // schedules inside its own transaction, so either the whole edit lands
+        // or none of it does, and it validates them against the line the ride
+        // is being moved to rather than the one it is leaving.
+        //
+        // Exceptions cannot join it — they are their own endpoints — so they
+        // follow, and they can be refused too. Once this call has landed a
+        // later refusal is no longer a clean "nothing happened", which is what
+        // `rideUpdateLanded` tells the dialog to say.
         const updatePayload = toUpdateRideDto(payload)
 
         const requestBody = confirmBreakingChange
@@ -170,6 +162,8 @@ export function useUpdateRideMutation() {
         if (!isSuccess) {
           throw new Error("Neuspesno azuriranje voznje")
         }
+
+        rideUpdateLanded = true
       }
 
       if (hasExceptionsUpdate) {
@@ -190,7 +184,7 @@ export function useUpdateRideMutation() {
         for (const exception of toRemove) {
           const removeResponse = await ridesControllerRemoveException(id, exception.id, {
             confirmBreakingChange,
-          }).catch(throwBreakingChangeConflict)
+          }).catch((error: unknown) => throwBreakingChangeConflict(error, rideUpdateLanded))
           if (!isRideMutationSuccess(removeResponse)) {
             throw new Error("Neuspesno uklanjanje izuzetka voznje")
           }
@@ -200,7 +194,7 @@ export function useUpdateRideMutation() {
           const addResponse = await ridesControllerAddException(id, {
             ...toCreateRideExceptionDto(exception),
             confirmBreakingChange,
-          }).catch(throwBreakingChangeConflict)
+          }).catch((error: unknown) => throwBreakingChangeConflict(error, rideUpdateLanded))
           if (!isRideMutationSuccess(addResponse)) {
             throw new Error("Neuspesno dodavanje izuzetka voznje")
           }

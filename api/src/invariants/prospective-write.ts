@@ -1,26 +1,55 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { Invariant, InvariantContext, Violation } from './invariant.types';
-import { findInvariant } from './registry';
+import { instanceNotOverbooked } from './checks/instance-not-overbooked';
+import { reservationPassengerActive } from './checks/passenger-active';
+import { reservationReachable } from './checks/reservation-reachable';
+import { rideLineActive } from './checks/ride-line-active';
+import { routeStationsActive } from './checks/route-stations-active';
+import { reservationSeatWithinCapacity } from './checks/seat-within-capacity';
+import { reservationSegmentValid } from './checks/segment-valid';
+import { reservationStationsOnRoute } from './checks/stations-on-route';
+import {
+  Invariant,
+  InvariantContext,
+  ProspectiveInvariant,
+  Violation
+} from './invariant.types';
 
-const DEFAULT_WINDOW_DAYS = 30;
+/**
+ * How far ahead a prospective check looks.
+ *
+ * Deliberately not the 30 days the reports use. A report bounded to a month is
+ * a list somebody can act on this week; a write is judged on everything it
+ * breaks, and agencies sell months ahead. The guard this replaced looked at
+ * every future reservation with no bound at all, and narrowing that to a month
+ * would have quietly re-opened the incident it was written for.
+ */
+const PROSPECTIVE_WINDOW_DAYS = 3650;
 
-export const PROSPECTIVE_INVARIANT_KEYS = {
-  lineUpdate: ['reservation.reachable', 'reservation.stationsOnRoute', 'reservation.segmentValid'],
-  rideUpdate: [
-    'reservation.reachable',
-    'reservation.seatWithinCapacity',
-    'instance.notOverbooked',
-    'reservation.stationsOnRoute'
+export const PROSPECTIVE_INVARIANTS = {
+  lineUpdate: [
+    reservationReachable,
+    reservationStationsOnRoute,
+    reservationSegmentValid,
+    // A line carries an isActive flag, so this endpoint can strand every ride
+    // on the route as surely as moving its stops can.
+    rideLineActive
   ],
-  rideException: ['reservation.reachable'],
-  stationDeactivation: ['route.stationsActive'],
-  passengerDeactivation: ['reservation.passengerActive']
-} as const;
-
-type ProspectiveInvariantKey =
-  (typeof PROSPECTIVE_INVARIANT_KEYS)[keyof typeof PROSPECTIVE_INVARIANT_KEYS][number];
+  rideUpdate: [
+    reservationReachable,
+    reservationSeatWithinCapacity,
+    instanceNotOverbooked,
+    reservationStationsOnRoute,
+    // A ride can be moved to another line, which is a route change for every
+    // reservation on it: the stations may all still exist but in an order that
+    // no longer describes the journey that was sold.
+    reservationSegmentValid
+  ],
+  rideException: [reservationReachable],
+  stationDeactivation: [routeStationsActive],
+  passengerDeactivation: [reservationPassengerActive]
+} satisfies Record<string, readonly ProspectiveInvariant[]>;
 
 export interface ProspectiveWriteScope {
   tenantId: string;
@@ -36,57 +65,109 @@ export interface ProspectiveWriteScope {
 export async function guardProspectiveWrite<TResult>(
   prisma: PrismaService,
   scope: ProspectiveWriteScope,
-  keys: readonly ProspectiveInvariantKey[],
+  invariants: readonly ProspectiveInvariant[],
   confirmed: boolean,
   write: (tx: Prisma.TransactionClient) => Promise<TResult>
 ): Promise<TResult> {
-  return prisma.$transaction(
-    async (tx) => {
-      if (confirmed) {
-        return write(tx);
+  // Nothing to compare. The write still needs its transaction — several of
+  // these callbacks rewrite a route and its schedules together — but not the
+  // serializable isolation and two full scans it would never read.
+  if (confirmed || invariants.length === 0) {
+    return prisma.$transaction(write);
+  }
+
+  return runSerializable(prisma, async (tx) => {
+    const before = await checkInvariants(tx, scope, invariants);
+    const result = await write(tx);
+    const after = await checkInvariants(tx, scope, invariants);
+
+    for (const invariant of invariants) {
+      const added = addedViolations(before.get(invariant.key)!, after.get(invariant.key)!);
+
+      if (added.length > 0) {
+        throw new ConflictException({
+          code: 'WOULD_BREAK_RESERVATIONS',
+          invariant: invariant.key,
+          affectedCount: added.length,
+          message: invariant.breakingChangeMessage(added.length)
+        });
       }
-
-      const invariants = keys.map(requireInvariant);
-      const before = await checkInvariants(tx, scope, invariants);
-      const result = await write(tx);
-      const after = await checkInvariants(tx, scope, invariants);
-
-      for (const invariant of invariants) {
-        const previousSubjects = new Set(before.get(invariant.key)!.map(violationIdentity));
-        const added = after
-          .get(invariant.key)!
-          .filter((violation) => !previousSubjects.has(violationIdentity(violation)));
-
-        if (added.length > 0) {
-          throw new ConflictException({
-            code: 'WOULD_BREAK_RESERVATIONS',
-            invariant: invariant.key,
-            affectedCount: added.length,
-            message: conflictMessage(invariant.key, added.length)
-          });
-        }
-      }
-
-      return result;
-    },
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
-      maxWait: 5_000,
-      timeout: 30_000
     }
+
+    return result;
+  });
+}
+
+/**
+ * Violations the proposed state is answerable for: ones whose subject was
+ * clean before, plus ones the write made worse on a subject that was already
+ * broken. Without the second half, halving a bus that is already one seat over
+ * capacity would compare equal to the baseline and go through unwarned.
+ */
+function addedViolations(before: Violation[], after: Violation[]): Violation[] {
+  const baseline = new Map(before.map((violation) => [subjectOf(violation), violation]));
+
+  return after.filter((violation) => {
+    const previous = baseline.get(subjectOf(violation));
+
+    if (!previous) {
+      return true;
+    }
+
+    return (violation.magnitude ?? 0) > (previous.magnitude ?? 0);
+  });
+}
+
+/**
+ * Runs the guard at `Serializable`.
+ *
+ * `RepeatableRead` is not enough here. Lowering capacity to 20 and selling seat
+ * 45 touch no common row, so both transactions commit happily and the
+ * invariant this guard exists to protect is broken by the pair of them — the
+ * textbook write skew, and a plausible Monday morning at a busy counter.
+ * Serializable makes Postgres abort one of them instead; one retry covers the
+ * ordinary case, and a second failure surfaces rather than looping.
+ */
+async function runSerializable<TResult>(
+  prisma: PrismaService,
+  work: (tx: Prisma.TransactionClient) => Promise<TResult>
+): Promise<TResult> {
+  const options = {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    maxWait: 5_000,
+    timeout: 30_000
+  };
+
+  try {
+    return await prisma.$transaction(work, options);
+  } catch (error) {
+    if (!isSerializationFailure(error)) {
+      throw error;
+    }
+
+    return prisma.$transaction(work, options);
+  }
+}
+
+function isSerializationFailure(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === 'P2034' || error.code === 'P2028')
   );
 }
 
 async function checkInvariants(
   prisma: Prisma.TransactionClient,
   scope: ProspectiveWriteScope,
-  invariants: Invariant[]
+  invariants: readonly Invariant[]
 ): Promise<Map<string, Violation[]>> {
   const ctx: InvariantContext = {
     tenantId: scope.tenantId,
     actorId: scope.actorId,
     prisma,
-    windowDays: DEFAULT_WINDOW_DAYS
+    // A context per pass, which is also what makes the checks share one load of
+    // the reservation window rather than taking five identical ones.
+    windowDays: PROSPECTIVE_WINDOW_DAYS
   };
   const result = new Map<string, Violation[]>();
 
@@ -97,37 +178,6 @@ async function checkInvariants(
   return result;
 }
 
-function requireInvariant(key: ProspectiveInvariantKey): Invariant {
-  const invariant = findInvariant(key);
-
-  if (!invariant) {
-    throw new Error(`Prospective invariant is not registered: ${key}`);
-  }
-
-  return invariant;
-}
-
-function violationIdentity(violation: Violation): string {
+function subjectOf(violation: Violation): string {
   return `${violation.subjectType}:${violation.subjectId}`;
-}
-
-function conflictMessage(key: string, count: number): string {
-  switch (key) {
-    case 'reservation.reachable':
-      return `Ova izmena cini ${count} rezervacija nevidljivim.`;
-    case 'reservation.seatWithinCapacity':
-      return `Ova izmena ostavlja ${count} rezervacija sa sedistem koje ne postoji.`;
-    case 'instance.notOverbooked':
-      return `Ova izmena preopterecuje ${count} polazaka.`;
-    case 'reservation.stationsOnRoute':
-      return `Ova izmena ostavlja ${count} rezervacija sa stanicom van rute.`;
-    case 'reservation.segmentValid':
-      return `Ova izmena kvari deonicu za ${count} rezervacija.`;
-    case 'route.stationsActive':
-      return `Ova izmena ostavlja ${count} linija sa neaktivnom stanicom.`;
-    case 'reservation.passengerActive':
-      return `Ova izmena ostavlja ${count} aktivnih rezervacija na neaktivnom putniku.`;
-    default:
-      return `Ova izmena stvara ${count} novih problema sa podacima.`;
-  }
 }

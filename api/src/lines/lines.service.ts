@@ -15,7 +15,7 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
-import { PROSPECTIVE_INVARIANT_KEYS, guardProspectiveWrite } from '../invariants/prospective-write';
+import { PROSPECTIVE_INVARIANTS, guardProspectiveWrite } from '../invariants/prospective-write';
 import { CreateLineDto } from './dto/create-line.dto';
 import { LineResponseDto, PaginatedLinesResponseDto } from './dto/line.response.dto';
 import { LineStopInputDto } from './dto/line-stop.dto';
@@ -26,7 +26,7 @@ import {
   realignDaySchedulesTx,
   type DayScheduleRealignInput
 } from '../rides/ride-schedule-alignment';
-import { LineStopMutableValues } from './line-pair-alignment';
+import { LineStopMutableValues, writeLineStopsTx } from './line-pair-alignment';
 
 const SAFE_LINE_SELECT = {
   id: true,
@@ -152,14 +152,7 @@ export class LinesService {
           }
         });
 
-        await this.replaceLineStopsTx(
-          tx,
-          auth.tenantId,
-          createdLine.id,
-          auth.sub,
-          intermediateStops,
-          false
-        );
+        await writeLineStopsTx(tx, auth.tenantId, createdLine.id, auth.sub, intermediateStops);
 
         if (shouldAutoCreateReverse) {
           const effectivePairKey = pairKey ?? `pair-${createdLine.id}`;
@@ -199,14 +192,7 @@ export class LinesService {
 
           const reversedStops = this.buildReversedStops(intermediateStops);
 
-          await this.replaceLineStopsTx(
-            tx,
-            auth.tenantId,
-            reverseLine.id,
-            auth.sub,
-            reversedStops,
-            false
-          );
+          await writeLineStopsTx(tx, auth.tenantId, reverseLine.id, auth.sub, reversedStops);
         }
 
         return tx.line.findFirst({
@@ -314,7 +300,7 @@ export class LinesService {
       const updated = await guardProspectiveWrite(
         this.prisma,
         { tenantId: auth.tenantId, actorId: auth.sub },
-        PROSPECTIVE_INVARIANT_KEYS.lineUpdate,
+        PROSPECTIVE_INVARIANTS.lineUpdate,
         dto.confirmBreakingChange === true,
         async (tx) => {
           await tx.line.update({
@@ -364,7 +350,7 @@ export class LinesService {
           }
 
           if (dto.intermediateStops !== undefined) {
-            await this.replaceLineStopsTx(tx, auth.tenantId, id, auth.sub, nextStops, true);
+            await writeLineStopsTx(tx, auth.tenantId, id, auth.sub, nextStops);
 
             // A BOTH pair describes one route in two directions, so a stop added
             // here belongs on the opposite direction as well.
@@ -788,7 +774,7 @@ export class LinesService {
           isDropoff: stop.isDropoff
         }));
 
-      await this.replaceLineStopsTx(tx, tenantId, pairedLine.id, actorId, mirroredStops, true);
+      await writeLineStopsTx(tx, tenantId, pairedLine.id, actorId, mirroredStops);
 
       // The mirrored route is a route change for the paired line too, so its
       // own ride schedules have to follow.
@@ -856,44 +842,6 @@ export class LinesService {
     // route, and a round-trip per schedule would put the line edit at the mercy
     // of how many rides happen to be on it.
     await realignDaySchedulesTx(tx, { tenantId, actorId, schedules: drifted });
-  }
-
-  private async replaceLineStopsTx(
-    tx: Prisma.TransactionClient,
-    tenantId: string,
-    lineId: string,
-    actorId: string,
-    stops: ResolvedLineStop[],
-    deleteExisting: boolean
-  ): Promise<void> {
-    if (deleteExisting) {
-      await tx.lineStop.deleteMany({
-        where: {
-          lineId,
-          tenantId
-        }
-      });
-    }
-
-    if (!stops.length) {
-      return;
-    }
-
-    await tx.lineStop.createMany({
-      data: stops.map((stop) =>
-        withCreateAudit(
-          {
-            tenantId,
-            lineId,
-            stationId: stop.stationId,
-            orderIndex: stop.orderIndex,
-            isBoarding: stop.isBoarding,
-            isDropoff: stop.isDropoff
-          },
-          actorId
-        )
-      )
-    });
   }
 
   private validateDirectionMetadata(

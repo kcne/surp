@@ -9,7 +9,7 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
-import { PROSPECTIVE_INVARIANT_KEYS, guardProspectiveWrite } from '../invariants/prospective-write';
+import { PROSPECTIVE_INVARIANTS, guardProspectiveWrite } from '../invariants/prospective-write';
 import { CreateRideDto } from './dto/create-ride.dto';
 import { ListRideInstancesQueryDto } from './dto/ride-instances.query.dto';
 import { ListRidesQueryDto } from './dto/list-rides.query.dto';
@@ -587,7 +587,7 @@ export class RidesService {
     const updated = await guardProspectiveWrite(
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
-      PROSPECTIVE_INVARIANT_KEYS.rideUpdate,
+      PROSPECTIVE_INVARIANTS.rideUpdate,
       dto.confirmBreakingChange === true,
       async (tx) => {
         await tx.ride.update({
@@ -660,7 +660,7 @@ export class RidesService {
     const updated = await guardProspectiveWrite(
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
-      PROSPECTIVE_INVARIANT_KEYS.rideUpdate,
+      PROSPECTIVE_INVARIANTS.rideUpdate,
       confirmed,
       async (tx) => {
         await this.replaceRideDaySchedulesTx(
@@ -704,46 +704,18 @@ export class RidesService {
 
     const exceptionDate = this.parseDateOnly(dto.date);
 
+    // Ahead of the guard, not inside it: both refusals are a 409, and a caller
+    // that cannot tell "this exception already exists" from "this exception
+    // breaks reservations" will offer the agency a confirmation button that
+    // cannot work. Leaving them here keeps one shape per reason.
+    await this.ensureExceptionIsNew(auth.tenantId, rideId, exceptionDate, dto);
+
     const created = await guardProspectiveWrite(
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
-      dto.type === RideExceptionType.SKIP ? PROSPECTIVE_INVARIANT_KEYS.rideException : [],
+      dto.type === RideExceptionType.SKIP ? PROSPECTIVE_INVARIANTS.rideException : [],
       dto.confirmBreakingChange === true,
       async (tx) => {
-        const existingOnDate = await tx.rideException.findMany({
-          where: {
-            tenantId: auth.tenantId,
-            rideId,
-            exceptionDate
-          },
-          select: {
-            id: true,
-            type: true,
-            departureTime: true,
-            arrivalTime: true
-          }
-        });
-
-        if (existingOnDate.some((item) => item.type !== dto.type)) {
-          throw new ConflictException('Cannot mix SKIP and ADDITIONAL exceptions on the same date');
-        }
-
-        if (
-          dto.type === RideExceptionType.ADDITIONAL &&
-          existingOnDate.some(
-            (item) =>
-              item.departureTime === dto.departureTime && item.arrivalTime === dto.arrivalTime
-          )
-        ) {
-          throw new ConflictException(
-            'Additional exception with the same date and times already exists'
-          );
-        }
-
-        if (dto.type === RideExceptionType.SKIP && existingOnDate.length > 0) {
-          throw new ConflictException('Skip exception for this date already exists');
-        }
-
         return tx.rideException.create({
           data: withCreateAudit(
             {
@@ -776,6 +748,45 @@ export class RidesService {
     return this.toExceptionResponse(created);
   }
 
+  private async ensureExceptionIsNew(
+    tenantId: string,
+    rideId: string,
+    exceptionDate: Date,
+    dto: CreateRideExceptionDto
+  ): Promise<void> {
+    const existingOnDate = await this.prisma.rideException.findMany({
+      where: {
+        tenantId,
+        rideId,
+        exceptionDate
+      },
+      select: {
+        type: true,
+        departureTime: true,
+        arrivalTime: true
+      }
+    });
+
+    if (existingOnDate.some((item) => item.type !== dto.type)) {
+      throw new ConflictException('Cannot mix SKIP and ADDITIONAL exceptions on the same date');
+    }
+
+    if (
+      dto.type === RideExceptionType.ADDITIONAL &&
+      existingOnDate.some(
+        (item) => item.departureTime === dto.departureTime && item.arrivalTime === dto.arrivalTime
+      )
+    ) {
+      throw new ConflictException(
+        'Additional exception with the same date and times already exists'
+      );
+    }
+
+    if (dto.type === RideExceptionType.SKIP && existingOnDate.length > 0) {
+      throw new ConflictException('Skip exception for this date already exists');
+    }
+  }
+
   async removeException(
     auth: AccessTokenPayload,
     rideId: string,
@@ -802,7 +813,7 @@ export class RidesService {
     const deleted = await guardProspectiveWrite(
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
-      PROSPECTIVE_INVARIANT_KEYS.rideException,
+      PROSPECTIVE_INVARIANTS.rideException,
       confirmed,
       (tx) =>
         tx.rideException.delete({
@@ -1163,24 +1174,19 @@ export class RidesService {
       return;
     }
 
-    for (const schedule of daySchedules) {
+    // Both rows are spread, not named: the two value types are total over
+    // their mutable columns, so a new column reaches the database instead of
+    // silently taking its default here.
+    for (const { stationTimes, ...scheduleValues } of daySchedules) {
       await tx.rideDaySchedule.create({
         data: withCreateAudit(
           {
             tenantId,
             rideId,
-            dayOfWeek: schedule.dayOfWeek,
+            ...scheduleValues,
             stationTimes: {
-              create: schedule.stationTimes.map((stationTime) =>
-                withCreateAudit(
-                  {
-                    tenantId,
-                    stationId: stationTime.stationId,
-                    orderIndex: stationTime.orderIndex,
-                    time: stationTime.time
-                  },
-                  actorId
-                )
+              create: stationTimes.map((stationTime) =>
+                withCreateAudit({ tenantId, ...stationTime }, actorId)
               )
             }
           },

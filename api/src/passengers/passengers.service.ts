@@ -3,7 +3,7 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
-import { PROSPECTIVE_INVARIANT_KEYS, guardProspectiveWrite } from '../invariants/prospective-write';
+import { PROSPECTIVE_INVARIANTS, guardProspectiveWrite } from '../invariants/prospective-write';
 import {
   CheckPassengerDuplicatesDto,
   PassengerDuplicatesResponseDto
@@ -190,7 +190,7 @@ export class PassengersService {
     return guardProspectiveWrite(
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
-      dto.isActive === false ? PROSPECTIVE_INVARIANT_KEYS.passengerDeactivation : [],
+      dto.isActive === false ? PROSPECTIVE_INVARIANTS.passengerDeactivation : [],
       dto.confirmBreakingChange === true,
       (tx) =>
         tx.passenger.update({

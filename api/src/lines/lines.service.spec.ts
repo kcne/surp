@@ -8,11 +8,23 @@ import {
 } from '@prisma/client';
 import { LinesService } from './lines.service';
 
+type FindManyArgs = { select?: Record<string, unknown> };
+type FindMany = (args: FindManyArgs) => Promise<unknown>;
+
+/**
+ * Makes the guard's invariant reads come back empty, so a test about route
+ * realignment is not also a test about what the invariants think of its
+ * fixtures. Rides are the one table both sides read: the guard asks for each
+ * ride's line, realignment asks for its day schedules, so they are told apart
+ * by what they select rather than by a second mock.
+ */
 function withCleanInvariantReads<T extends object>(tx: T): T {
   const existing = tx as T & {
     reservation?: Record<string, unknown>;
     station?: Record<string, unknown>;
+    ride?: { findMany?: FindMany };
   };
+  const rideFindMany = existing.ride?.findMany;
 
   Object.assign(tx, {
     reservation: {
@@ -22,6 +34,12 @@ function withCleanInvariantReads<T extends object>(tx: T): T {
     station: {
       ...existing.station,
       findMany: existing.station?.findMany ?? jest.fn().mockResolvedValue([])
+    },
+    ride: {
+      ...existing.ride,
+      findMany: jest.fn(async (args: FindManyArgs = {}) =>
+        args.select?.line || !rideFindMany ? [] : rideFindMany(args)
+      )
     }
   });
 
@@ -378,6 +396,7 @@ describe('LinesService', () => {
       { id: 'station-b', name: 'North' }
     ]);
 
+    const realignmentRideRead = jest.fn();
     const tx = {
       line: {
         update: jest.fn().mockResolvedValue({ ...baseLine, isActive: false }),
@@ -385,7 +404,9 @@ describe('LinesService', () => {
         findFirst: jest.fn().mockResolvedValue({ ...baseLine, isActive: false })
       },
       lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
-      ride: { findMany: jest.fn() },
+      // Held separately because the guard reads rides too; this is the read
+      // realignment would make, and the assertion is that it never happens.
+      ride: { findMany: realignmentRideRead },
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
@@ -395,7 +416,7 @@ describe('LinesService', () => {
 
     await service.update(auth, 'line-1', { isActive: false });
 
-    expect(tx.ride.findMany).not.toHaveBeenCalled();
+    expect(realignmentRideRead).not.toHaveBeenCalled();
     expect(tx.rideDayScheduleStationTime.deleteMany).not.toHaveBeenCalled();
   });
   it('realigns ride day schedules through the replace-stops endpoint too', async () => {

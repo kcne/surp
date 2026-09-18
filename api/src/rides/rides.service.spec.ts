@@ -227,24 +227,113 @@ describe('RidesService', () => {
       exceptions: []
     };
 
+    // Far enough out that the 30-day reporting window would miss it: a write
+    // is judged on everything it breaks, not on the month a report covers.
+    const travelDate = (() => {
+      const date = new Date();
+      date.setUTCDate(date.getUTCDate() + 120);
+      date.setUTCHours(0, 0, 0, 0);
+      return date;
+    })();
+
+    const soldSeat = {
+      id: 'reservation-1',
+      rideId: 'ride-1',
+      travelDate,
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:30',
+      seatNumber: 38,
+      departureStationId: 'station-a',
+      arrivalStationId: 'station-b',
+      passenger: {
+        id: 'passenger-1',
+        firstName: 'Marko',
+        lastName: 'Markovic',
+        phone: '+381601234567',
+        isActive: true
+      }
+    };
+
+    const windowedRide = (capacity: number) => ({
+      id: 'ride-1',
+      name: 'Morning Central Route',
+      capacity,
+      status: 'ACTIVE',
+      type: 'RECURRING',
+      recurringStartDate: new Date('2020-01-01T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      line: {
+        name: 'Central - North',
+        isActive: true,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b',
+        intermediateStops: []
+      },
+      daySchedules: [
+        {
+          dayOfWeek: travelDate.getUTCDay(),
+          stationTimes: [
+            { orderIndex: 0, time: '09:00' },
+            { orderIndex: 1, time: '10:30' }
+          ]
+        }
+      ],
+      exceptions: []
+    });
+
+    /**
+     * A transaction that answers the guard's two passes differently, which is
+     * what the database does for real: the first sees the ride as it stands,
+     * the second sees the capacity the write just applied.
+     */
+    const transactionSeeing = (reservations: unknown[], capacityAfterWrite: number) => {
+      let written = false;
+
+      return {
+        reservation: { findMany: jest.fn().mockResolvedValue(reservations) },
+        station: { findMany: jest.fn().mockResolvedValue([]) },
+        ride: {
+          findMany: jest.fn(async () => [windowedRide(written ? capacityAfterWrite : 48)]),
+          update: jest.fn(async () => {
+            written = true;
+          }),
+          findFirst: jest.fn().mockResolvedValue({ ...rideOnSale, capacity: capacityAfterWrite })
+        },
+        rideDaySchedule: { create: jest.fn(), deleteMany: jest.fn() }
+      };
+    };
+
+    const runUpdateAgainst = (reservations: unknown[], capacityAfterWrite: number) => {
+      prismaMock.$transaction.mockImplementation(async (fn: never) =>
+        (fn as unknown as (tx: unknown) => Promise<unknown>)(
+          transactionSeeing(reservations, capacityAfterWrite)
+        )
+      );
+    };
+
     beforeEach(() => {
       prismaMock.ride.findFirst.mockResolvedValue(rideOnSale);
-      prismaMock.$transaction.mockImplementation(async (fn: never) =>
-        (fn as unknown as (tx: unknown) => Promise<unknown>)({
-          reservation: { findMany: jest.fn().mockResolvedValue([]) },
-          station: { findMany: jest.fn().mockResolvedValue([]) },
-          ride: {
-            update: jest.fn(),
-            findFirst: jest.fn().mockResolvedValue({ ...rideOnSale, capacity: 30 })
-          },
-          rideDaySchedule: { create: jest.fn(), deleteMany: jest.fn() }
-        })
-      );
+      runUpdateAgainst([], 30);
+    });
+
+    it('refuses, naming how many passengers it would strand', async () => {
+      runUpdateAgainst([soldSeat], 30);
+
+      await expect(service.update(auth, 'ride-1', { capacity: 30 })).rejects.toMatchObject({
+        response: {
+          code: 'WOULD_BREAK_RESERVATIONS',
+          invariant: 'reservation.seatWithinCapacity',
+          affectedCount: 1,
+          message: 'Ova izmena ostavlja 1 rezervaciju sa sedistem koje ne postoji.'
+        }
+      });
     });
 
     it('goes through once the caller confirms it in the body', async () => {
-      prismaMock.reservation.count.mockResolvedValue(8);
-      prismaMock.reservation.findFirst.mockResolvedValue({ seatNumber: 38 });
+      runUpdateAgainst([soldSeat], 30);
 
       await expect(
         service.update(auth, 'ride-1', { capacity: 30, confirmBreakingChange: true })
@@ -252,8 +341,7 @@ describe('RidesService', () => {
     });
 
     it('asks nothing when every sold seat still fits', async () => {
-      prismaMock.reservation.count.mockResolvedValue(0);
-      prismaMock.reservation.findFirst.mockResolvedValue(null);
+      runUpdateAgainst([{ ...soldSeat, seatNumber: 12 }], 30);
 
       await expect(service.update(auth, 'ride-1', { capacity: 30 })).resolves.toMatchObject({
         capacity: 30
@@ -261,9 +349,9 @@ describe('RidesService', () => {
     });
 
     it('leaves raising capacity alone', async () => {
-      await expect(service.update(auth, 'ride-1', { capacity: 48 })).resolves.toBeDefined();
+      runUpdateAgainst([soldSeat], 48);
 
-      expect(prismaMock.reservation.count).not.toHaveBeenCalled();
+      await expect(service.update(auth, 'ride-1', { capacity: 48 })).resolves.toBeDefined();
     });
   });
 

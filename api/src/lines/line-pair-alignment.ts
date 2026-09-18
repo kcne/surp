@@ -134,19 +134,11 @@ export async function writeLineStopsTx(
   }
 
   await tx.lineStop.createMany({
-    data: stops.map((stop) =>
-      withCreateAudit(
-        {
-          tenantId,
-          lineId,
-          stationId: stop.stationId,
-          orderIndex: stop.orderIndex,
-          isBoarding: stop.isBoarding,
-          isDropoff: stop.isDropoff
-        },
-        actorId
-      )
-    )
+    // Spread rather than named: `PairedRouteStop` is total over the mutable
+    // columns, so a column added to `LineStop` arrives here on its own. Listing
+    // the four by hand is how a writer that produces a complete row ends up
+    // storing an incomplete one, which is `0caa6511`.
+    data: stops.map((stop) => withCreateAudit({ tenantId, lineId, ...stop }, actorId))
   });
 }
 

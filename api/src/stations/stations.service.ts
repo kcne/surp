@@ -3,7 +3,7 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
-import { PROSPECTIVE_INVARIANT_KEYS, guardProspectiveWrite } from '../invariants/prospective-write';
+import { PROSPECTIVE_INVARIANTS, guardProspectiveWrite } from '../invariants/prospective-write';
 import { CreateStationDto } from './dto/create-station.dto';
 import { ListStationsQueryDto } from './dto/list-stations.query.dto';
 import { PaginatedStationsResponseDto, StationResponseDto } from './dto/station.response.dto';
@@ -126,7 +126,7 @@ export class StationsService {
     return guardProspectiveWrite(
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
-      dto.isActive === false ? PROSPECTIVE_INVARIANT_KEYS.stationDeactivation : [],
+      dto.isActive === false ? PROSPECTIVE_INVARIANTS.stationDeactivation : [],
       dto.confirmBreakingChange === true,
       (tx) =>
         tx.station.update({

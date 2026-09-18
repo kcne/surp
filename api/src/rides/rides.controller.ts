@@ -166,7 +166,8 @@ export class RidesController {
   @ApiBadRequestResponse({ description: 'Validation failure or invalid exception combination.' })
   @ApiConflictResponse({
     type: WouldBreakReservationsDto,
-    description: 'Duplicate/conflicting exception, or a SKIP that would break a reservation.'
+    description:
+      'A SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS. A duplicate or conflicting exception is also 409, but returns the standard error body without that code.'
   })
   @ApiNotFoundResponse({ description: 'Ride not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })

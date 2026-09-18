@@ -12,12 +12,11 @@ import { RideInstancesView } from "@/components/rides/RideInstancesView"
 import { RidesDataTable } from "@/components/rides/RidesDataTable"
 import { useCrudDialogState } from "@/hooks/useCrudDialogState"
 import {
-  RideChangeNeedsConfirmationError,
   useCreateRideMutation,
   useDeleteRideMutation,
   useUpdateRideMutation,
 } from "@/infrastructure/hooks/mutations/useRideMutations"
-import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
+import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import type { Ride, RideFormData } from "@/types"
 
@@ -35,12 +34,6 @@ export default function SchedulePage() {
     createRideMutation.isPending || updateRideMutation.isPending || deleteRideMutation.isPending
   const [isInstancesViewOpen, setIsInstancesViewOpen] = useState(false)
   const [instancesRide, setInstancesRide] = useState<Ride | null>(null)
-  // An update the server held back until somebody confirms what it breaks.
-  const [pendingChange, setPendingChange] = useState<{
-    id: string
-    payload: Partial<RideFormData>
-    confirmation: WouldBreakReservationsDto
-  } | null>(null)
   const {
     isModalOpen,
     isDeleteDialogOpen,
@@ -89,37 +82,13 @@ export default function SchedulePage() {
     await createRideMutation.mutateAsync(payload)
   }
 
-  const handleUpdate = async (id: string, payload: Partial<RideFormData>) => {
-    try {
-      await updateRideMutation.mutateAsync({ id, payload })
-    } catch (error) {
-      if (error instanceof RideChangeNeedsConfirmationError) {
-        setPendingChange({ id, payload, confirmation: error.confirmation })
-      }
+  const confirmableUpdate = useConfirmableUpdate<{ id: string; payload: Partial<RideFormData> }>({
+    update: (variables) => updateRideMutation.mutateAsync(variables),
+    onConfirmed: closeModal,
+  })
 
-      // Rethrown either way, so the form stays open on the values that were
-      // typed rather than closing on a change that was never written.
-      throw error
-    }
-  }
-
-  const handleConfirmPendingChange = async () => {
-    if (!pendingChange) {
-      return
-    }
-
-    try {
-      await updateRideMutation.mutateAsync({
-        id: pendingChange.id,
-        payload: pendingChange.payload,
-        confirmBreakingChange: true,
-      })
-      setPendingChange(null)
-      closeModal()
-    } catch {
-      // The mutation already reported it; the dialog stays up to be retried.
-    }
-  }
+  const handleUpdate = (id: string, payload: Partial<RideFormData>) =>
+    confirmableUpdate.run({ id, payload })
 
   const handleDeleteRide = async (id: string) => {
     await deleteRideMutation.mutateAsync(id)
@@ -226,17 +195,7 @@ export default function SchedulePage() {
           onUpdate={handleUpdate}
         />
 
-        <ConfirmBreakingChangeDialog
-          open={pendingChange !== null}
-          onOpenChange={(open) => {
-            if (!open) {
-              setPendingChange(null)
-            }
-          }}
-          confirmation={pendingChange?.confirmation ?? null}
-          loading={mutationLoading}
-          onConfirm={handleConfirmPendingChange}
-        />
+        <ConfirmBreakingChangeDialog {...confirmableUpdate.dialogProps} loading={mutationLoading} />
 
         <DeleteRideDialog
           open={isDeleteDialogOpen}
