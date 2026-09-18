@@ -126,6 +126,8 @@ export const reservationSeatUnique: Invariant = {
   title: 'Jedno sediste nosi samo jednog putnika',
   description:
     'Isto sediste sme da se proda dvaput na istom polasku samo ako se putovanja ne preklapaju — jedan putnik izadje pre nego sto drugi udje. Kada se preklapaju, dva putnika dolaze na isto mesto. Baza to ne sprecava: provera radi samo pri upisu i vezana je za vreme polaska, pa kada se vreme polaska promeni, provera i ne vidi rezervacije upisane pre izmene.',
+  manualAdvice:
+    'Dva putnika drze isto sediste u isto vreme. Pozovite jednog od njih i prebacite ga na slobodno sediste na tom polasku — koji se od njih pomera je odluka agencije, ne sistema.',
   severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

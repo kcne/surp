@@ -64,6 +64,8 @@ export const reservationPassengerActive: Invariant = {
   title: 'Putnik rezervacije je aktivan',
   description:
     'Deaktiviranje putnika ne proverava da li putnik ima aktivnu buducu rezervaciju. Deaktivirani putnik moze i dalje da se pojavi na polasku sa vazecom kartom.',
+  manualAdvice:
+    'Odlucite sta je tacno: ako putnik i dalje putuje, vratite ga medju aktivne; ako ne putuje, otkazite njegove buduce rezervacije. Dok je ovako, putnik sa vazecom kartom se ne vidi tamo gde ga ocekujete.',
   severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

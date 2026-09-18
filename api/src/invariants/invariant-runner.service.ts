@@ -1,6 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InvariantRunStatus, Prisma, TicketCategory, TicketStatus, UserRole } from '@prisma/client';
+import {
+  InvariantRunStatus,
+  InvariantRunTrigger,
+  Prisma,
+  TicketCategory,
+  TicketStatus,
+  UserRole
+} from '@prisma/client';
 import { Cron } from '@nestjs/schedule';
 import { InvariantReportDto, InvariantResultDto } from './dto/invariant.response.dto';
 import { InvariantAlertEmailService } from './invariant-alert-email.service';
@@ -77,6 +84,7 @@ export class InvariantRunnerService {
         data: {
           tenantId: tenant.id,
           runDate,
+          trigger: InvariantRunTrigger.SCHEDULED,
           status: InvariantRunStatus.RUNNING,
           startedAt,
           results: []
@@ -152,10 +160,19 @@ export class InvariantRunnerService {
    * re-send instead of going quiet. The cost is a repeat alert for anything that
    * did get through on the half of the delivery that worked, which is the
    * cheaper of the two failures.
+   *
+   * Scheduled runs only. A manual run from Settings alerts nobody, so counting
+   * it as the baseline would mean an admin pressing "Proveri sve" quietly
+   * cancels tonight's email about everything that run happened to see.
    */
   private async alertBaseline(tenantId: string): Promise<StoredResult[]> {
     const previous = await this.prisma.invariantRun.findFirst({
-      where: { tenantId, status: InvariantRunStatus.COMPLETED, alertError: null },
+      where: {
+        tenantId,
+        trigger: InvariantRunTrigger.SCHEDULED,
+        status: InvariantRunStatus.COMPLETED,
+        alertError: null
+      },
       orderBy: { completedAt: 'desc' },
       select: { results: true }
     });

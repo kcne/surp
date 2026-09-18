@@ -62,6 +62,8 @@ export const reservationGroupPresent: Invariant = {
   title: 'Svaka rezervacija pripada grupi',
   description:
     'Rezervacija bez grupe nema oznaku G1, G2 i tako dalje na mapi sedista i u spisku putnika. Ova provera obuhvata i istorijske i otkazane rezervacije.',
+  manualAdvice:
+    'Ove rezervacije su upisane pre nego sto su grupe uvedene. Ako rezervacija treba da bude deo povratne karte, otkazite je i upisite ponovo kao povratnu; jednosmerne mozete ostaviti kako jesu, njima samo nedostaje oznaka grupe na mapi sedista.',
   severity: 'warning',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

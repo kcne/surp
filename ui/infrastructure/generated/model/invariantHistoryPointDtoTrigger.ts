@@ -5,15 +5,11 @@
  * Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.
  * OpenAPI spec version: 0.1.0
  */
-import type { InvariantResultDto } from './invariantResultDto';
 
-export interface InvariantReportDto {
-  checkedAt: string;
-  /** Days ahead the time-windowed checks covered. */
-  windowDays: number;
-  invariantCount: number;
-  /** Invariants reporting at least one violation. */
-  violatedCount: number;
-  totalViolationCount: number;
-  results: InvariantResultDto[];
-}
+export type InvariantHistoryPointDtoTrigger = typeof InvariantHistoryPointDtoTrigger[keyof typeof InvariantHistoryPointDtoTrigger];
+
+
+export const InvariantHistoryPointDtoTrigger = {
+  SCHEDULED: 'SCHEDULED',
+  MANUAL: 'MANUAL',
+} as const;

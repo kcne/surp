@@ -67,6 +67,8 @@ export const terminiReachable: Invariant = {
   title: 'Krajnja stanica je dostupna sa suprotnog smera',
   description:
     'Povratna karta trazi obe stanice na suprotnom smeru. Ako jedan smer zavrsava na stanici koju drugi uopste ne dodiruje, povratna karta preko te stanice nije moguca.',
+  manualAdvice:
+    'Dodavanje krajnje stanice na suprotnu rutu znaci odluku gde tacno na toj ruti autobus staje, a to se iz podataka ne moze zakljuciti. Cesto su te dve stanice isto fizicko mesto upisano dvaput — u tom slucaju ih spojite u jednu. U suprotnom dodajte stanicu na suprotnu rutu rucno, na odgovarajuce mesto u redosledu.',
   severity: 'warning',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

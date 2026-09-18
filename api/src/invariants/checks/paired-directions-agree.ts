@@ -207,6 +207,8 @@ export const pairedDirectionsAgree: Invariant = {
   title: 'Oba smera linije nose iste medjustanice',
   description:
     'Svaki smer para cuva svoju listu stanica. Stanica dodata na jedan smer ne pojavljuje se na drugom, pa se smerovi tiho raziđu i karta preko te stanice ne moze da se proda u oba pravca.',
+  manualAdvice:
+    'Popravka preskace parove ciji se smerovi stvarno razlikuju, jer tu ne moze da zna koja je lista stanica tacna. Takve parove uredite rucno na liniji.',
   severity: 'warning',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

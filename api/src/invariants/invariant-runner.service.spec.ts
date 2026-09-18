@@ -154,6 +154,33 @@ describe('InvariantRunnerService', () => {
     );
   });
 
+  // A manual run from Settings alerts nobody. Counting it as the baseline
+  // would let an admin pressing "Proveri sve" cancel that night's email about
+  // everything that run happened to see.
+  it('ignores manual runs when deciding what admins have been told', async () => {
+    const { service, prisma } = setup(undefined, [result('reservation.reachable', ['one'])]);
+
+    await service.runDaily();
+
+    expect(prisma.invariantRun.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ trigger: 'SCHEDULED' })
+      })
+    );
+  });
+
+  it('records the nightly run as scheduled, so the page can tell it apart', async () => {
+    const { service, prisma } = setup(undefined, [result('reservation.reachable', ['one'])]);
+
+    await service.runDaily();
+
+    expect(prisma.invariantRun.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ trigger: 'SCHEDULED' })
+      })
+    );
+  });
+
   it('tells admins the details are on the run when the ticket could not be opened', async () => {
     const current = [result('reservation.reachable', ['one'])];
     const { service, prisma, email } = setup(undefined, current);

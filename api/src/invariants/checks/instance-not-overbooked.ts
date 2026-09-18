@@ -97,6 +97,8 @@ export const instanceNotOverbooked: Invariant = {
   title: 'Polazak ne nosi vise putnika nego sto ima mesta',
   description:
     'Broj putnika se racuna po deonici: isti autobus tokom cele rute moze da preveze vise ljudi nego sto ima sedista, ali na jednoj deonici ne sme da ih bude vise od kapaciteta. Kada se vreme polaska promeni ili se kapacitet smanji, rezervacije se broje odvojeno i autobus tiho ostane prepun.',
+  manualAdvice:
+    'Na toj deonici ima vise putnika nego mesta. Povecajte kapacitet, dodajte drugi autobus, ili prebacite deo putnika na drugi termin — ko se pomera sistem ne moze da izabere.',
   severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

@@ -56,7 +56,10 @@ export async function findReservationsOffRoute(ctx: InvariantContext): Promise<{
       ...ride.line.intermediateStops.map((stop) => stop.stationId)
     ]);
 
-    const offRouteStationIds = findOffRouteStationIds({ ...reservation, travelDate }, routeStationIds);
+    const offRouteStationIds = findOffRouteStationIds(
+      { ...reservation, travelDate },
+      routeStationIds
+    );
 
     if (offRouteStationIds.length === 0) {
       continue;
@@ -82,6 +85,8 @@ export const reservationStationsOnRoute: Invariant = {
   title: 'Stanice rezervacije su na ruti',
   description:
     'Rezervacija cuva dve stanice, a njihov redosled i ulogu odredjuje trenutna ruta linije pri svakom citanju. Kada se stanica ukloni sa linije ili linija promeni rutu, rezervacija ostaje da postoji, ali se ne moze sacuvati nikakvom izmenom niti vise licno provaljuje da je jos uvek dostizna.',
+  manualAdvice:
+    'Ako je stanica uklonjena sa rute greskom, vratite je na liniju. U suprotnom otvorite rezervaciju i prepisite je na stanice koje su danas na ruti, pa obavestite putnika o promeni.',
   severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

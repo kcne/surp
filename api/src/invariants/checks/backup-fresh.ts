@@ -16,7 +16,9 @@ export async function checkBackupFreshness(
 
   const config = backupStorageConfig(env);
   if (!config) {
-    return result('Provera rezervne kopije nije podesena na serveru.', { reason: 'NOT_CONFIGURED' });
+    return result('Provera rezervne kopije nije podesena na serveru.', {
+      reason: 'NOT_CONFIGURED'
+    });
   }
 
   let parsed: unknown;
@@ -122,6 +124,8 @@ export const backupFresh: Invariant = {
   title: 'Rezervna kopija je svezija od 26 sati',
   description:
     'Poslednja uspesna rezervna kopija mora biti mladja od 26 sati da bi prekid dnevnog pravljenja kopija bio primecen na vreme.',
+  manualAdvice:
+    'Proverite da li dnevni posao za rezervnu kopiju i dalje radi i da li ima mesta na disku. Dok je poslednja kopija stara, oporavak posle greske vraca podatke unazad do nje, pa ovo ima prednost nad svim ostalim proverama.',
   severity: 'critical',
   async check(): Promise<CheckResult> {
     return checkBackupFreshness();

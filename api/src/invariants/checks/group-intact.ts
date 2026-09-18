@@ -125,6 +125,8 @@ export const reservationGroupIntact: Invariant = {
   title: 'Grupa povratne karte je cela',
   description:
     'Karta u oba smera se cuva kao vise rezervacija sa istim groupId, svaka na svojoj voznji. Otkazivanje van grupne putanje (#9) menja samo jednu od njih, pa putnik ostaje sa potvrdjenim jednim smerom i nevidljivim drugim.',
+  manualAdvice:
+    'Pozovite putnika i dogovorite se: ili otkazite i preostali smer, ili ponovo upisite otkazani. Koje od to dvoje je ono sto je putnik trazio ne vidi se iz podataka.',
   severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

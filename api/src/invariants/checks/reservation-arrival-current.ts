@@ -77,6 +77,8 @@ export const reservationArrivalCurrent: Invariant = {
   title: 'Rezervacija nosi tacno vreme dolaska',
   description:
     'Rezervacija cuva vreme dolaska polaska na kojem se nalazi, i to je vreme koje putnik dobija i koje stoji na spisku. Kada se promeni vreme poslednje stanice, rezervacija ostaje vidljiva na svom polasku, ali nosi staro vreme dolaska — nista ne puca, putnik samo dobije pogresan sat.',
+  manualAdvice:
+    'Popravka upisuje vreme dolaska koje polazak danas ima. Putnici kojima je vec javljeno staro vreme time nisu obavesteni — ako je razlika velika, pozovite ih.',
   severity: 'warning',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

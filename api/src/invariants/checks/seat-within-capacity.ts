@@ -66,6 +66,8 @@ export const reservationSeatWithinCapacity: Invariant = {
   title: 'Sediste postoji u autobusu',
   description:
     'Kapacitet voznje se moze smanjiti i posle prodaje. Kada se smanji ispod vec prodatog sedista, putnik i dalje vidi svoj broj sedista i dolazi na polazak, a tog sedista u autobusu nema.',
+  manualAdvice:
+    'Ili vratite kapacitet voznje na stari broj mesta, ili prebacite putnika na sediste koje u autobusu postoji i javite mu novi broj.',
   severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

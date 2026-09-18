@@ -63,6 +63,8 @@ export const rideLineActive: Invariant = {
   title: 'Voznja je na aktivnoj liniji',
   description:
     'Deaktiviranje linije ne menja status voznji koje na njoj saobracaju. Aktivna voznja na deaktiviranoj liniji je nedosledno stanje koje agencija treba svesno da resi.',
+  manualAdvice:
+    'Odlucite sta je tacno: ako linija vise ne saobraca, deaktivirajte i voznje na njoj; ako saobraca, vratite liniju medju aktivne.',
   severity: 'warning',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

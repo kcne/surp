@@ -74,6 +74,13 @@ export interface Invariant {
   title: string;
   /** Why a violation matters, in terms of what an agency would notice. */
   description: string;
+  /**
+   * What a person should do about what is left after any repair has run, in
+   * Serbian. Every check has one: even where a repair exists it declines to
+   * guess at some violations, and a count with no next step is the thing the
+   * old settings cards got right and a bare table would lose.
+   */
+  manualAdvice: string;
   severity: InvariantSeverity;
   check(ctx: InvariantContext): Promise<CheckResult>;
   /**
