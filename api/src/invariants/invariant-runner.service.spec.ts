@@ -73,7 +73,7 @@ describe('InvariantRunnerService', () => {
         results: currentResults
       })
     };
-    const email = { send: jest.fn().mockResolvedValue(true) };
+    const email = { send: jest.fn().mockResolvedValue('sent') };
     const service = new InvariantRunnerService(
       prisma as never,
       { get: jest.fn((_key: string, fallback: unknown) => fallback) } as never,
@@ -165,6 +165,35 @@ describe('InvariantRunnerService', () => {
     expect(prisma.invariantRun.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ alertError: 'ticket: ticket table locked' })
+      })
+    );
+  });
+
+  it('does not hold the baseline back when there is nobody to email', async () => {
+    const { service, prisma, email } = setup(undefined, [result('reservation.reachable', ['one'])]);
+    email.send.mockResolvedValue('skipped');
+
+    await service.runDaily();
+
+    // An unreachable email channel is the standing state of the deployment, not
+    // a delivery that failed: recording it as an alert error would reopen this
+    // same ticket every night.
+    expect(prisma.invariantRun.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ alertError: undefined }) })
+    );
+  });
+
+  it('does hold the baseline back when a send was attempted and failed', async () => {
+    const { service, prisma, email } = setup(undefined, [result('reservation.reachable', ['one'])]);
+    email.send.mockRejectedValue(new Error('Resend email API request failed with status 500'));
+
+    await service.runDaily();
+
+    expect(prisma.invariantRun.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          alertError: 'email: Resend email API request failed with status 500'
+        })
       })
     );
   });

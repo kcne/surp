@@ -195,14 +195,20 @@ export class InvariantRunnerService {
     alertErrors: string[]
   ): Promise<Date | undefined> {
     try {
-      const sent = await this.email.send(
+      const outcome = await this.email.send(
         tenant.name,
         tenant.users.map((user) => user.email),
         changedResults,
         ticketOpened
       );
-      if (sent) return new Date();
-      alertErrors.push('email: Resend is not configured or the tenant has no active admin');
+      if (outcome === 'sent') return new Date();
+
+      // A skip is not a failed delivery and must not reach `alertErrors`: with
+      // no email provider or no admin to write to, nothing is going to be
+      // different tomorrow, and holding the baseline back for it would reopen
+      // the same ticket every night for as long as the tenant stays that way.
+      // The ticket is the alert in that case; the email was never available.
+      this.logger.warn({ event: 'invariant_alert_email_unavailable', tenantId: tenant.id });
     } catch (error) {
       alertErrors.push(`email: ${errorMessage(error)}`);
     }

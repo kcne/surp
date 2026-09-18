@@ -12,18 +12,23 @@ export class InvariantAlertEmailService {
    * `ticketOpened` decides the closing line. Ticket creation and this email are
    * two independent deliveries, and telling admins to open a ticket that failed
    * to be created sends them looking for something that is not there.
+   *
+   * Returns `'skipped'` when there is no provider or nobody to write to, and
+   * throws when a send was attempted and failed. The caller needs those apart:
+   * one is worth retrying tomorrow, the other is the standing state of the
+   * deployment and will still be true tomorrow.
    */
   async send(
     tenantName: string,
     recipients: string[],
     results: InvariantResultDto[],
     ticketOpened: boolean
-  ): Promise<boolean> {
+  ): Promise<'sent' | 'skipped'> {
     const apiKey = this.config.get<string>('RESEND_API_KEY');
     const from = this.config.get<string>('RESEND_FROM');
     if (!apiKey || !from || recipients.length === 0) {
       this.logger.warn({ event: 'invariant_alert_email_skipped', tenantName, recipientCount: recipients.length });
-      return false;
+      return 'skipped';
     }
 
     const controller = new AbortController();
@@ -58,7 +63,7 @@ export class InvariantAlertEmailService {
         signal: controller.signal
       });
       if (!response.ok) throw new Error(`Resend email API request failed with status ${response.status}`);
-      return true;
+      return 'sent';
     } finally {
       clearTimeout(timeout);
     }
