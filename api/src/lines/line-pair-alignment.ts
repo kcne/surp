@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { withCreateAudit } from '../prisma/audit-write.helper';
+import { TotalRow } from '../prisma/total-row.type';
 
 /**
  * A BOTH pair describes one physical route travelled in two directions, so the
@@ -8,12 +9,12 @@ import { withCreateAudit } from '../prisma/audit-write.helper';
  * terminus than it departs to — so only the intermediate stops are compared.
  */
 
-export interface PairedRouteStop {
-  stationId: string;
-  orderIndex: number;
-  isBoarding: boolean;
-  isDropoff: boolean;
-}
+export type LineStopMutableValues = TotalRow<
+  Prisma.LineStopUncheckedCreateInput,
+  'id' | 'tenantId' | 'lineId' | 'createdById' | 'updatedById' | 'createdAt' | 'updatedAt'
+>;
+
+export type PairedRouteStop = LineStopMutableValues;
 
 export interface PairedRouteLine {
   id: string;
@@ -99,8 +100,7 @@ export function stopsForDirection(
 
   return ordered
     .filter(
-      (stationId) =>
-        stationId !== line.departureStationId && stationId !== line.arrivalStationId
+      (stationId) => stationId !== line.departureStationId && stationId !== line.arrivalStationId
     )
     .map((stationId, index) => {
       const own = ownFlags.get(stationId);

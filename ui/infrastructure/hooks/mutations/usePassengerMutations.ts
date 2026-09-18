@@ -1,8 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import {
-  PassengerResponseDto,
-} from "@/infrastructure/generated/model"
+import { PassengerResponseDto } from "@/infrastructure/generated/model"
 import {
   passengersControllerCreate,
   passengersControllerRemove,
@@ -17,6 +15,10 @@ import {
 } from "@/infrastructure/mappers/passengerMappers"
 import { passengersListQueryKey } from "@/infrastructure/hooks/queries/usePassengersListQuery"
 import type { PassengerFormData } from "@/types"
+import {
+  ChangeNeedsConfirmationError,
+  throwBreakingChangeConflict,
+} from "@/infrastructure/utils/breaking-change"
 
 function isPassengerMutationSuccess<TResponse extends { status: number }>(
   response: TResponse
@@ -76,8 +78,19 @@ export function useUpdatePassengerMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, payload }: { id: string; payload: Partial<PassengerFormData> }) => {
-      const response = await passengersControllerUpdate(id, toUpdatePassengerDto(payload))
+    mutationFn: async ({
+      id,
+      payload,
+      confirmBreakingChange,
+    }: {
+      id: string
+      payload: Partial<PassengerFormData>
+      confirmBreakingChange?: boolean
+    }) => {
+      const response = await passengersControllerUpdate(id, {
+        ...toUpdatePassengerDto(payload),
+        confirmBreakingChange,
+      }).catch(throwBreakingChangeConflict)
 
       if (!isUpdatePassengerSuccess(response)) {
         throw new Error("Neuspesno azuriranje putnika")
@@ -90,6 +103,10 @@ export function useUpdatePassengerMutation() {
       invalidatePassengers(queryClient)
     },
     onError: (error) => {
+      if (error instanceof ChangeNeedsConfirmationError) {
+        return
+      }
+
       toast.error(getErrorMessage(error, "Neuspesno azuriranje putnika"))
     },
   })

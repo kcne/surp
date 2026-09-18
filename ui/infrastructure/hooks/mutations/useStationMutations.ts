@@ -10,6 +10,10 @@ import {
 } from "@/infrastructure/generated/surp-api"
 import type { CreateStationDto, UpdateStationDto } from "@/infrastructure/generated/model"
 import { stationsListQueryKey } from "@/infrastructure/hooks/queries/useStationsListQuery"
+import {
+  ChangeNeedsConfirmationError,
+  throwBreakingChangeConflict,
+} from "@/infrastructure/utils/breaking-change"
 
 function isStationMutationSuccess<TResponse extends { status: number }>(
   response: TResponse,
@@ -62,11 +66,16 @@ export function useUpdateStationMutation() {
     mutationFn: async ({
       id,
       payload,
+      confirmBreakingChange,
     }: {
       id: string
       payload: UpdateStationDto
+      confirmBreakingChange?: boolean
     }) => {
-      const response = await stationsControllerUpdate(id, payload)
+      const response = await stationsControllerUpdate(id, {
+        ...payload,
+        confirmBreakingChange,
+      }).catch(throwBreakingChangeConflict)
       if (!isStationMutationSuccess<stationsControllerUpdateResponse>(response)) {
         throw new Error("Neuspesno azuriranje stanice")
       }
@@ -77,6 +86,10 @@ export function useUpdateStationMutation() {
       invalidateStationsList(queryClient)
     },
     onError: (error) => {
+      if (error instanceof ChangeNeedsConfirmationError) {
+        return
+      }
+
       toast.error(getErrorMessage(error, "Neuspesno azuriranje stanice"))
     },
   })

@@ -20,8 +20,11 @@ import {
   toUpdateRideDto,
 } from "@/infrastructure/mappers/rideMappers"
 import { ridesListQueryKey } from "@/infrastructure/hooks/queries/useRidesListQuery"
-import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
 import type { RideFormData } from "@/types"
+import {
+  ChangeNeedsConfirmationError,
+  throwBreakingChangeConflict,
+} from "@/infrastructure/utils/breaking-change"
 
 function isRideMutationSuccess<TResponse extends { status: number }>(
   response: TResponse,
@@ -44,24 +47,7 @@ function isRideMutationSuccess<TResponse extends { status: number }>(
  * resends with the confirmation, instead of being flattened into a red toast
  * that says only that something failed.
  */
-export class RideChangeNeedsConfirmationError extends Error {
-  constructor(readonly confirmation: WouldBreakReservationsDto) {
-    super(confirmation.message)
-    this.name = "RideChangeNeedsConfirmationError"
-  }
-}
-
-function asBreakingChangeConflict(error: unknown): WouldBreakReservationsDto | null {
-  const body = (error as { response?: { status?: number; data?: unknown } })?.response
-
-  if (body?.status !== 409) {
-    return null
-  }
-
-  const data = body.data as Partial<WouldBreakReservationsDto> | undefined
-
-  return data?.code === "WOULD_BREAK_RESERVATIONS" ? (data as WouldBreakReservationsDto) : null
-}
+export { ChangeNeedsConfirmationError as RideChangeNeedsConfirmationError }
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) {
@@ -171,17 +157,12 @@ export function useUpdateRideMutation() {
           ? { ...updatePayload, confirmBreakingChange: true }
           : updatePayload
 
-        const response = await (payload.lineId && payload.type
-          ? ridesControllerReplace(id, requestBody)
-          : ridesControllerUpdate(id, requestBody)
+        const response = await (
+          payload.lineId && payload.type
+            ? ridesControllerReplace(id, requestBody)
+            : ridesControllerUpdate(id, requestBody)
         ).catch((error: unknown) => {
-          const confirmation = asBreakingChangeConflict(error)
-
-          if (confirmation) {
-            throw new RideChangeNeedsConfirmationError(confirmation)
-          }
-
-          throw error
+          throwBreakingChangeConflict(error)
         })
 
         const isSuccess = isUpdateRideSuccess(response)
@@ -207,17 +188,19 @@ export function useUpdateRideMutation() {
         const toAdd = nextExceptions.filter((exception) => !existingIds.has(exception.id))
 
         for (const exception of toRemove) {
-          const removeResponse = await ridesControllerRemoveException(id, exception.id)
+          const removeResponse = await ridesControllerRemoveException(id, exception.id, {
+            confirmBreakingChange,
+          }).catch(throwBreakingChangeConflict)
           if (!isRideMutationSuccess(removeResponse)) {
             throw new Error("Neuspesno uklanjanje izuzetka voznje")
           }
         }
 
         for (const exception of toAdd) {
-          const addResponse = await ridesControllerAddException(
-            id,
-            toCreateRideExceptionDto(exception)
-          )
+          const addResponse = await ridesControllerAddException(id, {
+            ...toCreateRideExceptionDto(exception),
+            confirmBreakingChange,
+          }).catch(throwBreakingChangeConflict)
           if (!isRideMutationSuccess(addResponse)) {
             throw new Error("Neuspesno dodavanje izuzetka voznje")
           }
@@ -238,7 +221,7 @@ export function useUpdateRideMutation() {
     onError: (error) => {
       // The page turns this one into a question, so a toast would only be a
       // red notice next to a dialog asking the agency to decide.
-      if (error instanceof RideChangeNeedsConfirmationError) {
+      if (error instanceof ChangeNeedsConfirmationError) {
         return
       }
 

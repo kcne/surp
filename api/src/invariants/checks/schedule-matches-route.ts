@@ -124,6 +124,10 @@ export async function realignDriftedSchedules(ctx: InvariantContext): Promise<Re
   let estimatedTimeCount = 0;
   let reorderedScheduleCount = 0;
 
+  if (!('$transaction' in ctx.prisma)) {
+    throw new Error('Invariant repairs require a root database client');
+  }
+
   for (const entry of drifted) {
     const result = await ctx.prisma.$transaction((tx) =>
       realignDayScheduleTx(tx, {

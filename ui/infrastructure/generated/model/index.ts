@@ -20,6 +20,7 @@ export * from './cancellationPreviewResponseDto';
 export * from './checkPassengerDuplicatesDto';
 export * from './completeStorefrontAssetUploadDto';
 export * from './completeTicketAttachmentDto';
+export * from './confirmBreakingChangeDto';
 export * from './convertPlatformLeadDto';
 export * from './convertPlatformLeadResponseDto';
 export * from './createLineDto';

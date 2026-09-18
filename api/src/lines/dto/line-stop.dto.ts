@@ -10,6 +10,7 @@ import {
   Min,
   ValidateNested
 } from 'class-validator';
+import { ConfirmBreakingChangeDto } from '../../invariants/dto/confirm-breaking-change.dto';
 
 export class LineStopInputDto {
   @ApiProperty({ example: 'station-intermediate-id' })
@@ -42,7 +43,7 @@ export class LineStopInputDto {
   isDropoff?: boolean;
 }
 
-export class ReplaceLineStopsDto {
+export class ReplaceLineStopsDto extends ConfirmBreakingChangeDto {
   @ApiProperty({ type: [LineStopInputDto] })
   @IsArray()
   @ValidateNested({ each: true })

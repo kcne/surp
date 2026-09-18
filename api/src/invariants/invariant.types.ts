@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -24,7 +25,8 @@ export type InvariantSeverity = 'critical' | 'warning';
 export interface InvariantContext {
   tenantId: string;
   actorId: string;
-  prisma: PrismaService;
+  /** A full client for normal runs, or the transaction holding a proposed write. */
+  prisma: PrismaService | Prisma.TransactionClient;
   windowDays: number;
 }
 

@@ -1,10 +1,32 @@
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException
-} from '@nestjs/common';
-import { LineDirection, LineDirectionMode, ReservationStatus, RideStatus, UserRole } from '@prisma/client';
+  LineDirection,
+  LineDirectionMode,
+  ReservationStatus,
+  RideStatus,
+  UserRole
+} from '@prisma/client';
 import { LinesService } from './lines.service';
+
+function withCleanInvariantReads<T extends object>(tx: T): T {
+  const existing = tx as T & {
+    reservation?: Record<string, unknown>;
+    station?: Record<string, unknown>;
+  };
+
+  Object.assign(tx, {
+    reservation: {
+      ...existing.reservation,
+      findMany: existing.reservation?.findMany ?? jest.fn().mockResolvedValue([])
+    },
+    station: {
+      ...existing.station,
+      findMany: existing.station?.findMany ?? jest.fn().mockResolvedValue([])
+    }
+  });
+
+  return tx;
+}
 
 describe('LinesService', () => {
   const prismaMock = {
@@ -69,7 +91,11 @@ describe('LinesService', () => {
       category: null,
       isActive: true
     },
-    intermediateStops: [] as Array<{ stationId: string; orderIndex: number; station: { name: string } }>
+    intermediateStops: [] as Array<{
+      stationId: string;
+      orderIndex: number;
+      station: { name: string };
+    }>
   };
 
   let service: LinesService;
@@ -216,7 +242,9 @@ describe('LinesService', () => {
       }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx))
+    );
 
     const result = await service.remove(auth, 'line-1', true);
 
@@ -299,7 +327,9 @@ describe('LinesService', () => {
       }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx))
+    );
 
     await service.update(auth, 'line-1', {
       intermediateStops: [
@@ -359,7 +389,9 @@ describe('LinesService', () => {
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx))
+    );
 
     await service.update(auth, 'line-1', { isActive: false });
 
@@ -410,7 +442,9 @@ describe('LinesService', () => {
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx))
+    );
 
     await service.replaceStops(auth, 'line-1', [
       { stationId: 'station-c', orderIndex: 1 },
@@ -463,7 +497,9 @@ describe('LinesService', () => {
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx))
+    );
 
     await service.update(auth, 'line-1', {
       intermediateStops: [
@@ -475,13 +511,11 @@ describe('LinesService', () => {
 
     const ownCall = tx.lineStop.createMany.mock.calls[0][0];
     expect(
-      ownCall.data.map(
-        (entry: { stationId: string; isBoarding: boolean; isDropoff: boolean }) => ({
-          stationId: entry.stationId,
-          isBoarding: entry.isBoarding,
-          isDropoff: entry.isDropoff
-        })
-      )
+      ownCall.data.map((entry: { stationId: string; isBoarding: boolean; isDropoff: boolean }) => ({
+        stationId: entry.stationId,
+        isBoarding: entry.isBoarding,
+        isDropoff: entry.isDropoff
+      }))
     ).toEqual([
       { stationId: 'station-c', isBoarding: true, isDropoff: false },
       { stationId: 'station-d', isBoarding: true, isDropoff: true }
@@ -541,7 +575,9 @@ describe('LinesService', () => {
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx))
+    );
 
     await service.update(auth, 'line-1', {
       intermediateStops: [
@@ -601,7 +637,9 @@ describe('LinesService', () => {
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx))
+    );
 
     await service.update(auth, 'line-1', {
       intermediateStops: [
@@ -643,7 +681,9 @@ describe('LinesService', () => {
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx))
+    );
 
     await service.update(auth, 'line-1', {
       intermediateStops: [{ stationId: 'station-c', orderIndex: 1 }]

@@ -8,5 +8,7 @@
 import type { LineStopInputDto } from './lineStopInputDto';
 
 export interface ReplaceLineStopsDto {
+  /** Confirms a change previously refused with WOULD_BREAK_RESERVATIONS. */
+  confirmBreakingChange?: boolean;
   intermediateStops: LineStopInputDto[];
 }

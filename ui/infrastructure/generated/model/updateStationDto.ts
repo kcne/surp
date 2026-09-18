@@ -8,6 +8,8 @@
 import type { UpdateStationDtoCategory } from './updateStationDtoCategory';
 
 export interface UpdateStationDto {
+  /** Confirms a change previously refused with WOULD_BREAK_RESERVATIONS. */
+  confirmBreakingChange?: boolean;
   name?: string;
   address?: string;
   category?: UpdateStationDtoCategory;

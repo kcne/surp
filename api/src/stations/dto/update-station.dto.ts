@@ -1,14 +1,9 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { StationCategory } from '@prisma/client';
-import {
-  IsBoolean,
-  IsEnum,
-  IsOptional,
-  IsString,
-  MaxLength
-} from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ConfirmBreakingChangeDto } from '../../invariants/dto/confirm-breaking-change.dto';
 
-export class UpdateStationDto {
+export class UpdateStationDto extends ConfirmBreakingChangeDto {
   @ApiPropertyOptional({ example: 'Central Station - West Gate' })
   @IsOptional()
   @IsString()

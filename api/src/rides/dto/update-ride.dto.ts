@@ -2,7 +2,6 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { RideStatus, RideType } from '@prisma/client';
 import {
   IsArray,
-  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -15,11 +14,12 @@ import {
   ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ConfirmBreakingChangeDto } from '../../invariants/dto/confirm-breaking-change.dto';
 import { RideDayScheduleInputDto } from './ride-day-time.dto';
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-export class UpdateRideDto {
+export class UpdateRideDto extends ConfirmBreakingChangeDto {
   @ApiPropertyOptional({ example: 'Morning Central Route Updated' })
   @IsOptional()
   @IsString()
@@ -75,20 +75,6 @@ export class UpdateRideDto {
   @IsString()
   @Matches(TIME_PATTERN, { message: 'oneTimeArrivalTime must be in HH:mm format' })
   oneTimeArrivalTime?: string;
-
-  /**
-   * Says the caller has seen what the change would break and means to make it
-   * anyway. A body field rather than a query parameter, so a copied URL can
-   * never carry it.
-   */
-  @ApiPropertyOptional({
-    example: false,
-    description:
-      'Confirms a change the server refused with WOULD_BREAK_RESERVATIONS, such as lowering capacity under a seat that is already sold.'
-  })
-  @IsOptional()
-  @IsBoolean()
-  confirmBreakingChange?: boolean;
 
   @ApiPropertyOptional({ type: [RideDayScheduleInputDto] })
   @IsOptional()

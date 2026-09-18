@@ -17,6 +17,9 @@ import {
 import { useStationsListQuery } from "@/infrastructure/hooks/queries/useStationsListQuery"
 import type { CreateStationDto, UpdateStationDto } from "@/infrastructure/generated/model"
 import type { StationListItem } from "@/infrastructure/hooks/queries/useStationsListQuery"
+import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
+import { ChangeNeedsConfirmationError } from "@/infrastructure/utils/breaking-change"
+import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
 
 export default function StationsPage() {
   const stationsQuery = useStationsListQuery()
@@ -31,6 +34,11 @@ export default function StationsPage() {
     updateStationMutation.isPending ||
     deleteStationMutation.isPending
   const [isViewMode, setIsViewMode] = useState(false)
+  const [pendingChange, setPendingChange] = useState<{
+    id: string
+    payload: UpdateStationDto
+    confirmation: WouldBreakReservationsDto
+  } | null>(null)
   const {
     isModalOpen,
     isDeleteDialogOpen,
@@ -48,7 +56,33 @@ export default function StationsPage() {
   }
 
   const handleUpdate = async (id: string, payload: UpdateStationDto) => {
-    await updateStationMutation.mutateAsync({ id, payload })
+    try {
+      await updateStationMutation.mutateAsync({ id, payload })
+    } catch (error) {
+      if (error instanceof ChangeNeedsConfirmationError) {
+        setPendingChange({ id, payload, confirmation: error.confirmation })
+      }
+
+      throw error
+    }
+  }
+
+  const handleConfirmPendingChange = async () => {
+    if (!pendingChange) {
+      return
+    }
+
+    try {
+      await updateStationMutation.mutateAsync({
+        id: pendingChange.id,
+        payload: pendingChange.payload,
+        confirmBreakingChange: true,
+      })
+      setPendingChange(null)
+      handleModalClose()
+    } catch {
+      // The mutation reports ordinary failures; keep the dialog open for retry.
+    }
   }
 
   const handleDelete = async (id: string) => {
@@ -88,9 +122,7 @@ export default function StationsPage() {
               <MapPin className="h-6 w-6 text-primary" />
               Stanice
             </h1>
-            <p className="text-muted-foreground">
-              Upravljajte autobuskim stanicama u sistemu
-            </p>
+            <p className="text-muted-foreground">Upravljajte autobuskim stanicama u sistemu</p>
           </div>
           <Button onClick={handleAddNew}>
             <Plus className="mr-2 h-4 w-4" />
@@ -111,20 +143,14 @@ export default function StationsPage() {
               Greska pri ucitavanju stanica
             </p>
             <p className="mb-4 text-sm text-muted-foreground">
-              {error instanceof Error
-                ? error.message
-                : "Pokrenite ponovno ucitavanje podataka."}
+              {error instanceof Error ? error.message : "Pokrenite ponovno ucitavanje podataka."}
             </p>
-            <Button onClick={() => stationsQuery.refetch()}>
-              Pokusaj ponovo
-            </Button>
+            <Button onClick={() => stationsQuery.refetch()}>Pokusaj ponovo</Button>
           </div>
         ) : stations.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12">
             <MapPin className="mb-3 h-10 w-10 text-muted-foreground" />
-            <p className="text-lg font-medium text-muted-foreground">
-              Nema stanica
-            </p>
+            <p className="text-lg font-medium text-muted-foreground">Nema stanica</p>
             <p className="mb-4 text-sm text-muted-foreground">
               Dodajte prvu stanicu da biste počeli
             </p>
@@ -152,6 +178,18 @@ export default function StationsPage() {
           onUpdate={handleUpdate}
         />
 
+        <ConfirmBreakingChangeDialog
+          open={pendingChange !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPendingChange(null)
+            }
+          }}
+          confirmation={pendingChange?.confirmation ?? null}
+          loading={mutationLoading}
+          onConfirm={handleConfirmPendingChange}
+        />
+
         <DeleteStationDialog
           open={isDeleteDialogOpen}
           onOpenChange={setIsDeleteDialogOpen}
@@ -163,13 +201,3 @@ export default function StationsPage() {
     </Layout>
   )
 }
-
-
-
-
-
-
-
-
-
-
