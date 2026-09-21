@@ -18,6 +18,13 @@ import { withUpdateAudit } from '../prisma/audit-write.helper';
  * passenger about a journey that was never sold.
  */
 
+/**
+ * How far after an outbound leg a return leg is still plausibly the same
+ * journey. Used by the legacy heuristic in `cancellationPreview` and by the
+ * backfill that pairs the rows predating this column, which must agree.
+ */
+export const LEGACY_RETURN_LOOKUP_DAYS = 90;
+
 /** The partial unique index from 20260921130000_reservation_return_leg. */
 const ACTIVE_RETURN_LEG_INDEX = 'Reservation_active_return_leg_key';
 
