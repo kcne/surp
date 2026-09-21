@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { formatDuration, formatRunDate } from "@/components/settings/invariant-status"
+import { DomainAuditTrail } from "@/components/settings/DomainAuditTrail"
 import type { InvariantHistoryViolationDto } from "@/infrastructure/generated/model"
 
 /**
@@ -114,6 +115,7 @@ export function InvariantViolationsTable({
                           </div>
                         ))}
                       </dl>
+                      <DomainAuditTrail violation={violation} />
                     </TableCell>
                   </TableRow>
                 ) : null}
