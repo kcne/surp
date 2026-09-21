@@ -25,6 +25,7 @@ import {
   ChangeNeedsConfirmationError,
   throwBreakingChangeConflict,
 } from "@/infrastructure/utils/breaking-change"
+import type { BreakingChangeAnswers } from "@/infrastructure/hooks/useConfirmableUpdate"
 
 /** The confirmation key for the ride request itself; exceptions key by id. */
 const RIDE_STEP = "ride"
@@ -122,18 +123,25 @@ export function useUpdateRideMutation() {
     mutationFn: async ({
       id,
       payload,
-      confirmedSteps,
+      answers,
     }: {
       id: string
       payload: Partial<RideFormData>
       /**
-       * The steps the agency has already answered a 409 about, by key. An edit
-       * is several requests and each can be refused on its own terms, so a
-       * confirmation applies to the one request it was given for.
+       * The steps the agency has already answered a 409 about, by key, and how
+       * it answered them. An edit is several requests and each can be refused
+       * on its own terms, so an answer applies to the one request it was given
+       * for — and "save anyway" and "save and repair" are different answers,
+       * not one flag.
        */
-      confirmedSteps?: string[]
+      answers?: BreakingChangeAnswers
     }) => {
-      const isConfirmed = (step: string) => confirmedSteps?.includes(step) === true
+      const isConfirmed = (step: string) => answers?.confirmed.includes(step) === true
+      const isRepaired = (step: string) => answers?.repaired.includes(step) === true
+      const answeredFor = (step: string) => ({
+        confirmBreakingChange: isConfirmed(step),
+        repairBreakingChange: isRepaired(step),
+      })
       const hasExceptionsUpdate = Array.isArray(payload.exceptions)
       // Whether any request in this edit has already been written. Every step
       // that lands sets it, not just the ride: an exception-only edit that
@@ -160,9 +168,7 @@ export function useUpdateRideMutation() {
         // this one never answers for an exception nobody was asked about.
         const updatePayload = toUpdateRideDto(payload)
 
-        const requestBody = isConfirmed(RIDE_STEP)
-          ? { ...updatePayload, confirmBreakingChange: true }
-          : updatePayload
+        const requestBody = { ...updatePayload, ...answeredFor(RIDE_STEP) }
 
         const response = await (
           payload.lineId && payload.type
@@ -196,9 +202,11 @@ export function useUpdateRideMutation() {
 
         for (const exception of toRemove) {
           const step = `exception:remove:${exception.id}`
-          const removeResponse = await ridesControllerRemoveException(id, exception.id, {
-            confirmBreakingChange: isConfirmed(step),
-          }).catch((error: unknown) => throwBreakingChangeConflict(error, step, anyWriteLanded))
+          const removeResponse = await ridesControllerRemoveException(
+            id,
+            exception.id,
+            answeredFor(step)
+          ).catch((error: unknown) => throwBreakingChangeConflict(error, step, anyWriteLanded))
           if (!isRideMutationSuccess(removeResponse)) {
             throw new Error("Neuspesno uklanjanje izuzetka voznje")
           }
@@ -210,7 +218,7 @@ export function useUpdateRideMutation() {
           const step = `exception:add:${exception.id}`
           const addResponse = await ridesControllerAddException(id, {
             ...toCreateRideExceptionDto(exception),
-            confirmBreakingChange: isConfirmed(step),
+            ...answeredFor(step),
           }).catch((error: unknown) => throwBreakingChangeConflict(error, step, anyWriteLanded))
           if (!isRideMutationSuccess(addResponse)) {
             throw new Error("Neuspesno dodavanje izuzetka voznje")

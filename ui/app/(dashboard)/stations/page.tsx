@@ -50,10 +50,11 @@ export default function StationsPage() {
   }
 
   const confirmableUpdate = useConfirmableUpdate<{ id: string; payload: UpdateStationDto }>({
-    update: (variables, confirmedSteps) =>
+    update: (variables, answers) =>
       updateStationMutation.mutateAsync({
         ...variables,
-        confirmBreakingChange: confirmedSteps.length > 0,
+        confirmBreakingChange: answers.confirmed.length > 0,
+        repairBreakingChange: answers.repaired.length > 0,
       }),
     onConfirmed: () => handleModalClose(),
   })

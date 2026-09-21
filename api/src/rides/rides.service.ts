@@ -9,7 +9,11 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
-import { PROSPECTIVE_INVARIANTS, guardProspectiveWrite } from '../invariants/prospective-write';
+import {
+  PROSPECTIVE_INVARIANTS,
+  ProspectiveWriteConsent,
+  guardProspectiveWrite
+} from '../invariants/prospective-write';
 import { CreateRideDto } from './dto/create-ride.dto';
 import { ListRideInstancesQueryDto } from './dto/ride-instances.query.dto';
 import { ListRidesQueryDto } from './dto/list-rides.query.dto';
@@ -540,7 +544,7 @@ export class RidesService {
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       PROSPECTIVE_INVARIANTS.rideUpdate,
-      dto.confirmBreakingChange === true,
+      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
       async (tx) => {
         const existing = await this.getRideOrThrow(auth.tenantId, id, tx);
 
@@ -649,7 +653,7 @@ export class RidesService {
     auth: AccessTokenPayload,
     id: string,
     daySchedules: RideDayScheduleInputDto[],
-    confirmed = false
+    consent: ProspectiveWriteConsent = { confirmed: false, repair: false }
   ): Promise<RideResponseDto> {
     // The route these times are checked against is read inside the write's own
     // transaction. Read before it, a line edit could land in between and leave
@@ -660,7 +664,7 @@ export class RidesService {
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       PROSPECTIVE_INVARIANTS.rideUpdate,
-      confirmed,
+      consent,
       async (tx) => {
         const ride = await this.getRideOrThrow(auth.tenantId, id, tx);
 
@@ -721,7 +725,7 @@ export class RidesService {
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       dto.type === RideExceptionType.SKIP ? PROSPECTIVE_INVARIANTS.rideException : [],
-      dto.confirmBreakingChange === true,
+      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
       async (tx) => {
         // Inside the transaction, so the read that proves the exception is new
         // and the write that makes it exist cannot be separated. `RideException`
@@ -807,7 +811,7 @@ export class RidesService {
     auth: AccessTokenPayload,
     rideId: string,
     exceptionId: string,
-    confirmed = false
+    consent: ProspectiveWriteConsent = { confirmed: false, repair: false }
   ): Promise<RideExceptionResponseDto> {
     await this.getRideOrThrow(auth.tenantId, rideId);
 
@@ -830,7 +834,7 @@ export class RidesService {
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       PROSPECTIVE_INVARIANTS.rideException,
-      confirmed,
+      consent,
       (tx) =>
         tx.rideException.delete({
           where: {

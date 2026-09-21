@@ -83,8 +83,7 @@ export default function SchedulePage() {
   }
 
   const confirmableUpdate = useConfirmableUpdate<{ id: string; payload: Partial<RideFormData> }>({
-    update: (variables, confirmedSteps) =>
-      updateRideMutation.mutateAsync({ ...variables, confirmedSteps }),
+    update: (variables, answers) => updateRideMutation.mutateAsync({ ...variables, answers }),
     onConfirmed: closeModal,
   })
 

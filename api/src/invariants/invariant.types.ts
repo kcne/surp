@@ -105,6 +105,16 @@ export interface Invariant {
    * write is ever refused for; `ProspectiveInvariant` requires it.
    */
   breakingChangeMessage?(count: number): string;
+  /**
+   * What running `repair` would do to the subjects a write is being refused
+   * for, in Serbian. Shown on the button that answers the refusal by fixing
+   * rather than by overriding.
+   *
+   * Beside `breakingChangeMessage` and for the same reason: the check knows
+   * what its repair does, and a sentence written anywhere else drifts from it.
+   * Only meaningful where `repair` exists.
+   */
+  repairMessage?(count: number): string;
   check(ctx: InvariantContext): Promise<CheckResult>;
   /**
    * Present only where a repair can be made without guessing. An invariant

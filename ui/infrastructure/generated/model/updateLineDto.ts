@@ -12,6 +12,8 @@ import type { UpdateLineDtoDirectionMode } from './updateLineDtoDirectionMode';
 export interface UpdateLineDto {
   /** Confirms a change previously refused with WOULD_BREAK_RESERVATIONS. */
   confirmBreakingChange?: boolean;
+  /** Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange. */
+  repairBreakingChange?: boolean;
   name?: string;
   departureStationId?: string;
   arrivalStationId?: string;

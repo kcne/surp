@@ -127,7 +127,7 @@ export class StationsService {
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       dto.isActive === false ? PROSPECTIVE_INVARIANTS.stationDeactivation : [],
-      dto.confirmBreakingChange === true,
+      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
       (tx) =>
         tx.station.update({
           where: {

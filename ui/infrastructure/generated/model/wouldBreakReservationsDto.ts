@@ -13,4 +13,8 @@ export interface WouldBreakReservationsDto {
   /** New invariant violations the proposed change would introduce. */
   affectedCount: number;
   message: string;
+  /** Whether resending with repairBreakingChange would settle every affected subject rather than leaving it broken. */
+  repairable: boolean;
+  /** What the repair would do, in Serbian. Present when repairable. */
+  repairMessage?: string;
 }

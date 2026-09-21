@@ -57,16 +57,33 @@ export interface ProspectiveWriteScope {
 }
 
 /**
+ * The caller's answer to a refusal it has already been shown.
+ *
+ * Two answers, not one flag with two meanings. `confirmed` is "write it and
+ * leave the breakage for the integrity report"; `repair` is "write it and put
+ * the affected reservations back in order, and refuse if you cannot". They are
+ * separate because the second is a promise, and a promise that quietly
+ * degrades into the first is the thing worth not building: an agency that
+ * pressed a button saying the reservations would be fixed must not end up with
+ * broken ones and no word about it.
+ */
+export interface ProspectiveWriteConsent {
+  confirmed: boolean;
+  repair: boolean;
+}
+
+/**
  * Applies a write tentatively, asks the existing invariants what changed, and
- * commits only when the proposed state adds no violations (or was confirmed).
- * Comparing against the baseline matters: old drift must stay visible in the
- * integrity report, but it must not make an unrelated edit impossible.
+ * commits only when the proposed state adds no violations (or was confirmed,
+ * or was repaired). Comparing against the baseline matters: old drift must stay
+ * visible in the integrity report, but it must not make an unrelated edit
+ * impossible.
  */
 export async function guardProspectiveWrite<TResult>(
   prisma: PrismaService,
   scope: ProspectiveWriteScope,
   invariants: readonly ProspectiveInvariant[],
-  confirmed: boolean,
+  consent: ProspectiveWriteConsent,
   write: (tx: Prisma.TransactionClient) => Promise<TResult>
 ): Promise<TResult> {
   return runSerializable(prisma, async (tx) => {
@@ -74,7 +91,10 @@ export async function guardProspectiveWrite<TResult>(
     // read-then-write — an exception that must not already exist, a route read
     // to derive the next one from — and those need the isolation whether or
     // not an invariant is being measured. Only the two scans are skipped.
-    if (confirmed || invariants.length === 0) {
+    //
+    // A repair keeps the scans even when the write is confirmed: it cannot fix
+    // what it has not measured.
+    if (invariants.length === 0 || (consent.confirmed && !consent.repair)) {
       return write(tx);
     }
 
@@ -83,20 +103,63 @@ export async function guardProspectiveWrite<TResult>(
     const after = await checkInvariants(tx, scope, invariants);
 
     for (const invariant of invariants) {
-      const added = addedViolations(before.get(invariant.key)!, after.get(invariant.key)!);
+      let added = addedViolations(before.get(invariant.key)!, after.get(invariant.key)!);
 
-      if (added.length > 0) {
-        throw new ConflictException({
-          code: 'WOULD_BREAK_RESERVATIONS',
-          invariant: invariant.key,
-          affectedCount: added.length,
-          message: invariant.breakingChangeMessage(added.length)
-        });
+      if (added.length === 0) {
+        continue;
       }
+
+      if (consent.repair && isFullyRepairable(invariant, added)) {
+        await invariant.repair!(invariantContext(tx, scope));
+
+        // Re-checked rather than assumed. The repair decides seats against the
+        // bus as it stands and declines whatever it cannot settle, so whether
+        // it actually cleared these is a question only another scan answers —
+        // and it runs on a fresh context, which is what keeps the repaired
+        // rows from being served out of the window cache the first scan filled.
+        const repaired = await checkInvariants(tx, scope, [invariant]);
+        added = addedViolations(before.get(invariant.key)!, repaired.get(invariant.key)!);
+
+        if (added.length === 0) {
+          continue;
+        }
+      }
+
+      if (consent.confirmed) {
+        continue;
+      }
+
+      throw new ConflictException({
+        code: 'WOULD_BREAK_RESERVATIONS',
+        invariant: invariant.key,
+        affectedCount: added.length,
+        message: invariant.breakingChangeMessage(added.length),
+        // Computed from what is left, so a repair that ran and fell short
+        // cannot offer itself again on the way out.
+        repairable: isFullyRepairable(invariant, added),
+        ...(isFullyRepairable(invariant, added) && invariant.repairMessage
+          ? { repairMessage: invariant.repairMessage(added.length) }
+          : {})
+      });
     }
 
     return result;
   });
+}
+
+/**
+ * Whether running this invariant's repair would settle every one of these
+ * violations. Partial repair is deliberately not offered: an agency told the
+ * change would be fixed, and then left holding three broken reservations, is
+ * worse off than one told plainly that this is a telephone call.
+ */
+function isFullyRepairable(
+  invariant: ProspectiveInvariant,
+  added: readonly Violation[]
+): boolean {
+  return (
+    typeof invariant.repair === 'function' && added.every((violation) => violation.canRepair)
+  );
 }
 
 /**
@@ -164,19 +227,30 @@ function isSerializationFailure(error: unknown): boolean {
   );
 }
 
+/**
+ * A context per pass, never shared between them: the checks cache the
+ * reservation window against the context they were given, which is what makes
+ * five of them share one load — and what would serve a second pass the rows the
+ * first one read, write or repair notwithstanding.
+ */
+function invariantContext(
+  prisma: Prisma.TransactionClient,
+  scope: ProspectiveWriteScope
+): InvariantContext {
+  return {
+    tenantId: scope.tenantId,
+    actorId: scope.actorId,
+    prisma,
+    windowDays: PROSPECTIVE_WINDOW_DAYS
+  };
+}
+
 async function checkInvariants(
   prisma: Prisma.TransactionClient,
   scope: ProspectiveWriteScope,
   invariants: readonly Invariant[]
 ): Promise<Map<string, Violation[]>> {
-  const ctx: InvariantContext = {
-    tenantId: scope.tenantId,
-    actorId: scope.actorId,
-    prisma,
-    // A context per pass, which is also what makes the checks share one load of
-    // the reservation window rather than taking five identical ones.
-    windowDays: PROSPECTIVE_WINDOW_DAYS
-  };
+  const ctx = invariantContext(prisma, scope);
   const result = new Map<string, Violation[]>();
 
   for (const invariant of invariants) {

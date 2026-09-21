@@ -934,4 +934,198 @@ describe('RidesService', () => {
     );
     expect(result.status).toBe(RideStatus.INACTIVE);
   });
+
+  // The agency moves the morning departure an hour later. The reservations
+  // sold on the old time stop matching any departure and vanish from every
+  // list while still holding their seats — which is the one breakage the
+  // registry has a repair for, so the refusal can offer to fix it rather than
+  // only to be overridden.
+  describe('moving the departure time under a sold reservation', () => {
+    const travelDate = (() => {
+      const date = new Date();
+      date.setUTCDate(date.getUTCDate() + 60);
+      date.setUTCHours(0, 0, 0, 0);
+      return date;
+    })();
+
+    const dayOfWeek = travelDate.getUTCDay();
+
+    const timesAt = (departure: string, arrival: string) => [
+      { stationId: 'station-a', orderIndex: 0, time: departure },
+      { stationId: 'station-b', orderIndex: 1, time: arrival }
+    ];
+
+    const storedRide = (departure: string, arrival: string) => ({
+      id: 'ride-1',
+      tenantId: 'tenant-1',
+      lineId: 'line-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      name: 'Ride',
+      capacity: 38,
+      type: RideType.RECURRING,
+      status: RideStatus.ACTIVE,
+      recurringStartDate: new Date('2020-01-01T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      line: {
+        id: 'line-1',
+        name: 'Line 1',
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b',
+        intermediateStops: []
+      },
+      daySchedules: [{ dayOfWeek, stationTimes: timesAt(departure, arrival) }],
+      exceptions: []
+    });
+
+    const windowedRide = (departure: string, arrival: string) => ({
+      id: 'ride-1',
+      name: 'Ride',
+      capacity: 38,
+      status: 'ACTIVE',
+      type: 'RECURRING',
+      recurringStartDate: new Date('2020-01-01T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      line: {
+        name: 'Line 1',
+        isActive: true,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b',
+        intermediateStops: []
+      },
+      daySchedules: [
+        {
+          dayOfWeek,
+          stationTimes: [
+            { orderIndex: 0, time: departure },
+            { orderIndex: 1, time: arrival }
+          ]
+        }
+      ],
+      exceptions: []
+    });
+
+    /**
+     * A transaction that moves with the write, and with the repair: the scans
+     * after the write see the later departure, and a reservation the repair
+     * updates reads back updated on the scan that follows.
+     */
+    const transactionMoving = () => {
+      let written = false;
+
+      const reservations = [
+        {
+          id: 'reservation-1',
+          rideId: 'ride-1',
+          travelDate,
+          rideDepartureTime: '09:00',
+          rideArrivalTime: '10:30',
+          seatNumber: 12,
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-b',
+          passenger: {
+            id: 'passenger-1',
+            firstName: 'Marko',
+            lastName: 'Markovic',
+            phone: '+381601234567',
+            isActive: true
+          }
+        }
+      ];
+
+      const updates: Array<Record<string, unknown>> = [];
+
+      return {
+        updates,
+        tx: {
+          reservation: {
+            findMany: jest.fn(async () => reservations.map((item) => ({ ...item }))),
+            update: jest.fn(async ({ where, data }: never) => {
+              const target = reservations.find(
+                (item) => item.id === (where as { id: string }).id
+              )!;
+              const patch = data as Record<string, unknown>;
+              updates.push({ id: target.id, ...patch });
+              Object.assign(target, patch);
+
+              return target;
+            })
+          },
+          station: { findMany: jest.fn().mockResolvedValue([]) },
+          ride: {
+            findMany: jest.fn(async () => [
+              written ? windowedRide('10:00', '11:30') : windowedRide('09:00', '10:30')
+            ]),
+            update: jest.fn(async () => {
+              written = true;
+            }),
+            findFirst: jest.fn(async () =>
+              written ? storedRide('10:00', '11:30') : storedRide('09:00', '10:30')
+            )
+          },
+          rideDaySchedule: { create: jest.fn(), deleteMany: jest.fn() }
+        }
+      };
+    };
+
+    const movedLater = {
+      daySchedules: [{ dayOfWeek, stationTimes: timesAt('10:00', '11:30') }]
+    };
+
+    let harness: ReturnType<typeof transactionMoving>;
+
+    beforeEach(() => {
+      harness = transactionMoving();
+      prismaMock.$transaction.mockImplementation(async (fn: never) =>
+        (fn as unknown as (tx: unknown) => Promise<unknown>)(harness.tx)
+      );
+    });
+
+    it('refuses, and says the reservations can be moved rather than only overridden', async () => {
+      await expect(service.update(auth, 'ride-1', movedLater)).rejects.toMatchObject({
+        response: {
+          code: 'WOULD_BREAK_RESERVATIONS',
+          invariant: 'reservation.reachable',
+          affectedCount: 1,
+          repairable: true,
+          repairMessage: 'Premesta 1 rezervaciju na novo vreme polaska i slobodno sediste.'
+        }
+      });
+
+      // Refused means refused: nothing was moved on the way out.
+      expect(harness.updates).toHaveLength(0);
+    });
+
+    it('moves the reservation onto the new departure when asked to repair', async () => {
+      await expect(
+        service.update(auth, 'ride-1', { ...movedLater, repairBreakingChange: true })
+      ).resolves.toBeDefined();
+
+      expect(harness.updates).toEqual([
+        expect.objectContaining({
+          id: 'reservation-1',
+          rideDepartureTime: '10:00',
+          rideArrivalTime: '11:30'
+        })
+      ]);
+    });
+
+    it('leaves the reservation where it is when the caller only overrides', async () => {
+      await expect(
+        service.update(auth, 'ride-1', { ...movedLater, confirmBreakingChange: true })
+      ).resolves.toBeDefined();
+
+      // Confirming is the other answer: the write lands and the orphan stays
+      // for the integrity report to show.
+      expect(harness.updates).toHaveLength(0);
+    });
+  });
 });

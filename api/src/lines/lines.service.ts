@@ -277,7 +277,7 @@ export class LinesService {
         this.prisma,
         { tenantId: auth.tenantId, actorId: auth.sub },
         PROSPECTIVE_INVARIANTS.lineUpdate,
-        dto.confirmBreakingChange === true,
+        { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
         async (tx) => {
           // Read inside the transaction, not before it. Every value below is
           // derived from the line as it stands, and a concurrent route edit

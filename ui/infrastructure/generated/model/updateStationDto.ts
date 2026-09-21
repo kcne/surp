@@ -10,6 +10,8 @@ import type { UpdateStationDtoCategory } from './updateStationDtoCategory';
 export interface UpdateStationDto {
   /** Confirms a change previously refused with WOULD_BREAK_RESERVATIONS. */
   confirmBreakingChange?: boolean;
+  /** Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange. */
+  repairBreakingChange?: boolean;
   name?: string;
   address?: string;
   category?: UpdateStationDtoCategory;

@@ -67,14 +67,17 @@ export function useUpdateStationMutation() {
       id,
       payload,
       confirmBreakingChange,
+      repairBreakingChange,
     }: {
       id: string
       payload: UpdateStationDto
       confirmBreakingChange?: boolean
+      repairBreakingChange?: boolean
     }) => {
       const response = await stationsControllerUpdate(id, {
         ...payload,
         confirmBreakingChange,
+        repairBreakingChange,
       }).catch(throwBreakingChangeConflict)
       if (!isStationMutationSuccess<stationsControllerUpdateResponse>(response)) {
         throw new Error("Neuspesno azuriranje stanice")

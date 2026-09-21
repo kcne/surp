@@ -82,14 +82,17 @@ export function useUpdatePassengerMutation() {
       id,
       payload,
       confirmBreakingChange,
+      repairBreakingChange,
     }: {
       id: string
       payload: Partial<PassengerFormData>
       confirmBreakingChange?: boolean
+      repairBreakingChange?: boolean
     }) => {
       const response = await passengersControllerUpdate(id, {
         ...toUpdatePassengerDto(payload),
         confirmBreakingChange,
+        repairBreakingChange,
       }).catch(throwBreakingChangeConflict)
 
       if (!isUpdatePassengerSuccess(response)) {

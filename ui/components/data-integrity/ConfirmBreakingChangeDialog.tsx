@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
-import { AlertTriangle, X } from "lucide-react"
+import { AlertTriangle, Wrench, X } from "lucide-react"
 
 interface ConfirmBreakingChangeDialogProps {
   open: boolean
@@ -21,6 +21,12 @@ interface ConfirmBreakingChangeDialogProps {
   partiallyApplied?: boolean
   loading?: boolean
   onConfirm: () => Promise<void> | void
+  /**
+   * Save and put the affected reservations back in order. Offered only when
+   * the server said every one of them can be settled — most breakages are a
+   * routing decision or a telephone call, and for those this never appears.
+   */
+  onRepair?: () => Promise<void> | void
 }
 
 export function ConfirmBreakingChangeDialog({
@@ -30,7 +36,10 @@ export function ConfirmBreakingChangeDialog({
   partiallyApplied = false,
   loading = false,
   onConfirm,
+  onRepair,
 }: ConfirmBreakingChangeDialogProps) {
+  const canRepair = confirmation?.repairable === true && onRepair !== undefined
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -40,8 +49,16 @@ export function ConfirmBreakingChangeDialog({
             {/* The server's sentence already carries the count, in Serbian that
                 agrees with it — repeating it here only risks disagreeing. */}
             <span className="block font-medium text-foreground">{confirmation?.message}</span>
+            {canRepair && confirmation?.repairMessage && (
+              <span className="mt-2 block">
+                Mozete sacuvati i odmah popraviti: {confirmation.repairMessage} Obavestite putnike
+                o novom vremenu i sedistu.
+              </span>
+            )}
             <span className="mt-2 block">
-              Ako ipak nastavite, problem ostaje vidljiv u proveri podataka dok ga ne resite.
+              {canRepair
+                ? "Ako sacuvate bez popravke, problem ostaje vidljiv u proveri podataka dok ga ne resite."
+                : "Ako ipak nastavite, problem ostaje vidljiv u proveri podataka dok ga ne resite."}
             </span>
             {partiallyApplied && (
               <span className="mt-2 block">
@@ -66,6 +83,18 @@ export function ConfirmBreakingChangeDialog({
             <AlertTriangle className="mr-2 h-4 w-4" />
             {loading ? "Cuvanje..." : "Ipak sacuvaj"}
           </AlertDialogAction>
+          {canRepair && (
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault()
+                void onRepair()
+              }}
+              disabled={loading}
+            >
+              <Wrench className="mr-2 h-4 w-4" />
+              {loading ? "Cuvanje..." : "Sacuvaj i popravi"}
+            </AlertDialogAction>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

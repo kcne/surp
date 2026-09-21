@@ -6425,6 +6425,11 @@
             "example": false,
             "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
           },
+          "repairBreakingChange": {
+            "type": "boolean",
+            "example": false,
+            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+          },
           "name": {
             "type": "string",
             "example": "Central Station - West Gate"
@@ -6474,13 +6479,24 @@
           "message": {
             "type": "string",
             "example": "Ova izmena cini 8 rezervacija nevidljivim."
+          },
+          "repairable": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether resending with repairBreakingChange would settle every affected subject rather than leaving it broken."
+          },
+          "repairMessage": {
+            "type": "string",
+            "example": "Premesta 8 rezervacija na novo vreme polaska i slobodna mesta.",
+            "description": "What the repair would do, in Serbian. Present when repairable."
           }
         },
         "required": [
           "code",
           "invariant",
           "affectedCount",
-          "message"
+          "message",
+          "repairable"
         ]
       },
       "LineStopInputDto": {
@@ -6751,6 +6767,11 @@
             "example": false,
             "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
           },
+          "repairBreakingChange": {
+            "type": "boolean",
+            "example": false,
+            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+          },
           "name": {
             "type": "string",
             "example": "Central - North Updated"
@@ -6800,6 +6821,11 @@
             "type": "boolean",
             "example": false,
             "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
+          },
+          "repairBreakingChange": {
+            "type": "boolean",
+            "example": false,
+            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
           },
           "intermediateStops": {
             "type": "array",
@@ -8126,6 +8152,11 @@
             "example": false,
             "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
           },
+          "repairBreakingChange": {
+            "type": "boolean",
+            "example": false,
+            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+          },
           "firstName": {
             "type": "string",
             "example": "Mila"
@@ -8797,6 +8828,11 @@
             "example": false,
             "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
           },
+          "repairBreakingChange": {
+            "type": "boolean",
+            "example": false,
+            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+          },
           "name": {
             "type": "string",
             "example": "Morning Central Route Updated"
@@ -8862,6 +8898,11 @@
             "example": false,
             "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
           },
+          "repairBreakingChange": {
+            "type": "boolean",
+            "example": false,
+            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+          },
           "daySchedules": {
             "type": "array",
             "items": {
@@ -8903,6 +8944,11 @@
             "example": false,
             "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
           },
+          "repairBreakingChange": {
+            "type": "boolean",
+            "example": false,
+            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+          },
           "date": {
             "type": "string",
             "example": "2026-03-20"
@@ -8936,6 +8982,11 @@
             "type": "boolean",
             "example": false,
             "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
+          },
+          "repairBreakingChange": {
+            "type": "boolean",
+            "example": false,
+            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
           }
         }
       },

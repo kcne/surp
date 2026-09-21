@@ -321,6 +321,13 @@ export const reservationReachable: ProspectiveInvariant = {
   breakingChangeMessage: (count) =>
     `Ova izmena cini ${serbianPlural(count, 'rezervaciju nevidljivom', 'rezervacije nevidljivim', 'rezervacija nevidljivim')}.`,
 
+  // Names the seat as well as the time, because the repair can move it: the
+  // old seat may be taken on the departure the reservation is moving onto, and
+  // an agency that reads only "premesta na novo vreme" would not know to tell
+  // the passenger they are sitting somewhere else.
+  repairMessage: (count) =>
+    `Premesta ${serbianPlural(count, 'rezervaciju', 'rezervacije', 'rezervacija')} na novo vreme polaska i slobodno sediste.`,
+
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const report = await buildOrphanReport(ctx);
 

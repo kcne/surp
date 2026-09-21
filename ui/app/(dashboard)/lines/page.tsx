@@ -47,10 +47,11 @@ export default function LinesPage() {
   }
 
   const confirmableUpdate = useConfirmableUpdate<{ id: string; payload: UpdateLineDto }>({
-    update: (variables, confirmedSteps) =>
+    update: (variables, answers) =>
       updateLineMutation.mutateAsync({
         ...variables,
-        confirmBreakingChange: confirmedSteps.length > 0,
+        confirmBreakingChange: answers.confirmed.length > 0,
+        repairBreakingChange: answers.repaired.length > 0,
       }),
     onConfirmed: closeModal,
   })

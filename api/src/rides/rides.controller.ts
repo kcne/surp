@@ -158,7 +158,7 @@ export class RidesController {
       request.auth!,
       id,
       dto.daySchedules,
-      dto.confirmBreakingChange === true
+      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true }
     );
   }
 
@@ -210,7 +210,7 @@ export class RidesController {
       request.auth!,
       id,
       exceptionId,
-      dto.confirmBreakingChange === true
+      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true }
     );
   }
 
