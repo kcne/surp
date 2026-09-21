@@ -1,4 +1,5 @@
 const mockFindMany = jest.fn();
+const mockTxFindMany = jest.fn();
 const mockUpdateMany = jest.fn();
 const mockDisconnect = jest.fn();
 const mockPrisma = {
@@ -6,7 +7,7 @@ const mockPrisma = {
   $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
     callback({
       $executeRaw: jest.fn().mockResolvedValue(undefined),
-      reservation: { updateMany: mockUpdateMany }
+      reservation: { findMany: mockTxFindMany, updateMany: mockUpdateMany }
     })
   ),
   $disconnect: mockDisconnect
@@ -49,6 +50,7 @@ describe('cancel-reservations linked-leg guard', () => {
       ...originalEnv,
       APPLY: '1',
       ACTOR_USER_ID: 'admin-1',
+      TENANT_ID: 'tenant-1',
       RESERVATION_IDS: 'reservation-1'
     };
     delete process.env.ALLOW_LINKED;
@@ -58,11 +60,31 @@ describe('cancel-reservations linked-leg guard', () => {
 
   afterEach(() => {
     process.env = originalEnv;
+    // The script sets `process.exitCode` on failure, and that is jest's own
+    // process here: leaving it set would fail the run over a passing test.
+    process.exitCode = 0;
     jest.restoreAllMocks();
   });
 
-  async function run(row: ReturnType<typeof reservation>) {
-    mockFindMany.mockResolvedValue([row]);
+  /** The re-read under the locks, answering with whatever the row looks like now. */
+  function relocked(row: ReturnType<typeof reservation>) {
+    mockTxFindMany.mockImplementation(
+      async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in
+          .filter((id) => id === row.id)
+          .map(() => ({
+            id: row.id,
+            returnOfReservationId: row.returnOfReservationId,
+            returnOf: row.returnOf,
+            _count: row._count
+          }))
+    );
+  }
+
+  async function run(row: ReturnType<typeof reservation>, afterLocks = row) {
+    // The first read is the dry run's; any second one is the other-tenant probe.
+    mockFindMany.mockResolvedValueOnce([row]).mockResolvedValue([]);
+    relocked(afterLocks);
     const errors: unknown[] = [];
     jest.spyOn(console, 'error').mockImplementation((error: unknown) => {
       errors.push(error);
@@ -78,18 +100,14 @@ describe('cancel-reservations linked-leg guard', () => {
   it('skips a return leg linked to an outbound reservation', async () => {
     await run(reservation({ returnOfReservationId: 'outbound-1', returnOf: { status: 'ACTIVE' } }));
 
-    expect(mockUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: { in: [] }, status: 'ACTIVE' } })
-    );
+    expect(mockUpdateMany.mock.calls[0][0].where.id.in).toEqual([]);
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('ALLOW_LINKED=1'));
   });
 
   it('skips an outbound reservation with a linked return leg', async () => {
     await run(reservation({ _count: { returnLegs: 1 } }));
 
-    expect(mockUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: { in: [] }, status: 'ACTIVE' } })
-    );
+    expect(mockUpdateMany.mock.calls[0][0].where.id.in).toEqual([]);
   });
 
   it('allows an outbound whose only return leg is already cancelled', async () => {
@@ -111,12 +129,12 @@ describe('cancel-reservations linked-leg guard', () => {
     process.env.ALLOW_LINKED = '1';
     await run(reservation({ returnOfReservationId: 'outbound-1', returnOf: { status: 'ACTIVE' } }));
 
-    expect(mockUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: { in: ['reservation-1'] }, status: 'ACTIVE' },
-        data: expect.objectContaining({ status: 'CANCELLED', updatedById: 'admin-1' })
-      })
-    );
+    expect(mockUpdateMany.mock.calls[0][0]).toMatchObject({
+      where: { id: { in: ['reservation-1'] }, tenantId: 'tenant-1', status: 'ACTIVE' },
+      data: expect.objectContaining({ status: 'CANCELLED', updatedById: 'admin-1' })
+    });
+    // ALLOW_LINKED=1 means the update must not carry the linked-leg predicate.
+    expect(mockUpdateMany.mock.calls[0][0].where.returnLegs).toBeUndefined();
   });
 
   it('does not write in its default dry run', async () => {
@@ -142,5 +160,66 @@ describe('cancel-reservations linked-leg guard', () => {
       'RESERVATION_IDS is required'
     );
     expect(mockFindMany).not.toHaveBeenCalled();
+  });
+
+  it('requires a tenant before opening the database', () => {
+    delete process.env.TENANT_ID;
+
+    expect(() => jest.isolateModules(() => require('./cancel-reservations'))).toThrow(
+      'TENANT_ID is required'
+    );
+    expect(mockFindMany).not.toHaveBeenCalled();
+  });
+
+  it('scopes both the read and the write to the named tenant', async () => {
+    await run(reservation());
+
+    expect(mockFindMany.mock.calls[0][0].where).toMatchObject({
+      id: { in: ['reservation-1'] },
+      tenantId: 'tenant-1'
+    });
+    expect(mockUpdateMany.mock.calls[0][0].where.tenantId).toBe('tenant-1');
+  });
+
+  it('refuses to apply when a requested id belongs to another tenant', async () => {
+    mockFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ id: 'reservation-1', tenantId: 'tenant-2' }]);
+    relocked(reservation());
+
+    const errors: unknown[] = [];
+    jest.spyOn(console, 'error').mockImplementation((error: unknown) => {
+      errors.push(error);
+    });
+    const finished = new Promise<void>((resolve) => {
+      mockDisconnect.mockImplementation(async () => resolve());
+    });
+    jest.isolateModules(() => require('./cancel-reservations'));
+    await finished;
+
+    expect(String(errors[0])).toContain('belong to another tenant');
+    expect(mockUpdateMany).not.toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('OTHER TENANT'));
+  });
+
+  it('drops a row that gained a live linked leg after the dry run was read', async () => {
+    await run(
+      reservation(),
+      reservation({ returnOfReservationId: 'outbound-1', returnOf: { status: 'ACTIVE' } })
+    );
+
+    expect(mockUpdateMany.mock.calls[0][0].where.id.in).toEqual([]);
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('gained a live linked leg after the dry run')
+    );
+  });
+
+  it('states the linked-leg refusal in the update itself, not only in the plan', async () => {
+    await run(reservation());
+
+    expect(mockUpdateMany.mock.calls[0][0].where).toMatchObject({
+      returnLegs: { none: { status: 'ACTIVE' } },
+      OR: [{ returnOfReservationId: null }, { returnOf: { status: { not: 'ACTIVE' } } }]
+    });
   });
 });

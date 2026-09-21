@@ -5,11 +5,13 @@ import {
 } from './duplicate-passenger-merge';
 
 const findMany = jest.fn();
+const reservationFindMany = jest.fn();
 const reservationUpdateMany = jest.fn();
 const passengerUpdateMany = jest.fn();
 const passengerUpdate = jest.fn();
 const prismaMock = {
   passenger: { findMany },
+  reservation: { findMany: reservationFindMany },
   $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
     callback({
       reservation: { updateMany: reservationUpdateMany },
@@ -50,9 +52,49 @@ function passenger({ createdAt = '2026-01-01', reservations = 0, ...overrides }:
   };
 }
 
+interface ReservationOverrides {
+  id: string;
+  passengerId: string;
+  seatNumber?: number;
+  travelDate?: string;
+  rideDepartureTime?: string;
+  rideId?: string;
+  departureStationId?: string;
+  arrivalStationId?: string;
+}
+
+/** A live ticket on the Belgrade - Novi Pazar - Podgorica line, stations 0..2. */
+function reservationOn({
+  travelDate = '2026-09-11',
+  seatNumber = 4,
+  rideId = 'ride-1',
+  rideDepartureTime = '20:30',
+  departureStationId = 'belgrade',
+  arrivalStationId = 'podgorica',
+  ...overrides
+}: ReservationOverrides) {
+  return {
+    ...overrides,
+    rideId,
+    travelDate: new Date(`${travelDate}T00:00:00.000Z`),
+    rideDepartureTime,
+    seatNumber,
+    departureStationId,
+    arrivalStationId,
+    ride: {
+      line: {
+        departureStationId: 'belgrade',
+        arrivalStationId: 'podgorica',
+        intermediateStops: [{ stationId: 'novi-pazar' }]
+      }
+    }
+  };
+}
+
 describe('duplicate passenger merge', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    reservationFindMany.mockResolvedValue([]);
     reservationUpdateMany.mockResolvedValue({ count: 0 });
     passengerUpdateMany.mockResolvedValue({ count: 1 });
     passengerUpdate.mockResolvedValue({});
@@ -136,34 +178,156 @@ describe('duplicate passenger merge', () => {
     expect(plan.groups[0].reservationsToRepoint).toBe(2);
   });
 
-  it('keeps an active row when an inactive duplicate has more reservations', async () => {
+  it('keeps the busiest row even when it is inactive, and brings it back to life', async () => {
     findMany.mockResolvedValue([
       passenger({ id: 'inactive-busy', reservations: 5, isActive: false }),
-      passenger({ id: 'active-live', reservations: 1 })
+      passenger({ id: 'active-quiet', reservations: 1 })
     ]);
-    reservationUpdateMany.mockResolvedValue({ count: 5 });
+    reservationUpdateMany.mockResolvedValue({ count: 1 });
 
     const plan = await planDuplicatePassengerMerge(prisma);
 
     expect(plan.groups[0]).toMatchObject({
-      canonicalPassengerId: 'active-live',
-      retiredPassengerIds: ['inactive-busy'],
-      reservationsToRepoint: 5
+      canonicalPassengerId: 'inactive-busy',
+      retiredPassengerIds: ['active-quiet'],
+      reservationsToRepoint: 1,
+      reactivateCanonical: true
     });
 
     await applyDuplicatePassengerMerge(prisma, 'admin-1', plan);
 
     expect(reservationUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { tenantId: 'tenant-1', passengerId: { in: ['inactive-busy'] } },
-        data: expect.objectContaining({ passengerId: 'active-live' })
+        where: { tenantId: 'tenant-1', passengerId: { in: ['active-quiet'] } },
+        data: expect.objectContaining({ passengerId: 'inactive-busy' })
       })
     );
+    expect(passengerUpdate.mock.calls[0][0]).toMatchObject({
+      where: { id: 'inactive-busy' },
+      data: { isActive: true, updatedById: 'admin-1' }
+    });
     expect(passengerUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: { in: ['inactive-busy'] }, tenantId: 'tenant-1' }
+        where: { id: { in: ['active-quiet'] }, tenantId: 'tenant-1' }
       })
     );
+  });
+
+  it('leaves a live canonical row alone rather than rewriting its status', async () => {
+    findMany.mockResolvedValue([
+      passenger({ id: 'keep', reservations: 5 }),
+      passenger({ id: 'dupe', reservations: 1 })
+    ]);
+
+    const plan = await planDuplicatePassengerMerge(prisma);
+
+    expect(plan.groups[0].reactivateCanonical).toBe(false);
+
+    await applyDuplicatePassengerMerge(prisma, 'admin-1', plan);
+
+    expect(passengerUpdate).not.toHaveBeenCalled();
+  });
+
+  it('reports a group whose rows hold one seat at the same time, and leaves it alone', async () => {
+    findMany.mockResolvedValue([
+      passenger({ id: 'keep', reservations: 1 }),
+      passenger({ id: 'dupe', reservations: 1 })
+    ]);
+    reservationFindMany.mockResolvedValue([
+      reservationOn({ id: 'res-keep', passengerId: 'keep', seatNumber: 4 }),
+      reservationOn({ id: 'res-dupe', passengerId: 'dupe', seatNumber: 4 })
+    ]);
+
+    const plan = await planDuplicatePassengerMerge(prisma);
+
+    expect(plan.groups).toHaveLength(0);
+    expect(plan.conflicts).toMatchObject([
+      {
+        reason: 'seat_collision',
+        passengerIds: ['keep', 'dupe'],
+        seatCollisions: [
+          {
+            seatNumber: 4,
+            travelDate: '2026-09-11',
+            rideDepartureTime: '20:30',
+            reservationIds: ['res-keep', 'res-dupe']
+          }
+        ]
+      }
+    ]);
+  });
+
+  it('merges one seat resold down the route, because the first passenger is off', async () => {
+    findMany.mockResolvedValue([
+      passenger({ id: 'keep', reservations: 1 }),
+      passenger({ id: 'dupe', reservations: 1 })
+    ]);
+    reservationFindMany.mockResolvedValue([
+      reservationOn({
+        id: 'res-keep',
+        passengerId: 'keep',
+        seatNumber: 4,
+        departureStationId: 'belgrade',
+        arrivalStationId: 'novi-pazar'
+      }),
+      reservationOn({
+        id: 'res-dupe',
+        passengerId: 'dupe',
+        seatNumber: 4,
+        departureStationId: 'novi-pazar',
+        arrivalStationId: 'podgorica'
+      })
+    ]);
+
+    const plan = await planDuplicatePassengerMerge(prisma);
+
+    expect(plan.conflicts).toHaveLength(0);
+    expect(plan.groups).toHaveLength(1);
+  });
+
+  it('merges the same seat on two different departures', async () => {
+    findMany.mockResolvedValue([
+      passenger({ id: 'keep', reservations: 1 }),
+      passenger({ id: 'dupe', reservations: 1 })
+    ]);
+    reservationFindMany.mockResolvedValue([
+      reservationOn({ id: 'res-keep', passengerId: 'keep', seatNumber: 4 }),
+      reservationOn({
+        id: 'res-dupe',
+        passengerId: 'dupe',
+        seatNumber: 4,
+        travelDate: '2026-09-18'
+      })
+    ]);
+
+    const plan = await planDuplicatePassengerMerge(prisma);
+
+    expect(plan.conflicts).toHaveLength(0);
+    expect(plan.groups).toHaveLength(1);
+  });
+
+  it('ignores a double sale already sitting under one passenger row', async () => {
+    findMany.mockResolvedValue([
+      passenger({ id: 'keep', reservations: 2 }),
+      passenger({ id: 'dupe', reservations: 0 })
+    ]);
+    reservationFindMany.mockResolvedValue([
+      reservationOn({ id: 'res-one', passengerId: 'keep', seatNumber: 4 }),
+      reservationOn({ id: 'res-two', passengerId: 'keep', seatNumber: 4 })
+    ]);
+
+    const plan = await planDuplicatePassengerMerge(prisma);
+
+    expect(plan.conflicts).toHaveLength(0);
+    expect(plan.groups).toHaveLength(1);
+  });
+
+  it('does not query reservations when nothing is going to be merged', async () => {
+    findMany.mockResolvedValue([passenger({ id: 'only', reservations: 1 })]);
+
+    await planDuplicatePassengerMerge(prisma);
+
+    expect(reservationFindMany).not.toHaveBeenCalled();
   });
 
   it('reports a group whose rows disagree and leaves it alone', async () => {

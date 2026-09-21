@@ -1,5 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, ReservationStatus } from '@prisma/client';
 import { withUpdateAudit } from '../prisma/audit-write.helper';
+import { RouteSegment, routeStationOrder, segmentsOverlap } from '../reservations/route-segment';
 import { nameKeyForIdentity, phoneKeyForIdentity } from './passenger-match.util';
 
 /**
@@ -25,15 +26,36 @@ export interface DuplicatePassengerGroup {
   reservationsToRepoint: number;
   /** Fields the canonical row is missing that exactly one duplicate supplies. */
   filledFields: Record<string, string>;
+  /**
+   * True when the row that won on reservation count is inactive while another
+   * row in the group is live. The human is demonstrably still a customer, and
+   * retiring every other row would otherwise leave them with no active record.
+   */
+  reactivateCanonical: boolean;
+}
+
+/** Why a group was reported rather than merged. */
+export type DuplicatePassengerConflictReason = 'field_disagreement' | 'seat_collision';
+
+/** One seat two of the group's rows hold at the same time on one departure. */
+export interface DuplicatePassengerSeatCollision {
+  rideId: string;
+  travelDate: string;
+  rideDepartureTime: string;
+  seatNumber: number;
+  reservationIds: string[];
 }
 
 export interface DuplicatePassengerConflict {
   tenantId: string;
   nameKey: string;
   phoneKey: string;
+  reason: DuplicatePassengerConflictReason;
   passengerIds: string[];
   /** Fields where two rows each hold a different non-empty value. */
   conflictingFields: string[];
+  /** Overlapping same-seat holdings; set when `reason` is `seat_collision`. */
+  seatCollisions: DuplicatePassengerSeatCollision[];
 }
 
 export interface DuplicatePassengerCounts {
@@ -75,7 +97,35 @@ type PassengerRow = {
   _count: { reservations: number };
 };
 
-type PrismaReadClient = Pick<PrismaClient, 'passenger'>;
+type PrismaReadClient = Pick<PrismaClient, 'passenger' | 'reservation'>;
+
+/**
+ * A live reservation of a group member, with the route it was sold against.
+ *
+ * The merge has to see these before it repoints anything: #93 requires that
+ * collapsing two rows never puts one human on the same departure twice in the
+ * same seat. The line is read alongside so the seat can be judged by the
+ * stretch of route each ticket occupies rather than by the seat number alone —
+ * two tickets for seat 4 are legitimate when the first passenger is off before
+ * the second boards, and `route-segment` is where that rule lives.
+ */
+type ReservationRow = {
+  id: string;
+  passengerId: string;
+  rideId: string;
+  travelDate: Date;
+  rideDepartureTime: string;
+  seatNumber: number;
+  departureStationId: string;
+  arrivalStationId: string;
+  ride: {
+    line: {
+      departureStationId: string;
+      arrivalStationId: string;
+      intermediateStops: { stationId: string }[];
+    };
+  };
+};
 
 function fieldValue(row: PassengerRow, field: string): string {
   const value = (row as unknown as Record<string, unknown>)[field];
@@ -84,20 +134,130 @@ function fieldValue(row: PassengerRow, field: string): string {
 }
 
 /**
- * The row the others fold into: an active row if one exists, so a mixed-status
- * merge cannot move a live reservation onto an inactive passenger. Among rows
- * with the same status, keep the one carrying the most reservations to minimize
- * writes.
+ * The row the others fold into: the one carrying the most reservations, which
+ * is both what #93 specifies and the choice that moves the fewest rows.
  * Age breaks the tie, then the id, so two runs always choose the same row.
+ *
+ * Status deliberately plays no part. An inactive row holding five reservations
+ * is the row the agency has been selling against; picking the live row with one
+ * reservation instead would move five live tickets rather than one. The merge
+ * reactivates the winner when the group holds a live row, so the human is never
+ * left without an active record — see `reactivateCanonical`.
  */
 function canonicalOf(rows: PassengerRow[]): PassengerRow {
   return [...rows].sort(
     (left, right) =>
-      Number(right.isActive) - Number(left.isActive) ||
       right._count.reservations - left._count.reservations ||
       left.createdAt.getTime() - right.createdAt.getTime() ||
       left.id.localeCompare(right.id)
   )[0];
+}
+
+
+/**
+ * The stretch of route a ticket occupies its seat for.
+ *
+ * A station dropped from the line since the ticket was sold leaves the segment
+ * unreadable. The whole route is assumed then, the same assumption the seat
+ * checks make, so an unreadable row is reported as a collision rather than
+ * merged past.
+ */
+function segmentOf(row: ReservationRow, order: Map<string, number>): RouteSegment {
+  const lastOrder = row.ride.line.intermediateStops.length + 1;
+
+  return {
+    departureOrder: order.get(row.departureStationId) ?? 0,
+    arrivalOrder: order.get(row.arrivalStationId) ?? lastOrder
+  };
+}
+
+/** `rideId : travelDate : departureTime : seat`, the seat one bus carries. */
+function seatKey(row: ReservationRow): string {
+  return [
+    row.rideId,
+    row.travelDate.toISOString().slice(0, 10),
+    row.rideDepartureTime,
+    row.seatNumber
+  ].join(':');
+}
+
+/**
+ * Seats two different rows of one group hold at the same time.
+ *
+ * Reservations already sitting under a single passenger id are left out: that
+ * is a pre-existing double sale for `reservation.seatUnique` to report, and
+ * the merge neither creates nor worsens it.
+ */
+function seatCollisionsOf(
+  members: PassengerRow[],
+  reservationsByPassengerId: Map<string, ReservationRow[]>,
+  orderByRideId: Map<string, Map<string, number>>
+): DuplicatePassengerSeatCollision[] {
+  const bySeat = new Map<string, ReservationRow[]>();
+
+  for (const member of members) {
+    for (const row of reservationsByPassengerId.get(member.id) ?? []) {
+      const key = seatKey(row);
+      const held = bySeat.get(key);
+      if (held) {
+        held.push(row);
+      } else {
+        bySeat.set(key, [row]);
+      }
+    }
+  }
+
+  const collisions: DuplicatePassengerSeatCollision[] = [];
+
+  for (const held of bySeat.values()) {
+    if (held.length < 2) {
+      continue;
+    }
+
+    const orderOf = (row: ReservationRow): Map<string, number> => {
+      const cached = orderByRideId.get(row.rideId);
+      if (cached) {
+        return cached;
+      }
+
+      const order = routeStationOrder(row.ride.line);
+      orderByRideId.set(row.rideId, order);
+
+      return order;
+    };
+
+    const overlapping = new Set<string>();
+    for (let left = 0; left < held.length; left += 1) {
+      for (let right = left + 1; right < held.length; right += 1) {
+        if (held[left].passengerId === held[right].passengerId) {
+          continue;
+        }
+
+        if (
+          segmentsOverlap(
+            segmentOf(held[left], orderOf(held[left])),
+            segmentOf(held[right], orderOf(held[right]))
+          )
+        ) {
+          overlapping.add(held[left].id);
+          overlapping.add(held[right].id);
+        }
+      }
+    }
+
+    if (overlapping.size > 0) {
+      const [sample] = held;
+      collisions.push({
+        rideId: sample.rideId,
+        travelDate: sample.travelDate.toISOString().slice(0, 10),
+        rideDepartureTime: sample.rideDepartureTime,
+        seatNumber: sample.seatNumber,
+        reservationIds: held.filter((row) => overlapping.has(row.id)).map((row) => row.id)
+      });
+    }
+  }
+
+  return collisions;
 }
 
 /**
@@ -148,6 +308,58 @@ export async function planDuplicatePassengerMerge(
   const groups: DuplicatePassengerGroup[] = [];
   const conflicts: DuplicatePassengerConflict[] = [];
 
+  // Only the rows that are actually about to be folded together: one query for
+  // every group rather than one per group, and nothing at all when the data
+  // holds no duplicates.
+  const mergeCandidateIds = [...byHuman.values()]
+    .filter((members) => members.length > 1)
+    .flatMap((members) => members.map((member) => member.id));
+
+  const reservations =
+    mergeCandidateIds.length > 0
+      ? ((await prisma.reservation.findMany({
+          where: { passengerId: { in: mergeCandidateIds }, status: ReservationStatus.ACTIVE },
+          select: {
+            id: true,
+            passengerId: true,
+            rideId: true,
+            travelDate: true,
+            rideDepartureTime: true,
+            seatNumber: true,
+            departureStationId: true,
+            arrivalStationId: true,
+            ride: {
+              select: {
+                line: {
+                  select: {
+                    departureStationId: true,
+                    arrivalStationId: true,
+                    intermediateStops: {
+                      select: { stationId: true },
+                      orderBy: { orderIndex: 'asc' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        })) as unknown as ReservationRow[])
+      : [];
+
+  const reservationsByPassengerId = new Map<string, ReservationRow[]>();
+  for (const row of reservations) {
+    const held = reservationsByPassengerId.get(row.passengerId);
+    if (held) {
+      held.push(row);
+    } else {
+      reservationsByPassengerId.set(row.passengerId, [row]);
+    }
+  }
+
+  // One numbering per ride rather than per reservation; the route behind a ride
+  // does not change mid-plan.
+  const orderByRideId = new Map<string, Map<string, number>>();
+
   for (const members of byHuman.values()) {
     if (members.length < 2) {
       continue;
@@ -170,8 +382,29 @@ export async function planDuplicatePassengerMerge(
         tenantId,
         nameKey,
         phoneKey,
+        reason: 'field_disagreement',
         passengerIds: members.map((member) => member.id),
-        conflictingFields: [...conflictingFields]
+        conflictingFields: [...conflictingFields],
+        seatCollisions: []
+      });
+      continue;
+    }
+
+    // #93: the merge must not put one human on the same departure twice in the
+    // same seat. Report it and leave the group alone, the same refusal the
+    // field disagreement above gets — repointing first and discovering the
+    // double sale afterwards would need a second repair to undo.
+    const seatCollisions = seatCollisionsOf(members, reservationsByPassengerId, orderByRideId);
+
+    if (seatCollisions.length > 0) {
+      conflicts.push({
+        tenantId,
+        nameKey,
+        phoneKey,
+        reason: 'seat_collision',
+        passengerIds: members.map((member) => member.id),
+        conflictingFields: [],
+        seatCollisions
       });
       continue;
     }
@@ -206,7 +439,8 @@ export async function planDuplicatePassengerMerge(
         (total, member) => total + member._count.reservations,
         0
       ),
-      filledFields
+      filledFields,
+      reactivateCanonical: !canonical.isActive && members.some((member) => member.isActive)
     });
   }
 
@@ -259,10 +493,15 @@ export async function applyDuplicatePassengerMerge(
         data: withUpdateAudit({ passengerId: group.canonicalPassengerId }, actorId)
       });
 
-      if (Object.keys(group.filledFields).length > 0) {
+      const canonicalChanges: Record<string, string | boolean> = {
+        ...group.filledFields,
+        ...(group.reactivateCanonical ? { isActive: true } : {})
+      };
+
+      if (Object.keys(canonicalChanges).length > 0) {
         await tx.passenger.update({
           where: { id: group.canonicalPassengerId },
-          data: withUpdateAudit({ ...group.filledFields }, actorId)
+          data: withUpdateAudit(canonicalChanges, actorId)
         });
       }
 

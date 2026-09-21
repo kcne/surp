@@ -35,10 +35,26 @@ async function main() {
       `${counts.duplicateHumans} humans hold more than one row: ` +
       `${counts.rowsToRetire} rows to retire, ` +
       `${counts.reservationsToRepoint} reservations to repoint.\n` +
-      `${counts.conflicts} groups left alone because their rows disagree.`
+      `${counts.conflicts} groups left alone because their rows disagree or would collide.`
   );
 
   for (const conflict of plan.conflicts) {
+    if (conflict.reason === 'seat_collision') {
+      const seats = conflict.seatCollisions
+        .map(
+          (collision) =>
+            `seat ${collision.seatNumber} on ${collision.travelDate} ${collision.rideDepartureTime} ` +
+            `(${collision.reservationIds.join(', ')})`
+        )
+        .join('; ');
+
+      console.log(
+        `  conflict ${conflict.nameKey} (${conflict.phoneKey}): merging ${conflict.passengerIds.join(', ')} ` +
+          `would put one human in the same seat twice — ${seats}`
+      );
+      continue;
+    }
+
     console.log(
       `  conflict ${conflict.nameKey} (${conflict.phoneKey}): ` +
         `${conflict.conflictingFields.join(', ')} differ across ${conflict.passengerIds.join(', ')}`
