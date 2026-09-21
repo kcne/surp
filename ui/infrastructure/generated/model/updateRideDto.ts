@@ -10,6 +10,10 @@ import type { UpdateRideDtoStatus } from './updateRideDtoStatus';
 import type { UpdateRideDtoType } from './updateRideDtoType';
 
 export interface UpdateRideDto {
+  /** Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers. */
+  confirmBreakingChange?: boolean;
+  /** Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true. */
+  repairBreakingChange?: boolean;
   name?: string;
   lineId?: string;
   /**
@@ -24,7 +28,5 @@ export interface UpdateRideDto {
   oneTimeDate?: string;
   oneTimeDepartureTime?: string;
   oneTimeArrivalTime?: string;
-  /** Confirms a change the server refused with WOULD_BREAK_RESERVATIONS, such as lowering capacity under a seat that is already sold. */
-  confirmBreakingChange?: boolean;
   daySchedules?: RideDayScheduleInputDto[];
 }

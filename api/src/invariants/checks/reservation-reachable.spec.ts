@@ -15,12 +15,19 @@ const prismaMock = {
   station: { findMany: jest.fn() }
 };
 
-const ctx = {
-  tenantId: 'tenant-1',
-  actorId: 'admin-1',
-  prisma: prismaMock,
-  windowDays: 30
-} as unknown as InvariantContext;
+// A context per test, not per file: checks sharing one context share one load
+// of the reservation window, so reusing it across tests would answer the second
+// test from the first one's rows.
+let ctx: InvariantContext;
+
+beforeEach(() => {
+  ctx = {
+    tenantId: 'tenant-1',
+    actorId: 'admin-1',
+    prisma: prismaMock,
+    windowDays: 30
+  } as unknown as InvariantContext;
+});
 
 // Travel dates are pinned relative to today so the 30-day window always
 // contains them, whenever the suite runs.
@@ -284,6 +291,44 @@ describe('reservation.reachable', () => {
           updatedById: 'admin-1'
         })
       })
+    );
+  });
+
+  it('leaves unrelated pre-existing orphans untouched during a prospective repair', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([
+      reservation('res-old', 8, '07:45'),
+      reservation('res-new', 12, '07:45')
+    ]);
+
+    const result = await repairOrphanedReservations(ctx, new Set(['res-new']));
+
+    expect(result.repairedCount).toBe(1);
+    expect(prismaMock.reservation.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'res-new' } })
+    );
+  });
+
+  it('does not let an unrelated orphan claim the only seat in a scoped repair', async () => {
+    prismaMock.ride.findMany.mockResolvedValue([{ ...strandedRide, capacity: 1 }]);
+    prismaMock.reservation.findMany.mockResolvedValue([
+      reservation('res-old', 1, '07:45'),
+      reservation('res-new', 1, '07:45')
+    ]);
+
+    const fullReport = await buildOrphanReport(ctx);
+    const selectedCtx = { ...ctx };
+    const selectedReport = await buildOrphanReport(selectedCtx, new Set(['res-new']));
+
+    expect(fullReport.items.find((item) => item.reservationId === 'res-new')?.canRepair).toBe(false);
+    expect(selectedReport.items.find((item) => item.reservationId === 'res-new')).toEqual(
+      expect.objectContaining({ canRepair: true, targetSeatNumber: 1 })
+    );
+
+    await repairOrphanedReservations({ ...ctx }, new Set(['res-new']));
+    expect(prismaMock.reservation.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'res-new' } })
     );
   });
 

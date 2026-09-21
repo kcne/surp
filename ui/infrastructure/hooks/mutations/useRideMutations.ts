@@ -20,8 +20,15 @@ import {
   toUpdateRideDto,
 } from "@/infrastructure/mappers/rideMappers"
 import { ridesListQueryKey } from "@/infrastructure/hooks/queries/useRidesListQuery"
-import type { WouldBreakReservationsDto } from "@/infrastructure/generated/model"
 import type { RideFormData } from "@/types"
+import {
+  ChangeNeedsConfirmationError,
+  throwBreakingChangeConflict,
+} from "@/infrastructure/utils/breaking-change"
+import type { BreakingChangeAnswers } from "@/infrastructure/hooks/useConfirmableUpdate"
+
+/** The confirmation key for the ride request itself; exceptions key by id. */
+const RIDE_STEP = "ride"
 
 function isRideMutationSuccess<TResponse extends { status: number }>(
   response: TResponse,
@@ -32,35 +39,6 @@ function isRideMutationSuccess<TResponse extends { status: number }>(
   }
 
   return response.status >= 200 && response.status < 300
-}
-
-/**
- * A change the server refused because it would break reservations that already
- * exist — lowering capacity under a seat that is sold, today.
- *
- * It is not an error in the sense the other ones are: the request was valid and
- * the agency may well mean it, a smaller bus really does get substituted. So it
- * carries the server's count up to the page, which asks the question and
- * resends with the confirmation, instead of being flattened into a red toast
- * that says only that something failed.
- */
-export class RideChangeNeedsConfirmationError extends Error {
-  constructor(readonly confirmation: WouldBreakReservationsDto) {
-    super(confirmation.message)
-    this.name = "RideChangeNeedsConfirmationError"
-  }
-}
-
-function asBreakingChangeConflict(error: unknown): WouldBreakReservationsDto | null {
-  const body = (error as { response?: { status?: number; data?: unknown } })?.response
-
-  if (body?.status !== 409) {
-    return null
-  }
-
-  const data = body.data as Partial<WouldBreakReservationsDto> | undefined
-
-  return data?.code === "WOULD_BREAK_RESERVATIONS" ? (data as WouldBreakReservationsDto) : null
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -145,50 +123,68 @@ export function useUpdateRideMutation() {
     mutationFn: async ({
       id,
       payload,
-      confirmBreakingChange,
+      answers,
     }: {
       id: string
       payload: Partial<RideFormData>
-      /** Set only after the agency has answered the question the 409 asked. */
-      confirmBreakingChange?: boolean
+      /**
+       * The steps the agency has already answered a 409 about, by key, and how
+       * it answered them. An edit is several requests and each can be refused
+       * on its own terms, so an answer applies to the one request it was given
+       * for — and "save anyway" and "save and repair" are different answers,
+       * not one flag.
+       */
+      answers?: BreakingChangeAnswers
     }) => {
+      const isConfirmed = (step: string) =>
+        answers?.confirmed.some((answer) => answer.step === step) === true
+      const isRepaired = (step: string) =>
+        answers?.repaired.some((answer) => answer.step === step) === true
+      const answeredFor = (step: string) => ({
+        confirmBreakingChange: isConfirmed(step),
+        repairBreakingChange: isRepaired(step),
+      })
       const hasExceptionsUpdate = Array.isArray(payload.exceptions)
+      // Whether any request in this edit has already been written. Every step
+      // that lands sets it, not just the ride: an exception-only edit that
+      // removes one exception and is then refused on the next has left the
+      // first removal behind, and the dialog must not offer to cancel as
+      // though nothing had happened yet.
+      let anyWriteLanded = false
 
       if (hasPatchableFields(payload)) {
         // The day schedules travel with the ride update instead of going ahead
-        // of it in their own request. The update is the one call that can come
-        // back asking for confirmation, and anything written before it would
-        // survive a "cancel" as half a change nobody agreed to: the departure
-        // time already moved, the capacity change abandoned, and every
-        // reservation on the old time quietly orphaned. The ride endpoint
-        // replaces the schedules inside its own transaction, so either the
-        // whole edit lands or none of it does — and it validates them against
-        // the line the ride is being moved to rather than the one it is
-        // leaving, which the dedicated day-times endpoint cannot do.
+        // of it in their own request: anything written before it would survive
+        // a "cancel" as half a change nobody agreed to — the departure time
+        // already moved, the capacity change abandoned, and every reservation
+        // on the old time quietly orphaned. The ride endpoint replaces the
+        // schedules inside its own transaction, so either the whole edit lands
+        // or none of it does, and it validates them against the line the ride
+        // is being moved to rather than the one it is leaving.
+        //
+        // Exceptions cannot join it — they are their own endpoints — so they
+        // follow, and they can be refused too. Two things follow from that:
+        // once this call has landed a later refusal is no longer a clean
+        // "nothing happened", which `anyWriteLanded` tells the dialog to say;
+        // and each request is confirmed under its own key, so answering for
+        // this one never answers for an exception nobody was asked about.
         const updatePayload = toUpdateRideDto(payload)
 
-        const requestBody = confirmBreakingChange
-          ? { ...updatePayload, confirmBreakingChange: true }
-          : updatePayload
+        const requestBody = { ...updatePayload, ...answeredFor(RIDE_STEP) }
 
-        const response = await (payload.lineId && payload.type
-          ? ridesControllerReplace(id, requestBody)
-          : ridesControllerUpdate(id, requestBody)
-        ).catch((error: unknown) => {
-          const confirmation = asBreakingChangeConflict(error)
-
-          if (confirmation) {
-            throw new RideChangeNeedsConfirmationError(confirmation)
-          }
-
-          throw error
-        })
+        const response = await (
+          payload.lineId && payload.type
+            ? ridesControllerReplace(id, requestBody)
+            : ridesControllerUpdate(id, requestBody)
+        ).catch((error: unknown) => throwBreakingChangeConflict(error, RIDE_STEP))
 
         const isSuccess = isUpdateRideSuccess(response)
 
         if (!isSuccess) {
           throw new Error("Neuspesno azuriranje voznje")
         }
+
+        anyWriteLanded = true
       }
 
       if (hasExceptionsUpdate) {
@@ -207,20 +203,30 @@ export function useUpdateRideMutation() {
         const toAdd = nextExceptions.filter((exception) => !existingIds.has(exception.id))
 
         for (const exception of toRemove) {
-          const removeResponse = await ridesControllerRemoveException(id, exception.id)
+          const step = `exception:remove:${exception.id}`
+          const removeResponse = await ridesControllerRemoveException(
+            id,
+            exception.id,
+            answeredFor(step)
+          ).catch((error: unknown) => throwBreakingChangeConflict(error, step, anyWriteLanded))
           if (!isRideMutationSuccess(removeResponse)) {
             throw new Error("Neuspesno uklanjanje izuzetka voznje")
           }
+
+          anyWriteLanded = true
         }
 
         for (const exception of toAdd) {
-          const addResponse = await ridesControllerAddException(
-            id,
-            toCreateRideExceptionDto(exception)
-          )
+          const step = `exception:add:${exception.id}`
+          const addResponse = await ridesControllerAddException(id, {
+            ...toCreateRideExceptionDto(exception),
+            ...answeredFor(step),
+          }).catch((error: unknown) => throwBreakingChangeConflict(error, step, anyWriteLanded))
           if (!isRideMutationSuccess(addResponse)) {
             throw new Error("Neuspesno dodavanje izuzetka voznje")
           }
+
+          anyWriteLanded = true
         }
       }
 
@@ -238,7 +244,7 @@ export function useUpdateRideMutation() {
     onError: (error) => {
       // The page turns this one into a question, so a toast would only be a
       // red notice next to a dialog asking the agency to decide.
-      if (error instanceof RideChangeNeedsConfirmationError) {
+      if (error instanceof ChangeNeedsConfirmationError) {
         return
       }
 

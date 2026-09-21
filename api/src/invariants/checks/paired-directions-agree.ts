@@ -121,6 +121,10 @@ export async function syncDriftedPairs(ctx: InvariantContext): Promise<PairSyncO
 
     const mergedStopIds = entry.mergedStopIds;
 
+    if (!('$transaction' in ctx.prisma)) {
+      throw new Error('Invariant repairs require a root database client');
+    }
+
     const written = await ctx.prisma.$transaction(async (tx) => {
       let scheduleCount = 0;
       let stopCount = 0;

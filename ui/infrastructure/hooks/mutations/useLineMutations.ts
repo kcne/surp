@@ -12,6 +12,10 @@ import {
 import type { CreateLineDto, UpdateLineDto } from "@/infrastructure/generated/model"
 import { linesListQueryKey } from "@/infrastructure/hooks/queries/useLinesListQuery"
 import { ridesListQueryKey } from "@/infrastructure/hooks/queries/useRidesListQuery"
+import {
+  ChangeNeedsConfirmationError,
+  throwBreakingChangeConflict,
+} from "@/infrastructure/utils/breaking-change"
 
 function isLineMutationSuccess<TResponse extends { status: number }>(
   response: TResponse,
@@ -76,8 +80,22 @@ export function useUpdateLineMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, payload }: { id: string; payload: UpdateLineDto }) => {
-      const response = await linesControllerUpdate(id, payload)
+    mutationFn: async ({
+      id,
+      payload,
+      confirmBreakingChange,
+      repairBreakingChange,
+    }: {
+      id: string
+      payload: UpdateLineDto
+      confirmBreakingChange?: boolean
+      repairBreakingChange?: boolean
+    }) => {
+      const response = await linesControllerUpdate(id, {
+        ...payload,
+        confirmBreakingChange,
+        repairBreakingChange,
+      }).catch(throwBreakingChangeConflict)
       if (!isLineMutationSuccess<linesControllerUpdateResponse>(response)) {
         throw new Error("Neuspesno azuriranje linije")
       }
@@ -88,6 +106,10 @@ export function useUpdateLineMutation() {
       invalidateLinesList(queryClient)
     },
     onError: (error) => {
+      if (error instanceof ChangeNeedsConfirmationError) {
+        return
+      }
+
       toast.error(getErrorMessage(error, "Neuspesno azuriranje linije"))
     },
   })

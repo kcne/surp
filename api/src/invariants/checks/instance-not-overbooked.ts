@@ -1,7 +1,8 @@
 import { segmentCoversLeg } from '../../reservations/route-segment';
-import { CheckResult, Invariant, InvariantContext } from '../invariant.types';
+import { CheckResult, InvariantContext, ProspectiveInvariant } from '../invariant.types';
 import { InstanceOccupancy, legLabel, loadInstanceOccupancy } from './seat-occupancy';
 import { loadStationNames, stationNamer } from './tenant-lookups';
+import { serbianPlural } from '../serbian-plural';
 
 /**
  * No departure carries more passengers than it has seats.
@@ -92,7 +93,7 @@ function busiestLeg(
   return worst;
 }
 
-export const instanceNotOverbooked: Invariant = {
+export const instanceNotOverbooked: ProspectiveInvariant = {
   key: 'instance.notOverbooked',
   title: 'Polazak ne nosi vise putnika nego sto ima mesta',
   description:
@@ -100,6 +101,9 @@ export const instanceNotOverbooked: Invariant = {
   manualAdvice:
     'Na toj deonici ima vise putnika nego mesta. Povecajte kapacitet, dodajte drugi autobus, ili prebacite deo putnika na drugi termin — ko se pomera sistem ne moze da izabere.',
   severity: 'critical',
+
+  breakingChangeMessage: (count) =>
+    `Ova izmena preopterecuje ${serbianPlural(count, 'polazak', 'polaska', 'polazaka')}.`,
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const { items, scannedInstanceCount } = await findOverbookedInstances(ctx);
@@ -109,6 +113,9 @@ export const instanceNotOverbooked: Invariant = {
       violations: items.map((item) => ({
         subjectType: 'ride-instance' as const,
         subjectId: item.instanceKey,
+        // How far over the line this departure is, so that deepening an
+        // overbooking the write did not create still counts as breaking it.
+        magnitude: item.passengerCount - item.capacity,
         summary: `${item.rideName}, ${item.travelDate}, polazak ${item.departureTime}: ${item.passengerCount} putnika na deonici ${item.legLabel}, a kapacitet je ${item.capacity}.`,
         detail: { ...item },
         canRepair: false

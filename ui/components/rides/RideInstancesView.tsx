@@ -56,10 +56,18 @@ export function RideInstancesView({
     }
 
     const handleCancelInstance = async (instanceDate: string) => {
-      const maybeUpdatedRide = await onCancelInstance(activeRide, instanceDate)
+      try {
+        const maybeUpdatedRide = await onCancelInstance(activeRide, instanceDate)
 
-      if (maybeUpdatedRide) {
-        setActiveRide(maybeUpdatedRide)
+        if (maybeUpdatedRide) {
+          setActiveRide(maybeUpdatedRide)
+        }
+      } catch {
+        // The page answers for this one: a refusal opens the confirmation
+        // dialog and an ordinary failure has already raised its toast. What
+        // matters here is that the list keeps showing the instance as it still
+        // is — running — instead of marking it cancelled on a write that was
+        // refused.
       }
     }
 

@@ -10,9 +10,11 @@ export interface WouldBreakReservationsDto {
   code: string;
   /** Key of the invariant the change would violate. */
   invariant: string;
-  /** Reservations the change would break. */
+  /** New invariant violations the proposed change would introduce. */
   affectedCount: number;
-  /** Highest seat number still sold, so the caller can see the floor. */
-  highestOccupiedSeat: number;
   message: string;
+  /** Whether resending with repairBreakingChange would settle every affected subject rather than leaving it broken. */
+  repairable: boolean;
+  /** What the repair would do, in Serbian. Present when repairable. */
+  repairMessage?: string;
 }

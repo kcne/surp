@@ -17,6 +17,8 @@ import {
 import { useStationsListQuery } from "@/infrastructure/hooks/queries/useStationsListQuery"
 import type { CreateStationDto, UpdateStationDto } from "@/infrastructure/generated/model"
 import type { StationListItem } from "@/infrastructure/hooks/queries/useStationsListQuery"
+import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
+import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
 
 export default function StationsPage() {
   const stationsQuery = useStationsListQuery()
@@ -47,9 +49,18 @@ export default function StationsPage() {
     await createStationMutation.mutateAsync(payload)
   }
 
-  const handleUpdate = async (id: string, payload: UpdateStationDto) => {
-    await updateStationMutation.mutateAsync({ id, payload })
-  }
+  const confirmableUpdate = useConfirmableUpdate<{ id: string; payload: UpdateStationDto }>({
+    update: (variables, answers) =>
+      updateStationMutation.mutateAsync({
+        ...variables,
+        confirmBreakingChange: answers.confirmed.length > 0,
+        repairBreakingChange: answers.repaired.length > 0,
+      }),
+    onConfirmed: () => handleModalClose(),
+  })
+
+  const handleUpdate = (id: string, payload: UpdateStationDto) =>
+    confirmableUpdate.run({ id, payload })
 
   const handleDelete = async (id: string) => {
     await deleteStationMutation.mutateAsync(id)
@@ -88,9 +99,7 @@ export default function StationsPage() {
               <MapPin className="h-6 w-6 text-primary" />
               Stanice
             </h1>
-            <p className="text-muted-foreground">
-              Upravljajte autobuskim stanicama u sistemu
-            </p>
+            <p className="text-muted-foreground">Upravljajte autobuskim stanicama u sistemu</p>
           </div>
           <Button onClick={handleAddNew}>
             <Plus className="mr-2 h-4 w-4" />
@@ -111,20 +120,14 @@ export default function StationsPage() {
               Greska pri ucitavanju stanica
             </p>
             <p className="mb-4 text-sm text-muted-foreground">
-              {error instanceof Error
-                ? error.message
-                : "Pokrenite ponovno ucitavanje podataka."}
+              {error instanceof Error ? error.message : "Pokrenite ponovno ucitavanje podataka."}
             </p>
-            <Button onClick={() => stationsQuery.refetch()}>
-              Pokusaj ponovo
-            </Button>
+            <Button onClick={() => stationsQuery.refetch()}>Pokusaj ponovo</Button>
           </div>
         ) : stations.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12">
             <MapPin className="mb-3 h-10 w-10 text-muted-foreground" />
-            <p className="text-lg font-medium text-muted-foreground">
-              Nema stanica
-            </p>
+            <p className="text-lg font-medium text-muted-foreground">Nema stanica</p>
             <p className="mb-4 text-sm text-muted-foreground">
               Dodajte prvu stanicu da biste počeli
             </p>
@@ -152,6 +155,8 @@ export default function StationsPage() {
           onUpdate={handleUpdate}
         />
 
+        <ConfirmBreakingChangeDialog {...confirmableUpdate.dialogProps} loading={mutationLoading} />
+
         <DeleteStationDialog
           open={isDeleteDialogOpen}
           onOpenChange={setIsDeleteDialogOpen}
@@ -163,13 +168,3 @@ export default function StationsPage() {
     </Layout>
   )
 }
-
-
-
-
-
-
-
-
-
-

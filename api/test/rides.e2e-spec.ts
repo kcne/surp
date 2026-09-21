@@ -85,9 +85,16 @@ describe('RidesController (e2e)', () => {
       create: jest.fn(),
       delete: jest.fn()
     },
+    // Violation summaries name their stations, so the checks read this too.
+    station: {
+      findMany: jest.fn()
+    },
     reservation: {
       groupBy: jest.fn(),
-      count: jest.fn()
+      count: jest.fn(),
+      // The prospective checks load the reservation window inside the guard's
+      // transaction; without this they read `undefined`.
+      findMany: jest.fn()
     }
   };
 
@@ -187,12 +194,16 @@ describe('RidesController (e2e)', () => {
     prismaMock.reservation.groupBy.mockResolvedValue([]);
     prismaMock.reservation.count.mockResolvedValue(0);
 
+    prismaMock.station.findMany.mockResolvedValue([]);
+    prismaMock.reservation.findMany.mockResolvedValue([]);
+
+    // The callback form gets the whole mock rather than a hand-picked pair of
+    // models. A guarded write runs its checks in the same transaction as the
+    // write, so the client it is handed has to answer for every table those
+    // checks touch — and the set grows whenever an invariant joins the guard.
     prismaMock.$transaction.mockImplementation(async (arg: unknown) => {
       if (typeof arg === 'function') {
-        return arg({
-          ride: prismaMock.ride,
-          rideDaySchedule: prismaMock.rideDaySchedule
-        });
+        return (arg as (tx: typeof prismaMock) => unknown)(prismaMock);
       }
 
       return [[{ ...baseRide }], 1];

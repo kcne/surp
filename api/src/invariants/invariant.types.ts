@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -24,7 +25,8 @@ export type InvariantSeverity = 'critical' | 'warning';
 export interface InvariantContext {
   tenantId: string;
   actorId: string;
-  prisma: PrismaService;
+  /** A full client for normal runs, or the transaction holding a proposed write. */
+  prisma: PrismaService | Prisma.TransactionClient;
   windowDays: number;
 }
 
@@ -41,6 +43,18 @@ export interface Violation {
   subjectType: ViolationSubject;
   /** Identifies the row a human would open to look at this. */
   subjectId: string;
+  /**
+   * How bad this violation is, where "worse" is a larger number.
+   *
+   * Only meaningful for subjects that can hold more than one problem at once —
+   * an instance overbooked by two passengers rather than one, a line calling at
+   * three dead stations rather than one. A prospective write compares subjects
+   * by identity, so without this a change that deepens a violation it did not
+   * create would look identical to the baseline and pass unwarned. Checks whose
+   * subject can only ever hold one problem have nothing to count and leave it
+   * unset.
+   */
+  magnitude?: number;
   /** One sentence, in Serbian: it is read in Settings by agency staff. */
   summary: string;
   /** Everything the review page needs to render a detail row. */
@@ -82,10 +96,43 @@ export interface Invariant {
    */
   manualAdvice: string;
   severity: InvariantSeverity;
+  /**
+   * The sentence a write refused for breaking this invariant says, in Serbian.
+   *
+   * Lives here rather than in a switch beside the guard so that the check and
+   * the sentence describing it are one edit, and so a new prospective check
+   * cannot silently fall back to generic copy. Present only on the checks a
+   * write is ever refused for; `ProspectiveInvariant` requires it.
+   */
+  breakingChangeMessage?(count: number): string;
+  /**
+   * What running `repair` would do to the subjects a write is being refused
+   * for, in Serbian. Shown on the button that answers the refusal by fixing
+   * rather than by overriding.
+   *
+   * Beside `breakingChangeMessage` and for the same reason: the check knows
+   * what its repair does, and a sentence written anywhere else drifts from it.
+   * Only meaningful where `repair` exists.
+   */
+  repairMessage?(count: number): string;
   check(ctx: InvariantContext): Promise<CheckResult>;
   /**
    * Present only where a repair can be made without guessing. An invariant
    * whose fix requires a routing decision stays reported.
    */
-  repair?(ctx: InvariantContext): Promise<RepairResult>;
+  /** When provided by a prospective write, repair only these subjects. */
+  repair?(ctx: InvariantContext, subjectIds?: ReadonlySet<string>): Promise<RepairResult>;
 }
+
+/**
+ * An invariant a write can be refused for.
+ *
+ * Refusing is user-facing, so it must be able to say why in Serbian. Requiring
+ * the sentence here means `PROSPECTIVE_INVARIANTS` cannot name a check that
+ * would fall back to generic copy, and the compiler says so at the check.
+ */
+export type ProspectiveInvariant = Invariant & {
+  breakingChangeMessage: (count: number) => string;
+  /** Plan only these subjects when other existing violations compete for repair capacity. */
+  assessRepair?(ctx: InvariantContext, subjectIds: ReadonlySet<string>): Promise<CheckResult>;
+};

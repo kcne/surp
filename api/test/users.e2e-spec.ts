@@ -43,7 +43,9 @@ describe('UsersController (e2e)', () => {
   };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    // A request that fails before consuming mockResolvedValueOnce must not
+    // leave that response queued for the next test.
+    jest.resetAllMocks();
     mutablePasswordHash = await hash('strong-password-123', 10);
 
     prismaMock.tenant.findUnique.mockImplementation(async ({ where }: { where: { slug: string } }) => {

@@ -7,10 +7,12 @@ import {
   ApiHeader,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiExtraModels,
   ApiOperation,
   ApiQuery,
   ApiTags,
-  ApiUnauthorizedResponse
+  ApiUnauthorizedResponse,
+  getSchemaPath
 } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { RequestWithAuth } from '../auth/auth.types';
@@ -28,6 +30,8 @@ import {
 } from './dto/ride.response.dto';
 import { UpdateRideDto } from './dto/update-ride.dto';
 import { WouldBreakReservationsDto } from './dto/would-break-reservations.dto';
+import { RideExceptionConflictDto } from './dto/exception-conflict.dto';
+import { ConfirmBreakingChangeDto } from '../invariants/dto/confirm-breaking-change.dto';
 import { RidesService } from './rides.service';
 
 @ApiTags('Rides')
@@ -141,12 +145,21 @@ export class RidesController {
   @ApiNotFoundResponse({ description: 'Ride not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  @ApiConflictResponse({
+    type: WouldBreakReservationsDto,
+    description: 'The proposed schedule would break an existing reservation.'
+  })
   replaceDayTimes(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,
     @Body() dto: ReplaceRideDaySchedulesDto
   ): Promise<RideResponseDto> {
-    return this.ridesService.replaceDayTimes(request.auth!, id, dto.daySchedules);
+    return this.ridesService.replaceDayTimes(
+      request.auth!,
+      id,
+      dto.daySchedules,
+      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true }
+    );
   }
 
   @Post(':id/exceptions')
@@ -154,7 +167,17 @@ export class RidesController {
   @ApiOperation({ summary: 'Add a ride exception (skip/additional) in the current tenant.' })
   @ApiOkResponse({ type: RideExceptionResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure or invalid exception combination.' })
-  @ApiConflictResponse({ description: 'Duplicate exception for date or conflicting exception type.' })
+  @ApiExtraModels(WouldBreakReservationsDto, RideExceptionConflictDto)
+  @ApiConflictResponse({
+    description:
+      'Either a SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable, or a duplicate or conflicting exception, which is not.',
+    schema: {
+      oneOf: [
+        { $ref: getSchemaPath(WouldBreakReservationsDto) },
+        { $ref: getSchemaPath(RideExceptionConflictDto) }
+      ]
+    }
+  })
   @ApiNotFoundResponse({ description: 'Ride not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
@@ -173,12 +196,22 @@ export class RidesController {
   @ApiNotFoundResponse({ description: 'Ride or exception not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  @ApiConflictResponse({
+    type: WouldBreakReservationsDto,
+    description: 'Deleting the exception would break an existing reservation.'
+  })
   removeException(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,
-    @Param('exceptionId') exceptionId: string
+    @Param('exceptionId') exceptionId: string,
+    @Body() dto: ConfirmBreakingChangeDto
   ): Promise<RideExceptionResponseDto> {
-    return this.ridesService.removeException(request.auth!, id, exceptionId);
+    return this.ridesService.removeException(
+      request.auth!,
+      id,
+      exceptionId,
+      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true }
+    );
   }
 
   @Delete(':id')
@@ -190,7 +223,9 @@ export class RidesController {
     description: 'When true, cancels active reservations and deactivates the ride.'
   })
   @ApiOkResponse({ type: RideResponseDto })
-  @ApiConflictResponse({ description: 'Ride has active reservations and cascade override is not enabled.' })
+  @ApiConflictResponse({
+    description: 'Ride has active reservations and cascade override is not enabled.'
+  })
   @ApiNotFoundResponse({ description: 'Ride not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })

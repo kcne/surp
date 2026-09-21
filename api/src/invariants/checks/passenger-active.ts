@@ -1,6 +1,7 @@
 import { formatDateOnly } from '../../rides/ride-instance-materialization';
-import { CheckResult, Invariant, InvariantContext } from '../invariant.types';
+import { CheckResult, InvariantContext, ProspectiveInvariant } from '../invariant.types';
 import { loadReservationWindow } from './reservation-window';
+import { serbianPlural } from '../serbian-plural';
 
 /**
  * No active, future reservation belongs to a deactivated passenger.
@@ -59,7 +60,7 @@ export async function findReservationsWithInactivePassenger(
   return { items, scannedReservationCount: window.reservations.length };
 }
 
-export const reservationPassengerActive: Invariant = {
+export const reservationPassengerActive: ProspectiveInvariant = {
   key: 'reservation.passengerActive',
   title: 'Putnik rezervacije je aktivan',
   description:
@@ -67,6 +68,9 @@ export const reservationPassengerActive: Invariant = {
   manualAdvice:
     'Odlucite sta je tacno: ako putnik i dalje putuje, vratite ga medju aktivne; ako ne putuje, otkazite njegove buduce rezervacije. Dok je ovako, putnik sa vazecom kartom se ne vidi tamo gde ga ocekujete.',
   severity: 'critical',
+
+  breakingChangeMessage: (count) =>
+    `Ova izmena ostavlja ${serbianPlural(count, 'aktivnu rezervaciju', 'aktivne rezervacije', 'aktivnih rezervacija')} na neaktivnom putniku.`,
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const { items, scannedReservationCount } = await findReservationsWithInactivePassenger(ctx);

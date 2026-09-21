@@ -10,6 +10,10 @@ import type { UpdateLineDtoDirection } from './updateLineDtoDirection';
 import type { UpdateLineDtoDirectionMode } from './updateLineDtoDirectionMode';
 
 export interface UpdateLineDto {
+  /** Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers. */
+  confirmBreakingChange?: boolean;
+  /** Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true. */
+  repairBreakingChange?: boolean;
   name?: string;
   departureStationId?: string;
   arrivalStationId?: string;

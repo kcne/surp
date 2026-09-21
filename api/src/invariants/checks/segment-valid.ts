@@ -1,8 +1,9 @@
 import { formatDateOnly } from '../../rides/ride-instance-materialization';
 import { routeBoardingDropoffSets, routeStationOrder } from '../../reservations/route-segment';
-import { CheckResult, Invariant, InvariantContext } from '../invariant.types';
+import { CheckResult, InvariantContext, ProspectiveInvariant } from '../invariant.types';
 import { loadReservationWindow } from './reservation-window';
 import { loadStationNames, stationNamer } from './tenant-lookups';
+import { serbianPlural } from '../serbian-plural';
 
 /**
  * A reservation's segment reads the same way `validateAndResolveSegment`
@@ -126,7 +127,7 @@ function describeProblems(item: InvalidSegmentItem): string {
   return problems.join('; ');
 }
 
-export const reservationSegmentValid: Invariant = {
+export const reservationSegmentValid: ProspectiveInvariant = {
   key: 'reservation.segmentValid',
   title: 'Deonica rezervacije je i dalje ispravna',
   description:
@@ -134,6 +135,9 @@ export const reservationSegmentValid: Invariant = {
   manualAdvice:
     'Otvorite rezervaciju i ispravite stanice prema danasnjoj ruti: polazna mora biti pre dolazne, sa polazne se sme ukrcati, a na dolaznoj iskrcati. Ako je stanica greskom oznacena da nema ukrcavanje ili iskrcavanje, ispravite to na liniji.',
   severity: 'critical',
+
+  breakingChangeMessage: (count) =>
+    `Ova izmena kvari deonicu za ${serbianPlural(count, 'rezervaciju', 'rezervacije', 'rezervacija')}.`,
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const { items, scannedReservationCount } = await findInvalidSegments(ctx);
@@ -143,6 +147,15 @@ export const reservationSegmentValid: Invariant = {
       violations: items.map((item) => ({
         subjectType: 'reservation' as const,
         subjectId: item.reservationId,
+        // One reservation can hold up to three independent faults, so the
+        // subject alone does not say whether a write made things worse. An
+        // edit that reverses the stop order on a reservation whose departure
+        // station had already stopped boarding would otherwise compare equal
+        // to the baseline and go through unwarned.
+        magnitude:
+          Number(item.orderReversed) +
+          Number(item.departureNotBoarding) +
+          Number(item.arrivalNotDropoff),
         summary: `${item.passengerName}, ${item.travelDate}, polazak ${item.departureTime}: ${describeProblems(item)}.`,
         detail: { ...item },
         canRepair: false

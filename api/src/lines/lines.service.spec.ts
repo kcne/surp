@@ -1,10 +1,54 @@
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException
-} from '@nestjs/common';
-import { LineDirection, LineDirectionMode, ReservationStatus, RideStatus, UserRole } from '@prisma/client';
+  LineDirection,
+  LineDirectionMode,
+  ReservationStatus,
+  RideStatus,
+  UserRole
+} from '@prisma/client';
 import { LinesService } from './lines.service';
+
+type FindManyArgs = { select?: Record<string, unknown>; where?: { id?: unknown } };
+type FindMany = (args: FindManyArgs) => Promise<unknown>;
+
+/**
+ * Makes the guard's invariant reads come back empty, so a test about route
+ * realignment is not also a test about what the invariants think of its
+ * fixtures. Rides are the one table both sides read: the guard asks for each
+ * ride's line, realignment asks for its day schedules, so they are told apart
+ * by what they select rather than by a second mock.
+ */
+function withCleanInvariantReads<T extends object>(tx: T, readRouteStations: FindMany): T {
+  const existing = tx as T & {
+    reservation?: Record<string, unknown>;
+    station?: Record<string, unknown>;
+    ride?: { findMany?: FindMany };
+  };
+  const rideFindMany = existing.ride?.findMany;
+
+  Object.assign(tx, {
+    reservation: {
+      ...existing.reservation,
+      findMany: existing.reservation?.findMany ?? jest.fn().mockResolvedValue([])
+    },
+    station: {
+      ...existing.station,
+      // Route validation asks for named stations by id; the invariants ask for
+      // the whole tenant to turn ids into names. Only the first has to answer.
+      findMany: jest.fn(async (args: FindManyArgs = {}) =>
+        args.where?.id ? readRouteStations(args) : []
+      )
+    },
+    ride: {
+      ...existing.ride,
+      findMany: jest.fn(async (args: FindManyArgs = {}) =>
+        args.select?.line || !rideFindMany ? [] : rideFindMany(args)
+      )
+    }
+  });
+
+  return tx;
+}
 
 describe('LinesService', () => {
   const prismaMock = {
@@ -69,7 +113,11 @@ describe('LinesService', () => {
       category: null,
       isActive: true
     },
-    intermediateStops: [] as Array<{ stationId: string; orderIndex: number; station: { name: string } }>
+    intermediateStops: [] as Array<{
+      stationId: string;
+      orderIndex: number;
+      station: { name: string };
+    }>
   };
 
   let service: LinesService;
@@ -216,7 +264,9 @@ describe('LinesService', () => {
       }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
+    );
 
     const result = await service.remove(auth, 'line-1', true);
 
@@ -299,7 +349,9 @@ describe('LinesService', () => {
       }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
+    );
 
     await service.update(auth, 'line-1', {
       intermediateStops: [
@@ -348,6 +400,7 @@ describe('LinesService', () => {
       { id: 'station-b', name: 'North' }
     ]);
 
+    const realignmentRideRead = jest.fn();
     const tx = {
       line: {
         update: jest.fn().mockResolvedValue({ ...baseLine, isActive: false }),
@@ -355,15 +408,19 @@ describe('LinesService', () => {
         findFirst: jest.fn().mockResolvedValue({ ...baseLine, isActive: false })
       },
       lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
-      ride: { findMany: jest.fn() },
+      // Held separately because the guard reads rides too; this is the read
+      // realignment would make, and the assertion is that it never happens.
+      ride: { findMany: realignmentRideRead },
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
+    );
 
     await service.update(auth, 'line-1', { isActive: false });
 
-    expect(tx.ride.findMany).not.toHaveBeenCalled();
+    expect(realignmentRideRead).not.toHaveBeenCalled();
     expect(tx.rideDayScheduleStationTime.deleteMany).not.toHaveBeenCalled();
   });
   it('realigns ride day schedules through the replace-stops endpoint too', async () => {
@@ -410,7 +467,9 @@ describe('LinesService', () => {
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
+    );
 
     await service.replaceStops(auth, 'line-1', [
       { stationId: 'station-c', orderIndex: 1 },
@@ -427,6 +486,24 @@ describe('LinesService', () => {
       'station-b'
     ]);
   });
+
+  it('forwards both consent answers from replace-stops to the update path', async () => {
+    const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+
+    await service.replaceStops(auth, 'line-1', [{ stationId: 'station-c', orderIndex: 1 }], {
+      confirmed: false,
+      repair: true
+    });
+
+    expect(update).toHaveBeenCalledWith(auth, 'line-1', {
+      intermediateStops: [{ stationId: 'station-c', orderIndex: 1 }],
+      confirmBreakingChange: false,
+      repairBreakingChange: true
+    });
+
+    update.mockRestore();
+  });
+
   it('stores boarding rules per stop and flips them on the paired direction', async () => {
     prismaMock.line.findFirst.mockResolvedValue({
       ...baseLine,
@@ -463,7 +540,9 @@ describe('LinesService', () => {
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
+    );
 
     await service.update(auth, 'line-1', {
       intermediateStops: [
@@ -475,13 +554,11 @@ describe('LinesService', () => {
 
     const ownCall = tx.lineStop.createMany.mock.calls[0][0];
     expect(
-      ownCall.data.map(
-        (entry: { stationId: string; isBoarding: boolean; isDropoff: boolean }) => ({
-          stationId: entry.stationId,
-          isBoarding: entry.isBoarding,
-          isDropoff: entry.isDropoff
-        })
-      )
+      ownCall.data.map((entry: { stationId: string; isBoarding: boolean; isDropoff: boolean }) => ({
+        stationId: entry.stationId,
+        isBoarding: entry.isBoarding,
+        isDropoff: entry.isDropoff
+      }))
     ).toEqual([
       { stationId: 'station-c', isBoarding: true, isDropoff: false },
       { stationId: 'station-d', isBoarding: true, isDropoff: true }
@@ -541,7 +618,9 @@ describe('LinesService', () => {
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
+    );
 
     await service.update(auth, 'line-1', {
       intermediateStops: [
@@ -601,7 +680,9 @@ describe('LinesService', () => {
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
+    );
 
     await service.update(auth, 'line-1', {
       intermediateStops: [
@@ -617,12 +698,16 @@ describe('LinesService', () => {
   });
 
   it('does not touch other lines when the line is not part of a pair', async () => {
-    prismaMock.line.findFirst.mockResolvedValue({
+    // The update reads the line inside its own transaction now, so the
+    // unpaired fixture belongs on the transaction client.
+    const unpairedLine = {
       ...baseLine,
       directionMode: LineDirectionMode.SINGLE,
       pairKey: null,
       intermediateStops: []
-    });
+    };
+
+    prismaMock.line.findFirst.mockResolvedValue(unpairedLine);
 
     prismaMock.station.findMany
       .mockResolvedValueOnce([
@@ -633,9 +718,9 @@ describe('LinesService', () => {
 
     const tx = {
       line: {
-        update: jest.fn().mockResolvedValue(baseLine),
+        update: jest.fn().mockResolvedValue(unpairedLine),
         updateMany: jest.fn(),
-        findFirst: jest.fn().mockResolvedValue(baseLine),
+        findFirst: jest.fn().mockResolvedValue(unpairedLine),
         findMany: jest.fn()
       },
       lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
@@ -643,7 +728,9 @@ describe('LinesService', () => {
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
     };
 
-    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) => callback(tx));
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(withCleanInvariantReads(tx, prismaMock.station.findMany))
+    );
 
     await service.update(auth, 'line-1', {
       intermediateStops: [{ stationId: 'station-c', orderIndex: 1 }]

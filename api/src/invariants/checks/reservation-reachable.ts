@@ -10,8 +10,9 @@ import {
   type OrphanReason
 } from './orphaned-reservations';
 import { loadReservationWindow } from './reservation-window';
-import { CheckResult, Invariant, InvariantContext, RepairResult } from '../invariant.types';
+import { CheckResult, InvariantContext, ProspectiveInvariant, RepairResult } from '../invariant.types';
 import { loadStationNames } from './tenant-lookups';
+import { serbianPlural } from '../serbian-plural';
 
 /**
  * A reservation is only ever reached through a ride instance, and instances are
@@ -64,8 +65,11 @@ export interface OrphanRepairOutcome {
   items: OrphanedReservationItem[];
 }
 
-export async function buildOrphanReport(ctx: InvariantContext): Promise<OrphanReport> {
-  const scan = await scanForOrphans(ctx);
+export async function buildOrphanReport(
+  ctx: InvariantContext,
+  subjectIds?: ReadonlySet<string>
+): Promise<OrphanReport> {
+  const scan = await scanForOrphans(ctx, subjectIds);
 
   return {
     windowStartDate: scan.windowStartDate,
@@ -88,22 +92,27 @@ export async function buildOrphanReport(ctx: InvariantContext): Promise<OrphanRe
  * state of the bus.
  */
 export async function repairOrphanedReservations(
-  ctx: InvariantContext
+  ctx: InvariantContext,
+  subjectIds?: ReadonlySet<string>
 ): Promise<OrphanRepairOutcome> {
-  const scan = await scanForOrphans(ctx);
+  const scan = await scanForOrphans(ctx, subjectIds);
 
   let repairedCount = 0;
   let seatChangedCount = 0;
   let skippedCount = 0;
 
   for (const item of scan.items) {
+    if (subjectIds && !subjectIds.has(item.reservationId)) {
+      continue;
+    }
+
     if (!item.canRepair || !item.targetDepartureTime || item.targetSeatNumber === null) {
       skippedCount += 1;
       continue;
     }
 
-    // One reservation per transaction: a single failure must not roll back
-    // passengers already made visible again.
+    // A prospective write passes its transaction here, so a later failure
+    // rolls back every selected update along with the proposed write.
     await ctx.prisma.reservation.update({
       where: { id: item.reservationId },
       data: withUpdateAudit(
@@ -127,15 +136,19 @@ export async function repairOrphanedReservations(
     repairedCount,
     seatChangedCount,
     skippedCount,
-    items: scan.items
+    items: subjectIds
+      ? scan.items.filter((item) => subjectIds.has(item.reservationId))
+      : scan.items
   };
 }
 
 /**
  * Walks every active reservation travelling inside the window and asks which
- * ride instance, if any, can still reach it.
+ * ride instance, if any, can still reach it. A prospective repair can limit
+ * which orphans compete for target seats while visible reservations still
+ * retain their seats.
  */
-export async function scanForOrphans(ctx: InvariantContext): Promise<{
+export async function scanForOrphans(ctx: InvariantContext, subjectIds?: ReadonlySet<string>): Promise<{
   windowStartDate: string;
   windowEndDate: string;
   scannedReservationCount: number;
@@ -223,6 +236,10 @@ export async function scanForOrphans(ctx: InvariantContext): Promise<{
   const needsAnotherSeat: OrphanCandidate[] = [];
 
   for (const candidate of orphanCandidates) {
+    if (subjectIds && !subjectIds.has(candidate.reservation.id)) {
+      continue;
+    }
+
     const { reservation, ride, travelDate, targetDepartureTime } = candidate;
 
     if (!targetDepartureTime) {
@@ -308,7 +325,7 @@ export async function scanForOrphans(ctx: InvariantContext): Promise<{
   };
 }
 
-export const reservationReachable: Invariant = {
+export const reservationReachable: ProspectiveInvariant = {
   key: 'reservation.reachable',
   title: 'Rezervacija se vidi na svom polasku',
   description:
@@ -317,24 +334,42 @@ export const reservationReachable: Invariant = {
     'Popravka vraca samo rezervacije za koje tog dana postoji tacno jedan polazak. Za ostale otvorite taj datum u voznjama: ako polaska nema, napravite ga ili pozovite putnika; ako ih ima vise, prebacite rezervaciju rucno na onaj koji je putnik kupio; ako je autobus pun, povecajte kapacitet ili ponudite drugi termin.',
   severity: 'critical',
 
+  breakingChangeMessage: (count) =>
+    `Ova izmena cini ${serbianPlural(count, 'rezervaciju nevidljivom', 'rezervacije nevidljivim', 'rezervacija nevidljivim')}.`,
+
+  // Names the seat as well as the time, because the repair can move it: the
+  // old seat may be taken on the departure the reservation is moving onto, and
+  // an agency that reads only "premesta na novo vreme" would not know to tell
+  // the passenger they are sitting somewhere else.
+  repairMessage: (count) =>
+    `Premesta ${serbianPlural(count, 'rezervaciju', 'rezervacije', 'rezervacija')} na novo vreme polaska i slobodno sediste.`,
+
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const report = await buildOrphanReport(ctx);
 
-    return {
-      scannedCount: report.scannedReservationCount,
-      violations: report.items.map((item) => ({
-        subjectType: 'reservation' as const,
-        subjectId: item.reservationId,
-        summary: `${item.passengerName}, ${item.travelDate}, polazak ${item.currentDepartureTime}: ${item.reasonLabel.toLowerCase()}.`,
-        detail: { ...item },
-        canRepair: item.canRepair
-      }))
-    };
+    return toCheckResult(report);
   },
 
-  async repair(ctx: InvariantContext): Promise<RepairResult> {
-    const { repairedCount, skippedCount } = await repairOrphanedReservations(ctx);
+  async assessRepair(ctx: InvariantContext, subjectIds: ReadonlySet<string>): Promise<CheckResult> {
+    return toCheckResult(await buildOrphanReport(ctx, subjectIds));
+  },
+
+  async repair(ctx: InvariantContext, subjectIds?: ReadonlySet<string>): Promise<RepairResult> {
+    const { repairedCount, skippedCount } = await repairOrphanedReservations(ctx, subjectIds);
 
     return { repairedCount, skippedCount };
   }
 };
+
+function toCheckResult(report: OrphanReport): CheckResult {
+  return {
+    scannedCount: report.scannedReservationCount,
+    violations: report.items.map((item) => ({
+      subjectType: 'reservation' as const,
+      subjectId: item.reservationId,
+      summary: `${item.passengerName}, ${item.travelDate}, polazak ${item.currentDepartureTime}: ${item.reasonLabel.toLowerCase()}.`,
+      detail: { ...item },
+      canRepair: item.canRepair
+    }))
+  };
+}

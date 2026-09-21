@@ -27,7 +27,9 @@ describe('StationsController (e2e)', () => {
       delete: jest.fn()
     },
     line: {
-      count: jest.fn()
+      count: jest.fn(),
+      // `routeStationsActive` runs inside the deactivation guard's transaction.
+      findMany: jest.fn()
     },
     reservation: {
       count: jest.fn()
@@ -99,25 +101,39 @@ describe('StationsController (e2e)', () => {
       updatedAt: new Date()
     });
 
-    prismaMock.$transaction.mockResolvedValue([
-      [
-        {
-          id: 'station-1',
-          tenantId: 'tenant-1',
-          createdById: 'admin-1',
-          updatedById: 'admin-1',
-          name: 'Central Station',
-          address: '1 Main Street',
-          category: StationCategory.BUS_STATION,
-          contactPhone: null,
-          notes: null,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      ],
-      1
-    ]);
+    prismaMock.line.findMany.mockResolvedValue([]);
+
+    // `$transaction` is asked two different questions here. The list endpoint
+    // batches its queries as an array and wants the results back in order;
+    // `guardProspectiveWrite` hands in a callback and wants a transaction
+    // client to run it against. The callback form gets the mock itself, so a
+    // guarded write reaches the same model stubs as an unguarded one, and the
+    // checks it runs on the way find their tables rather than `undefined`.
+    prismaMock.$transaction.mockImplementation(async (arg: unknown) => {
+      if (typeof arg === 'function') {
+        return (arg as (tx: typeof prismaMock) => unknown)(prismaMock);
+      }
+
+      return [
+        [
+          {
+            id: 'station-1',
+            tenantId: 'tenant-1',
+            createdById: 'admin-1',
+            updatedById: 'admin-1',
+            name: 'Central Station',
+            address: '1 Main Street',
+            category: StationCategory.BUS_STATION,
+            contactPhone: null,
+            notes: null,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        ],
+        1
+      ];
+    });
 
     prismaMock.station.findFirst.mockResolvedValue({ id: 'station-1' });
     prismaMock.station.update.mockResolvedValue({

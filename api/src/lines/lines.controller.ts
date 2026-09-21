@@ -21,6 +21,7 @@ import { ReplaceLineStopsDto } from './dto/line-stop.dto';
 import { ListLinesQueryDto } from './dto/list-lines.query.dto';
 import { UpdateLineDto } from './dto/update-line.dto';
 import { LinesService } from './lines.service';
+import { WouldBreakReservationsDto } from '../rides/dto/would-break-reservations.dto';
 
 @ApiTags('Lines')
 @ApiBearerAuth('access-token')
@@ -77,6 +78,10 @@ export class LinesController {
   @ApiNotFoundResponse({ description: 'Line not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  @ApiConflictResponse({
+    type: WouldBreakReservationsDto,
+    description: 'The proposed line would break existing reservations.'
+  })
   update(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,
@@ -93,6 +98,10 @@ export class LinesController {
   @ApiNotFoundResponse({ description: 'Line not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  @ApiConflictResponse({
+    type: WouldBreakReservationsDto,
+    description: 'The proposed line would break existing reservations.'
+  })
   replace(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,
@@ -109,23 +118,35 @@ export class LinesController {
   @ApiNotFoundResponse({ description: 'Line not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  @ApiConflictResponse({
+    type: WouldBreakReservationsDto,
+    description: 'The proposed stop sequence would break existing reservations.'
+  })
   replaceStops(
     @Req() request: RequestWithAuth,
     @Param('id') id: string,
     @Body() dto: ReplaceLineStopsDto
   ): Promise<LineResponseDto> {
-    return this.linesService.replaceStops(request.auth!, id, dto.intermediateStops);
+    return this.linesService.replaceStops(request.auth!, id, dto.intermediateStops, {
+      confirmed: dto.confirmBreakingChange === true,
+      repair: dto.repairBreakingChange === true
+    });
   }
 
   @Post(':id/reverse')
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Create a reverse line from an existing line route in the current tenant.' })
+  @ApiOperation({
+    summary: 'Create a reverse line from an existing line route in the current tenant.'
+  })
   @ApiOkResponse({ type: LineResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure or route integrity violation.' })
   @ApiNotFoundResponse({ description: 'Line not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
-  createReverse(@Req() request: RequestWithAuth, @Param('id') id: string): Promise<LineResponseDto> {
+  createReverse(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string
+  ): Promise<LineResponseDto> {
     return this.linesService.createReverse(request.auth!, id);
   }
 
@@ -138,7 +159,9 @@ export class LinesController {
     description: 'When true, also deactivates related rides and cancels active reservations.'
   })
   @ApiOkResponse({ type: LineResponseDto })
-  @ApiConflictResponse({ description: 'Line has active rides and cascade override is not enabled.' })
+  @ApiConflictResponse({
+    description: 'Line has active rides and cascade override is not enabled.'
+  })
   @ApiNotFoundResponse({ description: 'Line not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })

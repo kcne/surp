@@ -1,6 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, Min, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  Min,
+  ValidateNested
+} from 'class-validator';
+import { ConfirmBreakingChangeDto } from '../../invariants/dto/confirm-breaking-change.dto';
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -38,7 +49,7 @@ export class RideDayScheduleInputDto {
   stationTimes!: RideStationTimeInputDto[];
 }
 
-export class ReplaceRideDaySchedulesDto {
+export class ReplaceRideDaySchedulesDto extends ConfirmBreakingChangeDto {
   @ApiProperty({ type: [RideDayScheduleInputDto] })
   @IsArray()
   @ValidateNested({ each: true })

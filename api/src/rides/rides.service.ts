@@ -9,6 +9,11 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  PROSPECTIVE_INVARIANTS,
+  ProspectiveWriteConsent,
+  guardProspectiveWrite
+} from '../invariants/prospective-write';
 import { CreateRideDto } from './dto/create-ride.dto';
 import { ListRideInstancesQueryDto } from './dto/ride-instances.query.dto';
 import { ListRidesQueryDto } from './dto/list-rides.query.dto';
@@ -28,6 +33,7 @@ import {
   utcDateOf
 } from './ride-instance-materialization';
 import { UpdateRideDto } from './dto/update-ride.dto';
+import { TotalRow } from '../prisma/total-row.type';
 
 const SAFE_RIDE_SELECT = Prisma.validator<Prisma.RideSelect>()({
   id: true,
@@ -223,6 +229,33 @@ type RideScheduleNormalized = {
   daySchedules: RideDayScheduleInputDto[];
 };
 
+type RideDayScheduleMutableValues = TotalRow<
+  Prisma.RideDayScheduleUncheckedCreateInput,
+  | 'id'
+  | 'tenantId'
+  | 'rideId'
+  | 'createdById'
+  | 'updatedById'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'stationTimes'
+>;
+
+type RideStationTimeMutableValues = TotalRow<
+  Prisma.RideDayScheduleStationTimeUncheckedCreateInput,
+  | 'id'
+  | 'tenantId'
+  | 'rideDayScheduleId'
+  | 'createdById'
+  | 'updatedById'
+  | 'createdAt'
+  | 'updatedAt'
+>;
+
+type TotalRideDaySchedule = RideDayScheduleMutableValues & {
+  stationTimes: RideStationTimeMutableValues[];
+};
+
 @Injectable()
 export class RidesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -270,7 +303,7 @@ export class RidesService {
           auth.tenantId,
           createdRide.id,
           auth.sub,
-          normalizedSchedule.daySchedules,
+          this.toTotalDaySchedules(normalizedSchedule.daySchedules),
           false
         );
       }
@@ -291,7 +324,10 @@ export class RidesService {
     return this.toRideResponse(created);
   }
 
-  async list(auth: AccessTokenPayload, query: ListRidesQueryDto): Promise<PaginatedRidesResponseDto> {
+  async list(
+    auth: AccessTokenPayload,
+    query: ListRidesQueryDto
+  ): Promise<PaginatedRidesResponseDto> {
     const pagination = resolvePagination(query.page, query.pageSize);
     const term = query.search?.trim();
 
@@ -496,107 +532,123 @@ export class RidesService {
   }
 
   async update(auth: AccessTokenPayload, id: string, dto: UpdateRideDto): Promise<RideResponseDto> {
-    const existing = await this.getRideOrThrow(auth.tenantId, id);
-
-    const nextType = dto.type ?? existing.type;
-    const nextLineId = dto.lineId ?? existing.lineId;
-
-    let nextLineName = existing.line.name;
-    let nextRouteStationIds = [
-      existing.line.departureStationId,
-      ...existing.line.intermediateStops.map((item) => item.stationId),
-      existing.line.arrivalStationId
-    ];
-    if (nextLineId !== existing.lineId) {
-      const line = await this.ensureLineInTenant(auth.tenantId, nextLineId);
-      nextLineName = line.name;
-      nextRouteStationIds = line.routeStationIds;
-    }
-
-    const nextDaySchedules =
-      dto.daySchedules !== undefined
-        ? dto.daySchedules
-        : existing.daySchedules.map((item) => ({
-            dayOfWeek: item.dayOfWeek,
-            stationTimes: item.stationTimes.map((stationTime) => ({
-              stationId: stationTime.stationId,
-              orderIndex: stationTime.orderIndex,
-              time: stationTime.time ?? undefined
-            }))
-          }));
-
-    const normalizedSchedule = this.normalizeAndValidateSchedule({
-      type: nextType,
-      routeStationIds: nextRouteStationIds,
-      recurringStartDate:
-        dto.recurringStartDate !== undefined
-          ? dto.recurringStartDate
-          : this.formatDate(existing.recurringStartDate),
-      recurringEndDate:
-        dto.recurringEndDate !== undefined ? dto.recurringEndDate : this.formatDate(existing.recurringEndDate),
-      oneTimeDate: dto.oneTimeDate !== undefined ? dto.oneTimeDate : this.formatDate(existing.oneTimeDate),
-      oneTimeDepartureTime:
-        dto.oneTimeDepartureTime !== undefined
-          ? dto.oneTimeDepartureTime
-          : (existing.oneTimeDepartureTime ?? undefined),
-      oneTimeArrivalTime:
-        dto.oneTimeArrivalTime !== undefined
-          ? dto.oneTimeArrivalTime
-          : (existing.oneTimeArrivalTime ?? undefined),
-      daySchedules: nextDaySchedules
-    });
-
-    const nextStatus = dto.status ?? existing.status;
-    this.validateStatusTransition(existing.status, nextStatus);
-
-    if (dto.capacity !== undefined && dto.capacity < existing.capacity) {
-      await this.ensureCapacityFitsSoldSeats(
-        auth.tenantId,
-        id,
-        dto.capacity,
-        dto.confirmBreakingChange === true
-      );
-    }
-
-    const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.ride.update({
-        where: {
-          id
-        },
-        data: withUpdateAudit(
-          {
-            ...(typeof dto.name === 'string' ? { name: dto.name.trim() || nextLineName } : {}),
-            ...(dto.lineId ? { lineId: dto.lineId } : {}),
-            ...(dto.capacity !== undefined ? { capacity: dto.capacity } : {}),
-            ...(dto.type ? { type: normalizedSchedule.type } : {}),
-            ...(dto.status ? { status: dto.status } : {}),
-            recurringStartDate: normalizedSchedule.recurringStartDate,
-            recurringEndDate: normalizedSchedule.recurringEndDate,
-            oneTimeDate: normalizedSchedule.oneTimeDate,
-            oneTimeDepartureTime: normalizedSchedule.oneTimeDepartureTime,
-            oneTimeArrivalTime: normalizedSchedule.oneTimeArrivalTime
-          },
-          auth.sub
-        )
-      });
-
-      await this.replaceRideDaySchedulesTx(
+    // Every field the DTO leaves out is filled in from the stored ride and
+    // written back, so this is a read-modify-write and it belongs inside one
+    // transaction. Read outside it, the merge is computed from a snapshot that
+    // a concurrent edit can invalidate before this one writes, and that edit is
+    // then overwritten with values read before it existed — a departure time
+    // moved back, a capacity change undone, with nothing to show it happened.
+    // Inside, the read and the write are one serializable unit and Postgres
+    // aborts the loser instead.
+    const updated = await guardProspectiveWrite(
+      this.prisma,
+      { tenantId: auth.tenantId, actorId: auth.sub },
+      PROSPECTIVE_INVARIANTS.rideUpdate,
+      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
+      async (
         tx,
-        auth.tenantId,
-        id,
-        auth.sub,
-        normalizedSchedule.daySchedules,
-        true
-      );
+        prepared: { nextLineName: string; normalizedSchedule: RideScheduleNormalized }
+      ) => {
+        const { nextLineName, normalizedSchedule } = prepared;
 
-      return tx.ride.findFirst({
-        where: {
+        await tx.ride.update({
+          where: {
+            id
+          },
+          data: withUpdateAudit(
+            {
+              ...(typeof dto.name === 'string' ? { name: dto.name.trim() || nextLineName } : {}),
+              ...(dto.lineId ? { lineId: dto.lineId } : {}),
+              ...(dto.capacity !== undefined ? { capacity: dto.capacity } : {}),
+              ...(dto.type ? { type: normalizedSchedule.type } : {}),
+              ...(dto.status ? { status: dto.status } : {}),
+              recurringStartDate: normalizedSchedule.recurringStartDate,
+              recurringEndDate: normalizedSchedule.recurringEndDate,
+              oneTimeDate: normalizedSchedule.oneTimeDate,
+              oneTimeDepartureTime: normalizedSchedule.oneTimeDepartureTime,
+              oneTimeArrivalTime: normalizedSchedule.oneTimeArrivalTime
+            },
+            auth.sub
+          )
+        });
+
+        await this.replaceRideDaySchedulesTx(
+          tx,
+          auth.tenantId,
           id,
-          tenantId: auth.tenantId
-        },
-        select: SAFE_RIDE_SELECT
-      });
-    });
+          auth.sub,
+          this.toTotalDaySchedules(normalizedSchedule.daySchedules),
+          true
+        );
+
+        return tx.ride.findFirst({
+          where: {
+            id,
+            tenantId: auth.tenantId
+          },
+          select: SAFE_RIDE_SELECT
+        });
+      },
+      async (tx) => {
+        const existing = await this.getRideOrThrow(auth.tenantId, id, tx);
+
+        const nextType = dto.type ?? existing.type;
+        const nextLineId = dto.lineId ?? existing.lineId;
+
+        let nextLineName = existing.line.name;
+        let nextRouteStationIds = [
+          existing.line.departureStationId,
+          ...existing.line.intermediateStops.map((item) => item.stationId),
+          existing.line.arrivalStationId
+        ];
+        if (nextLineId !== existing.lineId) {
+          const line = await this.ensureLineInTenant(auth.tenantId, nextLineId, tx);
+          nextLineName = line.name;
+          nextRouteStationIds = line.routeStationIds;
+        }
+
+        const nextDaySchedules =
+          dto.daySchedules !== undefined
+            ? dto.daySchedules
+            : existing.daySchedules.map((item) => ({
+                dayOfWeek: item.dayOfWeek,
+                stationTimes: item.stationTimes.map((stationTime) => ({
+                  stationId: stationTime.stationId,
+                  orderIndex: stationTime.orderIndex,
+                  time: stationTime.time ?? undefined
+                }))
+              }));
+
+        const normalizedSchedule = this.normalizeAndValidateSchedule({
+          type: nextType,
+          routeStationIds: nextRouteStationIds,
+          recurringStartDate:
+            dto.recurringStartDate !== undefined
+              ? dto.recurringStartDate
+              : this.formatDate(existing.recurringStartDate),
+          recurringEndDate:
+            dto.recurringEndDate !== undefined
+              ? dto.recurringEndDate
+              : this.formatDate(existing.recurringEndDate),
+          oneTimeDate:
+            dto.oneTimeDate !== undefined ? dto.oneTimeDate : this.formatDate(existing.oneTimeDate),
+          oneTimeDepartureTime:
+            dto.oneTimeDepartureTime !== undefined
+              ? dto.oneTimeDepartureTime
+              : (existing.oneTimeDepartureTime ?? undefined),
+          oneTimeArrivalTime:
+            dto.oneTimeArrivalTime !== undefined
+              ? dto.oneTimeArrivalTime
+              : (existing.oneTimeArrivalTime ?? undefined),
+          daySchedules: nextDaySchedules
+        });
+
+        const nextStatus = dto.status ?? existing.status;
+        this.validateStatusTransition(existing.status, nextStatus);
+
+        return { nextLineName, normalizedSchedule };
+      }
+    );
 
     if (!updated) {
       throw new NotFoundException('Ride not found');
@@ -605,102 +657,61 @@ export class RidesService {
     return this.toRideResponse(updated);
   }
 
-  /**
-   * Refuses to lower capacity under a seat that is already sold, unless the
-   * caller says in the request body that it means to.
-   *
-   * Capacity used to be written straight through. Taking a ride from 48 seats
-   * to 30 invalidated every seat from 31 up without a word: the reservations
-   * stayed visible, the seat numbers stayed printed on the list, and the
-   * passenger found out at the door. The same statement is available as
-   * `reservation.seatWithinCapacity`, which is what finds the ones already
-   * written; this is that statement asked before the write instead of after.
-   *
-   * Only reservations from today forward count. A seat number on a trip that
-   * has already run cannot be turned up to, and blocking an agency from
-   * correcting the record of a bus it no longer owns would be nonsense.
-   *
-   * The confirmation is a body flag, not a query parameter, so it cannot be
-   * carried along by a copied URL. Confirming is sometimes the right answer —
-   * a smaller bus really was substituted — and the passengers left over then
-   * show up in the check, which is where they belong.
-   */
-  private async ensureCapacityFitsSoldSeats(
-    tenantId: string,
-    rideId: string,
-    nextCapacity: number,
-    confirmed: boolean
-  ): Promise<void> {
-    const where = {
-      tenantId,
-      rideId,
-      status: ReservationStatus.ACTIVE,
-      travelDate: { gte: utcDateOf(formatDateOnly(new Date())!) },
-      seatNumber: { gt: nextCapacity }
-    };
-
-    const [affectedCount, highest] = await Promise.all([
-      this.prisma.reservation.count({ where }),
-      this.prisma.reservation.findFirst({
-        where,
-        select: { seatNumber: true },
-        orderBy: { seatNumber: 'desc' }
-      })
-    ]);
-
-    // `highest` is asked for separately from the count, so the two can disagree
-    // if the last of those reservations is cancelled between the two queries.
-    // Nothing is broken in that case — there is no seat left above the new
-    // capacity — so let the write through rather than assert the row is there
-    // and turn a resolved problem into a 500.
-    if (affectedCount === 0 || !highest || confirmed) {
-      return;
-    }
-
-    throw new ConflictException({
-      code: 'WOULD_BREAK_RESERVATIONS',
-      invariant: 'reservation.seatWithinCapacity',
-      affectedCount,
-      highestOccupiedSeat: highest.seatNumber,
-      message: `Smanjenje kapaciteta na ${nextCapacity} ostavlja ${affectedCount} rezervacija na sedistu koje vise ne postoji; najvise zauzeto sediste je ${highest.seatNumber}.`
-    });
-  }
-
   async replaceDayTimes(
     auth: AccessTokenPayload,
     id: string,
-    daySchedules: RideDayScheduleInputDto[]
+    daySchedules: RideDayScheduleInputDto[],
+    consent: ProspectiveWriteConsent = { confirmed: false, repair: false }
   ): Promise<RideResponseDto> {
-    const ride = await this.getRideOrThrow(auth.tenantId, id);
-
-    if (ride.type !== RideType.RECURRING) {
-      throw new BadRequestException('Day-times can only be managed for recurring rides');
-    }
-
-    const routeStationIds = [
-      ride.line.departureStationId,
-      ...ride.line.intermediateStops.map((item) => item.stationId),
-      ride.line.arrivalStationId
-    ];
-
-    this.validateDaySchedules(daySchedules, routeStationIds);
-
-    const updated = await this.prisma.$transaction(async (tx) => {
-      await this.replaceRideDaySchedulesTx(tx, auth.tenantId, id, auth.sub, daySchedules, true);
-
-      await tx.ride.update({
-        where: { id },
-        data: withUpdateAudit({}, auth.sub)
-      });
-
-      return tx.ride.findFirst({
-        where: {
+    // The route these times are checked against is read inside the write's own
+    // transaction. Read before it, a line edit could land in between and leave
+    // this call writing station times for stops the route no longer has —
+    // validated against a route that stopped being true while the check was
+    // still passing.
+    const updated = await guardProspectiveWrite(
+      this.prisma,
+      { tenantId: auth.tenantId, actorId: auth.sub },
+      PROSPECTIVE_INVARIANTS.rideUpdate,
+      consent,
+      async (tx) => {
+        await this.replaceRideDaySchedulesTx(
+          tx,
+          auth.tenantId,
           id,
-          tenantId: auth.tenantId
-        },
-        select: SAFE_RIDE_SELECT
-      });
-    });
+          auth.sub,
+          this.toTotalDaySchedules(daySchedules),
+          true
+        );
+
+        await tx.ride.update({
+          where: { id },
+          data: withUpdateAudit({}, auth.sub)
+        });
+
+        return tx.ride.findFirst({
+          where: {
+            id,
+            tenantId: auth.tenantId
+          },
+          select: SAFE_RIDE_SELECT
+        });
+      },
+      async (tx) => {
+        const ride = await this.getRideOrThrow(auth.tenantId, id, tx);
+
+        if (ride.type !== RideType.RECURRING) {
+          throw new BadRequestException('Day-times can only be managed for recurring rides');
+        }
+
+        const routeStationIds = [
+          ride.line.departureStationId,
+          ...ride.line.intermediateStops.map((item) => item.stationId),
+          ride.line.arrivalStationId
+        ];
+
+        this.validateDaySchedules(daySchedules, routeStationIds);
+      }
+    );
 
     if (!updated) {
       throw new NotFoundException('Ride not found');
@@ -719,14 +730,66 @@ export class RidesService {
 
     const exceptionDate = this.parseDateOnly(dto.date);
 
-    const existingOnDate = await this.prisma.rideException.findMany({
+    const created = await guardProspectiveWrite(
+      this.prisma,
+      { tenantId: auth.tenantId, actorId: auth.sub },
+      dto.type === RideExceptionType.SKIP ? PROSPECTIVE_INVARIANTS.rideException : [],
+      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
+      async (tx) => {
+        // Inside the transaction, so the read that proves the exception is new
+        // and the write that makes it exist cannot be separated. `RideException`
+        // carries no unique constraint, so this read is the only thing standing
+        // between two identical requests and two identical rows — which is what
+        // the serializable isolation is for: the second transaction's insert
+        // collides with the predicate this read locked, and Postgres aborts it.
+        await this.ensureExceptionIsNew(tx, auth.tenantId, rideId, exceptionDate, dto);
+
+        return tx.rideException.create({
+          data: withCreateAudit(
+            {
+              tenantId: auth.tenantId,
+              rideId,
+              exceptionDate,
+              type: dto.type,
+              departureTime:
+                dto.type === RideExceptionType.ADDITIONAL ? dto.departureTime!.trim() : null,
+              arrivalTime:
+                dto.type === RideExceptionType.ADDITIONAL ? dto.arrivalTime!.trim() : null
+            },
+            auth.sub
+          ),
+          select: {
+            id: true,
+            exceptionDate: true,
+            type: true,
+            departureTime: true,
+            arrivalTime: true,
+            createdById: true,
+            updatedById: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        });
+      }
+    );
+
+    return this.toExceptionResponse(created);
+  }
+
+  private async ensureExceptionIsNew(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    rideId: string,
+    exceptionDate: Date,
+    dto: CreateRideExceptionDto
+  ): Promise<void> {
+    const existingOnDate = await tx.rideException.findMany({
       where: {
-        tenantId: auth.tenantId,
+        tenantId,
         rideId,
         exceptionDate
       },
       select: {
-        id: true,
         type: true,
         departureTime: true,
         arrivalTime: true
@@ -743,45 +806,21 @@ export class RidesService {
         (item) => item.departureTime === dto.departureTime && item.arrivalTime === dto.arrivalTime
       )
     ) {
-      throw new ConflictException('Additional exception with the same date and times already exists');
+      throw new ConflictException(
+        'Additional exception with the same date and times already exists'
+      );
     }
 
     if (dto.type === RideExceptionType.SKIP && existingOnDate.length > 0) {
       throw new ConflictException('Skip exception for this date already exists');
     }
-
-    const created = await this.prisma.rideException.create({
-      data: withCreateAudit(
-        {
-          tenantId: auth.tenantId,
-          rideId,
-          exceptionDate,
-          type: dto.type,
-          departureTime: dto.type === RideExceptionType.ADDITIONAL ? dto.departureTime!.trim() : null,
-          arrivalTime: dto.type === RideExceptionType.ADDITIONAL ? dto.arrivalTime!.trim() : null
-        },
-        auth.sub
-      ),
-      select: {
-        id: true,
-        exceptionDate: true,
-        type: true,
-        departureTime: true,
-        arrivalTime: true,
-        createdById: true,
-        updatedById: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    });
-
-    return this.toExceptionResponse(created);
   }
 
   async removeException(
     auth: AccessTokenPayload,
     rideId: string,
-    exceptionId: string
+    exceptionId: string,
+    consent: ProspectiveWriteConsent = { confirmed: false, repair: false }
   ): Promise<RideExceptionResponseDto> {
     await this.getRideOrThrow(auth.tenantId, rideId);
 
@@ -800,27 +839,38 @@ export class RidesService {
       throw new NotFoundException('Ride exception not found');
     }
 
-    const deleted = await this.prisma.rideException.delete({
-      where: {
-        id: exceptionId
-      },
-      select: {
-        id: true,
-        exceptionDate: true,
-        type: true,
-        departureTime: true,
-        arrivalTime: true,
-        createdById: true,
-        updatedById: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    });
+    const deleted = await guardProspectiveWrite(
+      this.prisma,
+      { tenantId: auth.tenantId, actorId: auth.sub },
+      PROSPECTIVE_INVARIANTS.rideException,
+      consent,
+      (tx) =>
+        tx.rideException.delete({
+          where: {
+            id: exceptionId
+          },
+          select: {
+            id: true,
+            exceptionDate: true,
+            type: true,
+            departureTime: true,
+            arrivalTime: true,
+            createdById: true,
+            updatedById: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        })
+    );
 
     return this.toExceptionResponse(deleted);
   }
 
-  async remove(auth: AccessTokenPayload, id: string, cascade: boolean = false): Promise<RideResponseDto> {
+  async remove(
+    auth: AccessTokenPayload,
+    id: string,
+    cascade: boolean = false
+  ): Promise<RideResponseDto> {
     await this.getRideOrThrow(auth.tenantId, id);
 
     if (cascade) {
@@ -887,8 +937,18 @@ export class RidesService {
     return this.toRideResponse(deactivated);
   }
 
-  private async getRideOrThrow(tenantId: string, id: string): Promise<SelectedRide> {
-    const ride = await this.prisma.ride.findFirst({
+  /**
+   * `client` defaults to the unguarded connection, but a caller that is going
+   * to write what it reads passes its transaction instead: the read then joins
+   * the write in one serializable unit, and a concurrent edit is aborted rather
+   * than quietly overwritten.
+   */
+  private async getRideOrThrow(
+    tenantId: string,
+    id: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma
+  ): Promise<SelectedRide> {
+    const ride = await client.ride.findFirst({
       where: {
         id,
         tenantId
@@ -905,9 +965,10 @@ export class RidesService {
 
   private async ensureLineInTenant(
     tenantId: string,
-    lineId: string
+    lineId: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma
   ): Promise<{ id: string; name: string; routeStationIds: string[] }> {
-    const line = await this.prisma.line.findFirst({
+    const line = await client.line.findFirst({
       where: {
         id: lineId,
         tenantId
@@ -950,7 +1011,9 @@ export class RidesService {
 
     const normalized: RideScheduleNormalized = {
       type: input.type,
-      recurringStartDate: input.recurringStartDate ? this.parseDateOnly(input.recurringStartDate) : null,
+      recurringStartDate: input.recurringStartDate
+        ? this.parseDateOnly(input.recurringStartDate)
+        : null,
       recurringEndDate: input.recurringEndDate ? this.parseDateOnly(input.recurringEndDate) : null,
       oneTimeDate: input.oneTimeDate ? this.parseDateOnly(input.oneTimeDate) : null,
       oneTimeDepartureTime: input.oneTimeDepartureTime?.trim() || null,
@@ -963,7 +1026,9 @@ export class RidesService {
       normalized.recurringEndDate &&
       normalized.recurringEndDate < normalized.recurringStartDate
     ) {
-      throw new BadRequestException('recurringEndDate must be greater than or equal to recurringStartDate');
+      throw new BadRequestException(
+        'recurringEndDate must be greater than or equal to recurringStartDate'
+      );
     }
 
     if (normalized.type === RideType.RECURRING) {
@@ -972,7 +1037,9 @@ export class RidesService {
       }
 
       if (normalized.daySchedules.length === 0) {
-        throw new BadRequestException('Recurring rides require at least one day schedule definition');
+        throw new BadRequestException(
+          'Recurring rides require at least one day schedule definition'
+        );
       }
 
       if (
@@ -988,18 +1055,26 @@ export class RidesService {
       return normalized;
     }
 
-    if (!normalized.oneTimeDate || !normalized.oneTimeDepartureTime || !normalized.oneTimeArrivalTime) {
-      throw new BadRequestException('One-time rides require oneTimeDate, oneTimeDepartureTime and oneTimeArrivalTime');
+    if (
+      !normalized.oneTimeDate ||
+      !normalized.oneTimeDepartureTime ||
+      !normalized.oneTimeArrivalTime
+    ) {
+      throw new BadRequestException(
+        'One-time rides require oneTimeDate, oneTimeDepartureTime and oneTimeArrivalTime'
+      );
     }
 
-    if (this.isZeroDurationTimeRange(normalized.oneTimeDepartureTime, normalized.oneTimeArrivalTime)) {
+    if (
+      this.isZeroDurationTimeRange(normalized.oneTimeDepartureTime, normalized.oneTimeArrivalTime)
+    ) {
       throw new BadRequestException(
         'one-time departureTime and arrivalTime cannot be equal (overnight rides are allowed)'
       );
     }
 
-      if (normalized.daySchedules.length > 0) {
-        throw new BadRequestException('One-time rides cannot include recurring day schedules');
+    if (normalized.daySchedules.length > 0) {
+      throw new BadRequestException('One-time rides cannot include recurring day schedules');
     }
 
     if (normalized.recurringStartDate || normalized.recurringEndDate) {
@@ -1009,7 +1084,10 @@ export class RidesService {
     return normalized;
   }
 
-  private validateDaySchedules(daySchedules: RideDayScheduleInputDto[], routeStationIds: string[]): void {
+  private validateDaySchedules(
+    daySchedules: RideDayScheduleInputDto[],
+    routeStationIds: string[]
+  ): void {
     const daySet = new Set<number>();
     const stationSet = new Set(routeStationIds);
     const expectedOrderPairs = routeStationIds.map((stationId, index) => `${index}:${stationId}`);
@@ -1029,13 +1107,17 @@ export class RidesService {
           sortedStationTimes.length !== expectedOrderPairs.length ||
           routePairs.some((pair, index) => pair !== expectedOrderPairs[index])
         ) {
-          throw new BadRequestException('Day schedule station order must match the selected line route');
+          throw new BadRequestException(
+            'Day schedule station order must match the selected line route'
+          );
         }
 
         const scheduleStationIds = new Set<string>();
         for (const stationTime of sortedStationTimes) {
           if (!stationSet.has(stationTime.stationId)) {
-            throw new BadRequestException('Day schedule contains station outside of selected line route');
+            throw new BadRequestException(
+              'Day schedule contains station outside of selected line route'
+            );
           }
 
           if (scheduleStationIds.has(stationTime.stationId)) {
@@ -1048,7 +1130,11 @@ export class RidesService {
         const departureTime = sortedStationTimes[0].time?.trim();
         const arrivalTime = sortedStationTimes[sortedStationTimes.length - 1].time?.trim();
 
-        if (departureTime && arrivalTime && this.isZeroDurationTimeRange(departureTime, arrivalTime)) {
+        if (
+          departureTime &&
+          arrivalTime &&
+          this.isZeroDurationTimeRange(departureTime, arrivalTime)
+        ) {
           throw new BadRequestException(
             'day schedule departure and arrival times cannot be equal (overnight rides are allowed)'
           );
@@ -1084,7 +1170,9 @@ export class RidesService {
   private validateExceptionPayload(dto: CreateRideExceptionDto): void {
     if (dto.type === RideExceptionType.SKIP) {
       if (dto.departureTime || dto.arrivalTime) {
-        throw new BadRequestException('SKIP exceptions cannot include departureTime or arrivalTime');
+        throw new BadRequestException(
+          'SKIP exceptions cannot include departureTime or arrivalTime'
+        );
       }
 
       return;
@@ -1110,7 +1198,7 @@ export class RidesService {
     tenantId: string,
     rideId: string,
     actorId: string,
-    daySchedules: RideDayScheduleInputDto[],
+    daySchedules: TotalRideDaySchedule[],
     deleteExisting: boolean
   ): Promise<void> {
     if (deleteExisting) {
@@ -1126,24 +1214,19 @@ export class RidesService {
       return;
     }
 
-    for (const schedule of daySchedules) {
+    // Both rows are spread, not named: the two value types are total over
+    // their mutable columns, so a new column reaches the database instead of
+    // silently taking its default here.
+    for (const { stationTimes, ...scheduleValues } of daySchedules) {
       await tx.rideDaySchedule.create({
         data: withCreateAudit(
           {
             tenantId,
             rideId,
-            dayOfWeek: schedule.dayOfWeek,
+            ...scheduleValues,
             stationTimes: {
-              create: schedule.stationTimes.map((stationTime) =>
-                withCreateAudit(
-                  {
-                    tenantId,
-                    stationId: stationTime.stationId,
-                    orderIndex: stationTime.orderIndex,
-                    time: stationTime.time?.trim() || null
-                  },
-                  actorId
-                )
+              create: stationTimes.map((stationTime) =>
+                withCreateAudit({ tenantId, ...stationTime }, actorId)
               )
             }
           },
@@ -1151,6 +1234,17 @@ export class RidesService {
         )
       });
     }
+  }
+
+  private toTotalDaySchedules(daySchedules: RideDayScheduleInputDto[]): TotalRideDaySchedule[] {
+    return daySchedules.map((schedule) => ({
+      dayOfWeek: schedule.dayOfWeek,
+      stationTimes: schedule.stationTimes.map((stationTime) => ({
+        stationId: stationTime.stationId,
+        orderIndex: stationTime.orderIndex,
+        time: stationTime.time?.trim() || null
+      }))
+    }));
   }
 
   private parseDateOnly(value: string): Date {
@@ -1176,27 +1270,24 @@ export class RidesService {
     targetDate: string,
     targetDayOfWeek: number
   ): MaterializedRideInstance[] {
-    return materializeInstanceTimesForDate(
-      ride,
-      ride.exceptions,
-      targetDate,
-      targetDayOfWeek
-    ).map((times) => ({
-      rideId: ride.id,
-      date: targetDate,
-      departureTime: times.departureTime,
-      arrivalTime: times.arrivalTime,
-      source: times.source,
-      rideType: ride.type,
-      status: ride.status,
-      capacity: ride.capacity,
-      line: {
-        id: ride.line.id,
-        name: ride.line.name,
-        departureStationId: ride.line.departureStationId,
-        arrivalStationId: ride.line.arrivalStationId
-      }
-    }));
+    return materializeInstanceTimesForDate(ride, ride.exceptions, targetDate, targetDayOfWeek).map(
+      (times) => ({
+        rideId: ride.id,
+        date: targetDate,
+        departureTime: times.departureTime,
+        arrivalTime: times.arrivalTime,
+        source: times.source,
+        rideType: ride.type,
+        status: ride.status,
+        capacity: ride.capacity,
+        line: {
+          id: ride.line.id,
+          name: ride.line.name,
+          departureStationId: ride.line.departureStationId,
+          arrivalStationId: ride.line.arrivalStationId
+        }
+      })
+    );
   }
 
   private formatDate(value: Date | null): string | undefined {

@@ -8,5 +8,9 @@
 import type { RideDayScheduleInputDto } from './rideDayScheduleInputDto';
 
 export interface ReplaceRideDaySchedulesDto {
+  /** Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers. */
+  confirmBreakingChange?: boolean;
+  /** Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true. */
+  repairBreakingChange?: boolean;
   daySchedules: RideDayScheduleInputDto[];
 }

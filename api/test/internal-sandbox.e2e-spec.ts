@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
@@ -8,6 +9,8 @@ import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('InternalSandboxController (e2e)', () => {
   let app: INestApplication;
+  let previousResetToken: string | undefined;
+  let previousDemoPassword: string | undefined;
 
   const resetToken = 'test-sandbox-reset-token-at-least-32-chars';
 
@@ -27,6 +30,8 @@ describe('InternalSandboxController (e2e)', () => {
   };
 
   beforeEach(async () => {
+    previousResetToken = process.env.SANDBOX_RESET_TOKEN;
+    previousDemoPassword = process.env.SANDBOX_DEMO_PASSWORD;
     process.env.SANDBOX_RESET_TOKEN = resetToken;
     process.env.SANDBOX_DEMO_PASSWORD = 'demo-password';
     jest.clearAllMocks();
@@ -52,6 +57,11 @@ describe('InternalSandboxController (e2e)', () => {
       .useValue(prismaMock)
       .overrideProvider(JwtService)
       .useValue(jwtServiceMock)
+      // ConfigModule validates env at AppModule import time. Use a fresh
+      // ConfigService so this test reads its own token instead of a local .env
+      // value captured before beforeEach ran.
+      .overrideProvider(ConfigService)
+      .useValue(new ConfigService())
       .overrideProvider(InternalSandboxService)
       .useValue(internalSandboxServiceMock)
       .compile();
@@ -70,6 +80,18 @@ describe('InternalSandboxController (e2e)', () => {
   afterEach(async () => {
     if (app) {
       await app.close();
+    }
+
+    if (previousResetToken === undefined) {
+      delete process.env.SANDBOX_RESET_TOKEN;
+    } else {
+      process.env.SANDBOX_RESET_TOKEN = previousResetToken;
+    }
+
+    if (previousDemoPassword === undefined) {
+      delete process.env.SANDBOX_DEMO_PASSWORD;
+    } else {
+      process.env.SANDBOX_DEMO_PASSWORD = previousDemoPassword;
     }
   });
 
