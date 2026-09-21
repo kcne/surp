@@ -36,7 +36,7 @@ const DAY_IN_MS = 86_400_000;
  */
 const ENTRY_CORRECTION_MINUTES = 15;
 
-type BackfillPhase = 'exact' | 'heuristic';
+type BackfillPhase = 'exact' | 'heuristic' | 'block';
 
 export type ReturnLegExclusionReason =
   /** Cancelled, but the passenger still holds a live seat on that departure. */
@@ -84,6 +84,8 @@ export interface ReturnLegBackfillCounts {
   alreadyLinked: number;
   exactMatches: number;
   heuristicMatches: number;
+  /** Paired inside one booking block, the way the printed manifest does. */
+  blockMatches: number;
   ambiguous: number;
   /** Cancelled rows held back because they are not the leg they look like. */
   excluded: number;
@@ -102,6 +104,7 @@ export interface ReturnLegBackfillResult {
   linkedCount: number;
   exactCount: number;
   heuristicCount: number;
+  blockCount: number;
   /** Rows another writer linked between the plan and the write. */
   skippedCount: number;
 }
@@ -341,6 +344,112 @@ function pairingPass(rows: BackfillRow[]): {
     }
   }
 
+  // Phase C — a booking block. One passenger, one outbound departure, one
+  // return departure, and the same number of unlinked legs on each side.
+  //
+  // Phase B refuses these because two seats tie and the seat number cannot say
+  // which is which. But the printed passenger list has paired them all along
+  // (`ui/utils/passengerListHelpers.ts`) and the agency reads it every day: it
+  // takes the closest leg in time and ignores the seat entirely. It can,
+  // because within one block every pairing means the same thing — same
+  // passenger, same two departures — so the only thing a different matching
+  // changes is which seat number a summary quotes. Seat order keeps it
+  // deterministic.
+  const unpaired = rows.filter(
+    (row) =>
+      row.returnOfReservationId === null && !paired.has(row.id) && !takenOutboundIds.has(row.id)
+  );
+  const blocks = new Map<string, BackfillRow[]>();
+  for (const row of unpaired) {
+    const key = [
+      row.tenantId,
+      row.passengerId,
+      row.rideId,
+      row.travelDate.getTime(),
+      row.rideDepartureTime,
+      row.departureStationId,
+      row.arrivalStationId
+    ].join(':');
+    const block = blocks.get(key);
+    if (block) {
+      block.push(row);
+    } else {
+      blocks.set(key, [row]);
+    }
+  }
+
+  const bySeat = (left: BackfillRow, right: BackfillRow): number =>
+    left.seatNumber - right.seatNumber || left.id.localeCompare(right.id);
+
+  for (const legs of blocks.values()) {
+    if (legs.some((leg) => paired.has(leg.id))) {
+      continue;
+    }
+
+    const reachable = unpaired.filter(
+      (candidate) =>
+        !paired.has(candidate.id) &&
+        candidate.tenantId === legs[0].tenantId &&
+        candidate.passengerId === legs[0].passengerId &&
+        isReversed(legs[0], candidate) &&
+        departsBefore(candidate, legs[0]) &&
+        legs[0].travelDate.getTime() - candidate.travelDate.getTime() <=
+          LEGACY_RETURN_LOOKUP_DAYS * DAY_IN_MS
+    );
+
+    // Exactly one outbound departure, and it carries the same number of legs.
+    const departures = new Set(
+      reachable.map((candidate) => `${candidate.rideId}:${candidate.travelDate.getTime()}:${candidate.rideDepartureTime}`)
+    );
+    if (departures.size !== 1 || reachable.length !== legs.length || legs.length < 2) {
+      continue;
+    }
+
+    // One side wholly cancelled while the other is wholly live is not one
+    // booking cut in half — it is evidence that the two sides belong to
+    // different bookings. A party whose return really died keeps its seat
+    // numbers, so phase B pairs it on the seat and it is still reported; here
+    // nothing but the shape connects the rows, and the shape is ambiguous. In
+    // production this is one party that travelled out under one passenger row
+    // and back under another, with a different spelling of the surname and a
+    // different phone, so neither the merge nor the same-phone rule can see it.
+    const allLive = (block: BackfillRow[]): boolean =>
+      block.every((row) => row.status === ReservationStatus.ACTIVE);
+    const allCancelled = (block: BackfillRow[]): boolean =>
+      block.every((row) => row.status === ReservationStatus.CANCELLED);
+
+    if ((allLive(legs) && allCancelled(reachable)) || (allCancelled(legs) && allLive(reachable))) {
+      continue;
+    }
+
+    const outbound = [...reachable].sort(bySeat);
+    const returns = [...legs].sort(bySeat);
+    // A block sold together already carries one marker; only a legacy block
+    // needs a new one.
+    const markers = new Set(
+      [...returns, ...outbound].map((row) => row.roundTripId).filter((id): id is string => Boolean(id))
+    );
+    if (markers.size > 1) {
+      continue;
+    }
+    const roundTripId = [...markers][0] ?? randomUUID();
+
+    returns.forEach((leg, index) => {
+      const partner = outbound[index];
+      paired.add(leg.id);
+      paired.add(partner.id);
+      takenOutboundIds.add(partner.id);
+      links.push({
+        phase: 'block',
+        tenantId: leg.tenantId,
+        returnReservationId: leg.id,
+        outboundReservationId: partner.id,
+        // One marker for the whole block: it was sold as one booking.
+        roundTripId
+      });
+    });
+  }
+
   return { links, ambiguous };
 }
 
@@ -487,6 +596,7 @@ export async function planReturnLegBackfill(
   }
 
   const exactMatches = links.filter((link) => link.phase === 'exact').length;
+  const blockMatches = links.filter((link) => link.phase === 'block').length;
   const touched = new Set(
     links.flatMap((link) => [link.returnReservationId, link.outboundReservationId])
   );
@@ -504,7 +614,8 @@ export async function planReturnLegBackfill(
       reservationsRead: rows.length,
       alreadyLinked,
       exactMatches,
-      heuristicMatches: links.length - exactMatches,
+      heuristicMatches: links.length - exactMatches - blockMatches,
+      blockMatches,
       ambiguous: ambiguous.length,
       excluded: excluded.length,
       unmatched
@@ -531,6 +642,7 @@ export async function applyReturnLegBackfill(
     linkedCount: 0,
     exactCount: 0,
     heuristicCount: 0,
+    blockCount: 0,
     skippedCount: 0
   };
 
@@ -580,6 +692,7 @@ export async function applyReturnLegBackfill(
     result.linkedCount += written.length;
     result.exactCount += written.filter((link) => link.phase === 'exact').length;
     result.heuristicCount += written.filter((link) => link.phase === 'heuristic').length;
+    result.blockCount += written.filter((link) => link.phase === 'block').length;
     result.skippedCount += chunk.length - written.length;
   }
 
