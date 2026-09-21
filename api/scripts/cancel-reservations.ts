@@ -22,7 +22,7 @@ import { withUpdateAudit } from '../src/prisma/audit-write.helper';
 const prisma = new PrismaClient();
 const apply = process.env.APPLY === '1';
 const actorId = process.env.ACTOR_USER_ID?.trim();
-/** A reservation some return leg points at; cancelling it half-kills that pair. */
+/** A linked reservation can be either the outbound or the return leg. */
 const allowLinked = process.env.ALLOW_LINKED === '1';
 
 const ids = (process.env.RESERVATION_IDS ?? '')
@@ -88,10 +88,16 @@ async function main() {
       continue;
     }
 
-    if (row._count.returnLegs > 0 && !allowLinked) {
+    if ((row._count.returnLegs > 0 || row.returnOfReservationId !== null) && !allowLinked) {
+      const linkedLegs = [
+        ...(row.returnOfReservationId ? [`this return leg points at ${row.returnOfReservationId}`] : []),
+        ...(row._count.returnLegs > 0
+          ? [`${row._count.returnLegs} return leg(s) point at this reservation`]
+          : [])
+      ];
       console.log(
-        `  SKIP — ${row._count.returnLegs} return leg(s) point at this reservation, and ` +
-          'cancelling it would leave that pair half dead. Re-run with ALLOW_LINKED=1 if that is intended.'
+        `  SKIP — ${linkedLegs.join(' and ')}. ` +
+          'Cancelling it would leave that pair half dead. Re-run with ALLOW_LINKED=1 if that is intended.'
       );
       continue;
     }
