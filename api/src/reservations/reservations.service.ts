@@ -26,6 +26,7 @@ import {
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { CancellationPreviewDto, CancellationPreviewResponseDto } from './dto/cancellation-preview.dto';
 import { AssignReservationGroupDto } from './dto/assign-reservation-group.dto';
+import { asReturnLegConflict, linkReturnLeg } from './return-leg-link';
 import {
   RouteSegment,
   routeBoardingDropoffSets,
@@ -50,6 +51,7 @@ const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   arrivalStationId: true,
   groupId: true,
   roundTripId: true,
+  returnOfReservationId: true,
   notes: true,
   createdAt: true,
   updatedAt: true,
@@ -397,25 +399,78 @@ export class ReservationsService {
         excludeReservationIds: [existing.id]
       });
 
-      return tx.reservation.update({
-        where: {
-          id
-        },
-        data: withUpdateAudit(
-          {
-            ...(dto.groupId !== undefined ? { groupId: dto.groupId } : {}),
-            ...(dto.passengerId ? { passengerId: dto.passengerId } : {}),
-            ...(dto.seatNumber !== undefined ? { seatNumber: dto.seatNumber } : {}),
-            ...(dto.departureStationId ? { departureStationId: dto.departureStationId } : {}),
-            ...(dto.arrivalStationId ? { arrivalStationId: dto.arrivalStationId } : {}),
-            ...(dto.notes !== undefined
-              ? { notes: dto.notes && dto.notes.trim() ? dto.notes.trim() : null }
-              : {})
+      // Linking is repairable after the fact: a backfill that refuses to guess
+      // between two candidate outbound legs leaves the row unlinked, and this
+      // is how somebody who knows what the passenger asked for fixes it.
+      //
+      // A retained link is revalidated rather than trusted. The link asserts
+      // one passenger and a reversed station pair, and all three of those
+      // fields can change in this request — leaving the assertion standing
+      // while the row moves out from under it is the silent drift the
+      // round-trip check exists to catch, manufactured by the repair path.
+      const linkedFieldsChanged =
+        nextPassengerId !== existing.passengerId ||
+        departureStationId !== existing.departureStationId ||
+        arrivalStationId !== existing.arrivalStationId;
+
+      const outboundToValidate =
+        dto.returnOfReservationId !== undefined
+          ? dto.returnOfReservationId
+          : linkedFieldsChanged
+            ? existing.returnOfReservationId
+            : null;
+
+      const returnLeg = outboundToValidate
+        ? await linkReturnLeg(tx, {
+            tenantId: auth.tenantId,
+            actorId: auth.sub,
+            outboundReservationId: outboundToValidate,
+            leg: {
+              passengerId: nextPassengerId,
+              departureStationId,
+              arrivalStationId,
+              travelDate: existing.travelDate,
+              rideDepartureTime: existing.rideDepartureTime
+            },
+            excludeReservationId: existing.id
+          })
+        : null;
+
+      try {
+        return await tx.reservation.update({
+          where: {
+            id
           },
-          auth.sub
-        ),
-        select: SAFE_RESERVATION_SELECT
-      });
+          data: withUpdateAudit(
+            {
+              ...(dto.groupId !== undefined ? { groupId: dto.groupId } : {}),
+              ...(dto.passengerId ? { passengerId: dto.passengerId } : {}),
+              ...(dto.seatNumber !== undefined ? { seatNumber: dto.seatNumber } : {}),
+              ...(dto.departureStationId ? { departureStationId: dto.departureStationId } : {}),
+              ...(dto.arrivalStationId ? { arrivalStationId: dto.arrivalStationId } : {}),
+              ...(dto.notes !== undefined
+                ? { notes: dto.notes && dto.notes.trim() ? dto.notes.trim() : null }
+                : {}),
+              ...(returnLeg
+                ? {
+                    returnOfReservationId: returnLeg.returnOfReservationId,
+                    roundTripId: returnLeg.roundTripId
+                  }
+                : {}),
+              // Unlinking drops the booking marker too: cancellationPreview
+              // pairs legs by roundTripId, so leaving it behind would keep
+              // offering the unlinked leg as this booking's return.
+              ...(dto.returnOfReservationId === null
+                ? { returnOfReservationId: null, roundTripId: null }
+                : {})
+            },
+            auth.sub
+          ),
+          select: SAFE_RESERVATION_SELECT
+        });
+      } catch (error) {
+        throw asReturnLegConflict(error);
+      }
     });
 
     return this.toResponse(updated);
@@ -826,12 +881,33 @@ export class ReservationsService {
     );
 
     const travelDate = this.toUtcDate(dto.travelDate);
+
     await this.acquireRideInstanceLock(tx, {
       tenantId: auth.tenantId,
       rideId: dto.rideId,
       travelDate,
       rideDepartureTime: dto.rideDepartureTime
     });
+
+    // After the advisory lock, never before: linking row-locks the outbound
+    // reservation to stamp its booking marker, and update takes these two
+    // locks in this order. Taking them the other way round here lets a create
+    // and an update on the same pair each hold what the other waits for, and
+    // Postgres resolves that by aborting one operator's booking.
+    const returnLeg = dto.returnOfReservationId
+      ? await linkReturnLeg(tx, {
+          tenantId: auth.tenantId,
+          actorId: auth.sub,
+          outboundReservationId: dto.returnOfReservationId,
+          leg: {
+            passengerId: dto.passengerId,
+            departureStationId: dto.departureStationId,
+            arrivalStationId: dto.arrivalStationId,
+            travelDate,
+            rideDepartureTime: dto.rideDepartureTime
+          }
+        })
+      : null;
 
     await this.ensureSeatAndCapacityAreAvailable(tx, {
       tenantId: auth.tenantId,
@@ -844,28 +920,37 @@ export class ReservationsService {
       capacity: rideContext.capacity
     });
 
-    return tx.reservation.create({
-      data: withCreateAudit(
-        {
-          tenantId: auth.tenantId,
-          rideId: dto.rideId,
-          passengerId: dto.passengerId,
-          travelDate,
-          rideDepartureTime: dto.rideDepartureTime,
-          rideArrivalTime: dto.rideArrivalTime,
-          seatNumber: dto.seatNumber,
-          departureStationId: dto.departureStationId,
-          arrivalStationId: dto.arrivalStationId,
-          status: ReservationStatus.ACTIVE,
-          cancelledAt: null,
-          groupId,
-          notes: dto.notes?.trim() ? dto.notes.trim() : null,
-          roundTripId: dto.roundTripId ?? null
-        },
-        auth.sub
-      ),
-      select: SAFE_RESERVATION_SELECT
-    });
+    try {
+      return await tx.reservation.create({
+        data: withCreateAudit(
+          {
+            tenantId: auth.tenantId,
+            rideId: dto.rideId,
+            passengerId: dto.passengerId,
+            travelDate,
+            rideDepartureTime: dto.rideDepartureTime,
+            rideArrivalTime: dto.rideArrivalTime,
+            seatNumber: dto.seatNumber,
+            departureStationId: dto.departureStationId,
+            arrivalStationId: dto.arrivalStationId,
+            status: ReservationStatus.ACTIVE,
+            cancelledAt: null,
+            groupId,
+            notes: dto.notes?.trim() ? dto.notes.trim() : null,
+            returnOfReservationId: returnLeg?.returnOfReservationId ?? null,
+            // The booking marker is the server's to mint: a return leg takes it
+            // from its outbound leg, so the two sides of a booking can never
+            // disagree about which booking they belong to. A one-way leg carries
+            // none until a return leg turns it into a round trip.
+            roundTripId: returnLeg?.roundTripId ?? null
+          },
+          auth.sub
+        ),
+        select: SAFE_RESERVATION_SELECT
+      });
+    } catch (error) {
+      throw asReturnLegConflict(error);
+    }
   }
 
   private async acquireRideInstanceLock(
@@ -913,6 +998,7 @@ export class ReservationsService {
       arrivalStationId: reservation.arrivalStationId,
       groupId: reservation.groupId,
       roundTripId: reservation.roundTripId,
+      returnOfReservationId: reservation.returnOfReservationId,
       notes: reservation.notes,
       ride: {
         id: reservation.ride.id,

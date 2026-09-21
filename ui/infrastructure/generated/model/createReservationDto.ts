@@ -7,8 +7,8 @@
  */
 
 export interface CreateReservationDto {
-  /** Links both legs of a round-trip booking. */
-  roundTripId?: string;
+  /** Set on a return leg, naming the outbound reservation it belongs to. The outbound leg must be active, belong to the same passenger, travel the reversed station pair, and have no other active return leg. */
+  returnOfReservationId?: string;
   rideId: string;
   passengerId: string;
   travelDate: string;

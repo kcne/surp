@@ -281,26 +281,29 @@ export function ReservationModal({
     addPassengerTargetSeat,
     setAddPassengerTargetSeat,
     selectedRideInstance,
-    createReservation: async (payload) => {
-      await createReservationMutation.mutateAsync(payload)
-    },
-    createReservationsBatch: async (payload) => {
-      await createReservationsBatchMutation.mutateAsync(payload)
-    },
+    // The created reservations are returned, not discarded: a return leg needs
+    // the id of the outbound leg it travels back from, which only exists once
+    // the outbound leg is saved.
+    createReservation: async (payload) => createReservationMutation.mutateAsync(payload),
+    createReservationsBatch: async (payload) =>
+      (await createReservationsBatchMutation.mutateAsync(payload)).reservations,
     createReservationsForRideInstance: async (instance, requests, options) => {
       if (requests.length === 1) {
-        await createReservationMutation.mutateAsync({
-          data: requests[0],
-          rideInstance: instance,
-        })
-        return
+        return [
+          await createReservationMutation.mutateAsync({
+            data: requests[0],
+            rideInstance: instance,
+          }),
+        ]
       }
 
-      await createReservationsBatchMutation.mutateAsync({
-        data: requests,
-        rideInstance: instance,
-        travelTogether: options?.travelTogether,
-      })
+      return (
+        await createReservationsBatchMutation.mutateAsync({
+          data: requests,
+          rideInstance: instance,
+          travelTogether: options?.travelTogether,
+        })
+      ).reservations
     },
     updateReservation: async (reservationId, data) => {
       await updateReservationMutation.mutateAsync({ id: reservationId, payload: data })

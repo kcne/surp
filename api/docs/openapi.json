@@ -9094,10 +9094,9 @@
       "CreateReservationDto": {
         "type": "object",
         "properties": {
-          "roundTripId": {
+          "returnOfReservationId": {
             "type": "string",
-            "format": "uuid",
-            "description": "Links both legs of a round-trip booking."
+            "description": "Set on a return leg, naming the outbound reservation it belongs to. The outbound leg must be active, belong to the same passenger, travel the reversed station pair, and have no other active return leg."
           },
           "rideId": {
             "type": "string",
@@ -9272,7 +9271,12 @@
           "roundTripId": {
             "type": "string",
             "nullable": true,
-            "description": "Correlation id shared by both round-trip legs"
+            "description": "Correlation id shared by every leg of one round-trip booking"
+          },
+          "returnOfReservationId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set on a return leg: the outbound reservation this leg travels back from"
           },
           "notes": {
             "type": "string",
@@ -9317,6 +9321,7 @@
           "arrivalStationId",
           "groupId",
           "roundTripId",
+          "returnOfReservationId",
           "notes",
           "ride",
           "passenger",
@@ -9578,6 +9583,11 @@
             "example": "Putnik silazi na drugoj stanici",
             "maxLength": 500,
             "nullable": true
+          },
+          "returnOfReservationId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Links this reservation to the outbound leg it travels back from, or unlinks it when null. The outbound leg must be active, belong to the same passenger, travel the reversed station pair, and have no other active return leg."
           }
         }
       },

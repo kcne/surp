@@ -37,17 +37,17 @@ interface UseReservationSubmissionParams {
   createReservation: (payload: {
     data: ReservationFormData
     rideInstance: RideInstance
-  }) => Promise<void>
+  }) => Promise<Reservation>
   createReservationsBatch: (payload: {
     data: ReservationFormData[]
     rideInstance: RideInstance
     travelTogether?: boolean
-  }) => Promise<void>
+  }) => Promise<Reservation[]>
   createReservationsForRideInstance: (
     instance: RideInstance,
     requests: ReservationFormData[],
     options?: { showSuccessToast?: boolean; travelTogether?: boolean }
-  ) => Promise<void>
+  ) => Promise<Reservation[]>
   updateReservation: (reservationId: string, data: ReservationFormData) => Promise<void>
   clearSelectedSeats: () => void
   createPassenger: (data: PassengerFormData) => Promise<Passenger>
@@ -83,51 +83,97 @@ export function useReservationSubmission({
   clearSelectedSeats,
   createPassenger,
 }: UseReservationSubmissionParams) {
+  /**
+   * A return leg names the outbound leg it travels back from, and the outbound
+   * leg only has an id once it is saved. So the booking runs in two steps and
+   * the second one carries the link: no id is minted in the browser, and the
+   * server takes the booking marker from the outbound leg.
+   */
+  const linkReturnRequestsTo = (
+    createdOutbound: Reservation[],
+    outboundRequests: ReservationFormData[]
+  ): ReservationFormData[] => {
+    const createdBySeat = new Map(
+      createdOutbound.map((created) => [
+        `${created.passengerId}:${created.seatNumber}`,
+        created.id,
+      ])
+    )
+
+    return outboundRequests.map((request) => {
+      const outboundId = createdBySeat.get(`${request.passengerId}:${request.seatNumber}`)
+
+      if (!outboundId) {
+        throw new Error(
+          "Polazne karte su sacuvane, ali nije moguce povezati povratne. Dodajte povratnu kartu iz izmene rezervacije."
+        )
+      }
+
+      return { ...request, returnOfReservationId: outboundId }
+    })
+  }
+
+  const createReturnLegs = async (
+    returnInstance: RideInstance,
+    linkedOutboundRequests: ReservationFormData[]
+  ) => {
+    const returnRequests = buildReturnRequests({
+      outboundRequests: linkedOutboundRequests,
+      returnInstance,
+      returnDepartureStationId: form.getValues("arrivalStationId"),
+      returnArrivalStationId: form.getValues("departureStationId"),
+      allReservations,
+    })
+
+    try {
+      await createReservationsForRideInstance(returnInstance, returnRequests, {
+        showSuccessToast: false,
+        travelTogether,
+      })
+    } catch (error) {
+      // The outbound leg is already saved at this point. Saying so is the whole
+      // point: a silent failure here is what leaves a passenger holding one
+      // direction of a journey nobody knows is incomplete.
+      toast.error(
+        "Polazna karta je sacuvana, ali povratna nije rezervisana. Putnik za sada nema povratnu kartu."
+      )
+      throw error
+    }
+
+    toast.success("Povratna karta je uspesno rezervisana")
+  }
+
   const createWithOptionalReturn = async (outboundRequests: ReservationFormData[]) => {
     if (!selectedRideInstance) {
       throw new Error("Voznja nije izabrana")
     }
 
-    const roundTripId = isReturnTicket ? crypto.randomUUID() : undefined
-    const linkedOutboundRequests = roundTripId
-      ? outboundRequests.map((request) => ({ ...request, roundTripId }))
-      : outboundRequests
-    let returnRequests: ReservationFormData[] = []
-
-    if (isReturnTicket) {
-      if (!selectedReturnRideInstance) {
-        throw new Error("Izaberite datum i vreme povratne vožnje.")
-      }
-
-      returnRequests = buildReturnRequests({
-        outboundRequests: linkedOutboundRequests,
-        returnInstance: selectedReturnRideInstance,
-        returnDepartureStationId: form.getValues("arrivalStationId"),
-        returnArrivalStationId: form.getValues("departureStationId"),
-        allReservations,
-      })
+    if (isReturnTicket && !selectedReturnRideInstance) {
+      throw new Error("Izaberite datum i vreme povratne voznje.")
     }
 
-    if (linkedOutboundRequests.length === 1 && !isMultiReservation) {
-      await createReservation({
-        data: linkedOutboundRequests[0],
-        rideInstance: selectedRideInstance,
-      })
-    } else {
-      await createReservationsBatch({
-        data: linkedOutboundRequests,
-        rideInstance: selectedRideInstance,
-        travelTogether,
-      })
+    const createdOutbound =
+      outboundRequests.length === 1 && !isMultiReservation
+        ? [
+            await createReservation({
+              data: outboundRequests[0],
+              rideInstance: selectedRideInstance,
+            }),
+          ]
+        : await createReservationsBatch({
+            data: outboundRequests,
+            rideInstance: selectedRideInstance,
+            travelTogether,
+          })
+
+    if (!isReturnTicket || !selectedReturnRideInstance) {
+      return
     }
 
-    if (returnRequests.length > 0 && selectedReturnRideInstance) {
-      await createReservationsForRideInstance(selectedReturnRideInstance, returnRequests, {
-        showSuccessToast: false,
-        travelTogether,
-      })
-      toast.success("Povratna karta je uspešno rezervisana")
-    }
+    await createReturnLegs(
+      selectedReturnRideInstance,
+      linkReturnRequestsTo(createdOutbound, outboundRequests)
+    )
   }
 
   const onSubmit = async (data: ReservationFormData) => {
@@ -136,20 +182,14 @@ export function useReservationSubmission({
         await updateReservation(reservation.id, data)
         if (isReturnTicket && !existingReturnReservation) {
           if (!selectedReturnRideInstance) {
-            throw new Error("Izaberite datum i vreme povratne vožnje.")
+            throw new Error("Izaberite datum i vreme povratne voznje.")
           }
 
-          const returnRequests = buildReturnRequests({
-            outboundRequests: [data],
-            returnInstance: selectedReturnRideInstance,
-            returnDepartureStationId: form.getValues("arrivalStationId"),
-            returnArrivalStationId: form.getValues("departureStationId"),
-            allReservations,
-          })
-          await createReservationsForRideInstance(selectedReturnRideInstance, returnRequests, {
-            showSuccessToast: false,
-          })
-          toast.success("Povratna karta je uspešno rezervisana")
+          // Adding a return leg to a saved reservation links it the same way a
+          // fresh booking does; this path used to save neither side's link.
+          await createReturnLegs(selectedReturnRideInstance, [
+            { ...data, returnOfReservationId: reservation.id },
+          ])
         }
       } else if (isMultiReservation) {
         const requests = selectedSeats.map((seat) => ({

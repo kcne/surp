@@ -76,6 +76,7 @@ describe('ReservationsService', () => {
     arrivalStationId: 'station-c',
     groupId: null,
     roundTripId: null,
+    returnOfReservationId: null,
     notes: null,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -208,6 +209,9 @@ describe('ReservationsService', () => {
           createdById: data.createdById as string,
           updatedById: data.updatedById as string,
           groupId: (data.groupId as string | null | undefined) ?? null,
+          roundTripId: (data.roundTripId as string | null | undefined) ?? null,
+          returnOfReservationId:
+            (data.returnOfReservationId as string | null | undefined) ?? null,
           notes: (data.notes as string | null | undefined) ?? null
         };
 
@@ -383,6 +387,211 @@ describe('ReservationsService', () => {
     expect(result.departureStationId).toBe('station-a');
     expect(result.arrivalStationId).toBe('station-d');
     expect(result.groupId).toEqual(expect.any(String));
+  });
+
+  describe('return legs', () => {
+    /** The opposite direction of the same pair: station-d back to station-a. */
+    const reversedRide = {
+      id: 'ride-return',
+      line: {
+        isActive: true,
+        departureStationId: 'station-d',
+        arrivalStationId: 'station-a',
+        intermediateStops: [
+          { stationId: 'station-c', orderIndex: 1, isBoarding: true, isDropoff: true },
+          { stationId: 'station-b', orderIndex: 2, isBoarding: true, isDropoff: true }
+        ]
+      }
+    };
+
+    const createReturnLeg = () =>
+      service.create(auth, {
+        rideId: 'ride-return',
+        passengerId: 'passenger-1',
+        travelDate: '2026-04-06',
+        rideDepartureTime: '18:00',
+        rideArrivalTime: '19:30',
+        seatNumber: 12,
+        departureStationId: 'station-c',
+        arrivalStationId: 'station-a',
+        returnOfReservationId: 'reservation-1'
+      });
+
+    beforeEach(() => {
+      prismaMock.ride.findFirst.mockResolvedValue({ ...reversedRide, capacity: 40 });
+    });
+
+    it('links a created return leg to its outbound leg and shares the booking marker', async () => {
+      prismaMock.reservation.findFirst
+        .mockResolvedValueOnce({ ...baseReservation })
+        .mockResolvedValueOnce(null);
+
+      const result = await createReturnLeg();
+
+      expect(result.returnOfReservationId).toBe('reservation-1');
+      expect(result.roundTripId).toEqual(expect.any(String));
+      // The outbound leg was a one-way until now, so it is stamped with the
+      // marker the return leg was given rather than being left without one.
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'reservation-1' },
+          data: expect.objectContaining({ roundTripId: result.roundTripId })
+        })
+      );
+    });
+
+    it('takes the booking marker the outbound leg already carries', async () => {
+      prismaMock.reservation.findFirst
+        .mockResolvedValueOnce({ ...baseReservation, roundTripId: 'booking-1' })
+        .mockResolvedValueOnce(null);
+
+      await expect(createReturnLeg()).resolves.toEqual(
+        expect.objectContaining({ roundTripId: 'booking-1' })
+      );
+      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a return leg whose outbound leg already has a live return', async () => {
+      prismaMock.reservation.findFirst
+        .mockResolvedValueOnce({ ...baseReservation })
+        .mockResolvedValueOnce({ id: 'reservation-existing-return' });
+
+      await expect(createReturnLeg()).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('leaves a one-way reservation without a booking marker', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
+
+      const result = await service.create(auth, {
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 31,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-c'
+      });
+
+      expect(result.roundTripId).toBeNull();
+      expect(result.returnOfReservationId).toBeNull();
+    });
+
+    it('links an existing reservation to its outbound leg on update', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
+      prismaMock.reservation.findFirst
+        .mockResolvedValueOnce({ ...baseReservation })
+        .mockResolvedValueOnce({
+          ...baseReservation,
+          id: 'reservation-outbound',
+          departureStationId: 'station-c',
+          arrivalStationId: 'station-a',
+          roundTripId: 'booking-1'
+        })
+        .mockResolvedValueOnce(null);
+      prismaMock.reservation.update.mockResolvedValue({
+        ...baseReservation,
+        returnOfReservationId: 'reservation-outbound',
+        roundTripId: 'booking-1'
+      });
+
+      await service.update(auth, 'reservation-1', {
+        returnOfReservationId: 'reservation-outbound'
+      });
+
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'reservation-1' },
+          data: expect.objectContaining({
+            returnOfReservationId: 'reservation-outbound',
+            roundTripId: 'booking-1'
+          })
+        })
+      );
+    });
+
+    it('unlinks a return leg when update is given an explicit null', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
+      prismaMock.reservation.findFirst.mockResolvedValueOnce({
+        ...baseReservation,
+        returnOfReservationId: 'reservation-outbound',
+        roundTripId: 'booking-1'
+      });
+      prismaMock.reservation.update.mockResolvedValue({
+        ...baseReservation,
+        returnOfReservationId: null,
+        roundTripId: null
+      });
+
+      await service.update(auth, 'reservation-1', { returnOfReservationId: null });
+
+      // The marker goes with the link: cancellationPreview pairs legs by
+      // roundTripId, so keeping it would still offer the unlinked leg as the
+      // booking's return.
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ returnOfReservationId: null, roundTripId: null })
+        })
+      );
+    });
+
+    const linkedReservation = {
+      ...baseReservation,
+      returnOfReservationId: 'reservation-outbound',
+      roundTripId: 'booking-1'
+    };
+
+    /** The outbound leg the linked reservation travels back from. */
+    const linkedOutbound = {
+      ...baseReservation,
+      id: 'reservation-outbound',
+      departureStationId: 'station-c',
+      arrivalStationId: 'station-a',
+      roundTripId: 'booking-1'
+    };
+
+    it('revalidates a retained link when the passenger changes', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
+      prismaMock.passenger.findFirst.mockResolvedValue({ id: 'passenger-2' });
+      prismaMock.reservation.findFirst
+        .mockResolvedValueOnce({ ...linkedReservation })
+        .mockResolvedValueOnce({ ...linkedOutbound });
+
+      // The link asserts one passenger across both legs. Moving this leg to
+      // another passenger without revalidating would leave that assertion
+      // standing and false.
+      await expect(
+        service.update(auth, 'reservation-1', { passengerId: 'passenger-2' })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+    });
+
+    it('revalidates a retained link when the stations change', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
+      prismaMock.reservation.findFirst
+        .mockResolvedValueOnce({ ...linkedReservation })
+        .mockResolvedValueOnce({ ...linkedOutbound });
+
+      await expect(
+        service.update(auth, 'reservation-1', { arrivalStationId: 'station-d' })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+    });
+
+    it('leaves a retained link alone when no field it asserts on changes', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
+      prismaMock.reservation.findFirst.mockResolvedValueOnce({ ...linkedReservation });
+      prismaMock.reservation.update.mockResolvedValue({ ...linkedReservation });
+
+      await service.update(auth, 'reservation-1', { notes: 'Putnik kasni' });
+
+      expect(prismaMock.reservation.findFirst).toHaveBeenCalledTimes(1);
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ returnOfReservationId: expect.anything() })
+        })
+      );
+    });
   });
 
   it('refuses to create a reservation on a ride whose line is deactivated', async () => {

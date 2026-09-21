@@ -163,7 +163,7 @@ export type healthControllerHealthResponse = (healthControllerHealthResponseSucc
 export const getHealthControllerHealthUrl = () => {
 
 
-
+  
 
   return `/health`
 }
@@ -3117,21 +3117,23 @@ export const getMaintenanceControllerGetDomainAuditUrl = (entityType: string,
     entityId: string,) => {
 
 
+  
+
   return `/maintenance/audit/${entityType}/${entityId}`
 }
 
 export const maintenanceControllerGetDomainAudit = async (entityType: string,
     entityId: string, options?: RequestInit): Promise<maintenanceControllerGetDomainAuditResponse> => {
-
+  
   return customInstance<maintenanceControllerGetDomainAuditResponse>(getMaintenanceControllerGetDomainAuditUrl(entityType,entityId),
-  {
+  {      
     ...options,
     method: 'GET'
-
-
+    
+    
   }
 );}
-
+  
 
 
 
@@ -3143,7 +3145,7 @@ export const getMaintenanceControllerGetDomainAuditQueryKey = (entityType: strin
     ] as const;
     }
 
-
+    
 export const getMaintenanceControllerGetDomainAuditQueryOptions = <TData = Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError = ErrorType<void>>(entityType: string,
     entityId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
@@ -3152,11 +3154,13 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  queryOptions?.queryKey ?? getMaintenanceControllerGetDomainAuditQueryKey(entityType,entityId);
 
-
+  
 
     const queryFn: QueryFunction<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>> = ({ signal }) => maintenanceControllerGetDomainAudit(entityType,entityId, { signal, ...requestOptions });
 
+      
 
+      
 
    return  { queryKey, queryFn, enabled: !!(entityType && entityId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -3199,7 +3203,7 @@ export function useMaintenanceControllerGetDomainAudit<TData = Awaited<ReturnTyp
 export function useMaintenanceControllerGetDomainAudit<TData = Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError = ErrorType<void>>(
  entityType: string,
     entityId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
+ , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getMaintenanceControllerGetDomainAuditQueryOptions(entityType,entityId,options)

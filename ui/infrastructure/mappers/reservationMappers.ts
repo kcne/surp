@@ -85,6 +85,7 @@ export function toReservation(
     status: toReservationStatus(dto.status),
     groupId: dto.groupId ?? null,
     roundTripId: dto.roundTripId ?? null,
+    returnOfReservationId: dto.returnOfReservationId ?? null,
     notes: dto.notes ?? null,
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
@@ -105,7 +106,9 @@ export function toCreateReservationDto(
     seatNumber: data.seatNumber,
     departureStationId: data.departureStationId,
     arrivalStationId: data.arrivalStationId,
-    ...(data.roundTripId ? { roundTripId: data.roundTripId } : {}),
+    ...(data.returnOfReservationId
+      ? { returnOfReservationId: data.returnOfReservationId }
+      : {}),
     ...(trimmedNotes ? { notes: trimmedNotes } : {}),
   }
 }
@@ -117,5 +120,8 @@ export function toUpdateReservationDto(data: Partial<ReservationFormData>): Upda
     departureStationId: data.departureStationId,
     arrivalStationId: data.arrivalStationId,
     ...(data.notes !== undefined ? { notes: data.notes.trim() ? data.notes.trim() : null } : {}),
+    ...(data.returnOfReservationId !== undefined
+      ? { returnOfReservationId: data.returnOfReservationId }
+      : {}),
   }
 }
