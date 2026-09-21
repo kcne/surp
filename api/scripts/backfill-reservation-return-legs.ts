@@ -37,7 +37,7 @@ async function main() {
       `${counts.heuristicMatches} heuristic matches, ` +
       `${counts.blockMatches} paired inside a booking block.\n` +
       `${counts.ambiguous} ambiguous rows left unlinked, ${counts.excluded} cancelled rows held ` +
-      `back as not-the-leg, ${counts.unmatched} with no candidate.`
+      `back as not-the-leg, ${counts.unmatched} with no unique assignment.`
   );
 
   // Ambiguity is a to-do list for a human, not a failure. Print enough to act
@@ -83,9 +83,15 @@ async function main() {
       `(${result.exactCount} exact, ${result.heuristicCount} heuristic, ` +
       `${result.blockCount} booking block).` +
       (result.skippedCount > 0
-        ? ` Skipped ${result.skippedCount} rows linked by someone else since the plan was read.`
+        ? ` Skipped ${result.skippedCount} rows already linked or changed since the plan was read.`
         : '')
   );
+  if (result.contendedReturnReservationIds.length > 0) {
+    console.log(
+      `Outbound contention rolled back ${result.contendedReturnReservationIds.length} link(s): ` +
+        result.contendedReturnReservationIds.join(', ')
+    );
+  }
 }
 
 main()

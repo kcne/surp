@@ -26,7 +26,8 @@ import { LEGACY_RETURN_LOOKUP_DAYS } from './return-leg-link';
  *   that was never sold, which is worse than no link at all.
  */
 
-const MAX_LINKS_PER_TRANSACTION = 100;
+const LINK_TRANSACTION_TIMEOUT_MS = 10_000;
+const READ_PAGE_SIZE = 500;
 const DAY_IN_MS = 86_400_000;
 /**
  * A leg cancelled this soon after it was booked was a mis-entry corrected on
@@ -89,7 +90,7 @@ export interface ReturnLegBackfillCounts {
   ambiguous: number;
   /** Cancelled rows held back because they are not the leg they look like. */
   excluded: number;
-  /** Unlinked rows the backfill leaves alone — one-way tickets, mostly. */
+  /** Unlinked rows with no unique assignment — one-way tickets, mostly. */
   unmatched: number;
 }
 
@@ -105,9 +106,12 @@ export interface ReturnLegBackfillResult {
   exactCount: number;
   heuristicCount: number;
   blockCount: number;
-  /** Rows another writer linked between the plan and the write. */
+  /** Rows already linked or whose outbound marker changed after planning. */
   skippedCount: number;
+  contendedReturnReservationIds: string[];
 }
+
+class OutboundLinkContention extends Error {}
 
 const BACKFILL_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   id: true,
@@ -558,7 +562,8 @@ function excludedLegs(rows: BackfillRow[]): Map<string, ReturnLegExclusionReason
  * second run of the script a genuine no-op, so the production run can be
  * compared against the restored-backup run.
  */
-const MAX_PASSES = 10;
+// Each productive pass links at least one previously unlinked return row, so
+// more productive passes than considered rows means the planner failed to converge.
 
 /**
  * Reads the whole plan without writing anything, so it can be run against a
@@ -569,10 +574,17 @@ const MAX_PASSES = 10;
 export async function planReturnLegBackfill(
   prisma: PrismaReadClient
 ): Promise<ReturnLegBackfillPlan> {
-  const rows = await prisma.reservation.findMany({
-    select: BACKFILL_SELECT,
-    orderBy: [{ travelDate: 'asc' }, { rideDepartureTime: 'asc' }, { id: 'asc' }]
-  });
+  const rows: BackfillRow[] = [];
+  while (true) {
+    const page = await prisma.reservation.findMany({
+      select: BACKFILL_SELECT,
+      orderBy: [{ travelDate: 'asc' }, { rideDepartureTime: 'asc' }, { id: 'asc' }],
+      take: READ_PAGE_SIZE,
+      ...(rows.length > 0 ? { cursor: { id: rows[rows.length - 1].id }, skip: 1 } : {})
+    });
+    rows.push(...page);
+    if (page.length < READ_PAGE_SIZE) break;
+  }
   const rowsById = new Map(rows.map((row) => [row.id, row]));
   const alreadyLinked = rows.filter((row) => row.returnOfReservationId !== null).length;
 
@@ -595,7 +607,7 @@ export async function planReturnLegBackfill(
   // below rather than reported as open questions.
   const ambiguousByRow = new Map<string, ReturnLegBackfillAmbiguity>();
 
-  for (let pass = 0; pass < MAX_PASSES; pass += 1) {
+  for (let pass = 0; pass <= considered.length; pass += 1) {
     const result = pairingPass(considered);
     for (const entry of result.ambiguous) {
       if (!ambiguousByRow.has(entry.reservationId)) {
@@ -605,6 +617,9 @@ export async function planReturnLegBackfill(
 
     if (result.links.length === 0) {
       break;
+    }
+    if (pass === considered.length) {
+      throw new Error('return-leg backfill plan did not converge');
     }
 
     for (const link of result.links) {
@@ -626,7 +641,10 @@ export async function planReturnLegBackfill(
   const touched = new Set(
     links.flatMap((link) => [link.returnReservationId, link.outboundReservationId])
   );
-  const ambiguous = [...ambiguousByRow.values()].filter((entry) => !touched.has(entry.reservationId));
+  const linkedAsReturn = new Set(links.map((link) => link.returnReservationId));
+  const ambiguous = [...ambiguousByRow.values()].filter(
+    (entry) => !linkedAsReturn.has(entry.reservationId)
+  );
   const reported = new Set(ambiguous.map((entry) => entry.reservationId));
   const unmatched = considered.filter(
     (row) => !touched.has(row.id) && !reported.has(row.id) && row.returnOfReservationId === null
@@ -669,16 +687,13 @@ export async function applyReturnLegBackfill(
     exactCount: 0,
     heuristicCount: 0,
     blockCount: 0,
-    skippedCount: 0
+    skippedCount: 0,
+    contendedReturnReservationIds: []
   };
 
-  for (let start = 0; start < resolved.links.length; start += MAX_LINKS_PER_TRANSACTION) {
-    const chunk = resolved.links.slice(start, start + MAX_LINKS_PER_TRANSACTION);
-
-    const written = await prisma.$transaction(async (tx) => {
-      const applied: ReturnLegBackfillLink[] = [];
-
-      for (const link of chunk) {
+  for (const link of resolved.links) {
+    try {
+      const written = await prisma.$transaction(async (tx) => {
         const linked = await tx.reservation.updateMany({
           where: {
             id: link.returnReservationId,
@@ -695,34 +710,39 @@ export async function applyReturnLegBackfill(
         });
 
         if (linked.count === 0) {
-          continue;
+          return false;
         }
 
-        // Phase A leaves this a no-op — the outbound already carries the
-        // marker. Phase B is where the one-way leg becomes a round trip.
+        // An exact or block outbound may already carry the same marker. A
+        // different marker means another writer claimed it after planning.
         const marked = await tx.reservation.updateMany({
           where: {
             id: link.outboundReservationId,
             tenantId: link.tenantId,
-            roundTripId: null
+            OR: [{ roundTripId: null }, { roundTripId: link.roundTripId }]
           },
           data: withUpdateAudit({ roundTripId: link.roundTripId }, actorId)
         });
-        if (link.phase === 'heuristic' && marked.count === 0) {
-          throw new Error('outbound reservation was claimed after the backfill plan was read');
+        if (marked.count === 0) {
+          throw new OutboundLinkContention();
         }
 
-        applied.push(link);
+        return true;
+      }, { maxWait: LINK_TRANSACTION_TIMEOUT_MS, timeout: LINK_TRANSACTION_TIMEOUT_MS });
+
+      if (written) {
+        result.linkedCount += 1;
+        if (link.phase === 'exact') result.exactCount += 1;
+        if (link.phase === 'heuristic') result.heuristicCount += 1;
+        if (link.phase === 'block') result.blockCount += 1;
+      } else {
+        result.skippedCount += 1;
       }
-
-      return applied;
-    });
-
-    result.linkedCount += written.length;
-    result.exactCount += written.filter((link) => link.phase === 'exact').length;
-    result.heuristicCount += written.filter((link) => link.phase === 'heuristic').length;
-    result.blockCount += written.filter((link) => link.phase === 'block').length;
-    result.skippedCount += chunk.length - written.length;
+    } catch (error) {
+      if (!(error instanceof OutboundLinkContention)) throw error;
+      result.skippedCount += 1;
+      result.contendedReturnReservationIds.push(link.returnReservationId);
+    }
   }
 
   return result;

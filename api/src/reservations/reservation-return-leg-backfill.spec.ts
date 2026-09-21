@@ -8,9 +8,10 @@ const findMany = jest.fn();
 const updateMany = jest.fn();
 const prismaMock = {
   reservation: { findMany },
-  $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
-    callback({ reservation: { updateMany } })
-  )
+  $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>, options?: unknown) => {
+    expect(options).toBeDefined();
+    return callback({ reservation: { updateMany } });
+  })
 };
 
 const prisma = prismaMock as unknown as PrismaClient;
@@ -82,6 +83,25 @@ describe('reservation return leg backfill', () => {
 
     expect(plan.links).toHaveLength(1);
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('reads large backups in cursor pages', async () => {
+    const firstPage = Array.from({ length: 500 }, (_, index) =>
+      row({ id: `reservation-${index}`, passengerId: `passenger-${index}` })
+    );
+    findMany.mockResolvedValueOnce(firstPage).mockResolvedValueOnce([
+      row({ id: 'last-reservation', passengerId: 'last-passenger' })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.counts.reservationsRead).toBe(501);
+    expect(findMany).toHaveBeenCalledTimes(2);
+    expect(findMany.mock.calls[1][0]).toMatchObject({
+      take: 500,
+      cursor: { id: 'reservation-499' },
+      skip: 1
+    });
   });
 
   it('pairs rows that already share a booking marker and keeps that marker', async () => {
@@ -264,6 +284,27 @@ describe('reservation return leg backfill', () => {
     expect(plan.links).toHaveLength(0);
   });
 
+  it('reports an ambiguous return even when another leg later links to it as outbound', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'out-1', travelDate: '2026-03-01', seatNumber: 4 }),
+      row({ id: 'out-2', travelDate: '2026-03-02', seatNumber: 4 }),
+      returnRow({ id: 'ambiguous-return', travelDate: '2026-03-03', seatNumber: 4 }),
+      row({ id: 'later-return', travelDate: '2026-03-04', seatNumber: 4 })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toMatchObject([
+      { returnReservationId: 'later-return', outboundReservationId: 'ambiguous-return' }
+    ]);
+    expect(plan.ambiguous).toContainEqual(expect.objectContaining({
+      reservationId: 'ambiguous-return',
+      reason: 'multiple_candidates',
+      candidateReservationIds: expect.arrayContaining(['out-1', 'out-2'])
+    }));
+    expect(plan.counts.ambiguous).toBe(1);
+  });
+
   it('writes both sides of a pair and guards every update on the row still being free', async () => {
     findMany.mockResolvedValue([row({ id: 'outbound-1' }), returnRow({ id: 'return-1' })]);
 
@@ -274,7 +315,8 @@ describe('reservation return leg backfill', () => {
       exactCount: 0,
       heuristicCount: 1,
       blockCount: 0,
-      skippedCount: 0
+      skippedCount: 0,
+      contendedReturnReservationIds: []
     });
 
     const [legUpdate, outboundUpdate] = updateMany.mock.calls;
@@ -287,7 +329,10 @@ describe('reservation return leg backfill', () => {
       returnOfReservationId: 'outbound-1',
       updatedById: 'admin-1'
     });
-    expect(outboundUpdate[0].where).toMatchObject({ id: 'outbound-1', roundTripId: null });
+    expect(outboundUpdate[0].where).toMatchObject({
+      id: 'outbound-1',
+      OR: [{ roundTripId: null }, { roundTripId: legUpdate[0].data.roundTripId }]
+    });
     expect(outboundUpdate[0].data.roundTripId).toBe(legUpdate[0].data.roundTripId);
   });
 
@@ -317,15 +362,41 @@ describe('reservation return leg backfill', () => {
     expect(updateMany).toHaveBeenCalledTimes(1);
   });
 
-  it('aborts a heuristic link when another writer claimed its outbound row', async () => {
-    findMany.mockResolvedValue([row({ id: 'outbound-1' }), returnRow({ id: 'return-1' })]);
-    updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+  it('rolls back one contended pair and continues with later pairs', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'outbound-1' }), returnRow({ id: 'return-1' }),
+      row({ id: 'outbound-2', passengerId: 'passenger-2' }),
+      returnRow({ id: 'return-2', passengerId: 'passenger-2' })
+    ]);
+    updateMany.mockReset()
+      .mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 1 });
 
-    await expect(applyReturnLegBackfill(prisma, 'admin-1')).rejects.toThrow(
-      'outbound reservation was claimed after the backfill plan was read'
-    );
-    expect(updateMany).toHaveBeenCalledTimes(2);
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    const result = await applyReturnLegBackfill(prisma, 'admin-1');
+
+    expect(result).toMatchObject({
+      linkedCount: 1,
+      skippedCount: 1,
+      contendedReturnReservationIds: ['return-1']
+    });
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(2);
+    expect(prismaMock.$transaction.mock.calls[0][1]).toEqual({ maxWait: 10000, timeout: 10000 });
+  });
+
+  it('treats a block outbound with a changed marker as contention', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'out-3', seatNumber: 3 }), row({ id: 'out-4', seatNumber: 4 }),
+      returnRow({ id: 'back-15', seatNumber: 15 }),
+      returnRow({ id: 'back-16', seatNumber: 16 })
+    ]);
+    updateMany.mockReset()
+      .mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 1 });
+
+    const result = await applyReturnLegBackfill(prisma, 'admin-1');
+
+    expect(result).toMatchObject({ blockCount: 1, skippedCount: 1 });
+    expect(result.contendedReturnReservationIds).toEqual(['back-15']);
   });
 
   it('refuses to write without an actor, so no row loses its author', async () => {

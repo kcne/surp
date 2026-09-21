@@ -51,12 +51,13 @@ async function main() {
       status: true,
       roundTripId: true,
       returnOfReservationId: true,
+      returnOf: { select: { status: true } },
       notes: true,
       passenger: { select: { firstName: true, lastName: true, phone: true } },
       departureStation: { select: { name: true } },
       arrivalStation: { select: { name: true } },
       ride: { select: { name: true } },
-      _count: { select: { returnLegs: true } }
+      _count: { select: { returnLegs: { where: { status: ReservationStatus.ACTIVE } } } }
     }
   });
 
@@ -88,11 +89,13 @@ async function main() {
       continue;
     }
 
-    if ((row._count.returnLegs > 0 || row.returnOfReservationId !== null) && !allowLinked) {
+    if ((row._count.returnLegs > 0 || row.returnOf?.status === ReservationStatus.ACTIVE) && !allowLinked) {
       const linkedLegs = [
-        ...(row.returnOfReservationId ? [`this return leg points at ${row.returnOfReservationId}`] : []),
+        ...(row.returnOf?.status === ReservationStatus.ACTIVE
+          ? [`this return leg points at active reservation ${row.returnOfReservationId}`]
+          : []),
         ...(row._count.returnLegs > 0
-          ? [`${row._count.returnLegs} return leg(s) point at this reservation`]
+          ? [`${row._count.returnLegs} active return leg(s) point at this reservation`]
           : [])
       ];
       console.log(

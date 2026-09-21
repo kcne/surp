@@ -28,6 +28,7 @@ function reservation(overrides: Record<string, unknown> = {}) {
     status: 'ACTIVE',
     roundTripId: null,
     returnOfReservationId: null,
+    returnOf: null,
     notes: null,
     passenger: { firstName: 'Test', lastName: 'Passenger', phone: '0600000000' },
     departureStation: { name: 'Belgrade' },
@@ -75,7 +76,7 @@ describe('cancel-reservations linked-leg guard', () => {
   }
 
   it('skips a return leg linked to an outbound reservation', async () => {
-    await run(reservation({ returnOfReservationId: 'outbound-1' }));
+    await run(reservation({ returnOfReservationId: 'outbound-1', returnOf: { status: 'ACTIVE' } }));
 
     expect(mockUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: { in: [] }, status: 'ACTIVE' } })
@@ -91,9 +92,24 @@ describe('cancel-reservations linked-leg guard', () => {
     );
   });
 
+  it('allows an outbound whose only return leg is already cancelled', async () => {
+    await run(reservation({ _count: { returnLegs: 0 } }));
+
+    expect(mockFindMany.mock.calls[0][0].select._count).toEqual({
+      select: { returnLegs: { where: { status: 'ACTIVE' } } }
+    });
+    expect(mockUpdateMany.mock.calls[0][0].where.id.in).toEqual(['reservation-1']);
+  });
+
+  it('allows a return leg whose outbound is already cancelled', async () => {
+    await run(reservation({ returnOfReservationId: 'outbound-1', returnOf: { status: 'CANCELLED' } }));
+
+    expect(mockUpdateMany.mock.calls[0][0].where.id.in).toEqual(['reservation-1']);
+  });
+
   it('allows an explicitly authorized linked return leg', async () => {
     process.env.ALLOW_LINKED = '1';
-    await run(reservation({ returnOfReservationId: 'outbound-1' }));
+    await run(reservation({ returnOfReservationId: 'outbound-1', returnOf: { status: 'ACTIVE' } }));
 
     expect(mockUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -101,5 +117,30 @@ describe('cancel-reservations linked-leg guard', () => {
         data: expect.objectContaining({ status: 'CANCELLED', updatedById: 'admin-1' })
       })
     );
+  });
+
+  it('does not write in its default dry run', async () => {
+    delete process.env.APPLY;
+    await run(reservation());
+
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    expect(mockUpdateMany).not.toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Dry run only'));
+  });
+
+  it('skips an already cancelled reservation', async () => {
+    await run(reservation({ status: 'CANCELLED' }));
+
+    expect(mockUpdateMany.mock.calls[0][0].where.id.in).toEqual([]);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('already cancelled'));
+  });
+
+  it('requires reservation ids before opening the database', () => {
+    delete process.env.RESERVATION_IDS;
+
+    expect(() => jest.isolateModules(() => require('./cancel-reservations'))).toThrow(
+      'RESERVATION_IDS is required'
+    );
+    expect(mockFindMany).not.toHaveBeenCalled();
   });
 });
