@@ -26,6 +26,7 @@
     "invariants:check": "ts-node --transpile-only scripts/check-invariants.ts",
     "seed:prod:once": "ts-node --transpile-only scripts/prod-bootstrap-once.ts",
     "reservations:groups:backfill": "ts-node --transpile-only scripts/backfill-reservation-groups.ts",
+    "passengers:duplicates:merge": "ts-node --transpile-only scripts/merge-duplicate-passengers.ts",
     "reservations:return-legs:backfill": "ts-node --transpile-only scripts/backfill-reservation-return-legs.ts",
     "schedules:realign": "ts-node --transpile-only scripts/realign-ride-day-schedules.ts"
   },
