@@ -273,17 +273,25 @@ function pairingPass(rows: BackfillRow[]): {
   // place to invent a chain of them.
   const legacy = rows.filter((row) => !row.roundTripId && row.returnOfReservationId === null);
   const paired = new Set<string>();
+  const byPassenger = new Map<string, BackfillRow[]>();
+  for (const row of legacy) {
+    const key = `${row.tenantId}:${row.passengerId}`;
+    const bucket = byPassenger.get(key);
+    if (bucket) {
+      bucket.push(row);
+    } else {
+      byPassenger.set(key, [row]);
+    }
+  }
 
   for (const leg of liveLegsFirst(legacy)) {
     if (paired.has(leg.id)) {
       continue;
     }
 
-    const reachable = legacy.filter(
+    const reachable = (byPassenger.get(`${leg.tenantId}:${leg.passengerId}`) ?? []).filter(
       (candidate) =>
         candidate.id !== leg.id &&
-        candidate.tenantId === leg.tenantId &&
-        candidate.passengerId === leg.passengerId &&
         isReversed(leg, candidate) &&
         departsBefore(candidate, leg) &&
         leg.travelDate.getTime() - candidate.travelDate.getTime() <=
@@ -447,7 +455,7 @@ export async function applyReturnLegBackfill(
 
         // Phase A leaves this a no-op — the outbound already carries the
         // marker. Phase B is where the one-way leg becomes a round trip.
-        await tx.reservation.updateMany({
+        const marked = await tx.reservation.updateMany({
           where: {
             id: link.outboundReservationId,
             tenantId: link.tenantId,
@@ -455,6 +463,9 @@ export async function applyReturnLegBackfill(
           },
           data: withUpdateAudit({ roundTripId: link.roundTripId }, actorId)
         });
+        if (link.phase === 'heuristic' && marked.count === 0) {
+          throw new Error('outbound reservation was claimed after the backfill plan was read');
+        }
 
         applied.push(link);
       }

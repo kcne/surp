@@ -308,6 +308,17 @@ describe('reservation return leg backfill', () => {
     expect(updateMany).toHaveBeenCalledTimes(1);
   });
 
+  it('aborts a heuristic link when another writer claimed its outbound row', async () => {
+    findMany.mockResolvedValue([row({ id: 'outbound-1' }), returnRow({ id: 'return-1' })]);
+    updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+
+    await expect(applyReturnLegBackfill(prisma, 'admin-1')).rejects.toThrow(
+      'outbound reservation was claimed after the backfill plan was read'
+    );
+    expect(updateMany).toHaveBeenCalledTimes(2);
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses to write without an actor, so no row loses its author', async () => {
     await expect(applyReturnLegBackfill(prisma, '  ')).rejects.toThrow('actor user id is required');
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
