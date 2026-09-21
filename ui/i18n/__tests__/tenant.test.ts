@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { formatCurrency } from "@/i18n/format"
 import {
   DEFAULT_TIME_ZONE,
   fromBusinessDate,
@@ -105,6 +106,22 @@ describe("fromBusinessDate", () => {
     expect(() => fromBusinessDate("2025-09-21T10:00:00Z")).toThrow(TypeError)
   })
 
+  it("rejects a wall-clock time that is not on a 24-hour clock", () => {
+    // An hour of 24 or 30 would silently land on the following day.
+    expect(() => fromBusinessDate("2025-09-21", DEFAULT_TIME_ZONE, { hour: 24 })).toThrow(TypeError)
+    expect(() => fromBusinessDate("2025-09-21", DEFAULT_TIME_ZONE, { hour: 30 })).toThrow(TypeError)
+    expect(() => fromBusinessDate("2025-09-21", DEFAULT_TIME_ZONE, { hour: -1 })).toThrow(TypeError)
+    expect(() => fromBusinessDate("2025-09-21", DEFAULT_TIME_ZONE, { minute: 60 })).toThrow(TypeError)
+    expect(() => fromBusinessDate("2025-09-21", DEFAULT_TIME_ZONE, { hour: 1.5 })).toThrow(TypeError)
+    expect(() => fromBusinessDate("2025-09-21", DEFAULT_TIME_ZONE, { minute: NaN })).toThrow(TypeError)
+  })
+
+  it("accepts the edges of the clock", () => {
+    expect(
+      fromBusinessDate("2025-09-21", DEFAULT_TIME_ZONE, { hour: 23, minute: 59 }).toISOString()
+    ).toBe("2025-09-21T21:59:00.000Z")
+  })
+
   it("rejects a well-shaped string that is not a real calendar day", () => {
     // `Date.UTC` would roll these over silently — to 2 March and 1 January.
     expect(() => fromBusinessDate("2025-02-30")).toThrow(TypeError)
@@ -143,6 +160,15 @@ describe("getCurrencyFractionDigits", () => {
     expect(getCurrencyFractionDigits("RSD")).toBe(0)
     expect(getCurrencyFractionDigits()).toBe(0)
     expect(getCurrencyFractionDigits("EUR")).toBe(2)
+  })
+
+  it("canonicalises the currency code, as Intl does", () => {
+    // `Intl.NumberFormat` accepts "rsd"; a case-sensitive lookup would miss
+    // the table and price dinars with two decimal places.
+    expect(getCurrencyFractionDigits("rsd")).toBe(0)
+    expect(formatCurrency(1500.5, "sr", { currency: "rsd" })).toBe(
+      formatCurrency(1500.5, "sr", { currency: "RSD" })
+    )
   })
 })
 

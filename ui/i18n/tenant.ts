@@ -27,9 +27,15 @@ const CURRENCY_FRACTION_DIGITS: Record<string, number> = {
 
 const DEFAULT_FRACTION_DIGITS = 2
 
-/** Fraction digits a currency is always rendered with, on every runtime. */
+/**
+ * Fraction digits a currency is always rendered with, on every runtime.
+ *
+ * The code is upper-cased first: `Intl.NumberFormat` canonicalises "rsd" and
+ * would price it in dinars, so a lookup miss here would silently give those
+ * call sites two decimal places.
+ */
 export function getCurrencyFractionDigits(currency: string = DEFAULT_CURRENCY): number {
-  return CURRENCY_FRACTION_DIGITS[currency] ?? DEFAULT_FRACTION_DIGITS
+  return CURRENCY_FRACTION_DIGITS[currency.toUpperCase()] ?? DEFAULT_FRACTION_DIGITS
 }
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
@@ -125,6 +131,10 @@ export function getTimeZoneOffsetMinutes(value: Date | string | number, timeZone
   return (asUtc - Math.floor(date.getTime() / 1000) * 1000) / 60000
 }
 
+function isWallClockComponent(value: number, max: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= max
+}
+
 /**
  * The instant at which a business date starts for the tenant.
  *
@@ -142,8 +152,13 @@ export function fromBusinessDate(
     throw new TypeError(`Expected a YYYY-MM-DD business date, received "${businessDate}"`)
   }
 
-  const naive =
-    midnight.getTime() + ((wallClock.hour ?? 0) * 60 + (wallClock.minute ?? 0)) * 60000
+  const hour = wallClock.hour ?? 0
+  const minute = wallClock.minute ?? 0
+  if (!isWallClockComponent(hour, 23) || !isWallClockComponent(minute, 59)) {
+    throw new TypeError(`Expected a 24-hour wall-clock time, received ${hour}:${minute}`)
+  }
+
+  const naive = midnight.getTime() + (hour * 60 + minute) * 60000
 
   const firstGuess = new Date(naive - getTimeZoneOffsetMinutes(naive, timeZone) * 60000)
   return new Date(naive - getTimeZoneOffsetMinutes(firstGuess, timeZone) * 60000)
