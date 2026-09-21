@@ -1,21 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
+import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export class CreateReservationDto {
-  @ApiPropertyOptional({
-    format: 'uuid',
-    description:
-      'Marks a whole round-trip booking. Supply returnOfReservationId instead: the server then ' +
-      'takes this marker from the outbound leg so both sides always agree. Client-supplied values ' +
-      'are still accepted while the booking screens are migrated.'
-  })
-  @IsOptional()
-  @IsUUID()
-  roundTripId?: string;
-
   @ApiPropertyOptional({
     description:
       'Set on a return leg, naming the outbound reservation it belongs to. The outbound leg must ' +

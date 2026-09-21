@@ -399,6 +399,26 @@ export class ReservationsService {
         excludeReservationIds: [existing.id]
       });
 
+      // Linking is repairable after the fact: a backfill that refuses to guess
+      // between two candidate outbound legs leaves the row unlinked, and this
+      // is how somebody who knows what the passenger asked for fixes it.
+      const returnLeg =
+        dto.returnOfReservationId !== undefined && dto.returnOfReservationId !== null
+          ? await linkReturnLeg(tx, {
+              tenantId: auth.tenantId,
+              actorId: auth.sub,
+              outboundReservationId: dto.returnOfReservationId,
+              leg: {
+                passengerId: nextPassengerId,
+                departureStationId,
+                arrivalStationId,
+                travelDate: existing.travelDate,
+                rideDepartureTime: existing.rideDepartureTime
+              },
+              excludeReservationId: existing.id
+            })
+          : null;
+
       return tx.reservation.update({
         where: {
           id
@@ -412,7 +432,14 @@ export class ReservationsService {
             ...(dto.arrivalStationId ? { arrivalStationId: dto.arrivalStationId } : {}),
             ...(dto.notes !== undefined
               ? { notes: dto.notes && dto.notes.trim() ? dto.notes.trim() : null }
-              : {})
+              : {}),
+            ...(returnLeg
+              ? {
+                  returnOfReservationId: returnLeg.returnOfReservationId,
+                  roundTripId: returnLeg.roundTripId
+                }
+              : {}),
+            ...(dto.returnOfReservationId === null ? { returnOfReservationId: null } : {})
           },
           auth.sub
         ),
@@ -879,11 +906,11 @@ export class ReservationsService {
           groupId,
           notes: dto.notes?.trim() ? dto.notes.trim() : null,
           returnOfReservationId: returnLeg?.returnOfReservationId ?? null,
-          // A linked return leg takes the marker from its outbound leg, so the
-          // two sides of a booking can never disagree about which booking they
-          // belong to. Client-supplied markers remain honoured for one-way
-          // legs until the booking screens stop minting them.
-          roundTripId: returnLeg?.roundTripId ?? dto.roundTripId ?? null
+          // The booking marker is the server's to mint: a return leg takes it
+          // from its outbound leg, so the two sides of a booking can never
+          // disagree about which booking they belong to. A one-way leg carries
+          // none until a return leg turns it into a round trip.
+          roundTripId: returnLeg?.roundTripId ?? null
         },
         auth.sub
       ),

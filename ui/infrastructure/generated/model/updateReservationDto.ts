@@ -22,4 +22,9 @@ export interface UpdateReservationDto {
    * @nullable
    */
   notes?: string | null;
+  /**
+   * Links this reservation to the outbound leg it travels back from, or unlinks it when null. The outbound leg must be active, belong to the same passenger, travel the reversed station pair, and have no other active return leg.
+   * @nullable
+   */
+  returnOfReservationId?: string | null;
 }
