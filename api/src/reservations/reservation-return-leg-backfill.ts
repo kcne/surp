@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient, ReservationStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { withUpdateAudit } from '../prisma/audit-write.helper';
+import { phoneKeyForIdentity } from '../passengers/passenger-match.util';
 import { LEGACY_RETURN_LOOKUP_DAYS } from './return-leg-link';
 
 /**
@@ -27,8 +28,29 @@ import { LEGACY_RETURN_LOOKUP_DAYS } from './return-leg-link';
 
 const MAX_LINKS_PER_TRANSACTION = 100;
 const DAY_IN_MS = 86_400_000;
+/**
+ * A leg cancelled this soon after it was booked was a mis-entry corrected on
+ * the spot, not a journey somebody lost. On the production data the six such
+ * rows all died within 7 minutes and the next one took 48, so the line is
+ * drawn with room on both sides.
+ */
+const ENTRY_CORRECTION_MINUTES = 15;
 
 type BackfillPhase = 'exact' | 'heuristic';
+
+export type ReturnLegExclusionReason =
+  /** Cancelled, but the passenger still holds a live seat on that departure. */
+  | 'reseated_or_partly_cancelled'
+  /** Cancelled, but somebody on the same phone holds a live seat on it. */
+  | 'seat_held_under_another_row'
+  /** Cancelled within minutes of being booked. */
+  | 'entry_correction';
+
+export interface ReturnLegExclusion {
+  tenantId: string;
+  reservationId: string;
+  reason: ReturnLegExclusionReason;
+}
 
 export type ReturnLegAmbiguityReason =
   /** Several outbound legs fit, and the seat number does not break the tie. */
@@ -63,6 +85,8 @@ export interface ReturnLegBackfillCounts {
   exactMatches: number;
   heuristicMatches: number;
   ambiguous: number;
+  /** Cancelled rows held back because they are not the leg they look like. */
+  excluded: number;
   /** Unlinked rows the backfill leaves alone — one-way tickets, mostly. */
   unmatched: number;
 }
@@ -70,6 +94,7 @@ export interface ReturnLegBackfillCounts {
 export interface ReturnLegBackfillPlan {
   links: ReturnLegBackfillLink[];
   ambiguous: ReturnLegBackfillAmbiguity[];
+  excluded: ReturnLegExclusion[];
   counts: ReturnLegBackfillCounts;
 }
 
@@ -92,7 +117,11 @@ const BACKFILL_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   departureStationId: true,
   arrivalStationId: true,
   roundTripId: true,
-  returnOfReservationId: true
+  returnOfReservationId: true,
+  rideId: true,
+  createdAt: true,
+  cancelledAt: true,
+  passenger: { select: { phone: true } }
 });
 
 type BackfillRow = Prisma.ReservationGetPayload<{ select: typeof BACKFILL_SELECT }>;
@@ -316,6 +345,77 @@ function pairingPass(rows: BackfillRow[]): {
 }
 
 /**
+ * Cancelled rows that are not the leg they look like.
+ *
+ * Three shapes, all found in production and all of which would otherwise be
+ * paired with a live outbound leg and reported as a broken round trip:
+ *
+ * - **Reseated or partly cancelled.** The passenger still holds a live seat on
+ *   that very departure. #14 reseated 40 reservations whose seats had been
+ *   resold while they were invisible, cancelling the old rows; and a party
+ *   that gives up one of several seats keeps travelling. #79 is explicit that
+ *   this shape must not be flagged.
+ * - **Held under another row.** Somebody on the same phone holds a live seat
+ *   on that departure. A couple's two return seats ended up under one of the
+ *   two names and the other's rows were cancelled, confirmed with the agency.
+ *   This deliberately does not merge the two people: a shared phone with
+ *   different names is a family, not a duplicate.
+ * - **Entry correction.** Booked and cancelled minutes apart, which is
+ *   somebody fixing a mistake, not a passenger losing a journey.
+ */
+function excludedLegs(rows: BackfillRow[]): Map<string, ReturnLegExclusionReason> {
+  const departureKey = (row: BackfillRow): string =>
+    `${row.tenantId}:${row.rideId}:${row.travelDate.getTime()}:${row.rideDepartureTime}`;
+
+  const liveByDeparture = new Map<string, BackfillRow[]>();
+  for (const row of rows) {
+    if (row.status !== ReservationStatus.ACTIVE) {
+      continue;
+    }
+
+    const key = departureKey(row);
+    const seats = liveByDeparture.get(key);
+    if (seats) {
+      seats.push(row);
+    } else {
+      liveByDeparture.set(key, [row]);
+    }
+  }
+
+  const excluded = new Map<string, ReturnLegExclusionReason>();
+
+  for (const row of rows) {
+    if (row.status !== ReservationStatus.CANCELLED) {
+      continue;
+    }
+
+    if (
+      row.cancelledAt &&
+      row.cancelledAt.getTime() - row.createdAt.getTime() <= ENTRY_CORRECTION_MINUTES * 60_000
+    ) {
+      excluded.set(row.id, 'entry_correction');
+      continue;
+    }
+
+    const live = liveByDeparture.get(departureKey(row)) ?? [];
+    if (live.some((seat) => seat.passengerId === row.passengerId)) {
+      excluded.set(row.id, 'reseated_or_partly_cancelled');
+      continue;
+    }
+
+    const phone = phoneKeyForIdentity(row.passenger.phone);
+    if (
+      phone.length === 8 &&
+      live.some((seat) => phoneKeyForIdentity(seat.passenger.phone) === phone)
+    ) {
+      excluded.set(row.id, 'seat_held_under_another_row');
+    }
+  }
+
+  return excluded;
+}
+
+/**
  * Passes repeat until nothing new is found, because a pass changes what the
  * next one can see: a paired row leaves the pool, which can leave a single
  * candidate where two competed, and a marker minted in phase B moves its pair
@@ -341,6 +441,19 @@ export async function planReturnLegBackfill(
   const rowsById = new Map(rows.map((row) => [row.id, row]));
   const alreadyLinked = rows.filter((row) => row.returnOfReservationId !== null).length;
 
+  // Held back before anything is paired, so they are neither a leg nor a
+  // candidate for one. The outbound leg they would have claimed simply stays
+  // unlinked, which is the right answer: nothing was lost.
+  const exclusions = excludedLegs(rows);
+  const considered = rows.filter((row) => !exclusions.has(row.id));
+  const excluded: ReturnLegExclusion[] = rows
+    .filter((row) => exclusions.has(row.id))
+    .map((row) => ({
+      tenantId: row.tenantId,
+      reservationId: row.id,
+      reason: exclusions.get(row.id) as ReturnLegExclusionReason
+    }));
+
   const links: ReturnLegBackfillLink[] = [];
   // Kept across passes and keyed by row, so the pass that saw the competition
   // is the one that describes it. Entries a later pass resolved are dropped
@@ -348,7 +461,7 @@ export async function planReturnLegBackfill(
   const ambiguousByRow = new Map<string, ReturnLegBackfillAmbiguity>();
 
   for (let pass = 0; pass < MAX_PASSES; pass += 1) {
-    const result = pairingPass(rows);
+    const result = pairingPass(considered);
     for (const entry of result.ambiguous) {
       if (!ambiguousByRow.has(entry.reservationId)) {
         ambiguousByRow.set(entry.reservationId, entry);
@@ -379,19 +492,21 @@ export async function planReturnLegBackfill(
   );
   const ambiguous = [...ambiguousByRow.values()].filter((entry) => !touched.has(entry.reservationId));
   const reported = new Set(ambiguous.map((entry) => entry.reservationId));
-  const unmatched = rows.filter(
+  const unmatched = considered.filter(
     (row) => !touched.has(row.id) && !reported.has(row.id) && row.returnOfReservationId === null
   ).length;
 
   return {
     links,
     ambiguous,
+    excluded,
     counts: {
       reservationsRead: rows.length,
       alreadyLinked,
       exactMatches,
       heuristicMatches: links.length - exactMatches,
       ambiguous: ambiguous.length,
+      excluded: excluded.length,
       unmatched
     }
   };

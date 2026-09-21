@@ -35,7 +35,8 @@ async function main() {
     `${counts.reservationsRead} reservations read, ${counts.alreadyLinked} already linked.\n` +
       `${counts.exactMatches} exact matches (shared roundTripId), ` +
       `${counts.heuristicMatches} heuristic matches.\n` +
-      `${counts.ambiguous} ambiguous rows left unlinked, ${counts.unmatched} with no candidate.`
+      `${counts.ambiguous} ambiguous rows left unlinked, ${counts.excluded} cancelled rows held ` +
+      `back as not-the-leg, ${counts.unmatched} with no candidate.`
   );
 
   // Ambiguity is a to-do list for a human, not a failure. Print enough to act
@@ -48,6 +49,14 @@ async function main() {
   }
   if (plan.ambiguous.length > 20) {
     console.log(`  ... and ${plan.ambiguous.length - 20} more; set REPORT_PATH to see them all.`);
+  }
+
+  const heldBack = plan.excluded.reduce<Record<string, number>>((tally, entry) => {
+    tally[entry.reason] = (tally[entry.reason] ?? 0) + 1;
+    return tally;
+  }, {});
+  for (const [reason, count] of Object.entries(heldBack)) {
+    console.log(`  held back ${count} x ${reason}`);
   }
 
   if (reportPath) {
