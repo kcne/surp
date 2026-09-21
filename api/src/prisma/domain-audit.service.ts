@@ -22,8 +22,10 @@ export class DomainAuditService {
         entityId,
         type: { in: [AuditEventType.DOMAIN_CREATE, AuditEventType.DOMAIN_UPDATE, AuditEventType.DOMAIN_DELETE] }
       },
+      // Retention bounds this query to 90 days. Do not silently hide the
+      // creation event merely because a frequently edited row has 25 newer
+      // changes; postmortems need the whole retained trail.
       orderBy: { createdAt: 'desc' },
-      take: 25,
       select: { actorUserId: true, type: true, metadata: true, createdAt: true }
     });
 

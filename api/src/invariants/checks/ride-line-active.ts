@@ -77,7 +77,7 @@ export const rideLineActive: ProspectiveInvariant = {
     return {
       scannedCount: scannedRideCount,
       violations: items.map((item) => ({
-        subjectType: 'ride-schedule' as const,
+        subjectType: 'ride' as const,
         subjectId: item.rideId,
         summary: `Voznja "${item.rideName}" je aktivna na deaktiviranoj liniji "${item.lineName}".`,
         detail: { ...item },

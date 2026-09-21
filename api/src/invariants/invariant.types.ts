@@ -34,6 +34,7 @@ export type ViolationSubject =
   | 'reservation'
   | 'reservation-group'
   | 'ride-instance'
+  | 'ride'
   | 'ride-schedule'
   | 'line-pair'
   | 'line'
