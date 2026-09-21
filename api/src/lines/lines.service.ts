@@ -15,7 +15,11 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
-import { PROSPECTIVE_INVARIANTS, guardProspectiveWrite } from '../invariants/prospective-write';
+import {
+  PROSPECTIVE_INVARIANTS,
+  ProspectiveWriteConsent,
+  guardProspectiveWrite
+} from '../invariants/prospective-write';
 import { CreateLineDto } from './dto/create-line.dto';
 import { LineResponseDto, PaginatedLinesResponseDto } from './dto/line.response.dto';
 import { LineStopInputDto } from './dto/line-stop.dto';
@@ -428,9 +432,13 @@ export class LinesService {
     auth: AccessTokenPayload,
     id: string,
     intermediateStops: LineStopInputDto[],
-    confirmed = false
+    consent: ProspectiveWriteConsent = { confirmed: false, repair: false }
   ): Promise<LineResponseDto> {
-    return this.update(auth, id, { intermediateStops, confirmBreakingChange: confirmed });
+    return this.update(auth, id, {
+      intermediateStops,
+      confirmBreakingChange: consent.confirmed,
+      repairBreakingChange: consent.repair
+    });
   }
 
   async createReverse(auth: AccessTokenPayload, id: string): Promise<LineResponseDto> {

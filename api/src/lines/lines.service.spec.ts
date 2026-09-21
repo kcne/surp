@@ -486,6 +486,24 @@ describe('LinesService', () => {
       'station-b'
     ]);
   });
+
+  it('forwards both consent answers from replace-stops to the update path', async () => {
+    const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+
+    await service.replaceStops(auth, 'line-1', [{ stationId: 'station-c', orderIndex: 1 }], {
+      confirmed: false,
+      repair: true
+    });
+
+    expect(update).toHaveBeenCalledWith(auth, 'line-1', {
+      intermediateStops: [{ stationId: 'station-c', orderIndex: 1 }],
+      confirmBreakingChange: false,
+      repairBreakingChange: true
+    });
+
+    update.mockRestore();
+  });
+
   it('stores boarding rules per stop and flips them on the paired direction', async () => {
     prismaMock.line.findFirst.mockResolvedValue({
       ...baseLine,

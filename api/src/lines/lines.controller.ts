@@ -127,12 +127,10 @@ export class LinesController {
     @Param('id') id: string,
     @Body() dto: ReplaceLineStopsDto
   ): Promise<LineResponseDto> {
-    return this.linesService.replaceStops(
-      request.auth!,
-      id,
-      dto.intermediateStops,
-      dto.confirmBreakingChange === true
-    );
+    return this.linesService.replaceStops(request.auth!, id, dto.intermediateStops, {
+      confirmed: dto.confirmBreakingChange === true,
+      repair: dto.repairBreakingChange === true
+    });
   }
 
   @Post(':id/reverse')
