@@ -135,7 +135,12 @@ export function useUpdateRideMutation() {
     }) => {
       const isConfirmed = (step: string) => confirmedSteps?.includes(step) === true
       const hasExceptionsUpdate = Array.isArray(payload.exceptions)
-      let rideUpdateLanded = false
+      // Whether any request in this edit has already been written. Every step
+      // that lands sets it, not just the ride: an exception-only edit that
+      // removes one exception and is then refused on the next has left the
+      // first removal behind, and the dialog must not offer to cancel as
+      // though nothing had happened yet.
+      let anyWriteLanded = false
 
       if (hasPatchableFields(payload)) {
         // The day schedules travel with the ride update instead of going ahead
@@ -150,7 +155,7 @@ export function useUpdateRideMutation() {
         // Exceptions cannot join it — they are their own endpoints — so they
         // follow, and they can be refused too. Two things follow from that:
         // once this call has landed a later refusal is no longer a clean
-        // "nothing happened", which `rideUpdateLanded` tells the dialog to say;
+        // "nothing happened", which `anyWriteLanded` tells the dialog to say;
         // and each request is confirmed under its own key, so answering for
         // this one never answers for an exception nobody was asked about.
         const updatePayload = toUpdateRideDto(payload)
@@ -171,7 +176,7 @@ export function useUpdateRideMutation() {
           throw new Error("Neuspesno azuriranje voznje")
         }
 
-        rideUpdateLanded = true
+        anyWriteLanded = true
       }
 
       if (hasExceptionsUpdate) {
@@ -193,10 +198,12 @@ export function useUpdateRideMutation() {
           const step = `exception:remove:${exception.id}`
           const removeResponse = await ridesControllerRemoveException(id, exception.id, {
             confirmBreakingChange: isConfirmed(step),
-          }).catch((error: unknown) => throwBreakingChangeConflict(error, step, rideUpdateLanded))
+          }).catch((error: unknown) => throwBreakingChangeConflict(error, step, anyWriteLanded))
           if (!isRideMutationSuccess(removeResponse)) {
             throw new Error("Neuspesno uklanjanje izuzetka voznje")
           }
+
+          anyWriteLanded = true
         }
 
         for (const exception of toAdd) {
@@ -204,10 +211,12 @@ export function useUpdateRideMutation() {
           const addResponse = await ridesControllerAddException(id, {
             ...toCreateRideExceptionDto(exception),
             confirmBreakingChange: isConfirmed(step),
-          }).catch((error: unknown) => throwBreakingChangeConflict(error, step, rideUpdateLanded))
+          }).catch((error: unknown) => throwBreakingChangeConflict(error, step, anyWriteLanded))
           if (!isRideMutationSuccess(addResponse)) {
             throw new Error("Neuspesno dodavanje izuzetka voznje")
           }
+
+          anyWriteLanded = true
         }
       }
 

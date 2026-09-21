@@ -51,7 +51,8 @@ export interface Violation {
    * three dead stations rather than one. A prospective write compares subjects
    * by identity, so without this a change that deepens a violation it did not
    * create would look identical to the baseline and pass unwarned. Checks whose
-   * subject is a single reservation have nothing to count and leave it unset.
+   * subject can only ever hold one problem have nothing to count and leave it
+   * unset.
    */
   magnitude?: number;
   /** One sentence, in Serbian: it is read in Settings by agency staff. */

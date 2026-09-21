@@ -18,7 +18,11 @@ describe('RidesService', () => {
       groupBy: jest.fn(),
       count: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       updateMany: jest.fn()
+    },
+    station: {
+      findMany: jest.fn()
     },
     ride: {
       create: jest.fn(),
@@ -52,6 +56,20 @@ describe('RidesService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prismaMock.reservation.groupBy.mockResolvedValue([]);
+    // Nothing sold and nothing to name: the prospective checks find an empty
+    // window and report no violations, which is what every test that is not
+    // about them wants.
+    prismaMock.reservation.findMany.mockResolvedValue([]);
+    prismaMock.ride.findMany.mockResolvedValue([]);
+    prismaMock.station.findMany.mockResolvedValue([]);
+    // The guarded writes read what they are about to write inside their own
+    // transaction, so the callback form has to be handed a client. Tests that
+    // need the guard's two passes to see different states replace this.
+    prismaMock.$transaction.mockImplementation(async (arg: unknown) =>
+      typeof arg === 'function'
+        ? (arg as (tx: typeof prismaMock) => unknown)(prismaMock)
+        : undefined
+    );
     service = new RidesService(prismaMock as never);
   });
 
@@ -187,6 +205,62 @@ describe('RidesService', () => {
         status: RideStatus.DRAFT
       })
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  // The merge below fills every field the DTO omits from the stored ride and
+  // writes the result back. Read outside the transaction that writes it, a
+  // concurrent edit landing in between is overwritten with values read before
+  // it existed, and nothing records that it happened.
+  it('reads the ride it merges inside the transaction that writes it', async () => {
+    const stored = {
+      id: 'ride-1',
+      tenantId: 'tenant-1',
+      lineId: 'line-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      name: 'Ride',
+      capacity: 38,
+      type: RideType.RECURRING,
+      status: RideStatus.ACTIVE,
+      recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      line: {
+        id: 'line-1',
+        name: 'Line 1',
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b',
+        intermediateStops: []
+      },
+      daySchedules: [
+        {
+          dayOfWeek: 1,
+          stationTimes: [
+            { stationId: 'station-a', orderIndex: 0, time: '09:00' },
+            { stationId: 'station-b', orderIndex: 1, time: '10:30' }
+          ]
+        }
+      ],
+      exceptions: []
+    };
+
+    const readInTransaction = jest.fn().mockResolvedValue(stored);
+
+    prismaMock.$transaction.mockImplementation(async (fn: never) =>
+      (fn as unknown as (tx: unknown) => Promise<unknown>)({
+        ...prismaMock,
+        ride: { ...prismaMock.ride, findFirst: readInTransaction }
+      })
+    );
+
+    await service.update(auth, 'ride-1', { capacity: 40 });
+
+    expect(readInTransaction).toHaveBeenCalled();
+    expect(prismaMock.ride.findFirst).not.toHaveBeenCalled();
   });
 
   describe('lowering capacity under a sold seat', () => {

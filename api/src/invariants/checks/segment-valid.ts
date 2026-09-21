@@ -147,6 +147,15 @@ export const reservationSegmentValid: ProspectiveInvariant = {
       violations: items.map((item) => ({
         subjectType: 'reservation' as const,
         subjectId: item.reservationId,
+        // One reservation can hold up to three independent faults, so the
+        // subject alone does not say whether a write made things worse. An
+        // edit that reverses the stop order on a reservation whose departure
+        // station had already stopped boarding would otherwise compare equal
+        // to the baseline and go through unwarned.
+        magnitude:
+          Number(item.orderReversed) +
+          Number(item.departureNotBoarding) +
+          Number(item.arrivalNotDropoff),
         summary: `${item.passengerName}, ${item.travelDate}, polazak ${item.departureTime}: ${describeProblems(item)}.`,
         detail: { ...item },
         canRepair: false

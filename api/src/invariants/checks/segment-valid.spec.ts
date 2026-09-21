@@ -208,4 +208,48 @@ describe('reservation.segmentValid', () => {
     expect(result.violations[0].summary).toContain('ukrcavanje');
     expect(reservationSegmentValid.repair).toBeUndefined();
   });
+
+  // The subject is one reservation either way, so a prospective write can only
+  // tell that an edit deepened an existing fault by counting the faults.
+  it('counts the faults on a reservation so a write that adds one is visible', async () => {
+    prismaMock.ride.findMany.mockResolvedValue([
+      rideWith({
+        line: {
+          name: 'Subotica - Beograd',
+          departureStationId: 'station-su',
+          arrivalStationId: 'station-bg',
+          intermediateStops: [{ stationId: 'station-ns', isBoarding: true, isDropoff: true }]
+        }
+      })
+    ]);
+    prismaMock.reservation.findMany.mockResolvedValue([
+      reservation({ departureStationId: 'station-bg', arrivalStationId: 'station-ns' })
+    ]);
+
+    const result = await reservationSegmentValid.check(ctx);
+
+    // Beograd is the far end of the reversed route: it now sits after Novi Sad
+    // and, as a terminal arrival, boards nobody. Two faults on one subject.
+    expect(result.violations[0].magnitude).toBe(2);
+  });
+
+  it('counts a single fault as one', async () => {
+    prismaMock.ride.findMany.mockResolvedValue([
+      rideWith({
+        line: {
+          name: 'Beograd - Subotica',
+          departureStationId: 'station-bg',
+          arrivalStationId: 'station-su',
+          intermediateStops: [{ stationId: 'station-ns', isBoarding: false, isDropoff: true }]
+        }
+      })
+    ]);
+    prismaMock.reservation.findMany.mockResolvedValue([
+      reservation({ departureStationId: 'station-ns', arrivalStationId: 'station-su' })
+    ]);
+
+    const result = await reservationSegmentValid.check(ctx);
+
+    expect(result.violations[0].magnitude).toBe(1);
+  });
 });

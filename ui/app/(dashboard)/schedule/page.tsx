@@ -122,7 +122,13 @@ export default function SchedulePage() {
       ],
     }
 
-    await updateRideMutation.mutateAsync({
+    // Through the shared confirmation rather than straight at the mutation:
+    // cancelling an instance writes a SKIP exception, which is the one write
+    // the ride-exception guard refuses when reservations are sold on that
+    // date. Called directly, that refusal would raise no toast — the mutation
+    // deliberately stays quiet on it — and open no dialog, so the instance
+    // would simply stay uncancelled with nothing said.
+    await confirmableUpdate.run({
       id: ride.id,
       payload: {
         exceptions: nextRide.exceptions,

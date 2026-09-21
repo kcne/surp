@@ -528,68 +528,76 @@ export class RidesService {
   }
 
   async update(auth: AccessTokenPayload, id: string, dto: UpdateRideDto): Promise<RideResponseDto> {
-    const existing = await this.getRideOrThrow(auth.tenantId, id);
-
-    const nextType = dto.type ?? existing.type;
-    const nextLineId = dto.lineId ?? existing.lineId;
-
-    let nextLineName = existing.line.name;
-    let nextRouteStationIds = [
-      existing.line.departureStationId,
-      ...existing.line.intermediateStops.map((item) => item.stationId),
-      existing.line.arrivalStationId
-    ];
-    if (nextLineId !== existing.lineId) {
-      const line = await this.ensureLineInTenant(auth.tenantId, nextLineId);
-      nextLineName = line.name;
-      nextRouteStationIds = line.routeStationIds;
-    }
-
-    const nextDaySchedules =
-      dto.daySchedules !== undefined
-        ? dto.daySchedules
-        : existing.daySchedules.map((item) => ({
-            dayOfWeek: item.dayOfWeek,
-            stationTimes: item.stationTimes.map((stationTime) => ({
-              stationId: stationTime.stationId,
-              orderIndex: stationTime.orderIndex,
-              time: stationTime.time ?? undefined
-            }))
-          }));
-
-    const normalizedSchedule = this.normalizeAndValidateSchedule({
-      type: nextType,
-      routeStationIds: nextRouteStationIds,
-      recurringStartDate:
-        dto.recurringStartDate !== undefined
-          ? dto.recurringStartDate
-          : this.formatDate(existing.recurringStartDate),
-      recurringEndDate:
-        dto.recurringEndDate !== undefined
-          ? dto.recurringEndDate
-          : this.formatDate(existing.recurringEndDate),
-      oneTimeDate:
-        dto.oneTimeDate !== undefined ? dto.oneTimeDate : this.formatDate(existing.oneTimeDate),
-      oneTimeDepartureTime:
-        dto.oneTimeDepartureTime !== undefined
-          ? dto.oneTimeDepartureTime
-          : (existing.oneTimeDepartureTime ?? undefined),
-      oneTimeArrivalTime:
-        dto.oneTimeArrivalTime !== undefined
-          ? dto.oneTimeArrivalTime
-          : (existing.oneTimeArrivalTime ?? undefined),
-      daySchedules: nextDaySchedules
-    });
-
-    const nextStatus = dto.status ?? existing.status;
-    this.validateStatusTransition(existing.status, nextStatus);
-
+    // Every field the DTO leaves out is filled in from the stored ride and
+    // written back, so this is a read-modify-write and it belongs inside one
+    // transaction. Read outside it, the merge is computed from a snapshot that
+    // a concurrent edit can invalidate before this one writes, and that edit is
+    // then overwritten with values read before it existed — a departure time
+    // moved back, a capacity change undone, with nothing to show it happened.
+    // Inside, the read and the write are one serializable unit and Postgres
+    // aborts the loser instead.
     const updated = await guardProspectiveWrite(
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       PROSPECTIVE_INVARIANTS.rideUpdate,
       dto.confirmBreakingChange === true,
       async (tx) => {
+        const existing = await this.getRideOrThrow(auth.tenantId, id, tx);
+
+        const nextType = dto.type ?? existing.type;
+        const nextLineId = dto.lineId ?? existing.lineId;
+
+        let nextLineName = existing.line.name;
+        let nextRouteStationIds = [
+          existing.line.departureStationId,
+          ...existing.line.intermediateStops.map((item) => item.stationId),
+          existing.line.arrivalStationId
+        ];
+        if (nextLineId !== existing.lineId) {
+          const line = await this.ensureLineInTenant(auth.tenantId, nextLineId, tx);
+          nextLineName = line.name;
+          nextRouteStationIds = line.routeStationIds;
+        }
+
+        const nextDaySchedules =
+          dto.daySchedules !== undefined
+            ? dto.daySchedules
+            : existing.daySchedules.map((item) => ({
+                dayOfWeek: item.dayOfWeek,
+                stationTimes: item.stationTimes.map((stationTime) => ({
+                  stationId: stationTime.stationId,
+                  orderIndex: stationTime.orderIndex,
+                  time: stationTime.time ?? undefined
+                }))
+              }));
+
+        const normalizedSchedule = this.normalizeAndValidateSchedule({
+          type: nextType,
+          routeStationIds: nextRouteStationIds,
+          recurringStartDate:
+            dto.recurringStartDate !== undefined
+              ? dto.recurringStartDate
+              : this.formatDate(existing.recurringStartDate),
+          recurringEndDate:
+            dto.recurringEndDate !== undefined
+              ? dto.recurringEndDate
+              : this.formatDate(existing.recurringEndDate),
+          oneTimeDate:
+            dto.oneTimeDate !== undefined ? dto.oneTimeDate : this.formatDate(existing.oneTimeDate),
+          oneTimeDepartureTime:
+            dto.oneTimeDepartureTime !== undefined
+              ? dto.oneTimeDepartureTime
+              : (existing.oneTimeDepartureTime ?? undefined),
+          oneTimeArrivalTime:
+            dto.oneTimeArrivalTime !== undefined
+              ? dto.oneTimeArrivalTime
+              : (existing.oneTimeArrivalTime ?? undefined),
+          daySchedules: nextDaySchedules
+        });
+
+        const nextStatus = dto.status ?? existing.status;
+        this.validateStatusTransition(existing.status, nextStatus);
+
         await tx.ride.update({
           where: {
             id
@@ -643,26 +651,31 @@ export class RidesService {
     daySchedules: RideDayScheduleInputDto[],
     confirmed = false
   ): Promise<RideResponseDto> {
-    const ride = await this.getRideOrThrow(auth.tenantId, id);
-
-    if (ride.type !== RideType.RECURRING) {
-      throw new BadRequestException('Day-times can only be managed for recurring rides');
-    }
-
-    const routeStationIds = [
-      ride.line.departureStationId,
-      ...ride.line.intermediateStops.map((item) => item.stationId),
-      ride.line.arrivalStationId
-    ];
-
-    this.validateDaySchedules(daySchedules, routeStationIds);
-
+    // The route these times are checked against is read inside the write's own
+    // transaction. Read before it, a line edit could land in between and leave
+    // this call writing station times for stops the route no longer has —
+    // validated against a route that stopped being true while the check was
+    // still passing.
     const updated = await guardProspectiveWrite(
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       PROSPECTIVE_INVARIANTS.rideUpdate,
       confirmed,
       async (tx) => {
+        const ride = await this.getRideOrThrow(auth.tenantId, id, tx);
+
+        if (ride.type !== RideType.RECURRING) {
+          throw new BadRequestException('Day-times can only be managed for recurring rides');
+        }
+
+        const routeStationIds = [
+          ride.line.departureStationId,
+          ...ride.line.intermediateStops.map((item) => item.stationId),
+          ride.line.arrivalStationId
+        ];
+
+        this.validateDaySchedules(daySchedules, routeStationIds);
+
         await this.replaceRideDaySchedulesTx(
           tx,
           auth.tenantId,
@@ -911,8 +924,18 @@ export class RidesService {
     return this.toRideResponse(deactivated);
   }
 
-  private async getRideOrThrow(tenantId: string, id: string): Promise<SelectedRide> {
-    const ride = await this.prisma.ride.findFirst({
+  /**
+   * `client` defaults to the unguarded connection, but a caller that is going
+   * to write what it reads passes its transaction instead: the read then joins
+   * the write in one serializable unit, and a concurrent edit is aborted rather
+   * than quietly overwritten.
+   */
+  private async getRideOrThrow(
+    tenantId: string,
+    id: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma
+  ): Promise<SelectedRide> {
+    const ride = await client.ride.findFirst({
       where: {
         id,
         tenantId
@@ -929,9 +952,10 @@ export class RidesService {
 
   private async ensureLineInTenant(
     tenantId: string,
-    lineId: string
+    lineId: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma
   ): Promise<{ id: string; name: string; routeStationIds: string[] }> {
-    const line = await this.prisma.line.findFirst({
+    const line = await client.line.findFirst({
       where: {
         id: lineId,
         tenantId

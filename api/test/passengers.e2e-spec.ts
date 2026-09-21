@@ -25,6 +25,14 @@ describe('PassengersController (e2e)', () => {
       findFirst: jest.fn(),
       update: jest.fn(),
       delete: jest.fn()
+    },
+    // `reservation.passengerActive` loads the reservation window inside the
+    // deactivation guard's transaction, and that window reads both tables.
+    reservation: {
+      findMany: jest.fn()
+    },
+    ride: {
+      findMany: jest.fn()
     }
   };
 
@@ -103,26 +111,41 @@ describe('PassengersController (e2e)', () => {
       updatedAt: new Date()
     });
 
-    prismaMock.$transaction.mockResolvedValue([
-      [
-        {
-          id: 'passenger-1',
-          tenantId: 'tenant-1',
-          createdById: 'admin-1',
-          updatedById: 'admin-1',
-          firstName: 'Mila',
-          lastName: 'Markovic',
-          phone: '+381640000111',
-          email: 'mila.markovic@demo.local',
-          passengerType: PassengerType.ADULT,
-          isActive: true,
-          notes: null,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      ],
-      1
-    ]);
+    prismaMock.reservation.findMany.mockResolvedValue([]);
+    prismaMock.ride.findMany.mockResolvedValue([]);
+
+    // `$transaction` is asked two different questions here. The list endpoint
+    // batches its queries as an array and wants the results back in order;
+    // `guardProspectiveWrite` hands in a callback and wants a transaction
+    // client to run it against. The callback form gets the mock itself, so a
+    // guarded write reaches the same model stubs as an unguarded one, and the
+    // checks it runs on the way find their tables rather than `undefined`.
+    prismaMock.$transaction.mockImplementation(async (arg: unknown) => {
+      if (typeof arg === 'function') {
+        return (arg as (tx: typeof prismaMock) => unknown)(prismaMock);
+      }
+
+      return [
+        [
+          {
+            id: 'passenger-1',
+            tenantId: 'tenant-1',
+            createdById: 'admin-1',
+            updatedById: 'admin-1',
+            firstName: 'Mila',
+            lastName: 'Markovic',
+            phone: '+381640000111',
+            email: 'mila.markovic@demo.local',
+            passengerType: PassengerType.ADULT,
+            isActive: true,
+            notes: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        ],
+        1
+      ];
+    });
 
     prismaMock.passenger.findFirst.mockResolvedValue({
       id: 'passenger-1',
