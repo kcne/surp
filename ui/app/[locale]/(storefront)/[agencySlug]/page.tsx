@@ -22,9 +22,12 @@ import {
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { absoluteUrl, jsonLd, siteConfig } from "@/lib/seo"
+import { setActiveLocale } from "@/i18n/active-locale"
+import { resolveRequestLocale } from "@/i18n/resolve-locale"
 
 interface StorefrontPageProps {
   params: {
+    locale: string
     agencySlug: string
   }
 }
@@ -74,6 +77,11 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
 }
 
 export default async function StorefrontPage({ params }: StorefrontPageProps) {
+  // The 404 boundary below has no params of its own, so this request's locale
+  // is handed to it here, before anything can unwind into it. See
+  // `i18n/active-locale.ts`.
+  setActiveLocale(resolveRequestLocale(params))
+
   const storefront = await fetchPublicAgencyStorefront(params.agencySlug)
 
   if (!storefront) {

@@ -15,6 +15,7 @@ import { scheduleMatchesRoute } from './checks/schedule-matches-route';
 import { reservationStationsOnRoute } from './checks/stations-on-route';
 import { terminiReachable } from './checks/termini-reachable';
 import { backupFresh } from './checks/backup-fresh';
+import { tenantSlugReserved } from './checks/tenant-slug-reserved';
 
 /**
  * Every invariant the system knows about.
@@ -44,7 +45,8 @@ export const INVARIANTS: readonly Invariant[] = [
   pairedDirectionsAgree,
   terminiReachable,
   routeStationsActive,
-  rideLineActive
+  rideLineActive,
+  tenantSlugReserved
 ];
 
 export function findInvariant(key: string): Invariant | undefined {

@@ -5,6 +5,34 @@
   "unauthorized": "Your session expired. Please sign in again.",
   "forbidden": "You do not have permission for this action.",
   "notFound": "The requested record was not found.",
+  "notFoundPage": {
+    "app": {
+      "badge": "Error 404",
+      "title": "Page not found",
+      "description": "The link you opened does not exist or has moved. You can go back or continue to the platform home page.",
+      "toDashboard": "Back to dashboard",
+      "toReservations": "Go to reservations"
+    },
+    "public": {
+      "badge": "Error 404",
+      "title": "This page could not be found.",
+      "description": "The link may have changed or the page no longer exists. Continue to the main SURP pages.",
+      "toHome": "Back to home",
+      "toContact": "Book a demo",
+      "links": {
+        "features": "Features",
+        "pricing": "Pricing",
+        "forAgencies": "For agencies",
+        "blog": "Blog"
+      }
+    },
+    "storefront": {
+      "badge": "404",
+      "title": "Agency storefront not found",
+      "description": "This agency is not published or is currently unavailable.",
+      "toLogin": "Staff sign in"
+    }
+  },
   "conflict": "This record changed in the meantime. Refresh the page.",
   "validation": "Check the values you entered.",
   "serverError": "The server is unavailable right now. Try again later.",

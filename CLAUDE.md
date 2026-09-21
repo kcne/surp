@@ -28,6 +28,11 @@ Text a user typed — passenger names, notes, station names, an agency's own
 storefront copy — is rendered as written and never translated. Tenant timezone
 and currency follow the agency, not the reader's language.
 
+Serbian URLs are unprefixed and English adds `/en`; slugs are never
+translated. See `ui/docs/locale-routing.md` before changing anything about
+routing, `not-found` pages, or tenant slugs — it records two Next.js 14
+constraints that silently cost CDN caching or the 404 pages when broken.
+
 See `ui/docs/localization-inventory.md` for which issue owns which surface and
 `ui/docs/adding-a-locale.md` for adding a language.
 

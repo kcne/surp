@@ -6,11 +6,14 @@ import { CtaBand } from "@/components/marketing/cta-band"
 import { formatDate } from "@/components/marketing/blog-card"
 import { MarkdownContent } from "@/components/marketing/markdown-content"
 import { MarketingSection } from "@/components/marketing/section"
+import { setActiveLocale } from "@/i18n/active-locale"
+import { resolveRequestLocale } from "@/i18n/resolve-locale"
 import { getAllBlogPosts, getBlogPost, getBlogSlugs } from "@/lib/blog"
 import { absoluteUrl, breadcrumbJsonLd, buildMetadata, jsonLd, siteConfig } from "@/lib/seo"
 
 type BlogPostPageProps = {
   params: {
+    locale: string
     slug: string
   }
 }
@@ -38,6 +41,10 @@ export function generateMetadata({ params }: BlogPostPageProps): Metadata {
 }
 
 export default function BlogPostPage({ params }: BlogPostPageProps) {
+  // The 404 boundary below has no params of its own. See
+  // `i18n/active-locale.ts`.
+  setActiveLocale(resolveRequestLocale(params))
+
   const post = safeGetPost(params.slug)
 
   if (!post) {
