@@ -50,6 +50,7 @@ import type {
   CreateTicketCommentDto,
   CreateTicketDto,
   CreateUserDto,
+  DomainAuditEventResponseDto,
   InvariantDetailDto,
   InvariantRepairResultDto,
   InvariantSummaryDto,
@@ -162,7 +163,7 @@ export type healthControllerHealthResponse = (healthControllerHealthResponseSucc
 export const getHealthControllerHealthUrl = () => {
 
 
-  
+
 
   return `/health`
 }
@@ -3085,6 +3086,133 @@ export const useLinesControllerCreateReverse = <TError = ErrorType<void>,
       return useMutation(getLinesControllerCreateReverseMutationOptions(options), queryClient);
     }
     
+/**
+ * @summary Recent field-level changes to one domain row, for tracing a data-integrity violation.
+ */
+export type maintenanceControllerGetDomainAuditResponse200 = {
+  data: DomainAuditEventResponseDto[]
+  status: 200
+}
+
+export type maintenanceControllerGetDomainAuditResponse401 = {
+  data: void
+  status: 401
+}
+
+export type maintenanceControllerGetDomainAuditResponse403 = {
+  data: void
+  status: 403
+}
+
+export type maintenanceControllerGetDomainAuditResponseSuccess = (maintenanceControllerGetDomainAuditResponse200) & {
+  headers: Headers;
+};
+export type maintenanceControllerGetDomainAuditResponseError = (maintenanceControllerGetDomainAuditResponse401 | maintenanceControllerGetDomainAuditResponse403) & {
+  headers: Headers;
+};
+
+export type maintenanceControllerGetDomainAuditResponse = (maintenanceControllerGetDomainAuditResponseSuccess | maintenanceControllerGetDomainAuditResponseError)
+
+export const getMaintenanceControllerGetDomainAuditUrl = (entityType: string,
+    entityId: string,) => {
+
+
+  return `/maintenance/audit/${entityType}/${entityId}`
+}
+
+export const maintenanceControllerGetDomainAudit = async (entityType: string,
+    entityId: string, options?: RequestInit): Promise<maintenanceControllerGetDomainAuditResponse> => {
+
+  return customInstance<maintenanceControllerGetDomainAuditResponse>(getMaintenanceControllerGetDomainAuditUrl(entityType,entityId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getMaintenanceControllerGetDomainAuditQueryKey = (entityType: string,
+    entityId: string,) => {
+    return [
+    `/maintenance/audit/${entityType}/${entityId}`
+    ] as const;
+    }
+
+
+export const getMaintenanceControllerGetDomainAuditQueryOptions = <TData = Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError = ErrorType<void>>(entityType: string,
+    entityId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getMaintenanceControllerGetDomainAuditQueryKey(entityType,entityId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>> = ({ signal }) => maintenanceControllerGetDomainAudit(entityType,entityId, { signal, ...requestOptions });
+
+
+
+   return  { queryKey, queryFn, enabled: !!(entityType && entityId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type MaintenanceControllerGetDomainAuditQueryResult = NonNullable<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>>
+export type MaintenanceControllerGetDomainAuditQueryError = ErrorType<void>
+
+
+export function useMaintenanceControllerGetDomainAudit<TData = Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError = ErrorType<void>>(
+ entityType: string,
+    entityId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerGetDomainAudit<TData = Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError = ErrorType<void>>(
+ entityType: string,
+    entityId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>,
+          TError,
+          Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMaintenanceControllerGetDomainAudit<TData = Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError = ErrorType<void>>(
+ entityType: string,
+    entityId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Recent field-level changes to one domain row, for tracing a data-integrity violation.
+ */
+
+export function useMaintenanceControllerGetDomainAudit<TData = Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError = ErrorType<void>>(
+ entityType: string,
+    entityId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof maintenanceControllerGetDomainAudit>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getMaintenanceControllerGetDomainAuditQueryOptions(entityType,entityId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
 /**
  * @summary Report every data integrity check as of the last stored run, with the date each failing check started failing. Runs nothing: opening the page must not start sixteen table scans, and the honest answer is what the last check found plus when it ran.
  */

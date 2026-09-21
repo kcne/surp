@@ -20,6 +20,8 @@ import {
 import { InvariantRepairResultDto } from '../invariants/dto/invariant.response.dto';
 import { InvariantHistoryService } from '../invariants/invariant-history.service';
 import { InvariantsService, scopeOf } from '../invariants/invariants.service';
+import { DomainAuditService } from '../prisma/domain-audit.service';
+import { DomainAuditEventResponseDto } from './dto/domain-audit.response.dto';
 
 /**
  * Everything behind Settings → Data integrity.
@@ -39,8 +41,28 @@ import { InvariantsService, scopeOf } from '../invariants/invariants.service';
 export class MaintenanceController {
   constructor(
     private readonly invariantsService: InvariantsService,
-    private readonly invariantHistory: InvariantHistoryService
+    private readonly invariantHistory: InvariantHistoryService,
+    private readonly domainAudit: DomainAuditService
   ) {}
+
+  @Get('audit/:entityType/:entityId')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary:
+      'Recent field-level changes to one domain row, for tracing a data-integrity violation.'
+  })
+  @ApiParam({ name: 'entityType', example: 'LineStop' })
+  @ApiParam({ name: 'entityId', example: 'clx9stop123' })
+  @ApiOkResponse({ type: [DomainAuditEventResponseDto] })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  getDomainAudit(
+    @Req() request: RequestWithAuth,
+    @Param('entityType') entityType: string,
+    @Param('entityId') entityId: string
+  ): Promise<DomainAuditEventResponseDto[]> {
+    return this.domainAudit.history(request.auth!.tenantId, entityType, entityId);
+  }
 
   @Get('invariants/summary')
   @Roles(UserRole.ADMIN)

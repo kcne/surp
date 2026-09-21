@@ -60,6 +60,9 @@ enum ReservationStatus {
 
 enum AuditEventType {
   PASSWORD_RESET_ADMIN
+  DOMAIN_CREATE
+  DOMAIN_UPDATE
+  DOMAIN_DELETE
 }
 
 enum TicketStatus {
@@ -590,12 +593,15 @@ model AuditEvent {
   tenantId     String
   actorUserId  String
   targetUserId String?
+  entityType   String?
+  entityId     String?
   type         AuditEventType
   metadata     Json?
   createdAt    DateTime       @default(now())
   tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, type])
+  @@index([tenantId, entityType, entityId, createdAt])
   @@index([actorUserId])
   @@index([targetUserId])
   @@index([createdAt])

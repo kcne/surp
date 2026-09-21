@@ -1617,6 +1617,70 @@
         ]
       }
     },
+    "/maintenance/audit/{entityType}/{entityId}": {
+      "get": {
+        "operationId": "MaintenanceController_getDomainAudit",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityType",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "LineStop",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "clx9stop123",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DomainAuditEventResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Recent field-level changes to one domain row, for tracing a data-integrity violation.",
+        "tags": [
+          "Maintenance"
+        ]
+      }
+    },
     "/maintenance/invariants/summary": {
       "get": {
         "operationId": "MaintenanceController_getInvariantSummary",
@@ -6836,6 +6900,43 @@
         },
         "required": [
           "intermediateStops"
+        ]
+      },
+      "DomainAuditEventResponseDto": {
+        "type": "object",
+        "properties": {
+          "actorUserId": {
+            "type": "string",
+            "example": "clx9user123"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "create",
+              "update",
+              "delete"
+            ],
+            "example": "update"
+          },
+          "changes": {
+            "type": "object",
+            "example": {
+              "stationId": {
+                "before": "old",
+                "after": "new"
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-09-21T08:15:00.000Z"
+          }
+        },
+        "required": [
+          "actorUserId",
+          "action",
+          "changes",
+          "createdAt"
         ]
       },
       "InvariantRunSummaryDto": {
