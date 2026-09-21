@@ -136,6 +136,36 @@ describe('duplicate passenger merge', () => {
     expect(plan.groups[0].reservationsToRepoint).toBe(2);
   });
 
+  it('keeps an active row when an inactive duplicate has more reservations', async () => {
+    findMany.mockResolvedValue([
+      passenger({ id: 'inactive-busy', reservations: 5, isActive: false }),
+      passenger({ id: 'active-live', reservations: 1 })
+    ]);
+    reservationUpdateMany.mockResolvedValue({ count: 5 });
+
+    const plan = await planDuplicatePassengerMerge(prisma);
+
+    expect(plan.groups[0]).toMatchObject({
+      canonicalPassengerId: 'active-live',
+      retiredPassengerIds: ['inactive-busy'],
+      reservationsToRepoint: 5
+    });
+
+    await applyDuplicatePassengerMerge(prisma, 'admin-1', plan);
+
+    expect(reservationUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { tenantId: 'tenant-1', passengerId: { in: ['inactive-busy'] } },
+        data: expect.objectContaining({ passengerId: 'active-live' })
+      })
+    );
+    expect(passengerUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: ['inactive-busy'] }, tenantId: 'tenant-1' }
+      })
+    );
+  });
+
   it('reports a group whose rows disagree and leaves it alone', async () => {
     findMany.mockResolvedValue([
       passenger({ id: 'one', notes: 'plati u autobusu' }),

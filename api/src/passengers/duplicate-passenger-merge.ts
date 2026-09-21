@@ -84,13 +84,16 @@ function fieldValue(row: PassengerRow, field: string): string {
 }
 
 /**
- * The row the others fold into: the one carrying the most reservations, since
- * repointing fewer rows is both cheaper and less to undo. Age breaks the tie,
- * then the id, so two runs always choose the same row.
+ * The row the others fold into: an active row if one exists, so a mixed-status
+ * merge cannot move a live reservation onto an inactive passenger. Among rows
+ * with the same status, keep the one carrying the most reservations to minimize
+ * writes.
+ * Age breaks the tie, then the id, so two runs always choose the same row.
  */
 function canonicalOf(rows: PassengerRow[]): PassengerRow {
   return [...rows].sort(
     (left, right) =>
+      Number(right.isActive) - Number(left.isActive) ||
       right._count.reservations - left._count.reservations ||
       left.createdAt.getTime() - right.createdAt.getTime() ||
       left.id.localeCompare(right.id)
