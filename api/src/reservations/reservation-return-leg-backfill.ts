@@ -405,6 +405,24 @@ function pairingPass(rows: BackfillRow[]): {
       continue;
     }
 
+    // The outbound departure must also have only one possible return
+    // departure. Otherwise whichever return block happens to be read first
+    // would claim the seats, even though both blocks fit equally well.
+    const returnBlocks = [...blocks.values()].filter(
+      (possibleReturn) =>
+        possibleReturn.length === reachable.length &&
+        !possibleReturn.some((row) => paired.has(row.id)) &&
+        possibleReturn[0].tenantId === reachable[0].tenantId &&
+        possibleReturn[0].passengerId === reachable[0].passengerId &&
+        isReversed(possibleReturn[0], reachable[0]) &&
+        departsBefore(reachable[0], possibleReturn[0]) &&
+        possibleReturn[0].travelDate.getTime() - reachable[0].travelDate.getTime() <=
+          LEGACY_RETURN_LOOKUP_DAYS * DAY_IN_MS
+    );
+    if (returnBlocks.length !== 1) {
+      continue;
+    }
+
     // One side wholly cancelled while the other is wholly live is not one
     // booking cut in half — it is evidence that the two sides belong to
     // different bookings. A party whose return really died keeps its seat

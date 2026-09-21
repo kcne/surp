@@ -602,4 +602,20 @@ describe('reservation return leg backfill, a booking block', () => {
 
     expect(plan.links.filter((link) => link.phase === 'block')).toHaveLength(0);
   });
+
+  it('leaves both return departures alone when the same outbound block fits each one', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'out-3', seatNumber: 3 }),
+      row({ id: 'out-4', seatNumber: 4 }),
+      returnRow({ id: 'first-back-15', seatNumber: 15, travelDate: '2026-03-05' }),
+      returnRow({ id: 'first-back-16', seatNumber: 16, travelDate: '2026-03-05' }),
+      returnRow({ id: 'second-back-25', seatNumber: 25, travelDate: '2026-03-06' }),
+      returnRow({ id: 'second-back-26', seatNumber: 26, travelDate: '2026-03-06' })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toHaveLength(0);
+    expect(plan.counts.blockMatches).toBe(0);
+  });
 });
