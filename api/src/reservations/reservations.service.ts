@@ -26,7 +26,7 @@ import {
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { CancellationPreviewDto, CancellationPreviewResponseDto } from './dto/cancellation-preview.dto';
 import { AssignReservationGroupDto } from './dto/assign-reservation-group.dto';
-import { asReturnLegConflict, linkReturnLeg } from './return-leg-link';
+import { LEGACY_RETURN_LOOKUP_DAYS, asReturnLegConflict, linkReturnLeg } from './return-leg-link';
 import {
   RouteSegment,
   routeBoardingDropoffSets,
@@ -97,7 +97,6 @@ type RideRouteContext = {
 };
 
 type ReservationDbClient = PrismaService | Prisma.TransactionClient;
-const LEGACY_RETURN_LOOKUP_DAYS = 90;
 
 @Injectable()
 export class ReservationsService {

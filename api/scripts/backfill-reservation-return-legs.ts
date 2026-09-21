@@ -1,0 +1,81 @@
+/**
+ * Pairs the return legs booked before `returnOfReservationId` existed, so the
+ * round-trip check has a relationship it can actually assert on.
+ *
+ * Dry run (default): pnpm reservations:return-legs:backfill
+ * Apply:             APPLY=1 ACTOR_USER_ID=<user id> pnpm reservations:return-legs:backfill
+ * Optional:          REPORT_PATH=<file.json>
+ *
+ * Run the dry run and the apply against a restored production backup before
+ * using APPLY=1 against production, and compare the counts of the two runs.
+ * Deploy the linking write paths first, or this fills a bucket that is still
+ * draining.
+ */
+import { PrismaClient } from '@prisma/client';
+import { writeFileSync } from 'fs';
+import {
+  applyReturnLegBackfill,
+  planReturnLegBackfill
+} from '../src/reservations/reservation-return-leg-backfill';
+
+const prisma = new PrismaClient();
+const apply = process.env.APPLY === '1';
+const actorId = process.env.ACTOR_USER_ID?.trim();
+const reportPath = process.env.REPORT_PATH?.trim();
+
+if (apply && !actorId) {
+  throw new Error('ACTOR_USER_ID is required when APPLY=1, so updated rows carry an author.');
+}
+
+async function main() {
+  const plan = await planReturnLegBackfill(prisma);
+  const { counts } = plan;
+
+  console.log(
+    `${counts.reservationsRead} reservations read, ${counts.alreadyLinked} already linked.\n` +
+      `${counts.exactMatches} exact matches (shared roundTripId), ` +
+      `${counts.heuristicMatches} heuristic matches.\n` +
+      `${counts.ambiguous} ambiguous rows left unlinked, ${counts.unmatched} with no candidate.`
+  );
+
+  // Ambiguity is a to-do list for a human, not a failure. Print enough to act
+  // on, and keep the full detail for diffing one run against the next.
+  for (const entry of plan.ambiguous.slice(0, 20)) {
+    console.log(
+      `  ambiguous ${entry.reservationId} (${entry.phase}, ${entry.reason}): ` +
+        `${entry.candidateReservationIds.join(', ')}`
+    );
+  }
+  if (plan.ambiguous.length > 20) {
+    console.log(`  ... and ${plan.ambiguous.length - 20} more; set REPORT_PATH to see them all.`);
+  }
+
+  if (reportPath) {
+    writeFileSync(
+      reportPath,
+      `${JSON.stringify({ counts, links: plan.links, ambiguous: plan.ambiguous }, null, 2)}\n`
+    );
+    console.log(`Report written to ${reportPath}.`);
+  }
+
+  if (!apply) {
+    console.log('Dry run only. Re-run with APPLY=1 and ACTOR_USER_ID=<user id> to write.');
+    return;
+  }
+
+  const result = await applyReturnLegBackfill(prisma, actorId as string, plan);
+  console.log(
+    `Linked ${result.linkedCount} return legs ` +
+      `(${result.exactCount} exact, ${result.heuristicCount} heuristic).` +
+      (result.skippedCount > 0
+        ? ` Skipped ${result.skippedCount} rows linked by someone else since the plan was read.`
+        : '')
+  );
+}
+
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(() => prisma.$disconnect());
