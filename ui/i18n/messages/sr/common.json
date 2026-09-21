@@ -1,0 +1,84 @@
+{
+  "weekdays": {
+    "long": ["Nedelja", "Ponedeljak", "Utorak", "Sreda", "Četvrtak", "Petak", "Subota"],
+    "short": ["Ned", "Pon", "Uto", "Sre", "Čet", "Pet", "Sub"],
+    "narrow": ["N", "P", "U", "S", "Č", "P", "S"]
+  },
+  "months": {
+    "long": [
+      "Januar",
+      "Februar",
+      "Mart",
+      "April",
+      "Maj",
+      "Jun",
+      "Jul",
+      "Avgust",
+      "Septembar",
+      "Oktobar",
+      "Novembar",
+      "Decembar"
+    ],
+    "short": ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Avg", "Sep", "Okt", "Nov", "Dec"]
+  },
+  "duration": {
+    "hour": "h",
+    "minute": "min"
+  },
+  "actions": {
+    "add": "Dodaj",
+    "back": "Nazad",
+    "cancel": "Otkaži",
+    "close": "Zatvori",
+    "confirm": "Potvrdi",
+    "copy": "Kopiraj",
+    "delete": "Obriši",
+    "edit": "Izmeni",
+    "export": "Izvezi",
+    "filter": "Filtriraj",
+    "import": "Uvezi",
+    "next": "Sledeće",
+    "previous": "Prethodno",
+    "print": "Štampaj",
+    "reset": "Poništi",
+    "retry": "Pokušaj ponovo",
+    "save": "Sačuvaj",
+    "search": "Pretraži"
+  },
+  "states": {
+    "empty": "Nema podataka",
+    "error": "Došlo je do greške",
+    "loading": "Učitavanje…",
+    "noResults": "Nema rezultata",
+    "saving": "Čuvanje…"
+  },
+  "labels": {
+    "actions": "Radnje",
+    "all": "Sve",
+    "date": "Datum",
+    "from": "Od",
+    "no": "Ne",
+    "none": "Nijedan",
+    "optional": "Opciono",
+    "required": "Obavezno",
+    "status": "Status",
+    "time": "Vreme",
+    "to": "Do",
+    "yes": "Da"
+  },
+  "pagination": {
+    "rowsPerPage": "Redova po strani",
+    "pageOf": "Strana {page} od {total}",
+    "showing": "{count, plural, =0 {Nema prikazanih redova} one {Prikazan # red} few {Prikazana # reda} other {Prikazano # redova}}"
+  },
+  "counts": {
+    "passengers": "{count, plural, =0 {Nema putnika} one {# putnik} few {# putnika} other {# putnika}}",
+    "reservations": "{count, plural, =0 {Nema rezervacija} one {# rezervacija} few {# rezervacije} other {# rezervacija}}",
+    "seats": "{count, plural, =0 {Nema slobodnih mesta} one {# slobodno mesto} few {# slobodna mesta} other {# slobodnih mesta}}"
+  },
+  "language": {
+    "label": "Jezik",
+    "sr": "Srpski",
+    "en": "Engleski"
+  }
+}
