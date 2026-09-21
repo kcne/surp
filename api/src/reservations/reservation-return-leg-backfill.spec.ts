@@ -20,6 +20,10 @@ const NOVI_SAD = 'station-ns';
 
 interface RowOverrides {
   id: string;
+  phone?: string;
+  rideId?: string;
+  createdAt?: string;
+  cancelledAt?: string | null;
   passengerId?: string;
   travelDate?: string;
   rideDepartureTime?: string;
@@ -32,8 +36,12 @@ interface RowOverrides {
   tenantId?: string;
 }
 
-function row({ travelDate = '2026-03-01', ...overrides }: RowOverrides) {
+function row({ travelDate = '2026-03-01', phone = '0601234567', createdAt = '2026-01-01T09:00:00.000Z', cancelledAt = null, ...overrides }: RowOverrides) {
   return {
+    rideId: 'ride-1',
+    createdAt: new Date(createdAt),
+    cancelledAt: cancelledAt ? new Date(cancelledAt) : null,
+    passenger: { phone },
     tenantId: 'tenant-1',
     passengerId: 'passenger-1',
     rideDepartureTime: '07:30',
@@ -416,5 +424,97 @@ describe('reservation return leg backfill, repeated passes', () => {
     expect(plan.ambiguous).toMatchObject([
       { reservationId: 'return-1', reason: 'multiple_candidates' }
     ]);
+  });
+});
+
+describe('reservation return leg backfill, legs that are not what they look like', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('holds back a cancelled leg whose passenger still has a live seat on that departure', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'outbound-1' }),
+      returnRow({ id: 'reseated-away', seatNumber: 25, status: ReservationStatus.CANCELLED }),
+      returnRow({ id: 'the-live-seat', seatNumber: 3 })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.excluded).toMatchObject([
+      { reservationId: 'reseated-away', reason: 'reseated_or_partly_cancelled' }
+    ]);
+    expect(plan.links).toMatchObject([{ returnReservationId: 'the-live-seat' }]);
+  });
+
+  it('holds back a cancelled leg when the seat sits under another row on the same phone', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'outbound-1', passengerId: 'goran', phone: '0628246580' }),
+      returnRow({
+        id: 'his-cancelled-seat',
+        passengerId: 'goran',
+        phone: '0628246580',
+        status: ReservationStatus.CANCELLED
+      }),
+      returnRow({ id: 'her-live-seat', passengerId: 'zorica', phone: '+3816282465800'.slice(0, 13) })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.excluded).toMatchObject([
+      { reservationId: 'his-cancelled-seat', reason: 'seat_held_under_another_row' }
+    ]);
+    // Her row is a different passenger, so it is never paired with his leg.
+    expect(plan.links).toHaveLength(0);
+  });
+
+  it('holds back a leg cancelled minutes after it was booked', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'outbound-1' }),
+      returnRow({
+        id: 'mis-entry',
+        status: ReservationStatus.CANCELLED,
+        createdAt: '2026-03-02T16:27:00.000Z',
+        cancelledAt: '2026-03-02T16:28:00.000Z'
+      })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.excluded).toMatchObject([
+      { reservationId: 'mis-entry', reason: 'entry_correction' }
+    ]);
+    expect(plan.links).toHaveLength(0);
+  });
+
+  it('still pairs a cancelled leg the passenger really did lose', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'outbound-1' }),
+      returnRow({
+        id: 'really-cancelled',
+        status: ReservationStatus.CANCELLED,
+        createdAt: '2026-02-01T10:00:00.000Z',
+        cancelledAt: '2026-03-03T10:00:00.000Z'
+      })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.excluded).toHaveLength(0);
+    expect(plan.links).toMatchObject([{ returnReservationId: 'really-cancelled' }]);
+  });
+
+  it('does not confuse a different departure for the one the leg was on', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'outbound-1' }),
+      returnRow({ id: 'cancelled-leg', status: ReservationStatus.CANCELLED }),
+      // Same passenger, live, but a different departure entirely.
+      returnRow({ id: 'other-trip', travelDate: '2026-03-20', rideId: 'ride-2' })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.excluded).toHaveLength(0);
   });
 });
