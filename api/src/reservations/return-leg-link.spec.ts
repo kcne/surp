@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { linkReturnLeg, ReturnLegCandidate } from './return-leg-link';
+import { asReturnLegConflict, linkReturnLeg, ReturnLegCandidate } from './return-leg-link';
 
 const txMock = {
   reservation: {
@@ -163,5 +163,41 @@ describe('linkReturnLeg', () => {
   it('refuses to make a reservation its own return leg', async () => {
     await expect(link(returnLeg(), 'res-outbound')).rejects.toThrow('its own return leg');
     expect(txMock.reservation.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('asReturnLegConflict', () => {
+  const uniqueViolation = (target: unknown) =>
+    new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+      code: 'P2002',
+      clientVersion: '6.0.0',
+      meta: { target }
+    });
+
+  it('turns a race on the active return leg index into a conflict', () => {
+    // The check inside linkReturnLeg and the write that follows it are not one
+    // atomic step, so the loser of a race meets the index instead.
+    const mapped = asReturnLegConflict(uniqueViolation('Reservation_active_return_leg_key'));
+
+    expect(mapped).toBeInstanceOf(ConflictException);
+    expect((mapped as ConflictException).message).toBe('This reservation already has a return leg');
+  });
+
+  it('recognises the index reported as a column list', () => {
+    expect(asReturnLegConflict(uniqueViolation(['returnOfReservationId']))).toBeInstanceOf(
+      ConflictException
+    );
+  });
+
+  it('leaves a unique violation on another constraint untouched', () => {
+    const seatClash = uniqueViolation(['tenantId', 'rideId', 'seatNumber']);
+
+    expect(asReturnLegConflict(seatClash)).toBe(seatClash);
+  });
+
+  it('leaves errors that are not unique violations untouched', () => {
+    const failure = new Error('connection lost');
+
+    expect(asReturnLegConflict(failure)).toBe(failure);
   });
 });

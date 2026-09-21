@@ -18,6 +18,9 @@ import { withUpdateAudit } from '../prisma/audit-write.helper';
  * passenger about a journey that was never sold.
  */
 
+/** The partial unique index from 20260921130000_reservation_return_leg. */
+const ACTIVE_RETURN_LEG_INDEX = 'Reservation_active_return_leg_key';
+
 const OUTBOUND_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   id: true,
   tenantId: true,
@@ -138,4 +141,26 @@ export async function linkReturnLeg(
   }
 
   return { returnOfReservationId: outbound.id, roundTripId };
+}
+
+/**
+ * The check above and the write that follows it are not one atomic step, so
+ * two concurrent bookings can both pass it and leave the loser to the partial
+ * unique index. Untranslated, that reaches the operator as a 500 with an
+ * opaque body; this gives it the same 409 the check produces.
+ */
+export function asReturnLegConflict(error: unknown): unknown {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return error;
+  }
+
+  const target = error.meta?.target;
+  const hitReturnLegIndex =
+    typeof target === 'string'
+      ? target.includes(ACTIVE_RETURN_LEG_INDEX)
+      : Array.isArray(target) && target.includes('returnOfReservationId');
+
+  return hitReturnLegIndex
+    ? new ConflictException('This reservation already has a return leg')
+    : error;
 }

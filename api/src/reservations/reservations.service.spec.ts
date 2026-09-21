@@ -76,6 +76,7 @@ describe('ReservationsService', () => {
     arrivalStationId: 'station-c',
     groupId: null,
     roundTripId: null,
+    returnOfReservationId: null,
     notes: null,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -511,17 +512,83 @@ describe('ReservationsService', () => {
 
     it('unlinks a return leg when update is given an explicit null', async () => {
       prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
-      prismaMock.reservation.findFirst.mockResolvedValueOnce({ ...baseReservation });
+      prismaMock.reservation.findFirst.mockResolvedValueOnce({
+        ...baseReservation,
+        returnOfReservationId: 'reservation-outbound',
+        roundTripId: 'booking-1'
+      });
       prismaMock.reservation.update.mockResolvedValue({
         ...baseReservation,
-        returnOfReservationId: null
+        returnOfReservationId: null,
+        roundTripId: null
       });
 
       await service.update(auth, 'reservation-1', { returnOfReservationId: null });
 
+      // The marker goes with the link: cancellationPreview pairs legs by
+      // roundTripId, so keeping it would still offer the unlinked leg as the
+      // booking's return.
       expect(prismaMock.reservation.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ returnOfReservationId: null })
+          data: expect.objectContaining({ returnOfReservationId: null, roundTripId: null })
+        })
+      );
+    });
+
+    const linkedReservation = {
+      ...baseReservation,
+      returnOfReservationId: 'reservation-outbound',
+      roundTripId: 'booking-1'
+    };
+
+    /** The outbound leg the linked reservation travels back from. */
+    const linkedOutbound = {
+      ...baseReservation,
+      id: 'reservation-outbound',
+      departureStationId: 'station-c',
+      arrivalStationId: 'station-a',
+      roundTripId: 'booking-1'
+    };
+
+    it('revalidates a retained link when the passenger changes', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
+      prismaMock.passenger.findFirst.mockResolvedValue({ id: 'passenger-2' });
+      prismaMock.reservation.findFirst
+        .mockResolvedValueOnce({ ...linkedReservation })
+        .mockResolvedValueOnce({ ...linkedOutbound });
+
+      // The link asserts one passenger across both legs. Moving this leg to
+      // another passenger without revalidating would leave that assertion
+      // standing and false.
+      await expect(
+        service.update(auth, 'reservation-1', { passengerId: 'passenger-2' })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+    });
+
+    it('revalidates a retained link when the stations change', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
+      prismaMock.reservation.findFirst
+        .mockResolvedValueOnce({ ...linkedReservation })
+        .mockResolvedValueOnce({ ...linkedOutbound });
+
+      await expect(
+        service.update(auth, 'reservation-1', { arrivalStationId: 'station-d' })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+    });
+
+    it('leaves a retained link alone when no field it asserts on changes', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
+      prismaMock.reservation.findFirst.mockResolvedValueOnce({ ...linkedReservation });
+      prismaMock.reservation.update.mockResolvedValue({ ...linkedReservation });
+
+      await service.update(auth, 'reservation-1', { notes: 'Putnik kasni' });
+
+      expect(prismaMock.reservation.findFirst).toHaveBeenCalledTimes(1);
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ returnOfReservationId: expect.anything() })
         })
       );
     });
