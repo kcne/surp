@@ -432,30 +432,43 @@ model LineStop {
 }
 
 model Reservation {
-  id                 String            @id @default(cuid())
-  tenantId           String
-  rideId             String
-  passengerId        String
-  createdById        String?
-  updatedById        String?
-  travelDate         DateTime          @db.Date
-  rideDepartureTime  String
-  rideArrivalTime    String
-  seatNumber         Int
-  status             ReservationStatus @default(ACTIVE)
-  cancelledAt        DateTime?
-  departureStationId String
-  arrivalStationId   String
-  groupId            String?
-  roundTripId        String?
-  notes              String?           @db.Text
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  ride               Ride              @relation(fields: [rideId], references: [id], onDelete: Restrict)
-  passenger          Passenger         @relation(fields: [passengerId], references: [id], onDelete: Restrict)
-  departureStation   Station           @relation("ReservationDepartureStation", fields: [departureStationId], references: [id], onDelete: Restrict)
-  arrivalStation     Station           @relation("ReservationArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
+  id                    String            @id @default(cuid())
+  tenantId              String
+  rideId                String
+  passengerId           String
+  createdById           String?
+  updatedById           String?
+  travelDate            DateTime          @db.Date
+  rideDepartureTime     String
+  rideArrivalTime       String
+  seatNumber            Int
+  status                ReservationStatus @default(ACTIVE)
+  cancelledAt           DateTime?
+  departureStationId    String
+  arrivalStationId      String
+  groupId               String?
+  roundTripId           String?
+  /**
+   * Set on a return leg, pointing at the outbound leg it belongs to. This —
+   * not groupId, which is the driver-facing manifest label, and not
+   * roundTripId, which marks a whole booking — is the pair an integrity check
+   * can assert on: two rows, one passenger, opposite directions.
+   * Declared one-to-many because Prisma cannot express the partial unique
+   * index that actually governs it. Only one ACTIVE return leg per outbound
+   * leg is allowed; see the migration. Cancelling a return and booking another
+   * is an ordinary agency action, which a plain @unique would reject.
+   */
+  returnOfReservationId String?
+  notes                 String?           @db.Text
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  tenant                Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ride                  Ride              @relation(fields: [rideId], references: [id], onDelete: Restrict)
+  passenger             Passenger         @relation(fields: [passengerId], references: [id], onDelete: Restrict)
+  departureStation      Station           @relation("ReservationDepartureStation", fields: [departureStationId], references: [id], onDelete: Restrict)
+  arrivalStation        Station           @relation("ReservationArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
+  returnOf              Reservation?      @relation("ReservationReturnLeg", fields: [returnOfReservationId], references: [id], onDelete: Restrict)
+  returnLegs            Reservation[]     @relation("ReservationReturnLeg")
 
   @@index([tenantId])
   @@index([rideId])
@@ -468,6 +481,7 @@ model Reservation {
   @@index([updatedById])
   @@index([tenantId, rideId, travelDate, rideDepartureTime, groupId])
   @@index([tenantId, roundTripId, status])
+  @@index([returnOfReservationId])
 }
 
 model Passenger {

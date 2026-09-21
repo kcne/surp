@@ -80,8 +80,15 @@ export class ReservationResponseDto {
   @ApiProperty({ type: String, nullable: true, description: 'Correlation id shared by reservations created together as a group' })
   groupId!: string | null;
 
-  @ApiProperty({ type: String, nullable: true, description: 'Correlation id shared by both round-trip legs' })
+  @ApiProperty({ type: String, nullable: true, description: 'Correlation id shared by every leg of one round-trip booking' })
   roundTripId!: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Set on a return leg: the outbound reservation this leg travels back from'
+  })
+  returnOfReservationId!: string | null;
 
   @ApiProperty({ type: String, nullable: true, description: 'Per-reservation note shown in driver passenger lists' })
   notes!: string | null;

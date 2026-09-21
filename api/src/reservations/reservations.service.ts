@@ -26,6 +26,7 @@ import {
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { CancellationPreviewDto, CancellationPreviewResponseDto } from './dto/cancellation-preview.dto';
 import { AssignReservationGroupDto } from './dto/assign-reservation-group.dto';
+import { linkReturnLeg } from './return-leg-link';
 import {
   RouteSegment,
   routeBoardingDropoffSets,
@@ -50,6 +51,7 @@ const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   arrivalStationId: true,
   groupId: true,
   roundTripId: true,
+  returnOfReservationId: true,
   notes: true,
   createdAt: true,
   updatedAt: true,
@@ -826,6 +828,22 @@ export class ReservationsService {
     );
 
     const travelDate = this.toUtcDate(dto.travelDate);
+
+    const returnLeg = dto.returnOfReservationId
+      ? await linkReturnLeg(tx, {
+          tenantId: auth.tenantId,
+          actorId: auth.sub,
+          outboundReservationId: dto.returnOfReservationId,
+          leg: {
+            passengerId: dto.passengerId,
+            departureStationId: dto.departureStationId,
+            arrivalStationId: dto.arrivalStationId,
+            travelDate,
+            rideDepartureTime: dto.rideDepartureTime
+          }
+        })
+      : null;
+
     await this.acquireRideInstanceLock(tx, {
       tenantId: auth.tenantId,
       rideId: dto.rideId,
@@ -860,7 +878,12 @@ export class ReservationsService {
           cancelledAt: null,
           groupId,
           notes: dto.notes?.trim() ? dto.notes.trim() : null,
-          roundTripId: dto.roundTripId ?? null
+          returnOfReservationId: returnLeg?.returnOfReservationId ?? null,
+          // A linked return leg takes the marker from its outbound leg, so the
+          // two sides of a booking can never disagree about which booking they
+          // belong to. Client-supplied markers remain honoured for one-way
+          // legs until the booking screens stop minting them.
+          roundTripId: returnLeg?.roundTripId ?? dto.roundTripId ?? null
         },
         auth.sub
       ),
@@ -913,6 +936,7 @@ export class ReservationsService {
       arrivalStationId: reservation.arrivalStationId,
       groupId: reservation.groupId,
       roundTripId: reservation.roundTripId,
+      returnOfReservationId: reservation.returnOfReservationId,
       notes: reservation.notes,
       ride: {
         id: reservation.ride.id,

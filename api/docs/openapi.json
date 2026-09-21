@@ -9097,7 +9097,11 @@
           "roundTripId": {
             "type": "string",
             "format": "uuid",
-            "description": "Links both legs of a round-trip booking."
+            "description": "Marks a whole round-trip booking. Supply returnOfReservationId instead: the server then takes this marker from the outbound leg so both sides always agree. Client-supplied values are still accepted while the booking screens are migrated."
+          },
+          "returnOfReservationId": {
+            "type": "string",
+            "description": "Set on a return leg, naming the outbound reservation it belongs to. The outbound leg must be active, belong to the same passenger, travel the reversed station pair, and have no other active return leg."
           },
           "rideId": {
             "type": "string",
@@ -9272,7 +9276,12 @@
           "roundTripId": {
             "type": "string",
             "nullable": true,
-            "description": "Correlation id shared by both round-trip legs"
+            "description": "Correlation id shared by every leg of one round-trip booking"
+          },
+          "returnOfReservationId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set on a return leg: the outbound reservation this leg travels back from"
           },
           "notes": {
             "type": "string",
@@ -9317,6 +9326,7 @@
           "arrivalStationId",
           "groupId",
           "roundTripId",
+          "returnOfReservationId",
           "notes",
           "ride",
           "passenger",

@@ -5,10 +5,27 @@ import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches,
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export class CreateReservationDto {
-  @ApiPropertyOptional({ format: 'uuid', description: 'Links both legs of a round-trip booking.' })
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'Marks a whole round-trip booking. Supply returnOfReservationId instead: the server then ' +
+      'takes this marker from the outbound leg so both sides always agree. Client-supplied values ' +
+      'are still accepted while the booking screens are migrated.'
+  })
   @IsOptional()
   @IsUUID()
   roundTripId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Set on a return leg, naming the outbound reservation it belongs to. The outbound leg must ' +
+      'be active, belong to the same passenger, travel the reversed station pair, and have no ' +
+      'other active return leg.'
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  returnOfReservationId?: string;
   @ApiProperty({ example: 'ride-id-123' })
   @IsString()
   @IsNotEmpty()
