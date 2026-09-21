@@ -6,7 +6,7 @@ import { CheckCircle2, Send } from "lucide-react"
 import {
   type DemoLeadActionState,
   submitDemoLeadAction,
-} from "@/app/(marketing)/kontakt/actions"
+} from "@/app/[locale]/(marketing)/kontakt/actions"
 
 const initialState: DemoLeadActionState = {
   status: "idle",

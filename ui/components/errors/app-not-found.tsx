@@ -1,8 +1,14 @@
 import Link from "next/link"
 import { ArrowLeft, Home, SearchX } from "lucide-react"
-import { Button } from "@/components/ui/button"
 
-export default function NotFound() {
+import { notFoundCopy } from "@/components/errors/not-found-copy"
+import { Button } from "@/components/ui/button"
+import { localizePathname } from "@/i18n/routing"
+
+export function AppNotFound() {
+  const { locale, t } = notFoundCopy("app")
+  const href = (pathname: string) => localizePathname(locale, pathname)
+
   return (
     <main className="relative flex min-h-[calc(100vh-64px)] items-center justify-center overflow-hidden px-6 py-12">
       <div className="pointer-events-none absolute inset-0 -z-10">
@@ -14,26 +20,23 @@ export default function NotFound() {
       <section className="w-full max-w-2xl rounded-2xl border bg-card/80 p-8 shadow-xl backdrop-blur-sm md:p-10">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
           <SearchX className="h-3.5 w-3.5" />
-          Greska 404
+          {t("badge")}
         </div>
 
-        <h1 className="mb-3 text-3xl font-bold tracking-tight md:text-4xl">Stranica nije pronadjena</h1>
-        <p className="mb-8 max-w-xl text-sm text-muted-foreground md:text-base">
-          Link koji ste otvorili ne postoji ili je prebacen. Mozete se vratiti nazad ili nastaviti na pocetnu
-          stranicu platforme.
-        </p>
+        <h1 className="mb-3 text-3xl font-bold tracking-tight md:text-4xl">{t("title")}</h1>
+        <p className="mb-8 max-w-xl text-sm text-muted-foreground md:text-base">{t("description")}</p>
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button asChild>
-            <Link href="/dashboard">
+            <Link href={href("/dashboard")}>
               <Home className="mr-2 h-4 w-4" />
-              Nazad na dashboard
+              {t("toDashboard")}
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link href="/reservations">
+            <Link href={href("/reservations")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Idi na rezervacije
+              {t("toReservations")}
             </Link>
           </Button>
         </div>

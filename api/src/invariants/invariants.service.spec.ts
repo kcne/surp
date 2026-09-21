@@ -43,7 +43,8 @@ describe('INVARIANTS registry', () => {
       'pair.directionsAgree',
       'pair.terminiReachable',
       'route.stationsActive',
-      'ride.lineActive'
+      'ride.lineActive',
+      'tenant.slug-reserved'
     ]);
   });
 

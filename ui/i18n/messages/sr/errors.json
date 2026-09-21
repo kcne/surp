@@ -5,6 +5,34 @@
   "unauthorized": "Sesija je istekla. Prijavite se ponovo.",
   "forbidden": "Nemate dozvolu za ovu radnju.",
   "notFound": "Traženi podatak nije pronađen.",
+  "notFoundPage": {
+    "app": {
+      "badge": "Greška 404",
+      "title": "Stranica nije pronađena",
+      "description": "Link koji ste otvorili ne postoji ili je premešten. Možete se vratiti nazad ili nastaviti na početnu stranicu platforme.",
+      "toDashboard": "Nazad na kontrolnu tablu",
+      "toReservations": "Idi na rezervacije"
+    },
+    "public": {
+      "badge": "Greška 404",
+      "title": "Ova stranica nije pronađena.",
+      "description": "Link je možda promenjen ili stranica više ne postoji. Nastavite ka najvažnijim SURP stranicama.",
+      "toHome": "Nazad na početnu",
+      "toContact": "Zakažite demo",
+      "links": {
+        "features": "Funkcije",
+        "pricing": "Cene",
+        "forAgencies": "Za agencije",
+        "blog": "Blog"
+      }
+    },
+    "storefront": {
+      "badge": "404",
+      "title": "Javni izlog agencije nije pronađen",
+      "description": "Ova agencija nije objavljena ili trenutno nije dostupna.",
+      "toLogin": "Prijava za osoblje"
+    }
+  },
   "conflict": "Podatak je u međuvremenu izmenjen. Osvežite stranicu.",
   "validation": "Proverite unesene podatke.",
   "serverError": "Server trenutno nije dostupan. Pokušajte kasnije.",

@@ -8,11 +8,13 @@ import {
   reportIntlError,
   reportMessageFallback,
 } from "./reporting"
-import { resolveRequestLocale } from "./resolve-locale"
+import { localeFromSegment } from "./routing"
 import { DEFAULT_TIME_ZONE } from "./tenant"
 
-export default getRequestConfig(async () => {
-  const locale = await resolveRequestLocale()
+export default getRequestConfig(async ({ requestLocale }) => {
+  // next-intl reads this from the `[locale]` segment, so the config stays
+  // available to statically rendered pages.
+  const locale = localeFromSegment(await requestLocale)
   const { messages, fallbacks } = loadMessages(locale)
 
   for (const fallback of fallbacks) {
@@ -26,7 +28,7 @@ export default getRequestConfig(async () => {
     messages,
     formats,
     // Tenant time, not reader time: a browser in another timezone must not
-    // shift a departure. #67 onwards may narrow this per tenant.
+    // shift a departure. Narrowed per tenant by later issues.
     timeZone: DEFAULT_TIME_ZONE,
     onError: (error) => reportIntlError(locale, error),
     getMessageFallback: messageFallback,

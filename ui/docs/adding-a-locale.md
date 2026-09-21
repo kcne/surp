@@ -119,16 +119,29 @@ the existing ones — collation and plural categories are the usual ones.
 
 - **No database change.** Language is never stored per user; it lives in a
   cookie the language switcher writes.
-- **No routing change** once [#67](https://github.com/kcne/surp/issues/67)
-  lands. Until then there is no routing layer at all: every unprefixed URL
-  serves the default locale, so a locale added today formats and sorts
-  correctly but has no URL of its own yet. #67 adds the URL segment, reading
-  it from the registry rather than hard-coding locales.
+- **No routing change.** The middleware reads `SUPPORTED_LOCALES`, so a new
+  entry gets its `/xx` URL prefix, its place in `Accept-Language` negotiation
+  at `/`, and its own 404 pages with no edit to `middleware.ts`. The one thing
+  a new locale does need is the slug check below. `locale-routing.md` explains
+  the URL rules themselves.
 - **No API change.** Responses stay as they are; visible errors are translated
   on the client from stable codes.
 - **No separate activation step.** A locale in the registry with complete
   catalogs is live as soon as routing can reach it. There is no supported-but-disabled state — that is what
   the CI check is for.
+
+## One thing a new locale does need: check the slug collision
+
+A locale becomes a URL segment at the root of the site, which is also where
+agency storefronts live. Adding `de` makes `/de` a language prefix, so a
+tenant whose slug is `de` loses its storefront.
+
+Add the locale to `api/src/platform-tenants/supported-locales.ts`, which feeds
+`RESERVED_TENANT_SLUGS`, so no new tenant or converted lead can take it. Then
+run the `tenant.slug-reserved` invariant, which reports tenants already
+holding the word. It never renames anything: a storefront URL an agency has
+printed or linked is not ours to rewrite, so an existing collision is a
+conversation with that agency, not a migration.
 
 ## What is not locale-dependent
 

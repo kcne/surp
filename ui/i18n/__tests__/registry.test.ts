@@ -111,8 +111,16 @@ describe("named formats", () => {
 })
 
 describe("request locale", () => {
-  it("serves the default locale, which is what every unprefixed URL renders today", () => {
-    // #67 replaces this with URL-prefix resolution and homepage detection.
-    return expect(resolveRequestLocale()).resolves.toBe(DEFAULT_LOCALE)
+  it("reads the locale from the route segment", () => {
+    expect(resolveRequestLocale({ locale: "en" })).toBe("en")
+    expect(resolveRequestLocale({ locale: "sr" })).toBe("sr")
+  })
+
+  it("falls back to the default for a segment the registry does not know", () => {
+    // The middleware only ever rewrites to a registered locale, so this means
+    // the segment was reached some other way. A page in the wrong language is
+    // a better answer than a 500.
+    expect(resolveRequestLocale({ locale: "de" })).toBe(DEFAULT_LOCALE)
+    expect(resolveRequestLocale({})).toBe(DEFAULT_LOCALE)
   })
 })

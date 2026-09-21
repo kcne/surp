@@ -1,14 +1,22 @@
 import Link from "next/link"
 import { ArrowRight, SearchX } from "lucide-react"
 
-const helpfulLinks = [
-  { href: "/funkcije", label: "Funkcije" },
-  { href: "/cene", label: "Cene" },
-  { href: "/za-agencije", label: "Za agencije" },
-  { href: "/blog", label: "Blog" },
-]
+import { notFoundCopy } from "@/components/errors/not-found-copy"
+import { localizePathname } from "@/i18n/routing"
 
-export default function MarketingNotFound() {
+// Slugs are never translated, so a link differs between languages only by the
+// locale segment `localizePathname` adds.
+const HELPFUL_LINKS = [
+  { pathname: "/funkcije", key: "features" },
+  { pathname: "/cene", key: "pricing" },
+  { pathname: "/za-agencije", key: "forAgencies" },
+  { pathname: "/blog", key: "blog" },
+] as const
+
+export function MarketingNotFound() {
+  const { locale, t } = notFoundCopy("public")
+  const href = (pathname: string) => localizePathname(locale, pathname)
+
   return (
     <section className="relative isolate overflow-hidden bg-[color:var(--mk-bg)] px-6 py-24 md:py-32">
       <div className="pointer-events-none absolute inset-0 -z-10">
@@ -21,42 +29,41 @@ export default function MarketingNotFound() {
           <SearchX className="h-7 w-7" />
         </div>
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--mk-indigo-600)]">
-          Greska 404
+          {t("badge")}
         </p>
         <h1 className="mt-4 font-display text-5xl font-bold tracking-[-0.035em] text-[color:var(--mk-navy-900)] md:text-6xl">
-          Ova stranica nije pronadjena.
+          {t("title")}
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-[color:var(--mk-text-muted)]">
-          Link je mozda promenjen ili stranica vise ne postoji. Nastavite ka
-          najvaznijim SURP stranicama.
+          {t("description")}
         </p>
 
         <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
           <span className="mk-gradient-ring animate-gradient-border inline-flex w-full rounded-full p-[1px] motion-reduce:animate-none sm:w-auto">
             <Link
-              href="/"
+              href={href("/")}
               className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[color:var(--mk-indigo-600)] px-6 py-3 text-sm font-semibold text-white shadow-mk-glow sm:w-auto"
             >
-              Nazad na pocetnu
+              {t("toHome")}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </span>
           <Link
-            href="/kontakt"
+            href={href("/kontakt")}
             className="inline-flex min-h-12 items-center justify-center rounded-full border border-[color:var(--mk-border)] bg-white px-6 py-3 text-sm font-semibold text-[color:var(--mk-navy-900)] shadow-mk-sm"
           >
-            Zakazite demo
+            {t("toContact")}
           </Link>
         </div>
 
         <div className="mt-12 grid gap-3 sm:grid-cols-4">
-          {helpfulLinks.map((link) => (
+          {HELPFUL_LINKS.map((link) => (
             <Link
-              key={link.href}
-              href={link.href}
+              key={link.pathname}
+              href={href(link.pathname)}
               className="rounded-2xl border border-[color:var(--mk-border)] bg-white px-4 py-3 text-sm font-semibold text-[color:var(--mk-text-muted)] shadow-mk-sm transition hover:-translate-y-0.5 hover:text-[color:var(--mk-indigo-600)]"
             >
-              {link.label}
+              {t(`links.${link.key}`)}
             </Link>
           ))}
         </div>
