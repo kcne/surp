@@ -1,6 +1,6 @@
 import type { Formats } from "next-intl"
 
-import { DEFAULT_CURRENCY } from "./tenant"
+import { DEFAULT_CURRENCY, getCurrencyFractionDigits } from "./tenant"
 
 /**
  * Named format presets available to messages as `{value, date, long}` and to
@@ -24,7 +24,15 @@ export const formats = {
     },
   },
   number: {
-    currency: { style: "currency", currency: DEFAULT_CURRENCY },
+    // Fraction digits come from the same table `formatCurrency` reads, so an
+    // amount rendered through a message and one rendered through the helper
+    // cannot disagree on a runtime whose CLDR default differs.
+    currency: {
+      style: "currency",
+      currency: DEFAULT_CURRENCY,
+      minimumFractionDigits: getCurrencyFractionDigits(DEFAULT_CURRENCY),
+      maximumFractionDigits: getCurrencyFractionDigits(DEFAULT_CURRENCY),
+    },
     integer: { maximumFractionDigits: 0 },
     percent: { style: "percent", maximumFractionDigits: 1 },
   },

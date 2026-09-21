@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest"
 import {
   DEFAULT_TIME_ZONE,
   fromBusinessDate,
+  getCurrencyFractionDigits,
   getTimeZoneOffsetMinutes,
+  isBusinessDateShape,
   isSameBusinessDate,
+  parseBusinessDate,
   toBusinessDate,
 } from "@/i18n/tenant"
 
@@ -100,6 +103,46 @@ describe("fromBusinessDate", () => {
   it("rejects anything that is not a business date", () => {
     expect(() => fromBusinessDate("2025-9-1")).toThrow(TypeError)
     expect(() => fromBusinessDate("2025-09-21T10:00:00Z")).toThrow(TypeError)
+  })
+
+  it("rejects a well-shaped string that is not a real calendar day", () => {
+    // `Date.UTC` would roll these over silently — to 2 March and 1 January.
+    expect(() => fromBusinessDate("2025-02-30")).toThrow(TypeError)
+    expect(() => fromBusinessDate("2025-13-01")).toThrow(TypeError)
+    expect(() => fromBusinessDate("2025-00-10")).toThrow(TypeError)
+    expect(() => fromBusinessDate("2025-04-31")).toThrow(TypeError)
+  })
+})
+
+describe("parseBusinessDate", () => {
+  it("returns midnight UTC on the named day", () => {
+    expect(parseBusinessDate("2025-09-21")?.toISOString()).toBe("2025-09-21T00:00:00.000Z")
+  })
+
+  it("accepts a leap day only in a leap year", () => {
+    expect(parseBusinessDate("2024-02-29")?.toISOString()).toBe("2024-02-29T00:00:00.000Z")
+    expect(parseBusinessDate("2025-02-29")).toBeNull()
+  })
+
+  it("returns null for a rolled-over or malformed date", () => {
+    expect(parseBusinessDate("2025-02-30")).toBeNull()
+    expect(parseBusinessDate("2025-13-01")).toBeNull()
+    // Two-digit years are remapped to 19xx by `Date.UTC`.
+    expect(parseBusinessDate("0025-01-01")).toBeNull()
+    expect(parseBusinessDate("not a date")).toBeNull()
+  })
+
+  it("separates shape from validity", () => {
+    expect(isBusinessDateShape("2025-02-30")).toBe(true)
+    expect(isBusinessDateShape("2025-2-3")).toBe(false)
+  })
+})
+
+describe("getCurrencyFractionDigits", () => {
+  it("pins dinars to whole units and leaves subunit currencies alone", () => {
+    expect(getCurrencyFractionDigits("RSD")).toBe(0)
+    expect(getCurrencyFractionDigits()).toBe(0)
+    expect(getCurrencyFractionDigits("EUR")).toBe(2)
   })
 })
 

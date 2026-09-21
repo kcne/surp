@@ -13,7 +13,63 @@ export const DEFAULT_TIME_ZONE = "Europe/Belgrade"
 /** The only currency the product bills in today. */
 export const DEFAULT_CURRENCY = "RSD"
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+/**
+ * Fraction digits are pinned rather than left to CLDR, which has changed its
+ * default for RSD between ICU releases — the same price rendered 1.501 RSD on
+ * one Node version and 1.500,50 RSD on another. Prices must not depend on
+ * which runtime happens to render them, and the ICU presets in `formats.ts`
+ * must not disagree with `formatCurrency`.
+ */
+const CURRENCY_FRACTION_DIGITS: Record<string, number> = {
+  // Dinar prices are whole dinars throughout the product.
+  RSD: 0,
+}
+
+const DEFAULT_FRACTION_DIGITS = 2
+
+/** Fraction digits a currency is always rendered with, on every runtime. */
+export function getCurrencyFractionDigits(currency: string = DEFAULT_CURRENCY): number {
+  return CURRENCY_FRACTION_DIGITS[currency] ?? DEFAULT_FRACTION_DIGITS
+}
+
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/**
+ * True when a string has the `YYYY-MM-DD` shape — whether or not it names a
+ * real calendar day. Used to decide that a value is a business date at all;
+ * `parseBusinessDate` decides whether it is a valid one.
+ */
+export function isBusinessDateShape(value: string): boolean {
+  return ISO_DATE.test(value)
+}
+
+/**
+ * Strict `YYYY-MM-DD` parse, returning midnight UTC on that day, or `null`
+ * when the string is not a real calendar date.
+ *
+ * `Date.UTC` rolls out-of-range components over silently — `2025-02-30`
+ * becomes March 2 — so the parsed date is compared back against the input
+ * before it is handed to anything that computes or displays it.
+ */
+export function parseBusinessDate(value: string): Date | null {
+  const match = ISO_DATE.exec(value)
+  if (!match) return null
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(Date.UTC(year, month - 1, day))
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null
+  }
+
+  return date
+}
 
 function toDate(value: Date | string | number): Date {
   return value instanceof Date ? value : new Date(value)
@@ -81,12 +137,13 @@ export function fromBusinessDate(
   timeZone = DEFAULT_TIME_ZONE,
   wallClock: { hour?: number; minute?: number } = {}
 ): Date {
-  if (!ISO_DATE.test(businessDate)) {
+  const midnight = parseBusinessDate(businessDate)
+  if (!midnight) {
     throw new TypeError(`Expected a YYYY-MM-DD business date, received "${businessDate}"`)
   }
 
-  const [year, month, day] = businessDate.split("-").map(Number)
-  const naive = Date.UTC(year, month - 1, day, wallClock.hour ?? 0, wallClock.minute ?? 0)
+  const naive =
+    midnight.getTime() + ((wallClock.hour ?? 0) * 60 + (wallClock.minute ?? 0)) * 60000
 
   const firstGuess = new Date(naive - getTimeZoneOffsetMinutes(naive, timeZone) * 60000)
   return new Date(naive - getTimeZoneOffsetMinutes(firstGuess, timeZone) * 60000)

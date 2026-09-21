@@ -1,6 +1,7 @@
 import { createTranslator } from "next-intl"
 import { describe, expect, it } from "vitest"
 
+import { formatCurrency } from "@/i18n/format"
 import { formats } from "@/i18n/formats"
 import {
   DEFAULT_LOCALE,
@@ -157,6 +158,26 @@ describe("formatting inside messages", () => {
     }) as unknown as (key: string, values?: Record<string, unknown>) => string
 
     expect(t("line", { amount: 1500 })).toContain("RSD")
+  })
+
+  /**
+   * The ICU preset and the helper must round the same way: a runtime whose
+   * CLDR default gives RSD two fraction digits would otherwise render the same
+   * price as "1.500,50 RSD" in a message and "1.501 RSD" next to it.
+   */
+  it("rounds an embedded price exactly as formatCurrency does", () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      const t = createTranslator({
+        locale: getFormattingLocale(locale),
+        messages: { probe: { line: "{amount, number, currency}" } } as unknown as AppMessages,
+        namespace: "probe" as never,
+        formats,
+      }) as unknown as (key: string, values?: Record<string, unknown>) => string
+
+      for (const amount of [1500, 1500.5, 0]) {
+        expect(t("line", { amount })).toBe(formatCurrency(amount, locale))
+      }
+    }
   })
 
   it("maps the formatting tag back to the registry key", () => {

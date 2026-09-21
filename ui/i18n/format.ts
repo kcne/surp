@@ -14,7 +14,13 @@
 import { getFormattingLocale, getLocale, type SupportedLocale } from "./locales"
 import enCommon from "./messages/en/common.json"
 import srCommon from "./messages/sr/common.json"
-import { DEFAULT_CURRENCY, DEFAULT_TIME_ZONE } from "./tenant"
+import {
+  DEFAULT_CURRENCY,
+  DEFAULT_TIME_ZONE,
+  getCurrencyFractionDigits,
+  isBusinessDateShape,
+  parseBusinessDate,
+} from "./tenant"
 
 /**
  * Calendar names and duration units, the only catalog text these helpers read.
@@ -47,7 +53,6 @@ const DATE_FORMATS: Record<DateStyle, Intl.DateTimeFormatOptions> = {
 const TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }
 
 const CLOCK_TIME = /^(\d{1,2}):(\d{2})(?::\d{2})?$/
-const BUSINESS_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
 
 function toDate(value: Date | string | number): Date {
   return value instanceof Date ? value : new Date(value)
@@ -72,16 +77,17 @@ function dateTimeFormat(
  * Formatted with the clock pinned to UTC so the date can never shift: these
  * strings carry no time of day, and rendering one through any zone risks
  * moving a departure to the previous or next day.
+ *
+ * A string that is not a real calendar date is returned untouched rather than
+ * silently displayed as the day it would roll over to.
  */
 export function formatBusinessDate(
   businessDate: string,
   locale: SupportedLocale,
   options: { style?: DateStyle } = {}
 ): string {
-  const match = BUSINESS_DATE.exec(businessDate)
-  if (!match) return businessDate
-  const [, year, month, day] = match
-  const asUtc = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)))
+  const asUtc = parseBusinessDate(businessDate)
+  if (!asUtc) return businessDate
   return dateTimeFormat(locale, DATE_FORMATS[options.style ?? "long"], "UTC").format(asUtc)
 }
 
@@ -92,7 +98,7 @@ export function formatDate(
 ): string {
   // A bare `YYYY-MM-DD` is a calendar date, not an instant, so it must not be
   // pushed through a timezone on the way to the screen.
-  if (typeof value === "string" && BUSINESS_DATE.test(value)) {
+  if (typeof value === "string" && isBusinessDateShape(value)) {
     return formatBusinessDate(value, locale, { style: options.style })
   }
   const { style = "long", timeZone } = options
@@ -166,19 +172,6 @@ export function formatNumber(
 }
 
 /**
- * Fraction digits are pinned rather than left to CLDR, which has changed its
- * default for RSD between ICU releases — the same price rendered 1.501 RSD on
- * one Node version and 1.500,50 RSD on another. Prices must not depend on
- * which runtime happens to render them.
- */
-const CURRENCY_FRACTION_DIGITS: Record<string, number> = {
-  // Dinar prices are whole dinars throughout the product.
-  RSD: 0,
-}
-
-const DEFAULT_FRACTION_DIGITS = 2
-
-/**
  * Currency follows the tenant, not the reader: the code stays `RSD` in every
  * locale and only grouping, decimal separator, and symbol placement change.
  */
@@ -188,7 +181,7 @@ export function formatCurrency(
   options: Intl.NumberFormatOptions & { currency?: string } = {}
 ): string {
   const { currency = DEFAULT_CURRENCY, ...rest } = options
-  const digits = CURRENCY_FRACTION_DIGITS[currency] ?? DEFAULT_FRACTION_DIGITS
+  const digits = getCurrencyFractionDigits(currency)
   return new Intl.NumberFormat(getFormattingLocale(locale), {
     style: "currency",
     currency,

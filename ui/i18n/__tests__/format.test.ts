@@ -56,6 +56,13 @@ describe("formatDate", () => {
   it("leaves a value that is not a business date untouched", () => {
     expect(formatBusinessDate("not a date", "sr")).toBe("not a date")
   })
+
+  it("never displays an impossible date as the day it would roll over to", () => {
+    // `Date.UTC(2025, 1, 30)` is 2 March; showing that would invent a departure.
+    expect(formatBusinessDate("2025-02-30", "sr")).toBe("2025-02-30")
+    expect(formatDate("2025-02-30", "en")).toBe("2025-02-30")
+    expect(formatDate("2025-13-01", "sr", { style: "short" })).toBe("2025-13-01")
+  })
 })
 
 describe("formatDateTime and formatTime", () => {
