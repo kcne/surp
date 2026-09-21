@@ -34,7 +34,8 @@ async function main() {
   console.log(
     `${counts.reservationsRead} reservations read, ${counts.alreadyLinked} already linked.\n` +
       `${counts.exactMatches} exact matches (shared roundTripId), ` +
-      `${counts.heuristicMatches} heuristic matches.\n` +
+      `${counts.heuristicMatches} heuristic matches, ` +
+      `${counts.blockMatches} paired inside a booking block.\n` +
       `${counts.ambiguous} ambiguous rows left unlinked, ${counts.excluded} cancelled rows held ` +
       `back as not-the-leg, ${counts.unmatched} with no candidate.`
   );
@@ -62,7 +63,11 @@ async function main() {
   if (reportPath) {
     writeFileSync(
       reportPath,
-      `${JSON.stringify({ counts, links: plan.links, ambiguous: plan.ambiguous }, null, 2)}\n`
+      `${JSON.stringify(
+        { counts, links: plan.links, ambiguous: plan.ambiguous, excluded: plan.excluded },
+        null,
+        2
+      )}\n`
     );
     console.log(`Report written to ${reportPath}.`);
   }
@@ -75,7 +80,8 @@ async function main() {
   const result = await applyReturnLegBackfill(prisma, actorId as string, plan);
   console.log(
     `Linked ${result.linkedCount} return legs ` +
-      `(${result.exactCount} exact, ${result.heuristicCount} heuristic).` +
+      `(${result.exactCount} exact, ${result.heuristicCount} heuristic, ` +
+      `${result.blockCount} booking block).` +
       (result.skippedCount > 0
         ? ` Skipped ${result.skippedCount} rows linked by someone else since the plan was read.`
         : '')

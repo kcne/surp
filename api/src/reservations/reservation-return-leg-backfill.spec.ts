@@ -273,6 +273,7 @@ describe('reservation return leg backfill', () => {
       linkedCount: 1,
       exactCount: 0,
       heuristicCount: 1,
+      blockCount: 0,
       skippedCount: 0
     });
 
@@ -516,5 +517,116 @@ describe('reservation return leg backfill, legs that are not what they look like
     const plan = await planReturnLegBackfill(prisma);
 
     expect(plan.excluded).toHaveLength(0);
+  });
+});
+
+describe('reservation return leg backfill, a booking block', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('pairs a party whose seats do not match in both directions', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'out-3', seatNumber: 3 }),
+      row({ id: 'out-4', seatNumber: 4 }),
+      returnRow({ id: 'back-15', seatNumber: 15 }),
+      returnRow({ id: 'back-16', seatNumber: 16 })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toHaveLength(2);
+    expect(plan.links.every((link) => link.phase === 'block')).toBe(true);
+    expect(
+      Object.fromEntries(plan.links.map((l) => [l.returnReservationId, l.outboundReservationId]))
+    ).toEqual({ 'back-15': 'out-3', 'back-16': 'out-4' });
+    // One booking, one marker.
+    expect(new Set(plan.links.map((link) => link.roundTripId)).size).toBe(1);
+    expect(plan.ambiguous).toHaveLength(0);
+  });
+
+  it('keeps the marker a block already carries instead of minting another', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'out-3', seatNumber: 3, roundTripId: 'booking-1' }),
+      row({ id: 'out-4', seatNumber: 4, roundTripId: 'booking-1' }),
+      returnRow({ id: 'back-15', seatNumber: 15, roundTripId: 'booking-1' }),
+      returnRow({ id: 'back-16', seatNumber: 16, roundTripId: 'booking-1' })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toHaveLength(2);
+    expect(plan.links.map((link) => link.roundTripId)).toEqual(['booking-1', 'booking-1']);
+  });
+
+  it('will not pair a wholly cancelled side against a wholly live one', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'out-37', seatNumber: 37, status: ReservationStatus.CANCELLED, cancelledAt: '2026-03-01T14:00:00.000Z' }),
+      row({ id: 'out-38', seatNumber: 38, status: ReservationStatus.CANCELLED, cancelledAt: '2026-03-01T14:00:00.000Z' }),
+      returnRow({ id: 'back-5', seatNumber: 5 }),
+      returnRow({ id: 'back-6', seatNumber: 6 })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toHaveLength(0);
+  });
+
+  it('still pairs a party that genuinely lost its whole return, because the seats match', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'out-23', seatNumber: 23 }),
+      row({ id: 'out-24', seatNumber: 24 }),
+      returnRow({ id: 'back-23', seatNumber: 23, status: ReservationStatus.CANCELLED, cancelledAt: '2026-03-04T09:00:00.000Z' }),
+      returnRow({ id: 'back-24', seatNumber: 24, status: ReservationStatus.CANCELLED, cancelledAt: '2026-03-04T09:00:00.000Z' })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toHaveLength(2);
+    expect(plan.links.every((link) => link.phase === 'heuristic')).toBe(true);
+  });
+
+  it('leaves a block alone when the two sides are different sizes', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'out-1', seatNumber: 1 }),
+      row({ id: 'out-2', seatNumber: 2 }),
+      row({ id: 'out-3', seatNumber: 3 }),
+      returnRow({ id: 'back-9', seatNumber: 9 }),
+      returnRow({ id: 'back-10', seatNumber: 10 })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links.filter((link) => link.phase === 'block')).toHaveLength(0);
+  });
+
+  it('leaves a block alone when the outbound legs sit on two different departures', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'out-a', seatNumber: 3, travelDate: '2026-03-01' }),
+      row({ id: 'out-b', seatNumber: 4, travelDate: '2026-03-02' }),
+      returnRow({ id: 'back-15', seatNumber: 15 }),
+      returnRow({ id: 'back-16', seatNumber: 16 })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links.filter((link) => link.phase === 'block')).toHaveLength(0);
+  });
+
+  it('leaves both return departures alone when the same outbound block fits each one', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'out-3', seatNumber: 3 }),
+      row({ id: 'out-4', seatNumber: 4 }),
+      returnRow({ id: 'first-back-15', seatNumber: 15, travelDate: '2026-03-05' }),
+      returnRow({ id: 'first-back-16', seatNumber: 16, travelDate: '2026-03-05' }),
+      returnRow({ id: 'second-back-25', seatNumber: 25, travelDate: '2026-03-06' }),
+      returnRow({ id: 'second-back-26', seatNumber: 26, travelDate: '2026-03-06' })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toHaveLength(0);
+    expect(plan.counts.blockMatches).toBe(0);
   });
 });
