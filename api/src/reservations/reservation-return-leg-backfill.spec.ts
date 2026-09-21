@@ -313,3 +313,54 @@ describe('reservation return leg backfill', () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });
+
+describe('reservation return leg backfill, cancelled and rebooked', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('links the return leg still standing, not the one the passenger replaced', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'outbound-1' }),
+      returnRow({ id: 'cancelled-return', seatNumber: 4, status: ReservationStatus.CANCELLED }),
+      returnRow({ id: 'rebooked-return', seatNumber: 11, travelDate: '2026-03-06' })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toMatchObject([
+      { returnReservationId: 'rebooked-return', outboundReservationId: 'outbound-1' }
+    ]);
+    expect(plan.ambiguous).toMatchObject([
+      { reservationId: 'cancelled-return', reason: 'candidates_already_paired' }
+    ]);
+  });
+
+  it('still links a cancelled return leg that was never replaced, so the pair is flagged', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'outbound-1' }),
+      returnRow({ id: 'cancelled-return', status: ReservationStatus.CANCELLED })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toMatchObject([
+      { returnReservationId: 'cancelled-return', outboundReservationId: 'outbound-1' }
+    ]);
+  });
+
+  it('prefers a live outbound leg when a cancelled one fits equally well', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'cancelled-outbound', seatNumber: 4, status: ReservationStatus.CANCELLED }),
+      row({ id: 'live-outbound', seatNumber: 9, rideDepartureTime: '09:00' }),
+      returnRow({ id: 'return-1', seatNumber: 21 })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toMatchObject([
+      { returnReservationId: 'return-1', outboundReservationId: 'live-outbound' }
+    ]);
+  });
+});

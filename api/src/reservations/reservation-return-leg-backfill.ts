@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient, ReservationStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { withUpdateAudit } from '../prisma/audit-write.helper';
 import { LEGACY_RETURN_LOOKUP_DAYS } from './return-leg-link';
@@ -116,18 +116,47 @@ function isReversed(leg: BackfillRow, outbound: BackfillRow): boolean {
 }
 
 /**
- * Narrows a candidate set the one way the agency's own data justifies: a round
- * trip is normally sold on the same seat in both directions. Anything still
- * tied after that is left for a human.
+ * Narrows a candidate set two ways the agency's own data justifies, in order.
+ *
+ * A cancelled leg with a live alternative for the same journey was replaced,
+ * not lost — the passenger rebooked. Pairing the dead one would report a
+ * broken round trip to staff who already fixed it. When no live alternative
+ * exists the cancelled leg is the only candidate, so a genuinely half-dead
+ * pair is still linked and still flagged.
+ *
+ * Then the seat, which a round trip usually keeps in both directions. Only a
+ * preference: the orphan repair in #14 reseated 40 reservations whose seats
+ * had been resold while they were invisible, so a seat mismatch says as much
+ * about that incident as about the passenger.
+ *
+ * Anything still tied is left for a human.
  */
 function resolveCandidate(leg: BackfillRow, candidates: BackfillRow[]): BackfillRow | null {
   if (candidates.length <= 1) {
     return candidates[0] ?? null;
   }
 
-  const sameSeat = candidates.filter((candidate) => candidate.seatNumber === leg.seatNumber);
+  const live = candidates.filter((candidate) => candidate.status === ReservationStatus.ACTIVE);
+  const narrowed = live.length > 0 ? live : candidates;
+  if (narrowed.length === 1) {
+    return narrowed[0];
+  }
+
+  const sameSeat = narrowed.filter((candidate) => candidate.seatNumber === leg.seatNumber);
 
   return sameSeat.length === 1 ? sameSeat[0] : null;
+}
+
+/**
+ * Live legs choose first. Two return legs can fit one outbound leg when a
+ * passenger cancelled a return and booked another, and whichever is processed
+ * first takes it; the one still standing is the one that means something.
+ */
+function liveLegsFirst(legs: BackfillRow[]): BackfillRow[] {
+  return [
+    ...legs.filter((leg) => leg.status === ReservationStatus.ACTIVE),
+    ...legs.filter((leg) => leg.status !== ReservationStatus.ACTIVE)
+  ];
 }
 
 /**
@@ -209,7 +238,7 @@ export async function planReturnLegBackfill(
   }
 
   for (const booking of bookings.values()) {
-    for (const leg of booking) {
+    for (const leg of liveLegsFirst(booking)) {
       if (leg.returnOfReservationId !== null) {
         continue;
       }
@@ -249,7 +278,7 @@ export async function planReturnLegBackfill(
   const legacy = rows.filter((row) => !row.roundTripId && row.returnOfReservationId === null);
   const paired = new Set<string>();
 
-  for (const leg of legacy) {
+  for (const leg of liveLegsFirst(legacy)) {
     if (paired.has(leg.id)) {
       continue;
     }
