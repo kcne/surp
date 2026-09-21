@@ -165,25 +165,21 @@ function liveLegsFirst(legs: BackfillRow[]): BackfillRow[] {
  * returns are what gate 4 of the epic compares between the restored run and
  * the production run.
  */
-export async function planReturnLegBackfill(
-  prisma: PrismaReadClient
-): Promise<ReturnLegBackfillPlan> {
-  const rows = await prisma.reservation.findMany({
-    select: BACKFILL_SELECT,
-    orderBy: [{ travelDate: 'asc' }, { rideDepartureTime: 'asc' }, { id: 'asc' }]
-  });
-
+/**
+ * One pass over the current state of the rows. Both phases, in order.
+ */
+function pairingPass(rows: BackfillRow[]): {
+  links: ReturnLegBackfillLink[];
+  ambiguous: ReturnLegBackfillAmbiguity[];
+} {
   const links: ReturnLegBackfillLink[] = [];
   const ambiguous: ReturnLegBackfillAmbiguity[] = [];
 
   // An outbound leg any row already points at is out of reach, and so is one
-  // this run has just handed to another return leg.
+  // this pass has just handed to another return leg.
   const takenOutboundIds = new Set(
-    rows
-      .map((row) => row.returnOfReservationId)
-      .filter((id): id is string => Boolean(id))
+    rows.map((row) => row.returnOfReservationId).filter((id): id is string => Boolean(id))
   );
-  const alreadyLinked = rows.filter((row) => row.returnOfReservationId !== null).length;
 
   const record = (
     phase: BackfillPhase,
@@ -297,7 +293,9 @@ export async function planReturnLegBackfill(
       'heuristic',
       leg,
       reachable,
-      reachable.filter((candidate) => !takenOutboundIds.has(candidate.id) && !paired.has(candidate.id))
+      reachable.filter(
+        (candidate) => !takenOutboundIds.has(candidate.id) && !paired.has(candidate.id)
+      )
     );
 
     if (outbound) {
@@ -314,16 +312,75 @@ export async function planReturnLegBackfill(
     }
   }
 
+  return { links, ambiguous };
+}
+
+/**
+ * Passes repeat until nothing new is found, because a pass changes what the
+ * next one can see: a paired row leaves the pool, which can leave a single
+ * candidate where two competed, and a marker minted in phase B moves its pair
+ * out of phase B's reach. Running to that fixed point here is what makes a
+ * second run of the script a genuine no-op, so the production run can be
+ * compared against the restored-backup run.
+ */
+const MAX_PASSES = 10;
+
+/**
+ * Reads the whole plan without writing anything, so it can be run against a
+ * restored production backup before anyone supplies an actor id. The counts it
+ * returns are what gate 4 of the epic compares between the restored run and
+ * the production run.
+ */
+export async function planReturnLegBackfill(
+  prisma: PrismaReadClient
+): Promise<ReturnLegBackfillPlan> {
+  const rows = await prisma.reservation.findMany({
+    select: BACKFILL_SELECT,
+    orderBy: [{ travelDate: 'asc' }, { rideDepartureTime: 'asc' }, { id: 'asc' }]
+  });
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const alreadyLinked = rows.filter((row) => row.returnOfReservationId !== null).length;
+
+  const links: ReturnLegBackfillLink[] = [];
+  // Kept across passes and keyed by row, so the pass that saw the competition
+  // is the one that describes it. Entries a later pass resolved are dropped
+  // below rather than reported as open questions.
+  const ambiguousByRow = new Map<string, ReturnLegBackfillAmbiguity>();
+
+  for (let pass = 0; pass < MAX_PASSES; pass += 1) {
+    const result = pairingPass(rows);
+    for (const entry of result.ambiguous) {
+      if (!ambiguousByRow.has(entry.reservationId)) {
+        ambiguousByRow.set(entry.reservationId, entry);
+      }
+    }
+
+    if (result.links.length === 0) {
+      break;
+    }
+
+    for (const link of result.links) {
+      const leg = rowsById.get(link.returnReservationId);
+      const outbound = rowsById.get(link.outboundReservationId);
+      if (leg) {
+        leg.returnOfReservationId = link.outboundReservationId;
+        leg.roundTripId = link.roundTripId;
+      }
+      if (outbound) {
+        outbound.roundTripId = link.roundTripId;
+      }
+      links.push(link);
+    }
+  }
+
   const exactMatches = links.filter((link) => link.phase === 'exact').length;
-  // Counted at the end rather than as rows are visited: an outbound leg is
-  // reached before the return that pairs with it, and looks candidate-less
-  // until then.
   const touched = new Set(
     links.flatMap((link) => [link.returnReservationId, link.outboundReservationId])
   );
+  const ambiguous = [...ambiguousByRow.values()].filter((entry) => !touched.has(entry.reservationId));
   const reported = new Set(ambiguous.map((entry) => entry.reservationId));
   const unmatched = rows.filter(
-    (row) => row.returnOfReservationId === null && !touched.has(row.id) && !reported.has(row.id)
+    (row) => !touched.has(row.id) && !reported.has(row.id) && row.returnOfReservationId === null
   ).length;
 
   return {

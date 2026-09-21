@@ -364,3 +364,46 @@ describe('reservation return leg backfill, cancelled and rebooked', () => {
     ]);
   });
 });
+
+describe('reservation return leg backfill, repeated passes', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('resolves a tie that an earlier pass could only break later, in one run', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'outbound-seat-5', seatNumber: 5, travelDate: '2026-03-01' }),
+      row({ id: 'outbound-seat-6', seatNumber: 6, travelDate: '2026-03-02' }),
+      // Seen first, fits both outbound legs, and its own seat breaks no tie.
+      returnRow({ id: 'reseated-return', seatNumber: 99, travelDate: '2026-03-03' }),
+      returnRow({ id: 'seat-5-return', seatNumber: 5, travelDate: '2026-03-04' })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toHaveLength(2);
+    expect(
+      Object.fromEntries(plan.links.map((l) => [l.returnReservationId, l.outboundReservationId]))
+    ).toEqual({
+      'seat-5-return': 'outbound-seat-5',
+      'reseated-return': 'outbound-seat-6'
+    });
+    expect(plan.ambiguous).toHaveLength(0);
+  });
+
+  it('still reports a row no later pass could resolve', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'outbound-a', seatNumber: 1 }),
+      row({ id: 'outbound-b', seatNumber: 2, travelDate: '2026-03-02' }),
+      returnRow({ id: 'return-1', seatNumber: 7 })
+    ]);
+
+    const plan = await planReturnLegBackfill(prisma);
+
+    expect(plan.links).toHaveLength(0);
+    expect(plan.ambiguous).toMatchObject([
+      { reservationId: 'return-1', reason: 'multiple_candidates' }
+    ]);
+  });
+});
