@@ -205,6 +205,20 @@ describe('RidesService', () => {
         status: RideStatus.DRAFT
       })
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prismaMock.reservation.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns missing-ride errors before scanning tenant reservations', async () => {
+    prismaMock.ride.findFirst.mockResolvedValue(null);
+
+    await expect(service.update(auth, 'ride-missing', { capacity: 30 })).rejects.toBeInstanceOf(
+      NotFoundException
+    );
+    await expect(
+      service.replaceDayTimes(auth, 'ride-missing', [])
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prismaMock.reservation.findMany).not.toHaveBeenCalled();
   });
 
   // The merge below fills every field the DTO omits from the stored ride and
@@ -1116,6 +1130,7 @@ describe('RidesService', () => {
           rideArrivalTime: '11:30'
         })
       ]);
+      expect(harness.tx.reservation.findMany).toHaveBeenCalledTimes(3);
     });
 
     it('leaves the reservation where it is when the caller only overrides', async () => {

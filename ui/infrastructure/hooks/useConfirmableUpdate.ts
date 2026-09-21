@@ -7,15 +7,18 @@ import { ChangeNeedsConfirmationError } from "@/infrastructure/utils/breaking-ch
 /**
  * What the agency has answered so far, by step.
  *
- * Two lists rather than one, because a refusal has two answers and they are
- * not degrees of the same thing. Confirming writes the change and leaves the
- * breakage for the integrity report; repairing writes it and puts the affected
- * reservations back in order. A step appears in at most one list: answering
- * again replaces the earlier answer rather than adding to it.
+ * An edit can raise several invariant questions for the same request. Keep the
+ * invariant with each answer so overriding one does not discard a repair the
+ * agency chose for another.
  */
+export interface BreakingChangeAnswer {
+  step: string
+  invariant: string
+}
+
 export interface BreakingChangeAnswers {
-  confirmed: string[]
-  repaired: string[]
+  confirmed: BreakingChangeAnswer[]
+  repaired: BreakingChangeAnswer[]
 }
 
 const NO_ANSWERS: BreakingChangeAnswers = { confirmed: [], repaired: [] }
@@ -52,7 +55,11 @@ export function useConfirmableUpdate<TVariables>({
     partiallyApplied: boolean
   } | null>(null)
 
-  const attempt = async (variables: TVariables, answers: BreakingChangeAnswers) => {
+  const attempt = async (
+    variables: TVariables,
+    answers: BreakingChangeAnswers,
+    previouslyApplied = false
+  ) => {
     try {
       await update(variables, answers)
       setPending(null)
@@ -63,7 +70,7 @@ export function useConfirmableUpdate<TVariables>({
           answers,
           step: error.step,
           confirmation: error.confirmation,
-          partiallyApplied: error.partiallyApplied,
+          partiallyApplied: previouslyApplied || error.partiallyApplied,
         })
       }
 
@@ -72,21 +79,22 @@ export function useConfirmableUpdate<TVariables>({
   }
 
   /**
-   * Adds this refusal's step to one list and takes it out of the other, so a
-   * retry carries every answer given so far, none that was not, and only the
-   * latest answer to any one question. Pressing "save anyway" after a repair
-   * fell short must not resend the repair that already failed.
+   * Replace the answer to this invariant only. A later refusal for another
+   * invariant on the same request keeps its earlier repair or override.
    */
   const answering = (
     answers: BreakingChangeAnswers,
     step: string,
+    invariant: string,
     as: keyof BreakingChangeAnswers
   ): BreakingChangeAnswers => {
-    const without = (steps: string[]) => steps.filter((answered) => answered !== step)
+    const without = (entries: BreakingChangeAnswer[]) =>
+      entries.filter((answered) => answered.step !== step || answered.invariant !== invariant)
+    const answer = { step, invariant }
 
     return as === "confirmed"
-      ? { confirmed: [...without(answers.confirmed), step], repaired: without(answers.repaired) }
-      : { confirmed: without(answers.confirmed), repaired: [...without(answers.repaired), step] }
+      ? { confirmed: [...without(answers.confirmed), answer], repaired: without(answers.repaired) }
+      : { confirmed: without(answers.confirmed), repaired: [...without(answers.repaired), answer] }
   }
 
   const answer = (as: keyof BreakingChangeAnswers) => async () => {
@@ -95,7 +103,11 @@ export function useConfirmableUpdate<TVariables>({
     }
 
     try {
-      await attempt(pending.variables, answering(pending.answers, pending.step, as))
+      await attempt(
+        pending.variables,
+        answering(pending.answers, pending.step, pending.confirmation.invariant, as),
+        pending.partiallyApplied
+      )
       onConfirmed?.()
     } catch {
       // Either the next refusal, now showing in this same dialog, or an

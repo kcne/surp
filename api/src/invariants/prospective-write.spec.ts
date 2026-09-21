@@ -20,7 +20,8 @@ function violation(subjectId: string, magnitude?: number): Violation {
 function invariantReporting(
   key: string,
   before: Violation[],
-  after: Violation[]
+  after: Violation[],
+  afterRepair = after
 ): ProspectiveInvariant & { contexts: InvariantContext[] } {
   const contexts: InvariantContext[] = [];
   let call = 0;
@@ -35,7 +36,7 @@ function invariantReporting(
     contexts,
     async check(ctx) {
       contexts.push(ctx);
-      const violations = call === 0 ? before : after;
+      const violations = call === 0 ? before : call === 1 ? after : afterRepair;
       call += 1;
 
       return { violations, scannedCount: violations.length };
@@ -88,7 +89,11 @@ function invariantRepairing(
   key: string,
   passes: Violation[][],
   repair: () => Promise<void> = async () => {}
-): ProspectiveInvariant & { contexts: InvariantContext[]; repairCalls: number } {
+): ProspectiveInvariant & {
+  contexts: InvariantContext[];
+  repairCalls: number;
+  repairSubjects: string[][];
+} {
   const contexts: InvariantContext[] = [];
   let call = 0;
 
@@ -102,6 +107,7 @@ function invariantRepairing(
     repairMessage: (count: number) => `${key} repairs ${count}`,
     contexts,
     repairCalls: 0,
+    repairSubjects: [] as string[][],
     async check(ctx: InvariantContext) {
       contexts.push(ctx);
       const violations = passes[Math.min(call, passes.length - 1)];
@@ -109,8 +115,9 @@ function invariantRepairing(
 
       return { violations, scannedCount: violations.length };
     },
-    async repair() {
+    async repair(_ctx: InvariantContext, subjectIds?: ReadonlySet<string>) {
       invariant.repairCalls += 1;
+      invariant.repairSubjects.push([...(subjectIds ?? [])]);
       await repair();
 
       return { repairedCount: 0, skippedCount: 0 };
@@ -164,7 +171,7 @@ describe('guardProspectiveWrite', () => {
     await expect(
       guardProspectiveWrite(prisma as never, scope, [reachable], UNANSWERED, write)
     ).resolves.toBe('written');
-    expect(write).toHaveBeenCalledWith({ marker: 'transaction' });
+    expect(write).toHaveBeenCalledWith({ marker: 'transaction' }, undefined);
   });
 
   it('rejects a change that deepens a violation it did not create', async () => {
@@ -326,6 +333,41 @@ describe('guardProspectiveWrite', () => {
 
       expect(reachable.repairCalls).toBe(1);
       expect(transactions[0].outcome).toBe('committed');
+      expect(reachable.repairSubjects).toEqual([['res-1', 'res-2']]);
+    });
+
+    it('does not pass pre-existing violations to the repair', async () => {
+      const { prisma } = prismaDouble();
+      const reachable = invariantRepairing('reservation.reachable', [
+        [repairable('old')],
+        [repairable('old'), repairable('new')],
+        [repairable('old')]
+      ]);
+
+      await guardProspectiveWrite(prisma as never, scope, [reachable], REPAIR, jest.fn());
+
+      expect(reachable.repairSubjects).toEqual([['new']]);
+    });
+
+    it('uses a scoped seat assessment when old orphans make the full report pessimistic', async () => {
+      const { prisma } = prismaDouble();
+      const reachable = invariantRepairing('reservation.reachable', [
+        [violation('old')],
+        [violation('old'), violation('new')],
+        [violation('old')]
+      ]);
+      reachable.assessRepair = jest.fn(async (_ctx, subjectIds) => ({
+        scannedCount: 2,
+        violations: [repairable([...subjectIds][0])]
+      }));
+
+      await guardProspectiveWrite(prisma as never, scope, [reachable], REPAIR, jest.fn());
+
+      expect(reachable.assessRepair).toHaveBeenCalledWith(
+        expect.anything(),
+        new Set(['new'])
+      );
+      expect(reachable.repairSubjects).toEqual([['new']]);
     });
 
     it('repairs in the same transaction as the write it is repairing', async () => {
@@ -383,6 +425,70 @@ describe('guardProspectiveWrite', () => {
       expect(transactions[0].outcome).toBe('rolled-back');
     });
 
+    it('rolls back a failed repair even when another violation was confirmed', async () => {
+      const { prisma, transactions } = prismaDouble();
+      const reachable = invariantRepairing('reservation.reachable', [
+        [],
+        [repairable('res-1')],
+        [repairable('res-1')]
+      ]);
+
+      await expect(
+        guardProspectiveWrite(
+          prisma as never,
+          scope,
+          [reachable],
+          { confirmed: true, repair: true },
+          jest.fn()
+        )
+      ).rejects.toMatchObject({ response: { repairable: false } });
+
+      expect(transactions[0].outcome).toBe('rolled-back');
+    });
+
+    it('repairs one invariant and honors confirmation for another', async () => {
+      const { prisma, transactions } = prismaDouble();
+      const reachable = invariantRepairing('reservation.reachable', [
+        [],
+        [repairable('res-1')],
+        []
+      ]);
+      const overbooked = invariantReporting('instance.notOverbooked', [], [violation('bus-1')]);
+
+      await guardProspectiveWrite(
+        prisma as never,
+        scope,
+        [reachable, overbooked],
+        { confirmed: true, repair: true },
+        jest.fn()
+      );
+
+      expect(reachable.repairCalls).toBe(1);
+      expect(transactions[0].outcome).toBe('committed');
+    });
+
+    it('checks other invariants again after repair makes reservations reachable', async () => {
+      const { prisma, transactions } = prismaDouble();
+      const reachable = invariantRepairing('reservation.reachable', [
+        [],
+        [repairable('res-1')],
+        []
+      ]);
+      const overbooked = invariantReporting(
+        'instance.notOverbooked',
+        [],
+        [],
+        [violation('bus-1')]
+      );
+
+      await expect(
+        guardProspectiveWrite(prisma as never, scope, [reachable, overbooked], REPAIR, jest.fn())
+      ).rejects.toMatchObject({ response: { invariant: 'instance.notOverbooked' } });
+
+      expect(overbooked.contexts).toHaveLength(3);
+      expect(transactions[0].outcome).toBe('rolled-back');
+    });
+
     it('refuses an invariant with no repair exactly as it would have', async () => {
       const { prisma } = prismaDouble();
       const overbooked = invariantReporting(
@@ -412,6 +518,27 @@ describe('guardProspectiveWrite', () => {
       ).rejects.toMatchObject({ response: { affectedCount: 2, repairable: false } });
 
       expect(reachable.repairCalls).toBe(0);
+    });
+
+    it('does not let confirmation turn a partial repair request into an override', async () => {
+      const { prisma, transactions } = prismaDouble();
+      const reachable = invariantRepairing('reservation.reachable', [
+        [],
+        [repairable('res-1'), violation('res-2')]
+      ]);
+
+      await expect(
+        guardProspectiveWrite(
+          prisma as never,
+          scope,
+          [reachable],
+          { confirmed: true, repair: true },
+          jest.fn()
+        )
+      ).rejects.toMatchObject({ response: { affectedCount: 2, repairable: false } });
+
+      expect(reachable.repairCalls).toBe(0);
+      expect(transactions[0].outcome).toBe('rolled-back');
     });
 
     it('offers the repair, and what it would do, when every one can be settled', async () => {

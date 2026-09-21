@@ -545,6 +545,50 @@ export class RidesService {
       { tenantId: auth.tenantId, actorId: auth.sub },
       PROSPECTIVE_INVARIANTS.rideUpdate,
       { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
+      async (
+        tx,
+        prepared: { nextLineName: string; normalizedSchedule: RideScheduleNormalized }
+      ) => {
+        const { nextLineName, normalizedSchedule } = prepared;
+
+        await tx.ride.update({
+          where: {
+            id
+          },
+          data: withUpdateAudit(
+            {
+              ...(typeof dto.name === 'string' ? { name: dto.name.trim() || nextLineName } : {}),
+              ...(dto.lineId ? { lineId: dto.lineId } : {}),
+              ...(dto.capacity !== undefined ? { capacity: dto.capacity } : {}),
+              ...(dto.type ? { type: normalizedSchedule.type } : {}),
+              ...(dto.status ? { status: dto.status } : {}),
+              recurringStartDate: normalizedSchedule.recurringStartDate,
+              recurringEndDate: normalizedSchedule.recurringEndDate,
+              oneTimeDate: normalizedSchedule.oneTimeDate,
+              oneTimeDepartureTime: normalizedSchedule.oneTimeDepartureTime,
+              oneTimeArrivalTime: normalizedSchedule.oneTimeArrivalTime
+            },
+            auth.sub
+          )
+        });
+
+        await this.replaceRideDaySchedulesTx(
+          tx,
+          auth.tenantId,
+          id,
+          auth.sub,
+          this.toTotalDaySchedules(normalizedSchedule.daySchedules),
+          true
+        );
+
+        return tx.ride.findFirst({
+          where: {
+            id,
+            tenantId: auth.tenantId
+          },
+          select: SAFE_RIDE_SELECT
+        });
+      },
       async (tx) => {
         const existing = await this.getRideOrThrow(auth.tenantId, id, tx);
 
@@ -602,43 +646,7 @@ export class RidesService {
         const nextStatus = dto.status ?? existing.status;
         this.validateStatusTransition(existing.status, nextStatus);
 
-        await tx.ride.update({
-          where: {
-            id
-          },
-          data: withUpdateAudit(
-            {
-              ...(typeof dto.name === 'string' ? { name: dto.name.trim() || nextLineName } : {}),
-              ...(dto.lineId ? { lineId: dto.lineId } : {}),
-              ...(dto.capacity !== undefined ? { capacity: dto.capacity } : {}),
-              ...(dto.type ? { type: normalizedSchedule.type } : {}),
-              ...(dto.status ? { status: dto.status } : {}),
-              recurringStartDate: normalizedSchedule.recurringStartDate,
-              recurringEndDate: normalizedSchedule.recurringEndDate,
-              oneTimeDate: normalizedSchedule.oneTimeDate,
-              oneTimeDepartureTime: normalizedSchedule.oneTimeDepartureTime,
-              oneTimeArrivalTime: normalizedSchedule.oneTimeArrivalTime
-            },
-            auth.sub
-          )
-        });
-
-        await this.replaceRideDaySchedulesTx(
-          tx,
-          auth.tenantId,
-          id,
-          auth.sub,
-          this.toTotalDaySchedules(normalizedSchedule.daySchedules),
-          true
-        );
-
-        return tx.ride.findFirst({
-          where: {
-            id,
-            tenantId: auth.tenantId
-          },
-          select: SAFE_RIDE_SELECT
-        });
+        return { nextLineName, normalizedSchedule };
       }
     );
 
@@ -666,20 +674,6 @@ export class RidesService {
       PROSPECTIVE_INVARIANTS.rideUpdate,
       consent,
       async (tx) => {
-        const ride = await this.getRideOrThrow(auth.tenantId, id, tx);
-
-        if (ride.type !== RideType.RECURRING) {
-          throw new BadRequestException('Day-times can only be managed for recurring rides');
-        }
-
-        const routeStationIds = [
-          ride.line.departureStationId,
-          ...ride.line.intermediateStops.map((item) => item.stationId),
-          ride.line.arrivalStationId
-        ];
-
-        this.validateDaySchedules(daySchedules, routeStationIds);
-
         await this.replaceRideDaySchedulesTx(
           tx,
           auth.tenantId,
@@ -701,6 +695,21 @@ export class RidesService {
           },
           select: SAFE_RIDE_SELECT
         });
+      },
+      async (tx) => {
+        const ride = await this.getRideOrThrow(auth.tenantId, id, tx);
+
+        if (ride.type !== RideType.RECURRING) {
+          throw new BadRequestException('Day-times can only be managed for recurring rides');
+        }
+
+        const routeStationIds = [
+          ride.line.departureStationId,
+          ...ride.line.intermediateStops.map((item) => item.stationId),
+          ride.line.arrivalStationId
+        ];
+
+        this.validateDaySchedules(daySchedules, routeStationIds);
       }
     );
 

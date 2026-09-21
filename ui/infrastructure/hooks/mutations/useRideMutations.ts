@@ -136,8 +136,10 @@ export function useUpdateRideMutation() {
        */
       answers?: BreakingChangeAnswers
     }) => {
-      const isConfirmed = (step: string) => answers?.confirmed.includes(step) === true
-      const isRepaired = (step: string) => answers?.repaired.includes(step) === true
+      const isConfirmed = (step: string) =>
+        answers?.confirmed.some((answer) => answer.step === step) === true
+      const isRepaired = (step: string) =>
+        answers?.repaired.some((answer) => answer.step === step) === true
       const answeredFor = (step: string) => ({
         confirmBreakingChange: isConfirmed(step),
         repairBreakingChange: isRepaired(step),

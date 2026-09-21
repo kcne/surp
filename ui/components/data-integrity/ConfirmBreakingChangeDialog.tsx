@@ -67,8 +67,8 @@ export function ConfirmBreakingChangeDialog({
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={loading}>
+        <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:space-x-0">
+          <AlertDialogCancel disabled={loading} className="mt-0">
             <X className="mr-2 h-4 w-4" />
             Odustani
           </AlertDialogCancel>

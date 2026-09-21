@@ -6423,12 +6423,12 @@
           "confirmBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
+            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
           },
           "repairBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
           },
           "name": {
             "type": "string",
@@ -6765,12 +6765,12 @@
           "confirmBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
+            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
           },
           "repairBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
           },
           "name": {
             "type": "string",
@@ -6820,12 +6820,12 @@
           "confirmBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
+            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
           },
           "repairBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
           },
           "intermediateStops": {
             "type": "array",
@@ -8150,12 +8150,12 @@
           "confirmBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
+            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
           },
           "repairBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
           },
           "firstName": {
             "type": "string",
@@ -8826,12 +8826,12 @@
           "confirmBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
+            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
           },
           "repairBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
           },
           "name": {
             "type": "string",
@@ -8896,12 +8896,12 @@
           "confirmBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
+            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
           },
           "repairBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
           },
           "daySchedules": {
             "type": "array",
@@ -8942,12 +8942,12 @@
           "confirmBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
+            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
           },
           "repairBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
           },
           "date": {
             "type": "string",
@@ -8981,12 +8981,12 @@
           "confirmBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Confirms a change previously refused with WOULD_BREAK_RESERVATIONS."
+            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
           },
           "repairBreakingChange": {
             "type": "boolean",
             "example": false,
-            "description": "Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange."
+            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
           }
         }
       },

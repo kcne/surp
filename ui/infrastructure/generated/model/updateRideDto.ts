@@ -10,9 +10,9 @@ import type { UpdateRideDtoStatus } from './updateRideDtoStatus';
 import type { UpdateRideDtoType } from './updateRideDtoType';
 
 export interface UpdateRideDto {
-  /** Confirms a change previously refused with WOULD_BREAK_RESERVATIONS. */
+  /** Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers. */
   confirmBreakingChange?: boolean;
-  /** Applies the change and repairs the reservations it would break. Refused as before when the violation has no repair, so it never stands in for confirmBreakingChange. */
+  /** Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true. */
   repairBreakingChange?: boolean;
   name?: string;
   lineId?: string;

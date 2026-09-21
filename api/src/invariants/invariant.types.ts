@@ -120,7 +120,8 @@ export interface Invariant {
    * Present only where a repair can be made without guessing. An invariant
    * whose fix requires a routing decision stays reported.
    */
-  repair?(ctx: InvariantContext): Promise<RepairResult>;
+  /** When provided by a prospective write, repair only these subjects. */
+  repair?(ctx: InvariantContext, subjectIds?: ReadonlySet<string>): Promise<RepairResult>;
 }
 
 /**
@@ -132,4 +133,6 @@ export interface Invariant {
  */
 export type ProspectiveInvariant = Invariant & {
   breakingChangeMessage: (count: number) => string;
+  /** Plan only these subjects when other existing violations compete for repair capacity. */
+  assessRepair?(ctx: InvariantContext, subjectIds: ReadonlySet<string>): Promise<CheckResult>;
 };

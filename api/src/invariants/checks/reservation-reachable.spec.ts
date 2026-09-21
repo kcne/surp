@@ -294,6 +294,44 @@ describe('reservation.reachable', () => {
     );
   });
 
+  it('leaves unrelated pre-existing orphans untouched during a prospective repair', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([
+      reservation('res-old', 8, '07:45'),
+      reservation('res-new', 12, '07:45')
+    ]);
+
+    const result = await repairOrphanedReservations(ctx, new Set(['res-new']));
+
+    expect(result.repairedCount).toBe(1);
+    expect(prismaMock.reservation.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'res-new' } })
+    );
+  });
+
+  it('does not let an unrelated orphan claim the only seat in a scoped repair', async () => {
+    prismaMock.ride.findMany.mockResolvedValue([{ ...strandedRide, capacity: 1 }]);
+    prismaMock.reservation.findMany.mockResolvedValue([
+      reservation('res-old', 1, '07:45'),
+      reservation('res-new', 1, '07:45')
+    ]);
+
+    const fullReport = await buildOrphanReport(ctx);
+    const selectedCtx = { ...ctx };
+    const selectedReport = await buildOrphanReport(selectedCtx, new Set(['res-new']));
+
+    expect(fullReport.items.find((item) => item.reservationId === 'res-new')?.canRepair).toBe(false);
+    expect(selectedReport.items.find((item) => item.reservationId === 'res-new')).toEqual(
+      expect.objectContaining({ canRepair: true, targetSeatNumber: 1 })
+    );
+
+    await repairOrphanedReservations({ ...ctx }, new Set(['res-new']));
+    expect(prismaMock.reservation.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'res-new' } })
+    );
+  });
+
   it('touches nothing when no single instance can claim the orphans', async () => {
     prismaMock.ride.findMany.mockResolvedValue([
       { ...strandedRide, status: 'INACTIVE', daySchedules: [] }

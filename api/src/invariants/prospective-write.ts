@@ -59,13 +59,10 @@ export interface ProspectiveWriteScope {
 /**
  * The caller's answer to a refusal it has already been shown.
  *
- * Two answers, not one flag with two meanings. `confirmed` is "write it and
- * leave the breakage for the integrity report"; `repair` is "write it and put
- * the affected reservations back in order, and refuse if you cannot". They are
- * separate because the second is a promise, and a promise that quietly
- * degrades into the first is the thing worth not building: an agency that
- * pressed a button saying the reservations would be fixed must not end up with
- * broken ones and no word about it.
+ * `confirmed` permits unresolved violations; `repair` requires repairable
+ * violations to be settled. Both may be true when one edit raised separate
+ * questions about separate invariants: the guard then repairs where it can and
+ * permits the others. A failed requested repair still refuses the whole write.
  */
 export interface ProspectiveWriteConsent {
   confirmed: boolean;
@@ -79,14 +76,19 @@ export interface ProspectiveWriteConsent {
  * visible in the integrity report, but it must not make an unrelated edit
  * impossible.
  */
-export async function guardProspectiveWrite<TResult>(
+export async function guardProspectiveWrite<TResult, TPrepared = void>(
   prisma: PrismaService,
   scope: ProspectiveWriteScope,
   invariants: readonly ProspectiveInvariant[],
   consent: ProspectiveWriteConsent,
-  write: (tx: Prisma.TransactionClient) => Promise<TResult>
+  write: (tx: Prisma.TransactionClient, prepared: TPrepared) => Promise<TResult>,
+  /** Read and validate the proposed write before scanning the tenant. */
+  prepare?: (tx: Prisma.TransactionClient) => Promise<TPrepared>
 ): Promise<TResult> {
   return runSerializable(prisma, async (tx) => {
+    // Cheap existence and payload validation can run before the tenant-wide
+    // baseline scan while still reading the state this transaction will write.
+    const prepared = prepare ? await prepare(tx) : (undefined as TPrepared);
     // Nothing to compare, but still serializable: the callbacks do their own
     // read-then-write — an exception that must not already exist, a route read
     // to derive the next one from — and those need the isolation whether or
@@ -95,12 +97,13 @@ export async function guardProspectiveWrite<TResult>(
     // A repair keeps the scans even when the write is confirmed: it cannot fix
     // what it has not measured.
     if (invariants.length === 0 || (consent.confirmed && !consent.repair)) {
-      return write(tx);
+      return write(tx, prepared);
     }
 
     const before = await checkInvariants(tx, scope, invariants);
-    const result = await write(tx);
-    const after = await checkInvariants(tx, scope, invariants);
+    const result = await write(tx, prepared);
+    let afterContext = invariantContext(tx, scope);
+    let after = await checkInvariants(tx, scope, invariants, afterContext);
 
     for (const invariant of invariants) {
       let added = addedViolations(before.get(invariant.key)!, after.get(invariant.key)!);
@@ -109,41 +112,68 @@ export async function guardProspectiveWrite<TResult>(
         continue;
       }
 
-      if (consent.repair && isFullyRepairable(invariant, added)) {
-        await invariant.repair!(invariantContext(tx, scope));
+      if (invariant.assessRepair) {
+        const assessed = await invariant.assessRepair(
+          afterContext,
+          new Set(added.map((violation) => violation.subjectId))
+        );
+        const assessedBySubject = new Map(
+          assessed.violations.map((violation) => [subjectOf(violation), violation])
+        );
+        added = added.map((violation) => assessedBySubject.get(subjectOf(violation)) ?? violation);
+      }
 
-        // Re-checked rather than assumed. The repair decides seats against the
-        // bus as it stands and declines whatever it cannot settle, so whether
-        // it actually cleared these is a question only another scan answers —
-        // and it runs on a fresh context, which is what keeps the repaired
-        // rows from being served out of the window cache the first scan filled.
-        const repaired = await checkInvariants(tx, scope, [invariant]);
-        added = addedViolations(before.get(invariant.key)!, repaired.get(invariant.key)!);
-
-        if (added.length === 0) {
-          continue;
+      if (consent.repair && invariant.repair) {
+        if (!isFullyRepairable(invariant, added)) {
+          throw breakingChange(invariant, added, false);
         }
+
+        await invariant.repair(
+          // Nothing has written since the post-write scan, so its cached
+          // window is still the state the repair must plan against.
+          afterContext,
+          new Set(added.map((violation) => violation.subjectId))
+        );
+
+        // Refresh every invariant: making a reservation reachable can also
+        // change what the seat and segment checks see. This pass gets a fresh
+        // context, so the window cache cannot serve pre-repair rows.
+        afterContext = invariantContext(tx, scope);
+        after = await checkInvariants(tx, scope, invariants, afterContext);
+        added = addedViolations(before.get(invariant.key)!, after.get(invariant.key)!);
+
+        if (added.length > 0) {
+          throw breakingChange(invariant, added, false);
+        }
+
+        continue;
       }
 
       if (consent.confirmed) {
         continue;
       }
 
-      throw new ConflictException({
-        code: 'WOULD_BREAK_RESERVATIONS',
-        invariant: invariant.key,
-        affectedCount: added.length,
-        message: invariant.breakingChangeMessage(added.length),
-        // Computed from what is left, so a repair that ran and fell short
-        // cannot offer itself again on the way out.
-        repairable: isFullyRepairable(invariant, added),
-        ...(isFullyRepairable(invariant, added) && invariant.repairMessage
-          ? { repairMessage: invariant.repairMessage(added.length) }
-          : {})
-      });
+      throw breakingChange(invariant, added);
     }
 
     return result;
+  });
+}
+
+function breakingChange(
+  invariant: ProspectiveInvariant,
+  added: readonly Violation[],
+  repairable = isFullyRepairable(invariant, added)
+): ConflictException {
+  return new ConflictException({
+    code: 'WOULD_BREAK_RESERVATIONS',
+    invariant: invariant.key,
+    affectedCount: added.length,
+    message: invariant.breakingChangeMessage(added.length),
+    repairable,
+    ...(repairable && invariant.repairMessage
+      ? { repairMessage: invariant.repairMessage(added.length) }
+      : {})
   });
 }
 
@@ -248,9 +278,9 @@ function invariantContext(
 async function checkInvariants(
   prisma: Prisma.TransactionClient,
   scope: ProspectiveWriteScope,
-  invariants: readonly Invariant[]
+  invariants: readonly Invariant[],
+  ctx = invariantContext(prisma, scope)
 ): Promise<Map<string, Violation[]>> {
-  const ctx = invariantContext(prisma, scope);
   const result = new Map<string, Violation[]>();
 
   for (const invariant of invariants) {
