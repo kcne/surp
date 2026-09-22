@@ -1246,6 +1246,24 @@ describe('ReservationsService', () => {
     ]);
   });
 
+  it('uses the normalized travel date for batch locks and departure groups', async () => {
+    const item = (travelDate: string, seatNumber: number) => ({
+      rideId: 'ride-1', passengerId: 'passenger-1', travelDate,
+      rideDepartureTime: '09:00', rideArrivalTime: '10:30', seatNumber,
+      departureStationId: 'station-a', arrivalStationId: 'station-c'
+    });
+
+    const result = await service.createBatch(auth, {
+      travelTogether: true,
+      items: [item('2026-02-31', 1), item('2026-03-03', 2)]
+    });
+
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$executeRaw.mock.calls[0][1]).toBe('tenant-1:ride-1:2026-03-03:09:00');
+    expect(result.items[0].reservation?.travelDate).toBe('2026-03-03');
+    expect(result.items[0].reservation?.groupId).toBe(result.items[1].reservation?.groupId);
+  });
+
   it('fails when route segment capacity is exhausted', async () => {
     prismaMock.ride.findFirst.mockResolvedValueOnce({ ...routeRide, capacity: 1 });
 

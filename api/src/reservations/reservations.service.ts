@@ -138,7 +138,7 @@ export class ReservationsService {
         this.rideInstanceKey({
           tenantId: auth.tenantId,
           rideId: item.rideId,
-          travelDate: item.travelDate,
+          travelDate: this.toUtcDate(item.travelDate),
           rideDepartureTime: item.rideDepartureTime
         });
 
@@ -969,11 +969,10 @@ export class ReservationsService {
   private rideInstanceKey(input: {
     tenantId: string;
     rideId: string;
-    travelDate: string | Date;
+    travelDate: Date;
     rideDepartureTime: string;
   }): string {
-    const date = typeof input.travelDate === 'string' ? input.travelDate : this.formatDate(input.travelDate);
-    return [input.tenantId, input.rideId, date, input.rideDepartureTime].join(':');
+    return [input.tenantId, input.rideId, this.formatDate(input.travelDate), input.rideDepartureTime].join(':');
   }
 
   private async acquireRideInstanceLockByKey(tx: Prisma.TransactionClient, lockKey: string): Promise<void> {
