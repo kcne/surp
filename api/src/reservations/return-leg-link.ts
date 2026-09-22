@@ -18,6 +18,13 @@ import { withUpdateAudit } from '../prisma/audit-write.helper';
  * passenger about a journey that was never sold.
  */
 
+/**
+ * How far after an outbound leg a return leg is still plausibly the same
+ * journey. Used by the legacy heuristic in `cancellationPreview` and by the
+ * backfill that pairs the rows predating this column, which must agree.
+ */
+export const LEGACY_RETURN_LOOKUP_DAYS = 90;
+
 /** The partial unique index from 20260921130000_reservation_return_leg. */
 const ACTIVE_RETURN_LEG_INDEX = 'Reservation_active_return_leg_key';
 
@@ -149,18 +156,25 @@ export async function linkReturnLeg(
  * unique index. Untranslated, that reaches the operator as a 500 with an
  * opaque body; this gives it the same 409 the check produces.
  */
-export function asReturnLegConflict(error: unknown): unknown {
+/**
+ * True when a write lost the race for an outbound leg's one live return slot.
+ * The API turns this into a 409; the backfill records the row as contended and
+ * moves on, rather than letting one lost race abort a whole operator run.
+ */
+export function isActiveReturnLegConflict(error: unknown): boolean {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
-    return error;
+    return false;
   }
 
   const target = error.meta?.target;
-  const hitReturnLegIndex =
-    typeof target === 'string'
-      ? target.includes(ACTIVE_RETURN_LEG_INDEX)
-      : Array.isArray(target) && target.includes('returnOfReservationId');
 
-  return hitReturnLegIndex
+  return typeof target === 'string'
+    ? target.includes(ACTIVE_RETURN_LEG_INDEX)
+    : Array.isArray(target) && target.includes('returnOfReservationId');
+}
+
+export function asReturnLegConflict(error: unknown): unknown {
+  return isActiveReturnLegConflict(error)
     ? new ConflictException('This reservation already has a return leg')
     : error;
 }
