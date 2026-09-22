@@ -3402,6 +3402,38 @@
           ]
         },
         {
+          "name": "Create Reservation Batch Invalid Return Index",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Tenant-Slug", "value": "{{tenantSlug}}" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"rideId\": \"{{reservationRideId}}\",\n      \"passengerId\": \"{{reservationPassengerId}}\",\n      \"travelDate\": \"2026-03-30\",\n      \"rideDepartureTime\": \"09:00\",\n      \"rideArrivalTime\": \"10:30\",\n      \"seatNumber\": 22,\n      \"departureStationId\": \"{{reservationDepartureStationId}}\",\n      \"arrivalStationId\": \"{{reservationMidStationId}}\",\n      \"returnOfIndex\": 0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reservations/batch",
+              "host": ["{{baseUrl}}"],
+              "path": ["reservations", "batch"]
+            }
+          },
+          "response": [],
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 400 for self-referencing return index', function () {",
+                "  pm.response.to.have.status(400);",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
           "name": "Create Reservation Batch Conflict - All Or Nothing",
           "request": {
             "method": "POST",

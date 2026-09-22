@@ -117,46 +117,65 @@ export class ReservationsService {
     auth: AccessTokenPayload,
     dto: CreateReservationsBatchDto
   ): Promise<BatchReservationsResponseDto> {
-    if (dto.travelTogether && dto.items.length > 1) {
-      const first = dto.items[0];
-      if (dto.items.some((item) =>
-        item.rideId !== first.rideId ||
-        item.travelDate !== first.travelDate ||
-        item.rideDepartureTime !== first.rideDepartureTime
-      )) {
-        throw new BadRequestException('travelTogether requires every item to use the same departure');
+    dto.items.forEach((item, index) => {
+      if (item.returnOfIndex !== undefined) {
+        if (!Number.isInteger(item.returnOfIndex) || item.returnOfIndex < 0 || item.returnOfIndex >= index) {
+          throw new BadRequestException('returnOfIndex must refer to an earlier item in the batch');
+        }
+        if (item.returnOfReservationId !== undefined) {
+          throw new BadRequestException('Specify either returnOfIndex or returnOfReservationId');
+        }
       }
-    }
+    });
 
     return this.prisma.$transaction(async (tx) => {
       const results: ReservationBatchItemResultDto[] = [];
-      const sharedGroupId: string | undefined = dto.travelTogether ? randomUUID() : undefined;
-      const groupIdByRideInstancePassenger = new Map<string, string>();
+      const groupIds = new Map<string, string>();
+      const createdIds: string[] = [];
+      const batchRoundTripId = randomUUID();
+
+      const instanceKeyFor = (item: CreateReservationDto): string =>
+        this.rideInstanceKey({
+          tenantId: auth.tenantId,
+          rideId: item.rideId,
+          travelDate: item.travelDate,
+          rideDepartureTime: item.rideDepartureTime
+        });
+
+      const lockKeys = [...new Set(dto.items.map(instanceKeyFor))].sort();
+      for (const key of lockKeys) {
+        await this.acquireRideInstanceLockByKey(tx, key);
+      }
 
       const groupIdFor = (item: CreateReservationDto): string => {
-        if (sharedGroupId) {
-          return sharedGroupId;
-        }
-
-        const key = `${item.rideId}:${item.travelDate}:${item.rideDepartureTime}:${item.passengerId}`;
-        const existing = groupIdByRideInstancePassenger.get(key);
+        const instanceKey = instanceKeyFor(item);
+        const key = dto.travelTogether ? instanceKey : `${instanceKey}:${item.passengerId}`;
+        const existing = groupIds.get(key);
         if (existing) {
           return existing;
         }
 
         const created = randomUUID();
-        groupIdByRideInstancePassenger.set(key, created);
+        groupIds.set(key, created);
         return created;
       };
 
       for (let index = 0; index < dto.items.length; index += 1) {
         const item = dto.items[index];
+        const outboundId = item.returnOfIndex === undefined ? item.returnOfReservationId : createdIds[item.returnOfIndex];
         const created = await this.createSingleInTransaction(
           tx,
           auth,
-          item,
-          groupIdFor(item)
+          { ...item, returnOfReservationId: outboundId },
+          groupIdFor(item),
+          { lockHeld: true, roundTripId: item.returnOfIndex === undefined ? undefined : batchRoundTripId }
         );
+        createdIds.push(created.id);
+
+        if (item.returnOfIndex !== undefined) {
+          const outbound = results[item.returnOfIndex].reservation;
+          if (outbound) outbound.roundTripId = created.roundTripId;
+        }
 
         results.push({
           index,
@@ -847,7 +866,8 @@ export class ReservationsService {
     tx: Prisma.TransactionClient,
     auth: AccessTokenPayload,
     dto: CreateReservationDto,
-    groupId: string
+    groupId: string,
+    options: { lockHeld?: boolean; roundTripId?: string } = {}
   ): Promise<SelectedReservation> {
     const rideContext = await this.getRideRouteContext(auth.tenantId, dto.rideId, tx);
     await this.ensurePassengerExistsInTenant(auth.tenantId, dto.passengerId, tx);
@@ -860,12 +880,14 @@ export class ReservationsService {
 
     const travelDate = this.toUtcDate(dto.travelDate);
 
-    await this.acquireRideInstanceLock(tx, {
-      tenantId: auth.tenantId,
-      rideId: dto.rideId,
-      travelDate,
-      rideDepartureTime: dto.rideDepartureTime
-    });
+    if (!options.lockHeld) {
+      await this.acquireRideInstanceLock(tx, {
+        tenantId: auth.tenantId,
+        rideId: dto.rideId,
+        travelDate,
+        rideDepartureTime: dto.rideDepartureTime
+      });
+    }
 
     // After the advisory lock, never before: linking row-locks the outbound
     // reservation to stamp its booking marker, and update takes these two
@@ -877,6 +899,7 @@ export class ReservationsService {
           tenantId: auth.tenantId,
           actorId: auth.sub,
           outboundReservationId: dto.returnOfReservationId,
+          bookingMarker: options.roundTripId,
           leg: {
             passengerId: dto.passengerId,
             departureStationId: dto.departureStationId,
@@ -940,13 +963,20 @@ export class ReservationsService {
       rideDepartureTime: string;
     }
   ): Promise<void> {
-    const lockKey = [
-      input.tenantId,
-      input.rideId,
-      this.formatDate(input.travelDate),
-      input.rideDepartureTime
-    ].join(':');
+    await this.acquireRideInstanceLockByKey(tx, this.rideInstanceKey(input));
+  }
 
+  private rideInstanceKey(input: {
+    tenantId: string;
+    rideId: string;
+    travelDate: string | Date;
+    rideDepartureTime: string;
+  }): string {
+    const date = typeof input.travelDate === 'string' ? input.travelDate : this.formatDate(input.travelDate);
+    return [input.tenantId, input.rideId, date, input.rideDepartureTime].join(':');
+  }
+
+  private async acquireRideInstanceLockByKey(tx: Prisma.TransactionClient, lockKey: string): Promise<void> {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
   }
 

@@ -281,9 +281,6 @@ export function ReservationModal({
     addPassengerTargetSeat,
     setAddPassengerTargetSeat,
     selectedRideInstance,
-    // The created reservations are returned, not discarded: a return leg needs
-    // the id of the outbound leg it travels back from, which only exists once
-    // the outbound leg is saved.
     createReservation: async (payload) => createReservationMutation.mutateAsync(payload),
     createReservationsBatch: async (payload) =>
       (await createReservationsBatchMutation.mutateAsync(payload)).reservations,

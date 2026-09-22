@@ -86,6 +86,7 @@ interface CreateReservationInput {
 interface CreateReservationsBatchInput {
   data: ReservationFormData[]
   rideInstance: RideInstance
+  returnRideInstance?: RideInstance
   travelTogether?: boolean
 }
 
@@ -118,9 +119,13 @@ export function useCreateReservationsBatchMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ data, rideInstance, travelTogether }: CreateReservationsBatchInput) => {
+    mutationFn: async ({ data, rideInstance, returnRideInstance, travelTogether }: CreateReservationsBatchInput) => {
+      const instanceFor = (item: ReservationFormData) =>
+        returnRideInstance && item.rideInstanceId === returnRideInstance.id
+          ? returnRideInstance
+          : rideInstance
       const response = await reservationsControllerCreateBatch({
-        items: data.map((item) => toCreateReservationDto(item, rideInstance)),
+        items: data.map((item) => toCreateReservationDto(item, instanceFor(item))),
         travelTogether: travelTogether ?? false,
       })
 
@@ -137,16 +142,15 @@ export function useCreateReservationsBatchMutation() {
       }
 
       return {
-        rideInstanceId: rideInstance.id,
+        rideInstanceIds: [...new Set(data.map((item) => instanceFor(item).id))],
         reservations: batchResponse.items
-          .map((item) => item.reservation)
-          .filter((item): item is NonNullable<typeof item> => Boolean(item))
-          .map((item) => toReservation(item, rideInstance)),
+          .filter((item) => Boolean(item.reservation))
+          .map((item) => toReservation(item.reservation!, instanceFor(data[item.index]))),
       }
     },
     onSuccess: (result) => {
       toast.success("Rezervacije su uspesno kreirane")
-      invalidateReservations(queryClient, [result.rideInstanceId])
+      invalidateReservations(queryClient, result.rideInstanceIds)
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, "Neuspesno kreiranje rezervacija"))

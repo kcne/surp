@@ -41,6 +41,7 @@ interface UseReservationSubmissionParams {
   createReservationsBatch: (payload: {
     data: ReservationFormData[]
     rideInstance: RideInstance
+    returnRideInstance?: RideInstance
     travelTogether?: boolean
   }) => Promise<Reservation[]>
   createReservationsForRideInstance: (
@@ -83,36 +84,6 @@ export function useReservationSubmission({
   clearSelectedSeats,
   createPassenger,
 }: UseReservationSubmissionParams) {
-  /**
-   * A return leg names the outbound leg it travels back from, and the outbound
-   * leg only has an id once it is saved. So the booking runs in two steps and
-   * the second one carries the link: no id is minted in the browser, and the
-   * server takes the booking marker from the outbound leg.
-   */
-  const linkReturnRequestsTo = (
-    createdOutbound: Reservation[],
-    outboundRequests: ReservationFormData[]
-  ): ReservationFormData[] => {
-    const createdBySeat = new Map(
-      createdOutbound.map((created) => [
-        `${created.passengerId}:${created.seatNumber}`,
-        created.id,
-      ])
-    )
-
-    return outboundRequests.map((request) => {
-      const outboundId = createdBySeat.get(`${request.passengerId}:${request.seatNumber}`)
-
-      if (!outboundId) {
-        throw new Error(
-          "Polazne karte su sacuvane, ali nije moguce povezati povratne. Dodajte povratnu kartu iz izmene rezervacije."
-        )
-      }
-
-      return { ...request, returnOfReservationId: outboundId }
-    })
-  }
-
   const createReturnLegs = async (
     returnInstance: RideInstance,
     linkedOutboundRequests: ReservationFormData[]
@@ -131,11 +102,8 @@ export function useReservationSubmission({
         travelTogether,
       })
     } catch (error) {
-      // The outbound leg is already saved at this point. Saying so is the whole
-      // point: a silent failure here is what leaves a passenger holding one
-      // direction of a journey nobody knows is incomplete.
       toast.error(
-        "Polazna karta je sacuvana, ali povratna nije rezervisana. Putnik za sada nema povratnu kartu."
+        "Izmena polazne rezervacije je sacuvana, ali povratna nije rezervisana."
       )
       throw error
     }
@@ -152,27 +120,34 @@ export function useReservationSubmission({
       throw new Error("Izaberite datum i vreme povratne voznje.")
     }
 
-    const createdOutbound =
+    if (isReturnTicket && selectedReturnRideInstance) {
+      const returnRequests = buildReturnRequests({
+        outboundRequests,
+        returnInstance: selectedReturnRideInstance,
+        returnDepartureStationId: form.getValues("arrivalStationId"),
+        returnArrivalStationId: form.getValues("departureStationId"),
+        allReservations,
+      })
+      await createReservationsBatch({
+        data: [...outboundRequests, ...returnRequests],
+        rideInstance: selectedRideInstance,
+        returnRideInstance: selectedReturnRideInstance,
+        travelTogether,
+      })
+      return
+    }
+
+    await (
       outboundRequests.length === 1 && !isMultiReservation
-        ? [
-            await createReservation({
+        ? createReservation({
               data: outboundRequests[0],
               rideInstance: selectedRideInstance,
-            }),
-          ]
-        : await createReservationsBatch({
+            })
+        : createReservationsBatch({
             data: outboundRequests,
             rideInstance: selectedRideInstance,
             travelTogether,
           })
-
-    if (!isReturnTicket || !selectedReturnRideInstance) {
-      return
-    }
-
-    await createReturnLegs(
-      selectedReturnRideInstance,
-      linkReturnRequestsTo(createdOutbound, outboundRequests)
     )
   }
 

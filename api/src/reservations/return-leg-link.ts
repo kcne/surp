@@ -57,6 +57,8 @@ interface LinkReturnLegInput {
   tenantId: string;
   actorId: string;
   outboundReservationId: string;
+  /** Shared by return legs created in the same sale. */
+  bookingMarker?: string;
   leg: ReturnLegCandidate;
   /** The reservation being updated, so it cannot become its own return leg. */
   excludeReservationId?: string;
@@ -137,7 +139,7 @@ export async function linkReturnLeg(
   // A one-way ticket carries no booking marker, so the first return leg is
   // what turns the outbound into a round trip. Stamping both sides keeps the
   // marker meaning exactly what it says: sold together.
-  const roundTripId = outbound.roundTripId ?? randomUUID();
+  const roundTripId = outbound.roundTripId ?? input.bookingMarker ?? randomUUID();
 
   if (!outbound.roundTripId) {
     await tx.reservation.update({
