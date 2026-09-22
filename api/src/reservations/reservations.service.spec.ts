@@ -971,6 +971,31 @@ describe('ReservationsService', () => {
     expect(new Set(groupIds).size).toBe(1);
   });
 
+  it.each([
+    ['ride', { rideId: 'ride-2' }],
+    ['date', { travelDate: '2026-03-31' }],
+    ['departure time', { rideDepartureTime: '11:00' }]
+  ])('rejects travelTogether items on different %s before writing', async (_field, change) => {
+    const first = {
+      rideId: 'ride-1',
+      passengerId: 'passenger-1',
+      travelDate: '2026-03-30',
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:30',
+      seatNumber: 1,
+      departureStationId: 'station-a',
+      arrivalStationId: 'station-c'
+    };
+
+    await expect(service.createBatch(auth, {
+      travelTogether: true,
+      items: [first, { ...first, ...change, seatNumber: 2 }]
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(reservationStore).toHaveLength(0);
+  });
+
   it('assigns one group per passenger when travelTogether is false', async () => {
     const result = await service.createBatch(auth, {
       travelTogether: false,

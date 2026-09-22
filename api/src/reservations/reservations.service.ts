@@ -117,6 +117,17 @@ export class ReservationsService {
     auth: AccessTokenPayload,
     dto: CreateReservationsBatchDto
   ): Promise<BatchReservationsResponseDto> {
+    if (dto.travelTogether && dto.items.length > 1) {
+      const first = dto.items[0];
+      if (dto.items.some((item) =>
+        item.rideId !== first.rideId ||
+        item.travelDate !== first.travelDate ||
+        item.rideDepartureTime !== first.rideDepartureTime
+      )) {
+        throw new BadRequestException('travelTogether requires every item to use the same departure');
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const results: ReservationBatchItemResultDto[] = [];
       const sharedGroupId: string | undefined = dto.travelTogether ? randomUUID() : undefined;

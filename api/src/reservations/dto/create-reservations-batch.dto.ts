@@ -14,7 +14,7 @@ export class CreateReservationsBatchDto {
 
   @ApiPropertyOptional({
     description:
-      'When true, all reservations in the batch share one server-generated groupId. When false or omitted, each distinct passenger receives an individual groupId.',
+      'When true, all reservations in the batch must use the same ride, travel date, and departure time and share one server-generated groupId. When false or omitted, each distinct passenger receives an individual groupId.',
     default: false
   })
   @IsOptional()
