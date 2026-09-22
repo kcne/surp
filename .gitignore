@@ -43,3 +43,6 @@ pnpm-debug.log*
 
 
 
+
+# Backfill and review reports: hold reservation and passenger database IDs.
+api/reports/
