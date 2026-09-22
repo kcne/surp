@@ -20,8 +20,7 @@ import { withUpdateAudit } from '../prisma/audit-write.helper';
 
 /**
  * How far after an outbound leg a return leg is still plausibly the same
- * journey. Used by the legacy heuristic in `cancellationPreview` and by the
- * backfill that pairs the rows predating this column, which must agree.
+ * journey. Used by the backfill that pairs rows predating this column.
  */
 export const LEGACY_RETURN_LOOKUP_DAYS = 90;
 
