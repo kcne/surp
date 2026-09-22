@@ -525,9 +525,7 @@ describe('ReservationsService', () => {
 
       await service.update(auth, 'reservation-1', { returnOfReservationId: null });
 
-      // The marker goes with the link: cancellationPreview pairs legs by
-      // roundTripId, so keeping it would still offer the unlinked leg as the
-      // booking's return.
+      // The marker assigned when this pair was linked is cleared too.
       expect(prismaMock.reservation.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ returnOfReservationId: null, roundTripId: null })
@@ -650,7 +648,7 @@ describe('ReservationsService', () => {
     expect(result.status).toBe(ReservationStatus.CANCELLED);
   });
 
-  it('includes explicitly linked return reservations in a cancellation preview', async () => {
+  it('includes only the selected seat’s linked return, even when a party shares a booking marker', async () => {
     const outbound = { ...baseReservation, roundTripId: 'round-trip-1' };
     const returnLeg = {
       ...baseReservation,
@@ -658,7 +656,8 @@ describe('ReservationsService', () => {
       rideId: 'ride-return',
       departureStationId: 'station-c',
       arrivalStationId: 'station-a',
-      roundTripId: 'round-trip-1'
+      roundTripId: 'round-trip-1',
+      returnOfReservationId: 'reservation-1'
     };
     prismaMock.reservation.findMany
       .mockResolvedValueOnce([outbound])
@@ -674,9 +673,60 @@ describe('ReservationsService', () => {
     expect(prismaMock.reservation.findMany).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        where: expect.objectContaining({ roundTripId: { in: ['round-trip-1'] } })
+        where: {
+          tenantId: 'tenant-1',
+          status: ReservationStatus.ACTIVE,
+          id: { notIn: ['reservation-1'] },
+          OR: [
+            { returnOf: { id: { in: ['reservation-1'] } } },
+            { returnLegs: { some: { id: { in: ['reservation-1'] } } } }
+          ]
+        }
       })
     );
+  });
+
+  it('finds the outbound when the selected reservation is a return leg', async () => {
+    const returnLeg = {
+      ...baseReservation,
+      id: 'reservation-return',
+      returnOfReservationId: 'reservation-1'
+    };
+    prismaMock.reservation.findMany
+      .mockResolvedValueOnce([returnLeg])
+      .mockResolvedValueOnce([baseReservation]);
+
+    const result = await service.cancellationPreview(auth, {
+      reservationIds: ['reservation-return'],
+      scope: 'selected'
+    });
+
+    expect(result.outboundReservations.map((item) => item.id)).toEqual(['reservation-return']);
+    expect(result.returnReservations.map((item) => item.id)).toEqual(['reservation-1']);
+    expect(prismaMock.reservation.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            { returnLegs: { some: { id: { in: ['reservation-return'] } } } }
+          ])
+        })
+      })
+    );
+  });
+
+  it('does not guess a return for an unlinked legacy reservation', async () => {
+    prismaMock.reservation.findMany
+      .mockResolvedValueOnce([baseReservation])
+      .mockResolvedValueOnce([]);
+
+    const result = await service.cancellationPreview(auth, {
+      reservationIds: ['reservation-1'],
+      scope: 'selected'
+    });
+
+    expect(result.returnReservations).toEqual([]);
+    expect(prismaMock.reservation.findMany).toHaveBeenCalledTimes(2);
   });
 
   it('assigns a group to active reservations from one departure atomically', async () => {
