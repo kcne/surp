@@ -24,6 +24,7 @@ interface FixtureState {
   scheduleId: string;
   passengerId: string;
   reservationId: string;
+  groupId: string;
   travelDate: Date;
   stationIds: { first: string; middle: string; last: string; alternate: string };
   stationTimeIds: { first: string; middle: string; last: string };
@@ -33,6 +34,18 @@ interface FixtureState {
 interface IncidentFixture {
   name: string;
   invariantKey: string;
+  /**
+   * `violation` (the default) reproduces an incident and requires
+   * `invariantKey` to report it.
+   *
+   * `silence` does the opposite: it writes a shape the agency produces on
+   * purpose and requires the whole registry to stay quiet. A check that cries
+   * wolf on routine work is one staff learn to skip, and the check this one
+   * replaced spent months doing exactly that before anyone measured it — so
+   * the shapes a check must *not* report are worth pinning down as firmly as
+   * the ones it must.
+   */
+  expects?: 'violation' | 'silence';
   mutate(tx: Prisma.TransactionClient, state: FixtureState): Promise<void>;
   matches?(violation: Violation, state: FixtureState): boolean;
 }
@@ -234,8 +247,123 @@ const fixtures: IncidentFixture[] = [
       await tx.line.update({ where: { id: state.lineId }, data: { isActive: false } });
     },
     matches: (_violation, state) => _violation.subjectId === state.rideId
+  },
+  {
+    name: 'return leg is cancelled while its outbound leg still stands',
+    invariantKey: 'reservation.returnLegIntact',
+    mutate: async (tx, state) => {
+      const returnLeg = await createReturnLeg(tx, state, { seatNumber: 1, daysAfter: 7 });
+
+      // Cancelled on its own, the way every write in this area acts: one
+      // reservation at a time, with no notion that it might be half of
+      // something. The outbound is left untouched and still sold.
+      await tx.reservation.update({
+        where: { id: returnLeg.id },
+        data: { status: ReservationStatus.CANCELLED, cancelledAt: new Date() }
+      });
+    }
+  },
+  {
+    // The nine criticals `reservation.groupIntact` had on the production page
+    // in September 2026 were all this: one departure, several seats, some of
+    // them given back. No return ticket is involved and nothing is broken.
+    name: 'party on one departure gives some of its seats back',
+    invariantKey: 'reservation.returnLegIntact',
+    expects: 'silence',
+    mutate: async (tx, state) => {
+      await createSeatOnSameDeparture(tx, state, 2);
+      const returned = await createSeatOnSameDeparture(tx, state, 3);
+
+      await tx.reservation.update({
+        where: { id: returned.id },
+        data: { status: ReservationStatus.CANCELLED, cancelledAt: new Date() }
+      });
+    }
+  },
+  {
+    // Cancelling a return leg and booking a different one is ordinary agency
+    // work — which is why the unique index on the link is partial. No row in
+    // production has this shape yet, so only this fixture stops a predicate
+    // reading "the two statuses disagree" from passing by luck.
+    name: 'return leg is cancelled and replaced by a live one',
+    invariantKey: 'reservation.returnLegIntact',
+    expects: 'silence',
+    mutate: async (tx, state) => {
+      const dropped = await createReturnLeg(tx, state, { seatNumber: 1, daysAfter: 7 });
+
+      await tx.reservation.update({
+        where: { id: dropped.id },
+        data: { status: ReservationStatus.CANCELLED, cancelledAt: new Date() }
+      });
+
+      await createReturnLeg(tx, state, { seatNumber: 2, daysAfter: 14 });
+    }
   }
 ];
+
+/**
+ * A leg linked back to the seeded reservation: same passenger, a later date on
+ * the same weekday so the recurring schedule still covers it, its own manifest
+ * group because it sits on its own departure.
+ *
+ * It travels the seeded route forwards rather than reversed. A real return leg
+ * is sold on the opposite direction of the line, but the check reads the link
+ * and the two statuses and nothing else, and seeding a second line, ride and
+ * schedule would add a whole reverse route to every fixture's baseline to
+ * assert nothing.
+ */
+async function createReturnLeg(
+  tx: Prisma.TransactionClient,
+  state: FixtureState,
+  { seatNumber, daysAfter }: { seatNumber: number; daysAfter: number }
+) {
+  const travelDate = new Date(state.travelDate);
+  travelDate.setUTCDate(travelDate.getUTCDate() + daysAfter);
+
+  return tx.reservation.create({
+    data: {
+      tenantId: state.tenantId,
+      rideId: state.rideId,
+      passengerId: state.passengerId,
+      travelDate,
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '11:00',
+      seatNumber,
+      status: ReservationStatus.ACTIVE,
+      departureStationId: state.stationIds.middle,
+      arrivalStationId: state.stationIds.last,
+      groupId: `${state.groupId}-return-${seatNumber}`,
+      returnOfReservationId: state.reservationId,
+      createdById: state.actorId,
+      updatedById: state.actorId
+    }
+  });
+}
+
+/** Another seat on the seeded departure, under the same manifest group label. */
+async function createSeatOnSameDeparture(
+  tx: Prisma.TransactionClient,
+  state: FixtureState,
+  seatNumber: number
+) {
+  return tx.reservation.create({
+    data: {
+      tenantId: state.tenantId,
+      rideId: state.rideId,
+      passengerId: state.passengerId,
+      travelDate: state.travelDate,
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '11:00',
+      seatNumber,
+      status: ReservationStatus.ACTIVE,
+      departureStationId: state.stationIds.middle,
+      arrivalStationId: state.stationIds.last,
+      groupId: state.groupId,
+      createdById: state.actorId,
+      updatedById: state.actorId
+    }
+  });
+}
 
 export async function runIncidentFixtures(prisma: PrismaClient): Promise<IncidentFixtureResult[]> {
   const results: IncidentFixtureResult[] = [];
@@ -252,10 +380,7 @@ export async function runIncidentFixtures(prisma: PrismaClient): Promise<Inciden
           );
         }
 
-        const before = await runRegistry(contextFor(tx, state));
-        const baselineFindings = before.flatMap((entry) =>
-          entry.result.violations.map((violation) => `${entry.invariantKey}:${violation.subjectId}`)
-        );
+        const baselineFindings = await findingsOf(contextFor(tx, state));
         if (baselineFindings.length > 0) {
           throw new Error(
             `Fixture ${fixture.name} is invalid before its incident mutation: ${baselineFindings.join(', ')}`
@@ -263,16 +388,29 @@ export async function runIncidentFixtures(prisma: PrismaClient): Promise<Inciden
         }
 
         await fixture.mutate(tx, state);
-        const reports = await runRegistry(contextFor(tx, state));
-        const report = reports.find((entry) => entry.invariantKey === fixture.invariantKey)!;
-        const detected = report.result.violations.some((violation) =>
-          fixture.matches
-            ? fixture.matches(violation, state)
-            : violation.subjectId === state.reservationId
-        );
 
-        if (!detected) {
-          throw new Error(`Fixture ${fixture.name} was not detected by ${fixture.invariantKey}`);
+        if (fixture.expects === 'silence') {
+          // The same assertion the baseline just made, so a check that learns
+          // to report legitimate work fails here rather than on the page.
+          const findings = await findingsOf(contextFor(tx, state));
+
+          if (findings.length > 0) {
+            throw new Error(
+              `Fixture ${fixture.name} must not be reported, but was: ${findings.join(', ')}`
+            );
+          }
+        } else {
+          const reports = await runRegistry(contextFor(tx, state));
+          const report = reports.find((entry) => entry.invariantKey === fixture.invariantKey)!;
+          const detected = report.result.violations.some((violation) =>
+            fixture.matches
+              ? fixture.matches(violation, state)
+              : violation.subjectId === state.reservationId
+          );
+
+          if (!detected) {
+            throw new Error(`Fixture ${fixture.name} was not detected by ${fixture.invariantKey}`);
+          }
         }
 
         throw new FixtureRollback({ name: fixture.name, invariantKey: fixture.invariantKey });
@@ -296,6 +434,15 @@ function contextFor(tx: Prisma.TransactionClient, state: FixtureState): Invarian
     prisma: tx as unknown as PrismaService,
     windowDays: 30
   };
+}
+
+/** Every violation the whole registry reports, as `key:subjectId` labels. */
+async function findingsOf(ctx: InvariantContext): Promise<string[]> {
+  const reports = await runRegistry(ctx);
+
+  return reports.flatMap((entry) =>
+    entry.result.violations.map((violation) => `${entry.invariantKey}:${violation.subjectId}`)
+  );
 }
 
 async function runRegistry(ctx: InvariantContext) {
@@ -330,6 +477,7 @@ async function seedValidFixture(
   const scheduleId = fixtureId('schedule', index);
   const passengerId = fixtureId('passenger', index);
   const reservationId = fixtureId('reservation', index);
+  const groupId = fixtureId('group', index);
   const stationIds = {
     first: fixtureId('station-first', index),
     middle: fixtureId('station-middle', index),
@@ -468,7 +616,7 @@ async function seedValidFixture(
       status: ReservationStatus.ACTIVE,
       departureStationId: stationIds.middle,
       arrivalStationId: stationIds.last,
-      groupId: fixtureId('group', index),
+      groupId,
       createdById: actorId,
       updatedById: actorId
     }
@@ -482,6 +630,7 @@ async function seedValidFixture(
     scheduleId,
     passengerId,
     reservationId,
+    groupId,
     travelDate,
     stationIds,
     stationTimeIds,

@@ -40,12 +40,23 @@ With `--run-fixtures`, the command first exercises rollback-isolated database
 fixtures for every write-path incident in the data-integrity epic:
 first/last schedule time changes, weekday and recurring-range removal, ride
 deactivation, SKIP and deleted ADDITIONAL exceptions, capacity reduction,
-ride-line replacement, route reorder, boarding/drop-off changes, and station,
-passenger, or line deactivation. Each fixture starts valid, applies the same
-post-sale mutation as the incident, runs the registry, and requires the
-responsible invariant to report the affected row. The transaction is always
-rolled back, so fixture data never leaks into the clean-data check or a local
-database.
+ride-line replacement, route reorder, boarding/drop-off changes, station,
+passenger, or line deactivation, and a return leg cancelled while its outbound
+leg still stands. Each fixture starts valid, applies the same post-sale
+mutation as the incident, runs the registry, and requires the responsible
+invariant to report the affected row. The transaction is always rolled back, so
+fixture data never leaks into the clean-data check or a local database.
+
+A second kind of fixture asserts the opposite. A fixture declaring
+`expects: 'silence'` writes a shape the agency produces on purpose and requires
+the **whole registry** to stay quiet afterwards — the same assertion the runner
+already makes on every fixture's pre-mutation baseline. Two are covered today,
+both belonging to `reservation.returnLegIntact`: a party on one departure
+giving some of its seats back, which is what the check it replaced reported as
+critical for months (#79); and a return leg cancelled and replaced by a live
+one, which is routine agency work the partial unique index on the link exists
+to allow. Neither shape may ever be reported, and a check that learns to report
+them fails the build instead of the page.
 
 ## OpenAPI Contract Freeze Policy
 
