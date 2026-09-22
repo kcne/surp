@@ -187,10 +187,16 @@ function summaryOf(item: BrokenReturnLegItem): string {
   if (item.reason === 'RETURN_CANCELLED') {
     // Every link on this outbound is dead — that is the shape — so every one
     // is named. More than one means the return was cancelled, rebooked and
-    // cancelled again.
-    return `${item.passengerName}: odlazna voznja ${outbound} je aktivna, a povratna ${item.returnLegs
-      .map(departure)
-      .join(', ')} je otkazana.`;
+    // cancelled again, which is why the sentence has to agree in number.
+    // `serbianPlural` is the wrong tool here: it prefixes a count, and these
+    // are named departures rather than a tally.
+    const returns = item.returnLegs.map(departure).join(', ');
+    const cancelled =
+      item.returnLegs.length > 1
+        ? `a povratne ${returns} su otkazane.`
+        : `a povratna ${returns} je otkazana.`;
+
+    return `${item.passengerName}: odlazna voznja ${outbound} je aktivna, ${cancelled}`;
   }
 
   // Exactly one, guaranteed by the partial unique index: a cancelled return

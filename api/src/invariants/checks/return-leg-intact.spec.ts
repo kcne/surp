@@ -162,6 +162,37 @@ describe('reservation.returnLegIntact', () => {
     ]);
   });
 
+  it('agrees in number when more than one cancelled return leg is named', async () => {
+    pairOf(
+      outboundRow(),
+      returnRow({ id: 'res-back-1', status: 'CANCELLED', travelDate: dateInDays(12) }),
+      returnRow({
+        id: 'res-back-2',
+        status: 'CANCELLED',
+        seatNumber: 6,
+        travelDate: dateInDays(19)
+      })
+    );
+
+    const result = await reservationReturnLegIntact.check(ctx);
+
+    const summary = result.violations[0].summary;
+    expect(summary).toContain('a povratne');
+    expect(summary).toContain('su otkazane');
+    expect(summary).not.toContain('je otkazana');
+  });
+
+  it('keeps the singular form when a single return leg is named', async () => {
+    pairOf(outboundRow(), returnRow({ status: 'CANCELLED' }));
+
+    const result = await reservationReturnLegIntact.check(ctx);
+
+    const summary = result.violations[0].summary;
+    expect(summary).toContain('a povratna');
+    expect(summary).toContain('je otkazana');
+    expect(summary).not.toContain('su otkazane');
+  });
+
   it('names only the live return leg when the outbound is the cancelled half', async () => {
     pairOf(
       outboundRow({ status: 'CANCELLED' }),
