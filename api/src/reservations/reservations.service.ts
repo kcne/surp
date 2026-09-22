@@ -257,7 +257,11 @@ export class ReservationsService {
     const groupIds = selected.map((item) => item.groupId).filter((id): id is string => Boolean(id));
     const primary = dto.scope === 'groups' && groupIds.length > 0
       ? await this.prisma.reservation.findMany({
-          where: { tenantId: auth.tenantId, status: ReservationStatus.ACTIVE, groupId: { in: groupIds } },
+          where: {
+            tenantId: auth.tenantId,
+            status: ReservationStatus.ACTIVE,
+            OR: [{ groupId: { in: groupIds } }, { id: { in: dto.reservationIds } }]
+          },
           select: SAFE_RESERVATION_SELECT
         })
       : selected;

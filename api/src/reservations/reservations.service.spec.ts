@@ -729,6 +729,39 @@ describe('ReservationsService', () => {
     expect(prismaMock.reservation.findMany).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps ungrouped selected reservations and their return legs in group scope', async () => {
+    const grouped = { ...baseReservation, groupId: 'group-1' };
+    const ungrouped = { ...baseReservation, id: 'reservation-2' };
+    const returnLeg = {
+      ...baseReservation,
+      id: 'reservation-return',
+      returnOfReservationId: 'reservation-2'
+    };
+    prismaMock.reservation.findMany
+      .mockResolvedValueOnce([grouped, ungrouped])
+      .mockImplementationOnce(async ({ where }: { where: { OR?: Array<{ id?: { in: string[] } }> } }) =>
+        where.OR?.some((clause) => clause.id?.in.includes('reservation-2'))
+          ? [grouped, ungrouped]
+          : [grouped]
+      )
+      .mockImplementationOnce(async ({ where }: { where: { OR: Array<{ returnOf?: { id: { in: string[] } } }> } }) =>
+        where.OR.some((clause) => clause.returnOf?.id.in.includes('reservation-2'))
+          ? [returnLeg]
+          : []
+      );
+
+    const result = await service.cancellationPreview(auth, {
+      reservationIds: ['reservation-1', 'reservation-2'],
+      scope: 'groups'
+    });
+
+    expect(result.outboundReservations.map((item) => item.id)).toEqual([
+      'reservation-1',
+      'reservation-2'
+    ]);
+    expect(result.returnReservations.map((item) => item.id)).toEqual(['reservation-return']);
+  });
+
   it('assigns a group to active reservations from one departure atomically', async () => {
     const groupId = 'dd1d9d6b-d10c-4cab-bb6f-a50d59f0f5da';
     const first = { ...baseReservation, groupId: 'old-group' };
