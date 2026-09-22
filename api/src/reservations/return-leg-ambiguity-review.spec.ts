@@ -94,6 +94,21 @@ describe('groupAmbiguities', () => {
 
     expect(decisions[0].entirelyPast).toBe(false);
   });
+
+  // A leg that did not resolve has no date, so "every resolved leg is past"
+  // says nothing about the decision as a whole. Concluding past from the rows
+  // that happen to be present would hide it from the one person able to
+  // answer it.
+  it('treats a decision as live when only some of its legs resolve', () => {
+    const past = new Date('2026-08-02T00:00:00.000Z');
+    const decisions = groupAmbiguities(
+      [ambiguity('ret-1', ['out-1', 'out-missing'])],
+      index(row({ id: 'ret-1', travelDate: past }), row({ id: 'out-1', travelDate: past })),
+      TODAY
+    );
+
+    expect(decisions[0].entirelyPast).toBe(false);
+  });
 });
 
 describe('formatReviewSheet', () => {
@@ -139,7 +154,10 @@ describe('formatReviewSheet', () => {
   });
 
   it('flags a candidate that is already linked, which is why it is unavailable', () => {
-    const linked = index(row({ id: 'ret-1' }), row({ id: 'out-1', returnOfReservationId: 'ret-9' }));
+    const linked = index(
+      row({ id: 'ret-1' }),
+      row({ id: 'out-1', returnOfReservationId: 'ret-9' })
+    );
     const sheet = formatReviewSheet(
       groupAmbiguities([ambiguity('ret-1', ['out-1'], 'candidates_already_paired')], linked, TODAY),
       linked,

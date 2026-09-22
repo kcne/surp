@@ -100,13 +100,20 @@ export function isEntirelyPast(
   rowsById: ReadonlyMap<string, AmbiguityReviewRow>,
   today: Date
 ): boolean {
-  const legs = [...decision.returnLegIds, ...decision.candidateReservationIds]
-    .map((id) => rowsById.get(id))
-    .filter((row): row is AmbiguityReviewRow => Boolean(row));
+  const ids = [...decision.returnLegIds, ...decision.candidateReservationIds];
 
-  // No rows resolved means nothing is known about the dates; treat it as live
-  // so it reaches a human rather than being filtered away unseen.
-  return legs.length > 0 && legs.every((leg) => leg.travelDate < today);
+  // A leg that did not resolve has no date, so nothing can be concluded about
+  // it — and concluding "past" from the legs that happen to be present would
+  // hide the decision from the only person able to answer it. Every id must
+  // resolve and every one of them must have travelled.
+  return (
+    ids.length > 0 &&
+    ids.every((id) => {
+      const leg = rowsById.get(id);
+
+      return leg !== undefined && leg.travelDate < today;
+    })
+  );
 }
 
 function describe(row: AmbiguityReviewRow): string {

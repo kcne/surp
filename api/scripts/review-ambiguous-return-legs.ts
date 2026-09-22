@@ -18,7 +18,7 @@
  * pull requests and issues.
  */
 import { PrismaClient } from '@prisma/client';
-import { writeFileSync } from 'fs';
+import { chmodSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import {
   AmbiguityReviewRow,
@@ -66,7 +66,10 @@ async function main() {
       ambiguous.flatMap((entry) => [entry.reservationId, ...entry.candidateReservationIds])
     )
   ];
-  const rows = await prisma.reservation.findMany({ where: { id: { in: ids } }, select: REVIEW_SELECT });
+  const rows = await prisma.reservation.findMany({
+    where: { id: { in: ids } },
+    select: REVIEW_SELECT
+  });
 
   const rowsById = new Map<string, AmbiguityReviewRow>(
     rows.map((row) => [
@@ -93,7 +96,14 @@ async function main() {
   const decisions = groupAmbiguities(ambiguous, rowsById, today);
   const live = decisions.filter((decision) => !decision.entirelyPast).length;
 
-  writeFileSync(outPath, formatReviewSheet(decisions, rowsById, { includePast, sourcePath: reportPath! }));
+  // The sheet carries passenger names and phone numbers, so it is never
+  // world-readable. `mode` applies only when the file is created, and the
+  // default path is a shared /tmp where a previous run may have left a
+  // readable file behind, so an existing one is tightened too.
+  const sheet = formatReviewSheet(decisions, rowsById, { includePast, sourcePath: reportPath! });
+
+  writeFileSync(outPath, sheet, { mode: 0o600 });
+  chmodSync(outPath, 0o600);
 
   console.log(
     `${ambiguous.length} ambiguous row(s) in ${decisions.length} decision(s); ` +
@@ -104,7 +114,9 @@ async function main() {
       ? `Review sheet written to ${outPath}, past decisions included.`
       : `Review sheet written to ${outPath}. Set INCLUDE_PAST=1 to add the ${decisions.length - live} already travelled.`
   );
-  console.log('It carries passenger names and phone numbers; keep it out of issues and pull requests.');
+  console.log(
+    'It carries passenger names and phone numbers; keep it out of issues and pull requests.'
+  );
 }
 
 main()
