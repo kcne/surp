@@ -109,6 +109,7 @@ export function toCreateReservationDto(
     ...(data.returnOfReservationId
       ? { returnOfReservationId: data.returnOfReservationId }
       : {}),
+    ...(data.returnOfIndex !== undefined ? { returnOfIndex: data.returnOfIndex } : {}),
     ...(trimmedNotes ? { notes: trimmedNotes } : {}),
   }
 }

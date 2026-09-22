@@ -201,6 +201,8 @@ export type ReservationFormData = {
   notes?: string
   /** Set on a return leg: the outbound reservation it travels back from. */
   returnOfReservationId?: string
+  /** Earlier item in an atomic booking batch. */
+  returnOfIndex?: number
 }
 
 // Seat Map Types

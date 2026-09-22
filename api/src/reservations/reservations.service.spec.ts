@@ -975,7 +975,7 @@ describe('ReservationsService', () => {
     ['ride', { rideId: 'ride-2' }],
     ['date', { travelDate: '2026-03-31' }],
     ['departure time', { rideDepartureTime: '11:00' }]
-  ])('rejects travelTogether items on different %s before writing', async (_field, change) => {
+  ])('groups travelTogether items separately on different %s', async (_field, change) => {
     const first = {
       rideId: 'ride-1',
       passengerId: 'passenger-1',
@@ -987,13 +987,13 @@ describe('ReservationsService', () => {
       arrivalStationId: 'station-c'
     };
 
-    await expect(service.createBatch(auth, {
+    const result = await service.createBatch(auth, {
       travelTogether: true,
-      items: [first, { ...first, ...change, seatNumber: 2 }]
-    })).rejects.toBeInstanceOf(BadRequestException);
+      items: [first, { ...first, ...change, seatNumber: 2 }, { ...first, seatNumber: 3 }]
+    });
 
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
-    expect(reservationStore).toHaveLength(0);
+    expect(result.items[0].reservation?.groupId).toBe(result.items[2].reservation?.groupId);
+    expect(result.items[1].reservation?.groupId).not.toBe(result.items[0].reservation?.groupId);
   });
 
   it('assigns one group per passenger when travelTogether is false', async () => {
@@ -1111,6 +1111,157 @@ describe('ReservationsService', () => {
     });
 
     expect(result.items[0].reservation?.groupId).toEqual(expect.any(String));
+  });
+
+  it('books both departures atomically with one booking marker and one group per departure', async () => {
+    prismaMock.ride.findFirst.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'ride-return'
+        ? {
+            id: 'ride-return',
+            capacity: 40,
+            line: {
+              isActive: true,
+              departureStationId: 'station-c',
+              arrivalStationId: 'station-a',
+              intermediateStops: []
+            }
+          }
+        : { ...routeRide, capacity: 40 }
+    );
+    prismaMock.reservation.findFirst.mockImplementation(async ({ where }: { where: { id?: string; returnOfReservationId?: string } }) =>
+      where.returnOfReservationId
+        ? null
+        : {
+            ...baseReservation,
+            id: where.id ?? baseReservation.id,
+            seatNumber: where.id === 'reservation-2' ? 2 : 1
+          }
+    );
+
+    const outbound = (seatNumber: number) => ({
+      rideId: 'ride-1', passengerId: 'passenger-1', travelDate: '2026-03-30',
+      rideDepartureTime: '09:00', rideArrivalTime: '10:30', seatNumber,
+      departureStationId: 'station-a', arrivalStationId: 'station-c'
+    });
+    const returning = (seatNumber: number, returnOfIndex: number) => ({
+      rideId: 'ride-return', passengerId: 'passenger-1', travelDate: '2026-03-31',
+      rideDepartureTime: '09:00', rideArrivalTime: '10:30', seatNumber,
+      departureStationId: 'station-c', arrivalStationId: 'station-a', returnOfIndex
+    });
+    const result = await service.createBatch(auth, {
+      travelTogether: true,
+      items: [outbound(1), outbound(2), returning(1, 0), returning(2, 1)]
+    });
+
+    expect(result.createdCount).toBe(4);
+    expect(result.items[2].reservation?.returnOfReservationId).toBe('reservation-1');
+    expect(result.items[3].reservation?.returnOfReservationId).toBe('reservation-2');
+    expect(new Set(result.items.map((item) => item.reservation?.roundTripId)).size).toBe(1);
+    expect(result.items[0].reservation?.roundTripId).toEqual(expect.any(String));
+    expect(result.items[0].reservation?.groupId).toBe(result.items[1].reservation?.groupId);
+    expect(result.items[2].reservation?.groupId).toBe(result.items[3].reservation?.groupId);
+    expect(result.items[0].reservation?.groupId).not.toBe(result.items[2].reservation?.groupId);
+    expect(prismaMock.reservation.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('rolls back outbound rows when a linked return cannot be created', async () => {
+    await expect(service.createBatch(auth, { items: [
+      {
+        rideId: 'ride-1', passengerId: 'passenger-1', travelDate: '2026-03-30',
+        rideDepartureTime: '09:00', rideArrivalTime: '10:30', seatNumber: 1,
+        departureStationId: 'station-a', arrivalStationId: 'station-c'
+      },
+      {
+        rideId: 'ride-1', passengerId: 'passenger-1', travelDate: '2026-03-31',
+        rideDepartureTime: '09:00', rideArrivalTime: '10:30', seatNumber: 1,
+        departureStationId: 'station-c', arrivalStationId: 'station-a', returnOfIndex: 0
+      }
+    ] })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prismaMock.reservation.create).toHaveBeenCalledTimes(1);
+    expect(reservationStore).toHaveLength(0);
+  });
+
+  it.each([-1, 2, 1.5])('rejects invalid returnOfIndex %s before writing', async (returnOfIndex) => {
+    await expect(service.createBatch(auth, { items: [
+      {
+        rideId: 'ride-1', passengerId: 'passenger-1', travelDate: '2026-03-30',
+        rideDepartureTime: '09:00', rideArrivalTime: '10:30', seatNumber: 1,
+        departureStationId: 'station-a', arrivalStationId: 'station-c'
+      },
+      {
+        rideId: 'ride-1', passengerId: 'passenger-1', travelDate: '2026-03-31',
+        rideDepartureTime: '09:00', rideArrivalTime: '10:30', seatNumber: 2,
+        departureStationId: 'station-a', arrivalStationId: 'station-c', returnOfIndex
+      }
+    ] })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a self reference', async () => {
+    await expect(service.createBatch(auth, { items: [{
+      rideId: 'ride-1', passengerId: 'passenger-1', travelDate: '2026-03-30',
+      rideDepartureTime: '09:00', rideArrivalTime: '10:30', seatNumber: 1,
+      departureStationId: 'station-a', arrivalStationId: 'station-c', returnOfIndex: 0
+    }] })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects an item that names both an earlier index and a saved reservation', async () => {
+    const item = (seatNumber: number) => ({
+      rideId: 'ride-1', passengerId: 'passenger-1', travelDate: '2026-03-30',
+      rideDepartureTime: '09:00', rideArrivalTime: '10:30', seatNumber,
+      departureStationId: 'station-a', arrivalStationId: 'station-c'
+    });
+    await expect(service.createBatch(auth, { items: [
+      item(1),
+      { ...item(2), returnOfIndex: 0, returnOfReservationId: 'reservation-existing' }
+    ] })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('takes distinct departure locks in sorted order before creating any reservation', async () => {
+    const events: string[] = [];
+    prismaMock.$executeRaw.mockImplementation(async (_strings: TemplateStringsArray, key: string) => {
+      events.push(`lock:${key}`);
+      return 1;
+    });
+    const create = prismaMock.reservation.create.getMockImplementation()!;
+    prismaMock.reservation.create.mockImplementation(async (input: unknown) => {
+      events.push('create');
+      return create(input);
+    });
+    const item = (travelDate: string) => ({
+      rideId: 'ride-1', passengerId: 'passenger-1', travelDate,
+      rideDepartureTime: '09:00', rideArrivalTime: '10:30', seatNumber: 1,
+      departureStationId: 'station-a', arrivalStationId: 'station-c'
+    });
+
+    await service.createBatch(auth, { items: [item('2026-04-01'), item('2026-03-30'), { ...item('2026-04-01'), seatNumber: 2 }] });
+
+    expect(events).toEqual([
+      'lock:tenant-1:ride-1:2026-03-30:09:00',
+      'lock:tenant-1:ride-1:2026-04-01:09:00',
+      'create', 'create', 'create'
+    ]);
+  });
+
+  it('uses the normalized travel date for batch locks and departure groups', async () => {
+    const item = (travelDate: string, seatNumber: number) => ({
+      rideId: 'ride-1', passengerId: 'passenger-1', travelDate,
+      rideDepartureTime: '09:00', rideArrivalTime: '10:30', seatNumber,
+      departureStationId: 'station-a', arrivalStationId: 'station-c'
+    });
+
+    const result = await service.createBatch(auth, {
+      travelTogether: true,
+      items: [item('2026-02-31', 1), item('2026-03-03', 2)]
+    });
+
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$executeRaw.mock.calls[0][1]).toBe('tenant-1:ride-1:2026-03-03:09:00');
+    expect(result.items[0].reservation?.travelDate).toBe('2026-03-03');
+    expect(result.items[0].reservation?.groupId).toBe(result.items[1].reservation?.groupId);
   });
 
   it('fails when route segment capacity is exhausted', async () => {

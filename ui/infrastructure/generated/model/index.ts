@@ -32,6 +32,7 @@ export * from './createPassengerDto';
 export * from './createPassengerDtoPassengerType';
 export * from './createPlatformTenantAdminDto';
 export * from './createPlatformTenantDto';
+export * from './createReservationBatchItemDto';
 export * from './createReservationDto';
 export * from './createReservationsBatchDto';
 export * from './createRideDto';

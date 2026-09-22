@@ -78,7 +78,7 @@ export function buildReturnRequests({
   )
   const workingReservations = [...existingReturnReservations]
 
-  return outboundRequests.map((outboundRequest) => {
+  return outboundRequests.map((outboundRequest, index) => {
     const preferredSeat = outboundRequest.seatNumber
     const hasPreferredSeatConflict = checkSeatConflict(
       workingReservations,
@@ -137,6 +137,7 @@ export function buildReturnRequests({
       departureStationId: returnDepartureStationId,
       arrivalStationId: returnArrivalStationId,
       seatNumber: assignedSeat,
+      ...(!outboundRequest.returnOfReservationId ? { returnOfIndex: index } : {}),
     }
   })
 }
