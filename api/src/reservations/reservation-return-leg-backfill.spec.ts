@@ -1,4 +1,4 @@
-import { PrismaClient, ReservationStatus } from '@prisma/client';
+import { Prisma, PrismaClient, ReservationStatus } from '@prisma/client';
 import {
   applyReturnLegBackfill,
   planReturnLegBackfill
@@ -397,6 +397,47 @@ describe('reservation return leg backfill', () => {
 
     expect(result).toMatchObject({ blockCount: 1, skippedCount: 1 });
     expect(result.contendedReturnReservationIds).toEqual(['back-15']);
+  });
+
+  it('records a lost race for the live return slot as contention instead of aborting the run', async () => {
+    findMany.mockResolvedValue([
+      row({ id: 'outbound-1' }), returnRow({ id: 'return-1' }),
+      row({ id: 'outbound-2', passengerId: 'passenger-2' }),
+      returnRow({ id: 'return-2', passengerId: 'passenger-2' })
+    ]);
+    // The partial unique index rejects the write: another writer took this
+    // outbound leg's one live return slot between the plan and the write.
+    updateMany.mockReset()
+      .mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+          meta: { target: 'Reservation_active_return_leg_key' }
+        })
+      )
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 });
+
+    const result = await applyReturnLegBackfill(prisma, 'admin-1');
+
+    expect(result).toMatchObject({
+      linkedCount: 1,
+      skippedCount: 1,
+      contendedReturnReservationIds: ['return-1']
+    });
+  });
+
+  it('still aborts on a unique violation that is not the return-leg index', async () => {
+    findMany.mockResolvedValue([row({ id: 'outbound-1' }), returnRow({ id: 'return-1' })]);
+    updateMany.mockReset().mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: 'Reservation_seat_key' }
+      })
+    );
+
+    await expect(applyReturnLegBackfill(prisma, 'admin-1')).rejects.toThrow('Unique constraint failed');
   });
 
   it('refuses to write without an actor, so no row loses its author', async () => {

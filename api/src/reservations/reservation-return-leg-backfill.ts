@@ -2,7 +2,7 @@ import { Prisma, PrismaClient, ReservationStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { withUpdateAudit } from '../prisma/audit-write.helper';
 import { phoneKeyForIdentity } from '../passengers/passenger-match.util';
-import { LEGACY_RETURN_LOOKUP_DAYS } from './return-leg-link';
+import { LEGACY_RETURN_LOOKUP_DAYS, isActiveReturnLegConflict } from './return-leg-link';
 
 /**
  * Pairs the return legs that were booked before `returnOfReservationId`
@@ -739,7 +739,13 @@ export async function applyReturnLegBackfill(
         result.skippedCount += 1;
       }
     } catch (error) {
-      if (!(error instanceof OutboundLinkContention)) throw error;
+      // Two ways to lose the race for one outbound leg: its marker changed
+      // under us (OutboundLinkContention), or another writer already took its
+      // single live return slot and the partial unique index rejected ours.
+      // Both are contention, not corruption — record the row and keep going.
+      if (!(error instanceof OutboundLinkContention) && !isActiveReturnLegConflict(error)) {
+        throw error;
+      }
       result.skippedCount += 1;
       result.contendedReturnReservationIds.push(link.returnReservationId);
     }

@@ -156,18 +156,25 @@ export async function linkReturnLeg(
  * unique index. Untranslated, that reaches the operator as a 500 with an
  * opaque body; this gives it the same 409 the check produces.
  */
-export function asReturnLegConflict(error: unknown): unknown {
+/**
+ * True when a write lost the race for an outbound leg's one live return slot.
+ * The API turns this into a 409; the backfill records the row as contended and
+ * moves on, rather than letting one lost race abort a whole operator run.
+ */
+export function isActiveReturnLegConflict(error: unknown): boolean {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
-    return error;
+    return false;
   }
 
   const target = error.meta?.target;
-  const hitReturnLegIndex =
-    typeof target === 'string'
-      ? target.includes(ACTIVE_RETURN_LEG_INDEX)
-      : Array.isArray(target) && target.includes('returnOfReservationId');
 
-  return hitReturnLegIndex
+  return typeof target === 'string'
+    ? target.includes(ACTIVE_RETURN_LEG_INDEX)
+    : Array.isArray(target) && target.includes('returnOfReservationId');
+}
+
+export function asReturnLegConflict(error: unknown): unknown {
+  return isActiveReturnLegConflict(error)
     ? new ConflictException('This reservation already has a return leg')
     : error;
 }
