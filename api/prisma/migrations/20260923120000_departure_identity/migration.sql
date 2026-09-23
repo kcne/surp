@@ -41,9 +41,14 @@ CREATE UNIQUE INDEX "RideException_id_rideId_tenantId_key" ON "RideException"("i
 -- whatever the application does. RESTRICT keeps a departure that someone is
 -- booked on from being deleted. With the default MATCH SIMPLE, a NULL
 -- departure column leaves the key unchecked, which is what a legacy row needs.
-ALTER TABLE "Reservation" ADD CONSTRAINT "Reservation_rideDayScheduleId_rideId_tenantId_fkey" FOREIGN KEY ("rideDayScheduleId", "rideId", "tenantId") REFERENCES "RideDaySchedule"("id", "rideId", "tenantId") ON DELETE RESTRICT ON UPDATE RESTRICT;
+--
+-- All four constraints below are added NOT VALID: they apply to every write
+-- from now on, but existing rows are not scanned while this migration holds
+-- its locks (ACCESS EXCLUSIVE for a CHECK). The next migration validates them
+-- under SHARE UPDATE EXCLUSIVE, which lets bookings carry on.
+ALTER TABLE "Reservation" ADD CONSTRAINT "Reservation_rideDayScheduleId_rideId_tenantId_fkey" FOREIGN KEY ("rideDayScheduleId", "rideId", "tenantId") REFERENCES "RideDaySchedule"("id", "rideId", "tenantId") ON DELETE RESTRICT ON UPDATE RESTRICT NOT VALID;
 
-ALTER TABLE "Reservation" ADD CONSTRAINT "Reservation_rideExceptionId_rideId_tenantId_fkey" FOREIGN KEY ("rideExceptionId", "rideId", "tenantId") REFERENCES "RideException"("id", "rideId", "tenantId") ON DELETE RESTRICT ON UPDATE RESTRICT;
+ALTER TABLE "Reservation" ADD CONSTRAINT "Reservation_rideExceptionId_rideId_tenantId_fkey" FOREIGN KEY ("rideExceptionId", "rideId", "tenantId") REFERENCES "RideException"("id", "rideId", "tenantId") ON DELETE RESTRICT ON UPDATE RESTRICT NOT VALID;
 
 -- The only valid shapes of an identity. A legacy row has none of it; each
 -- kind names exactly the departure row it needs and nothing else.
@@ -61,10 +66,10 @@ CHECK (
     WHEN 'ADDITIONAL' THEN "rideDayScheduleId" IS NULL AND "rideExceptionId" IS NOT NULL
     ELSE "rideDayScheduleId" IS NULL AND "rideExceptionId" IS NULL
   END
-);
+) NOT VALID;
 
 -- A SKIP is not something a reservation can be sold on, so it is still
 -- deleted when removed and never retired.
 ALTER TABLE "RideException"
 ADD CONSTRAINT "RideException_retiredAt_additional_check"
-CHECK ("retiredAt" IS NULL OR "type" = 'ADDITIONAL');
+CHECK ("retiredAt" IS NULL OR "type" = 'ADDITIONAL') NOT VALID;
