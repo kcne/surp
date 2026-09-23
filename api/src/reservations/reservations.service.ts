@@ -168,7 +168,7 @@ export class ReservationsService {
           auth,
           { ...item, returnOfReservationId: outboundId },
           groupIdFor(item),
-          { lockHeld: true, roundTripId: item.returnOfIndex === undefined ? undefined : batchRoundTripId }
+          { lockHeld: true, roundTripId: batchRoundTripId }
         );
         createdIds.push(created.id);
 
