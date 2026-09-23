@@ -99,6 +99,7 @@ describe('schedule.matchesRoute', () => {
     prismaMock.line.findMany.mockResolvedValue([lineWithDriftedRide]);
 
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       rideDayScheduleStationTime: {
         deleteMany: jest.fn(),
         createMany: jest.fn()

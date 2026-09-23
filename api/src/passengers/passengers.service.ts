@@ -4,6 +4,7 @@ import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
 import { PROSPECTIVE_INVARIANTS, guardProspectiveWrite } from '../invariants/prospective-write';
+import { consentFrom } from '../invariants/dto/confirm-breaking-change.dto';
 import {
   CheckPassengerDuplicatesDto,
   PassengerDuplicatesResponseDto
@@ -191,7 +192,7 @@ export class PassengersService {
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       dto.isActive === false ? PROSPECTIVE_INVARIANTS.passengerDeactivation : [],
-      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
+      consentFrom(dto),
       (tx) =>
         tx.passenger.update({
           where: {

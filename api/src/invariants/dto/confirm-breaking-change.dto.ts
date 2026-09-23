@@ -1,32 +1,74 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import type { ProspectiveWriteConsent } from '../prospective-write';
 
 export class ConfirmBreakingChangeDto {
+  /**
+   * The "save anyway" answer to a refusal.
+   *
+   * Each entry is the `confirmationToken` of a refusal the operator was shown.
+   * It permits exactly the violations that refusal listed: if a booking landed
+   * in between and changed them, the write is refused again with a new token,
+   * so the count confirmed is always the count written.
+   */
   @ApiPropertyOptional({
-    example: false,
+    type: [String],
+    example: ['9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e'],
     description:
-      'Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers.'
+      'confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.'
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(128, { each: true })
+  confirmationTokens?: string[];
+
+  /**
+   * The "save and repair" answer to a refusal. Only an answer the client
+   * should offer when the refusal said `repairable`. A requested repair that
+   * fails refuses the whole write, even when another refusal was confirmed.
+   */
+  @ApiPropertyOptional({
+    type: [String],
+    example: [],
+    description:
+      'confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.'
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(128, { each: true })
+  repairTokens?: string[];
+
+  /**
+   * Still accepted so a tab loaded before tokens existed gets a refusal it
+   * can answer rather than a validation error — but it permits nothing. An
+   * answer that names no refusal cannot say what it agreed to.
+   */
+  @ApiPropertyOptional({
+    deprecated: true,
+    example: false,
+    description: 'Ignored. Send confirmationTokens instead.'
   })
   @IsOptional()
   @IsBoolean()
   confirmBreakingChange?: boolean;
 
-  /**
-   * The repair answer to a refusal.
-   *
-   * `confirmBreakingChange` means "write it and leave the breakage for someone
-   * to find in the integrity report". This one means "write it and put the
-   * affected reservations back in order", and it is only an answer the client
-   * should offer when the refusal said `repairable`. Both may be set when one
-   * write raises separate invariant questions. An attempted repair that fails
-   * refuses the write even when confirmation is also set.
-   */
   @ApiPropertyOptional({
+    deprecated: true,
     example: false,
-    description:
-      'Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true.'
+    description: 'Ignored. Send repairTokens instead.'
   })
   @IsOptional()
   @IsBoolean()
   repairBreakingChange?: boolean;
+}
+
+export function consentFrom(dto: ConfirmBreakingChangeDto): ProspectiveWriteConsent {
+  return {
+    confirmationTokens: dto.confirmationTokens ?? [],
+    repairTokens: dto.repairTokens ?? []
+  };
 }

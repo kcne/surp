@@ -21,6 +21,7 @@ import { ReplaceLineStopsDto } from './dto/line-stop.dto';
 import { ListLinesQueryDto } from './dto/list-lines.query.dto';
 import { UpdateLineDto } from './dto/update-line.dto';
 import { LinesService } from './lines.service';
+import { consentFrom } from '../invariants/dto/confirm-breaking-change.dto';
 import { WouldBreakReservationsDto } from '../rides/dto/would-break-reservations.dto';
 
 @ApiTags('Lines')
@@ -127,10 +128,7 @@ export class LinesController {
     @Param('id') id: string,
     @Body() dto: ReplaceLineStopsDto
   ): Promise<LineResponseDto> {
-    return this.linesService.replaceStops(request.auth!, id, dto.intermediateStops, {
-      confirmed: dto.confirmBreakingChange === true,
-      repair: dto.repairBreakingChange === true
-    });
+    return this.linesService.replaceStops(request.auth!, id, dto.intermediateStops, consentFrom(dto));
   }
 
   @Post(':id/reverse')

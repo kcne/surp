@@ -18,7 +18,7 @@ import { useStationsListQuery } from "@/infrastructure/hooks/queries/useStations
 import type { CreateStationDto, UpdateStationDto } from "@/infrastructure/generated/model"
 import type { StationListItem } from "@/infrastructure/hooks/queries/useStationsListQuery"
 import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
-import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
+import { answerTokens, useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
 
 export default function StationsPage() {
   const stationsQuery = useStationsListQuery()
@@ -53,8 +53,7 @@ export default function StationsPage() {
     update: (variables, answers) =>
       updateStationMutation.mutateAsync({
         ...variables,
-        confirmBreakingChange: answers.confirmed.length > 0,
-        repairBreakingChange: answers.repaired.length > 0,
+        ...answerTokens(answers),
       }),
     onConfirmed: () => handleModalClose(),
   })

@@ -8,9 +8,27 @@ import {
 } from '@prisma/client';
 import { RidesService } from './rides.service';
 
+/** The token a refusal hands out, which is what the operator's answer carries back. */
+async function refusalToken(refused: Promise<unknown>): Promise<string> {
+  try {
+    await refused;
+  } catch (error) {
+    const token = (error as { response?: { confirmationToken?: unknown } }).response
+      ?.confirmationToken;
+
+    if (typeof token === 'string') {
+      return token;
+    }
+  }
+
+  throw new Error('Expected the write to be refused with a confirmation token');
+}
+
 describe('RidesService', () => {
   const prismaMock = {
     $transaction: jest.fn(),
+    // The schedule lock every guarded write takes first.
+    $executeRaw: jest.fn().mockResolvedValue(1),
     line: {
       findFirst: jest.fn()
     },
@@ -381,6 +399,7 @@ describe('RidesService', () => {
       let written = false;
 
       return {
+        $executeRaw: jest.fn().mockResolvedValue(1),
         reservation: { findMany: jest.fn().mockResolvedValue(reservations) },
         station: { findMany: jest.fn().mockResolvedValue([]) },
         ride: {
@@ -420,12 +439,24 @@ describe('RidesService', () => {
       });
     });
 
-    it('goes through once the caller confirms it in the body', async () => {
+    it('goes through once the caller answers with the token it was given', async () => {
+      runUpdateAgainst([soldSeat], 30);
+      const token = await refusalToken(service.update(auth, 'ride-1', { capacity: 30 }));
+
+      runUpdateAgainst([soldSeat], 30);
+      await expect(
+        service.update(auth, 'ride-1', { capacity: 30, confirmationTokens: [token] })
+      ).resolves.toMatchObject({ capacity: 30 });
+    });
+
+    it('refuses a bare confirmBreakingChange from a tab that predates tokens', async () => {
       runUpdateAgainst([soldSeat], 30);
 
       await expect(
         service.update(auth, 'ride-1', { capacity: 30, confirmBreakingChange: true })
-      ).resolves.toMatchObject({ capacity: 30 });
+      ).rejects.toMatchObject({
+        response: { code: 'WOULD_BREAK_RESERVATIONS', confirmationToken: expect.any(String) }
+      });
     });
 
     it('asks nothing when every sold seat still fits', async () => {
@@ -489,7 +520,7 @@ describe('RidesService', () => {
       }
     ]);
     prismaMock.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
-      callback({ rideException: prismaMock.rideException })
+      callback({ $executeRaw: prismaMock.$executeRaw, rideException: prismaMock.rideException })
     );
 
     await expect(
@@ -885,6 +916,7 @@ describe('RidesService', () => {
     });
 
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       reservation: {
         updateMany: jest.fn().mockResolvedValue({ count: 2 })
       },
@@ -1060,6 +1092,7 @@ describe('RidesService', () => {
       return {
         updates,
         tx: {
+          $executeRaw: jest.fn().mockResolvedValue(1),
           reservation: {
             findMany: jest.fn(async () => reservations.map((item) => ({ ...item }))),
             update: jest.fn(async ({ where, data }: never) => {
@@ -1119,8 +1152,11 @@ describe('RidesService', () => {
     });
 
     it('moves the reservation onto the new departure when asked to repair', async () => {
+      const token = await refusalToken(service.update(auth, 'ride-1', movedLater));
+      harness = transactionMoving();
+
       await expect(
-        service.update(auth, 'ride-1', { ...movedLater, repairBreakingChange: true })
+        service.update(auth, 'ride-1', { ...movedLater, repairTokens: [token] })
       ).resolves.toBeDefined();
 
       expect(harness.updates).toEqual([
@@ -1134,8 +1170,11 @@ describe('RidesService', () => {
     });
 
     it('leaves the reservation where it is when the caller only overrides', async () => {
+      const token = await refusalToken(service.update(auth, 'ride-1', movedLater));
+      harness = transactionMoving();
+
       await expect(
-        service.update(auth, 'ride-1', { ...movedLater, confirmBreakingChange: true })
+        service.update(auth, 'ride-1', { ...movedLater, confirmationTokens: [token] })
       ).resolves.toBeDefined();
 
       // Confirming is the other answer: the write lands and the orphan stays

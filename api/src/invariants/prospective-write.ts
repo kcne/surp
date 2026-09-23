@@ -1,6 +1,8 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { scheduleEditTransaction } from '../prisma/schedule-lock';
 import { instanceNotOverbooked } from './checks/instance-not-overbooked';
 import { reservationPassengerActive } from './checks/passenger-active';
 import { reservationReachable } from './checks/reservation-reachable';
@@ -57,24 +59,31 @@ export interface ProspectiveWriteScope {
 }
 
 /**
- * The caller's answer to a refusal it has already been shown.
+ * The caller's answers to refusals it has already been shown.
  *
- * `confirmed` permits unresolved violations; `repair` requires repairable
- * violations to be settled. Both may be true when one edit raised separate
- * questions about separate invariants: the guard then repairs where it can and
- * permits the others. A failed requested repair still refuses the whole write.
+ * Each answer is the `confirmationToken` of the refusal it answers, so it
+ * permits exactly the violations the operator was shown and nothing that
+ * appeared since. A token in `confirmationTokens` permits those violations to
+ * stand; one in `repairTokens` asks for them to be repaired. One request can
+ * carry answers to several refusals when separate invariants raised separate
+ * questions. A failed requested repair still refuses the whole write.
  */
 export interface ProspectiveWriteConsent {
-  confirmed: boolean;
-  repair: boolean;
+  confirmationTokens: readonly string[];
+  repairTokens: readonly string[];
 }
+
+export const NO_CONSENT: ProspectiveWriteConsent = { confirmationTokens: [], repairTokens: [] };
 
 /**
  * Applies a write tentatively, asks the existing invariants what changed, and
- * commits only when the proposed state adds no violations (or was confirmed,
- * or was repaired). Comparing against the baseline matters: old drift must stay
- * visible in the integrity report, but it must not make an unrelated edit
- * impossible.
+ * commits only when the proposed state adds no violations (or the operator
+ * confirmed or repaired exactly those). Comparing against the baseline matters:
+ * old drift must stay visible in the integrity report, but it must not make an
+ * unrelated edit impossible.
+ *
+ * The whole guard runs under the tenant's exclusive schedule lock, so no
+ * booking is in flight while it measures and none starts until it commits.
  */
 export async function guardProspectiveWrite<TResult, TPrepared = void>(
   prisma: PrismaService,
@@ -85,18 +94,15 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
   /** Read and validate the proposed write before scanning the tenant. */
   prepare?: (tx: Prisma.TransactionClient) => Promise<TPrepared>
 ): Promise<TResult> {
-  return runSerializable(prisma, async (tx) => {
+  return scheduleEditTransaction(prisma, scope.tenantId, async (tx) => {
     // Cheap existence and payload validation can run before the tenant-wide
     // baseline scan while still reading the state this transaction will write.
     const prepared = prepare ? await prepare(tx) : (undefined as TPrepared);
-    // Nothing to compare, but still serializable: the callbacks do their own
-    // read-then-write — an exception that must not already exist, a route read
-    // to derive the next one from — and those need the isolation whether or
-    // not an invariant is being measured. Only the two scans are skipped.
-    //
-    // A repair keeps the scans even when the write is confirmed: it cannot fix
-    // what it has not measured.
-    if (invariants.length === 0 || (consent.confirmed && !consent.repair)) {
+
+    // A confirmation does not skip the scans. What the operator agreed to is
+    // the set of violations they were shown; only measuring again can tell
+    // whether that is still the set this write would leave behind.
+    if (invariants.length === 0) {
       return write(tx, prepared);
     }
 
@@ -112,6 +118,8 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
         continue;
       }
 
+      const token = confirmationTokenFor(invariant, added);
+
       if (invariant.assessRepair) {
         const assessed = await invariant.assessRepair(
           afterContext,
@@ -123,10 +131,12 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
         added = added.map((violation) => assessedBySubject.get(subjectOf(violation)) ?? violation);
       }
 
-      if (consent.repair && invariant.repair) {
+      if (consent.repairTokens.includes(token) && invariant.repair) {
         if (!isFullyRepairable(invariant, added)) {
-          throw breakingChange(invariant, added, false);
+          throw breakingChange(invariant, added, token, false);
         }
+
+        const shown = added;
 
         await invariant.repair(
           // Nothing has written since the post-write scan, so its cached
@@ -143,17 +153,20 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
         added = addedViolations(before.get(invariant.key)!, after.get(invariant.key)!);
 
         if (added.length > 0) {
-          throw breakingChange(invariant, added, false);
+          // What is left to decide is whether to save without the repair, so
+          // the refusal describes that: the violations as first measured, and
+          // the token that confirms them.
+          throw breakingChange(invariant, shown, token, false);
         }
 
         continue;
       }
 
-      if (consent.confirmed) {
+      if (consent.confirmationTokens.includes(token)) {
         continue;
       }
 
-      throw breakingChange(invariant, added);
+      throw breakingChange(invariant, added, token);
     }
 
     return result;
@@ -163,12 +176,14 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
 function breakingChange(
   invariant: ProspectiveInvariant,
   added: readonly Violation[],
+  confirmationToken: string,
   repairable = isFullyRepairable(invariant, added)
 ): ConflictException {
   return new ConflictException({
     code: 'WOULD_BREAK_RESERVATIONS',
     invariant: invariant.key,
     affectedCount: added.length,
+    confirmationToken,
     message: invariant.breakingChangeMessage(added.length),
     repairable,
     ...(repairable && invariant.repairMessage
@@ -213,48 +228,25 @@ function addedViolations(before: Violation[], after: Violation[]): Violation[] {
 }
 
 /**
- * Runs the guard at `Serializable`.
+ * Binds an answer to the refusal it was given for.
  *
- * `RepeatableRead` is not enough here. Lowering capacity to 20 and selling seat
- * 45 touch no common row, so both transactions commit happily and the invariant
- * this guard exists to protect is broken by the pair of them — the textbook
- * write skew, and a plausible Monday morning at a busy counter. Serializable
- * makes Postgres abort one of them instead; one retry covers the ordinary case,
- * and a second failure surfaces rather than looping.
- *
- * Note what this does not buy. Postgres only serializes against other
- * serializable transactions, and booking still runs at the default isolation
- * with its own advisory lock on the ride instance. So this closes the race
- * between two guarded writes, and leaves the one between a guarded write and a
- * concurrent booking open. Closing that means putting both sides on the same
- * protocol, which is a change to the booking path, not to this file.
+ * A digest of the invariant and of each added violation's subject and
+ * magnitude — what the operator was shown, and nothing about how it was
+ * worded. When a booking lands between the refusal and the answer and changes
+ * that set, the answer no longer matches and the operator is asked again, so
+ * the count confirmed is always the count written.
  */
-async function runSerializable<TResult>(
-  prisma: PrismaService,
-  work: (tx: Prisma.TransactionClient) => Promise<TResult>
-): Promise<TResult> {
-  const options = {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    maxWait: 5_000,
-    timeout: 30_000
-  };
+export function confirmationTokenFor(
+  invariant: Pick<ProspectiveInvariant, 'key'>,
+  added: readonly Violation[]
+): string {
+  const subjects = added
+    .map((violation) => [subjectOf(violation), violation.magnitude ?? null] as const)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
 
-  try {
-    return await prisma.$transaction(work, options);
-  } catch (error) {
-    if (!isSerializationFailure(error)) {
-      throw error;
-    }
-
-    return prisma.$transaction(work, options);
-  }
-}
-
-function isSerializationFailure(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    (error.code === 'P2034' || error.code === 'P2028')
-  );
+  return createHash('sha256')
+    .update(JSON.stringify([invariant.key, subjects]))
+    .digest('hex');
 }
 
 /**

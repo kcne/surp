@@ -14,6 +14,7 @@ const prismaMock = {
   reservation: { findMany: reservationFindMany },
   $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
     callback({
+      $executeRaw: jest.fn().mockResolvedValue(1),
       reservation: { updateMany: reservationUpdateMany },
       passenger: { updateMany: passengerUpdateMany, update: passengerUpdate }
     })

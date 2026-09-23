@@ -10,7 +10,7 @@ const prismaMock = {
   reservation: { findMany },
   $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>, options?: unknown) => {
     expect(options).toBeDefined();
-    return callback({ reservation: { updateMany } });
+    return callback({ $executeRaw: jest.fn().mockResolvedValue(1), reservation: { updateMany } });
   })
 };
 
@@ -380,7 +380,7 @@ describe('reservation return leg backfill', () => {
       contendedReturnReservationIds: ['return-1']
     });
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(2);
-    expect(prismaMock.$transaction.mock.calls[0][1]).toEqual({ maxWait: 10000, timeout: 10000 });
+    expect(prismaMock.$transaction.mock.calls[0][1]).toEqual({ maxWait: 10000, timeout: 20000 });
   });
 
   it('treats a block outbound with a changed marker as contention', async () => {

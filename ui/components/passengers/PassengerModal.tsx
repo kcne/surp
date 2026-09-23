@@ -8,7 +8,7 @@ import {
 } from "@/infrastructure/hooks/mutations/usePassengerMutations"
 import type { Passenger, PassengerFormData } from "@/types"
 import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
-import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
+import { answerTokens, useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
 
 interface PassengerModalProps {
   open: boolean
@@ -25,8 +25,7 @@ export function PassengerModal({ open, onOpenChange, passenger }: PassengerModal
     update: (variables, answers) =>
       updatePassengerMutation.mutateAsync({
         ...variables,
-        confirmBreakingChange: answers.confirmed.length > 0,
-        repairBreakingChange: answers.repaired.length > 0,
+        ...answerTokens(answers),
       }),
     onConfirmed: () => onOpenChange(false),
   })

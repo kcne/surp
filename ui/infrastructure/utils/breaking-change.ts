@@ -47,7 +47,8 @@ export function asBreakingChangeConflict(error: unknown): WouldBreakReservations
     data?.code !== "WOULD_BREAK_RESERVATIONS" ||
     typeof data.affectedCount !== "number" ||
     typeof data.invariant !== "string" ||
-    typeof data.message !== "string"
+    typeof data.message !== "string" ||
+    typeof data.confirmationToken !== "string"
   ) {
     return null
   }
@@ -67,4 +68,24 @@ export function throwBreakingChangeConflict(
   }
 
   throw error
+}
+
+/**
+ * The server's refusal when a schedule edit held the tenant's schedule longer
+ * than a booking waits. Nothing was saved; the operator can simply try again,
+ * so this carries the server's own Serbian sentence rather than a generic
+ * failure.
+ */
+export function scheduleBeingUpdatedMessage(error: unknown): string | null {
+  const response = (error as { response?: { status?: number; data?: unknown } })?.response
+
+  if (response?.status !== 409) {
+    return null
+  }
+
+  const data = response.data as { code?: unknown; message?: unknown } | undefined
+
+  return data?.code === "SCHEDULE_BEING_UPDATED" && typeof data.message === "string"
+    ? data.message
+    : null
 }

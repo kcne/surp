@@ -15,11 +15,14 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
+import { scheduleEditTransaction } from '../prisma/schedule-lock';
 import {
+  NO_CONSENT,
   PROSPECTIVE_INVARIANTS,
   ProspectiveWriteConsent,
   guardProspectiveWrite
 } from '../invariants/prospective-write';
+import { consentFrom } from '../invariants/dto/confirm-breaking-change.dto';
 import { CreateLineDto } from './dto/create-line.dto';
 import { LineResponseDto, PaginatedLinesResponseDto } from './dto/line.response.dto';
 import { LineStopInputDto } from './dto/line-stop.dto';
@@ -281,7 +284,7 @@ export class LinesService {
         this.prisma,
         { tenantId: auth.tenantId, actorId: auth.sub },
         PROSPECTIVE_INVARIANTS.lineUpdate,
-        { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
+        consentFrom(dto),
         async (tx) => {
           // Read inside the transaction, not before it. Every value below is
           // derived from the line as it stands, and a concurrent route edit
@@ -432,12 +435,12 @@ export class LinesService {
     auth: AccessTokenPayload,
     id: string,
     intermediateStops: LineStopInputDto[],
-    consent: ProspectiveWriteConsent = { confirmed: false, repair: false }
+    consent: ProspectiveWriteConsent = NO_CONSENT
   ): Promise<LineResponseDto> {
     return this.update(auth, id, {
       intermediateStops,
-      confirmBreakingChange: consent.confirmed,
-      repairBreakingChange: consent.repair
+      confirmationTokens: [...consent.confirmationTokens],
+      repairTokens: [...consent.repairTokens]
     });
   }
 
@@ -529,7 +532,9 @@ export class LinesService {
     await this.getLineOrThrow(auth.tenantId, id);
 
     if (cascade) {
-      return this.prisma.$transaction(async (tx) => {
+      // Cancelling every reservation and retiring the rides is a schedule edit:
+      // a booking still in flight must land before the cancellation sweeps it.
+      return scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
         const now = new Date();
         const rides = await tx.ride.findMany({
           where: {

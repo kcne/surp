@@ -19,6 +19,7 @@
  * write, and the shared helper refuses to create them without an actor.
  */
 import { PrismaClient } from '@prisma/client';
+import { scheduleEditTransaction } from '../src/prisma/schedule-lock';
 import {
   buildAlignedStationTimes,
   describeScheduleDrift,
@@ -125,7 +126,9 @@ async function main() {
 
         // Same helper the service and the maintenance endpoint use, so the
         // offline repair cannot drift from the online one.
-        await prisma.$transaction((tx) =>
+        // A schedule edit like any other: it waits for bookings in flight and
+        // holds new ones back until the rewritten times are committed.
+        await scheduleEditTransaction(prisma, line.tenantId, (tx) =>
           realignDayScheduleTx(tx, {
             tenantId: line.tenantId,
             rideDayScheduleId: daySchedule.id,

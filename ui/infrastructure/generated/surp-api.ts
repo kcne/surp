@@ -8615,10 +8615,15 @@ export type reservationsControllerCancelResponse404 = {
   status: 404
 }
 
+export type reservationsControllerCancelResponse409 = {
+  data: void
+  status: 409
+}
+
 export type reservationsControllerCancelResponseSuccess = (reservationsControllerCancelResponse200) & {
   headers: Headers;
 };
-export type reservationsControllerCancelResponseError = (reservationsControllerCancelResponse400 | reservationsControllerCancelResponse401 | reservationsControllerCancelResponse403 | reservationsControllerCancelResponse404) & {
+export type reservationsControllerCancelResponseError = (reservationsControllerCancelResponse400 | reservationsControllerCancelResponse401 | reservationsControllerCancelResponse403 | reservationsControllerCancelResponse404 | reservationsControllerCancelResponse409) & {
   headers: Headers;
 };
 

@@ -5,6 +5,7 @@ import {
   routeStationIdsOf
 } from '../../rides/ride-schedule-alignment';
 import { CheckResult, Invariant, InvariantContext, RepairResult } from '../invariant.types';
+import { scheduleEditTransaction } from '../../prisma/schedule-lock';
 import { loadStationNames, stationNamer } from './tenant-lookups';
 
 /**
@@ -129,7 +130,7 @@ export async function realignDriftedSchedules(ctx: InvariantContext): Promise<Re
   }
 
   for (const entry of drifted) {
-    const result = await ctx.prisma.$transaction((tx) =>
+    const result = await scheduleEditTransaction(ctx.prisma, entry.tenantId, (tx) =>
       realignDayScheduleTx(tx, {
         tenantId: entry.tenantId,
         rideDayScheduleId: entry.rideDayScheduleId,

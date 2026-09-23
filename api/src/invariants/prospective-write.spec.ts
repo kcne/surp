@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { guardProspectiveWrite } from './prospective-write';
+import { confirmationTokenFor, guardProspectiveWrite, ProspectiveWriteConsent } from './prospective-write';
 import { InvariantContext, ProspectiveInvariant, Violation } from './invariant.types';
 
 function violation(subjectId: string, magnitude?: number): Violation {
@@ -53,6 +53,14 @@ function invariantReporting(
 function prismaDouble() {
   type TransactionOptions = { isolationLevel?: Prisma.TransactionIsolationLevel };
   const transactions: Array<{ options?: TransactionOptions; outcome: string }> = [];
+  const statements: string[] = [];
+  const tx = {
+    marker: 'transaction',
+    $executeRaw: jest.fn(async (sql: TemplateStringsArray) => {
+      statements.push(sql.join('?'));
+      return 1;
+    })
+  };
   const prisma = {
     $transaction: jest.fn(
       async (
@@ -63,7 +71,7 @@ function prismaDouble() {
         transactions.push(record);
 
         try {
-          const result = await callback({ marker: 'transaction' });
+          const result = await callback(tx);
           record.outcome = 'committed';
 
           return result;
@@ -75,7 +83,7 @@ function prismaDouble() {
     )
   };
 
-  return { prisma, transactions };
+  return { prisma, transactions, tx, statements };
 }
 
 /**
@@ -133,10 +141,25 @@ function repairable(subjectId: string): Violation {
 
 const scope = { tenantId: 'tenant-1', actorId: 'actor-1' };
 
-/** The three answers a caller can arrive with. */
-const UNANSWERED = { confirmed: false, repair: false };
-const CONFIRMED = { confirmed: true, repair: false };
-const REPAIR = { confirmed: false, repair: true };
+const UNANSWERED: ProspectiveWriteConsent = { confirmationTokens: [], repairTokens: [] };
+
+/** The answer an operator gives after being shown exactly these violations. */
+function confirming(key: string, added: Violation[]): ProspectiveWriteConsent {
+  return { confirmationTokens: [confirmationTokenFor({ key }, added)], repairTokens: [] };
+}
+
+function repairing(key: string, added: Violation[]): ProspectiveWriteConsent {
+  return { confirmationTokens: [], repairTokens: [confirmationTokenFor({ key }, added)] };
+}
+
+function both(...answers: ProspectiveWriteConsent[]): ProspectiveWriteConsent {
+  return {
+    confirmationTokens: answers.flatMap((answer) => answer.confirmationTokens),
+    repairTokens: answers.flatMap((answer) => answer.repairTokens)
+  };
+}
+
+const REACHABLE = 'reservation.reachable';
 
 describe('guardProspectiveWrite', () => {
   it('rejects only violations introduced by the proposed state', async () => {
@@ -160,7 +183,7 @@ describe('guardProspectiveWrite', () => {
   });
 
   it('does not block an edit because of a pre-existing violation', async () => {
-    const { prisma } = prismaDouble();
+    const { prisma, tx } = prismaDouble();
     const reachable = invariantReporting(
       'reservation.reachable',
       [violation('old')],
@@ -171,7 +194,7 @@ describe('guardProspectiveWrite', () => {
     await expect(
       guardProspectiveWrite(prisma as never, scope, [reachable], UNANSWERED, write)
     ).resolves.toBe('written');
-    expect(write).toHaveBeenCalledWith({ marker: 'transaction' }, undefined);
+    expect(write).toHaveBeenCalledWith(tx, undefined);
   });
 
   it('rejects a change that deepens a violation it did not create', async () => {
@@ -247,73 +270,178 @@ describe('guardProspectiveWrite', () => {
     expect(first.contexts[0]).not.toBe(first.contexts[1]);
   });
 
-  it('skips the invariant reads after explicit confirmation', async () => {
-    const { prisma, transactions } = prismaDouble();
-    const reachable = invariantReporting('reservation.reachable', [], [violation('new')]);
-    const check = jest.spyOn(reachable, 'check');
-    const write = jest.fn().mockResolvedValue('written');
+  describe('answering with a confirmation token', () => {
+    it('hands out a token that names exactly the violations it refused', async () => {
+      const { prisma } = prismaDouble();
+      const added = [violation('new-1'), violation('new-2', 3)];
+      const reachable = invariantReporting(REACHABLE, [violation('old')], [violation('old'), ...added]);
 
-    await expect(
-      guardProspectiveWrite(prisma as never, scope, [reachable], CONFIRMED, write)
-    ).resolves.toBe('written');
+      await expect(
+        guardProspectiveWrite(prisma as never, scope, [reachable], UNANSWERED, jest.fn())
+      ).rejects.toMatchObject({
+        response: { confirmationToken: confirmationTokenFor({ key: REACHABLE }, added) }
+      });
+    });
 
-    expect(check).not.toHaveBeenCalled();
-    expect(transactions).toHaveLength(1);
+    it('commits when the token matches what the operator was shown', async () => {
+      const { prisma, transactions } = prismaDouble();
+      const reachable = invariantReporting(REACHABLE, [], [violation('new')]);
+      const write = jest.fn().mockResolvedValue('written');
+
+      await expect(
+        guardProspectiveWrite(
+          prisma as never,
+          scope,
+          [reachable],
+          confirming(REACHABLE, [violation('new')]),
+          write
+        )
+      ).resolves.toBe('written');
+      expect(transactions[0].outcome).toBe('committed');
+    });
+
+    it('still measures after a confirmation, since only a measurement can match the token', async () => {
+      const { prisma } = prismaDouble();
+      const reachable = invariantReporting(REACHABLE, [], [violation('new')]);
+      const check = jest.spyOn(reachable, 'check');
+
+      await guardProspectiveWrite(
+        prisma as never,
+        scope,
+        [reachable],
+        confirming(REACHABLE, [violation('new')]),
+        jest.fn()
+      );
+
+      expect(check).toHaveBeenCalledTimes(2);
+    });
+
+    it('refuses again, with a fresh token, when a booking changed the set in between', async () => {
+      const { prisma, transactions } = prismaDouble();
+      // Shown one broken reservation; by the time the answer arrives, a booking
+      // has made it two.
+      const shown = [violation('res-1')];
+      const now = [violation('res-1'), violation('res-2')];
+      const reachable = invariantReporting(REACHABLE, [], now);
+
+      await expect(
+        guardProspectiveWrite(
+          prisma as never,
+          scope,
+          [reachable],
+          confirming(REACHABLE, shown),
+          jest.fn()
+        )
+      ).rejects.toMatchObject({
+        response: {
+          code: 'WOULD_BREAK_RESERVATIONS',
+          affectedCount: 2,
+          confirmationToken: confirmationTokenFor({ key: REACHABLE }, now)
+        }
+      });
+      expect(transactions[0].outcome).toBe('rolled-back');
+    });
+
+    it('refuses again when the same subjects got worse', async () => {
+      const { prisma } = prismaDouble();
+      const overbooked = invariantReporting('instance.notOverbooked', [], [violation('bus-1', 4)]);
+
+      await expect(
+        guardProspectiveWrite(
+          prisma as never,
+          scope,
+          [overbooked],
+          confirming('instance.notOverbooked', [violation('bus-1', 2)]),
+          jest.fn()
+        )
+      ).rejects.toMatchObject({ response: { invariant: 'instance.notOverbooked' } });
+    });
+
+    it('does not let a token for one invariant answer another', async () => {
+      const { prisma } = prismaDouble();
+      const overbooked = invariantReporting('instance.notOverbooked', [], [violation('res-1')]);
+
+      await expect(
+        guardProspectiveWrite(
+          prisma as never,
+          scope,
+          [overbooked],
+          confirming(REACHABLE, [violation('res-1')]),
+          jest.fn()
+        )
+      ).rejects.toMatchObject({ response: { invariant: 'instance.notOverbooked' } });
+    });
+
+    it('does not depend on the order the violations were reported in', () => {
+      expect(confirmationTokenFor({ key: REACHABLE }, [violation('b'), violation('a')])).toBe(
+        confirmationTokenFor({ key: REACHABLE }, [violation('a'), violation('b')])
+      );
+    });
   });
 
-  it('keeps the isolation even when there is nothing to check', async () => {
-    const { prisma, transactions } = prismaDouble();
-    const write = jest.fn().mockResolvedValue('written');
+  describe('the schedule lock', () => {
+    it('runs at READ COMMITTED, where a lock taken first is seen by every read after it', async () => {
+      const { prisma, transactions } = prismaDouble();
+      const reachable = invariantReporting(REACHABLE, [], []);
 
-    await expect(guardProspectiveWrite(prisma as never, scope, [], UNANSWERED, write)).resolves.toBe(
-      'written'
-    );
+      await guardProspectiveWrite(prisma as never, scope, [reachable], UNANSWERED, jest.fn());
 
-    // The callbacks do their own read-then-write — the exception that must not
-    // already exist — so the isolation is not the checks' to skip.
-    expect(transactions[0].options?.isolationLevel).toBe(
-      Prisma.TransactionIsolationLevel.Serializable
-    );
-  });
+      expect(transactions[0].options?.isolationLevel).toBe(
+        Prisma.TransactionIsolationLevel.ReadCommitted
+      );
+    });
 
-  it('runs the compared write serializably', async () => {
-    const { prisma, transactions } = prismaDouble();
-    const reachable = invariantReporting('reservation.reachable', [], []);
+    it('takes the tenant lock exclusively before preparing, scanning or writing', async () => {
+      const { prisma, statements } = prismaDouble();
+      const order: string[] = [];
+      const reachable = invariantReporting(REACHABLE, [], []);
+      jest.spyOn(reachable, 'check').mockImplementation(async () => {
+        order.push(`check after ${statements.length} statements`);
+        return { violations: [], scannedCount: 0 };
+      });
 
-    await guardProspectiveWrite(prisma as never, scope, [reachable], UNANSWERED, jest.fn());
+      await guardProspectiveWrite(
+        prisma as never,
+        scope,
+        [reachable],
+        UNANSWERED,
+        async () => {
+          order.push('write');
+        },
+        async () => {
+          order.push(`prepare after ${statements.length} statements`);
+        }
+      );
 
-    expect(transactions[0].options?.isolationLevel).toBe(
-      Prisma.TransactionIsolationLevel.Serializable
-    );
-  });
+      expect(statements).toHaveLength(1);
+      expect(statements[0]).toContain('pg_advisory_xact_lock(');
+      expect(statements[0]).not.toContain('_shared');
+      expect(order[0]).toBe('prepare after 1 statements');
+    });
 
-  it('retries once when Postgres aborts the transaction to keep it serializable', async () => {
-    const { prisma } = prismaDouble();
-    const reachable = invariantReporting('reservation.reachable', [], []);
-    const write = jest.fn().mockResolvedValue('written');
+    it('keeps the lock even when there is nothing to check', async () => {
+      const { prisma, statements } = prismaDouble();
+      const write = jest.fn().mockResolvedValue('written');
 
-    prisma.$transaction.mockRejectedValueOnce(
-      new Prisma.PrismaClientKnownRequestError('write conflict', {
-        code: 'P2034',
-        clientVersion: 'test'
-      })
-    );
+      await expect(guardProspectiveWrite(prisma as never, scope, [], UNANSWERED, write)).resolves.toBe(
+        'written'
+      );
 
-    await expect(
-      guardProspectiveWrite(prisma as never, scope, [reachable], UNANSWERED, write)
-    ).resolves.toBe('written');
-    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
-  });
+      // The callbacks do their own read-then-write — the exception that must not
+      // already exist — so the lock is not the checks' to skip.
+      expect(statements[0]).toContain('pg_advisory_xact_lock(');
+    });
 
-  it('does not retry an ordinary failure', async () => {
-    const { prisma } = prismaDouble();
-    const reachable = invariantReporting('reservation.reachable', [], []);
-    const write = jest.fn().mockRejectedValue(new Error('constraint violated'));
+    it('does not retry a failure behind the operator\'s back', async () => {
+      const { prisma } = prismaDouble();
+      const reachable = invariantReporting(REACHABLE, [], []);
+      const write = jest.fn().mockRejectedValue(new Error('constraint violated'));
 
-    await expect(
-      guardProspectiveWrite(prisma as never, scope, [reachable], UNANSWERED, write)
-    ).rejects.toThrow('constraint violated');
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      await expect(
+        guardProspectiveWrite(prisma as never, scope, [reachable], UNANSWERED, write)
+      ).rejects.toThrow('constraint violated');
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('repairing instead of overriding', () => {
@@ -328,7 +456,13 @@ describe('guardProspectiveWrite', () => {
       const write = jest.fn().mockResolvedValue('written');
 
       await expect(
-        guardProspectiveWrite(prisma as never, scope, [reachable], REPAIR, write)
+        guardProspectiveWrite(
+          prisma as never,
+          scope,
+          [reachable],
+          repairing(REACHABLE, [repairable('res-1'), repairable('res-2')]),
+          write
+        )
       ).resolves.toBe('written');
 
       expect(reachable.repairCalls).toBe(1);
@@ -344,7 +478,13 @@ describe('guardProspectiveWrite', () => {
         [repairable('old')]
       ]);
 
-      await guardProspectiveWrite(prisma as never, scope, [reachable], REPAIR, jest.fn());
+      await guardProspectiveWrite(
+        prisma as never,
+        scope,
+        [reachable],
+        repairing(REACHABLE, [repairable('new')]),
+        jest.fn()
+      );
 
       expect(reachable.repairSubjects).toEqual([['new']]);
     });
@@ -361,7 +501,13 @@ describe('guardProspectiveWrite', () => {
         violations: [repairable([...subjectIds][0])]
       }));
 
-      await guardProspectiveWrite(prisma as never, scope, [reachable], REPAIR, jest.fn());
+      await guardProspectiveWrite(
+        prisma as never,
+        scope,
+        [reachable],
+        repairing(REACHABLE, [violation('new')]),
+        jest.fn()
+      );
 
       expect(reachable.assessRepair).toHaveBeenCalledWith(
         expect.anything(),
@@ -371,19 +517,25 @@ describe('guardProspectiveWrite', () => {
     });
 
     it('repairs in the same transaction as the write it is repairing', async () => {
-      const { prisma, transactions } = prismaDouble();
+      const { prisma, transactions, tx } = prismaDouble();
       const reachable = invariantRepairing('reservation.reachable', [
         [],
         [repairable('res-1')],
         []
       ]);
 
-      await guardProspectiveWrite(prisma as never, scope, [reachable], REPAIR, jest.fn());
+      await guardProspectiveWrite(
+        prisma as never,
+        scope,
+        [reachable],
+        repairing(REACHABLE, [repairable('res-1')]),
+        jest.fn()
+      );
 
       // One transaction for all of it: a repair that landed while the write it
       // was repairing rolled back would leave passengers moved for nothing.
       expect(transactions).toHaveLength(1);
-      expect(reachable.contexts[2].prisma).toEqual({ marker: 'transaction' });
+      expect(reachable.contexts[2].prisma).toBe(tx);
     });
 
     it('re-checks on a fresh context, not the one the scan already cached', async () => {
@@ -394,7 +546,13 @@ describe('guardProspectiveWrite', () => {
         []
       ]);
 
-      await guardProspectiveWrite(prisma as never, scope, [reachable], REPAIR, jest.fn());
+      await guardProspectiveWrite(
+        prisma as never,
+        scope,
+        [reachable],
+        repairing(REACHABLE, [repairable('res-1')]),
+        jest.fn()
+      );
 
       expect(reachable.contexts).toHaveLength(3);
       expect(reachable.contexts[2]).not.toBe(reachable.contexts[1]);
@@ -410,12 +568,17 @@ describe('guardProspectiveWrite', () => {
         [violation('res-2')]
       ]);
 
+      const shown = [repairable('res-1'), repairable('res-2')];
+
       await expect(
-        guardProspectiveWrite(prisma as never, scope, [reachable], REPAIR, jest.fn())
+        guardProspectiveWrite(prisma as never, scope, [reachable], repairing(REACHABLE, shown), jest.fn())
       ).rejects.toMatchObject({
         response: {
           code: 'WOULD_BREAK_RESERVATIONS',
-          affectedCount: 1,
+          // The repair rolled back with everything else, so saving anyway
+          // leaves both broken — and that is the count the operator confirms.
+          affectedCount: 2,
+          confirmationToken: confirmationTokenFor({ key: REACHABLE }, shown),
           // Nothing left that a second press would fix, so it is not offered
           // again — the remaining one is now a telephone call.
           repairable: false
@@ -433,12 +596,14 @@ describe('guardProspectiveWrite', () => {
         [repairable('res-1')]
       ]);
 
+      const shown = [repairable('res-1')];
+
       await expect(
         guardProspectiveWrite(
           prisma as never,
           scope,
           [reachable],
-          { confirmed: true, repair: true },
+          both(repairing(REACHABLE, shown), confirming('instance.notOverbooked', [violation('bus-1')])),
           jest.fn()
         )
       ).rejects.toMatchObject({ response: { repairable: false } });
@@ -459,7 +624,10 @@ describe('guardProspectiveWrite', () => {
         prisma as never,
         scope,
         [reachable, overbooked],
-        { confirmed: true, repair: true },
+        both(
+          repairing(REACHABLE, [repairable('res-1')]),
+          confirming('instance.notOverbooked', [violation('bus-1')])
+        ),
         jest.fn()
       );
 
@@ -482,7 +650,13 @@ describe('guardProspectiveWrite', () => {
       );
 
       await expect(
-        guardProspectiveWrite(prisma as never, scope, [reachable, overbooked], REPAIR, jest.fn())
+        guardProspectiveWrite(
+          prisma as never,
+          scope,
+          [reachable, overbooked],
+          repairing(REACHABLE, [repairable('res-1')]),
+          jest.fn()
+        )
       ).rejects.toMatchObject({ response: { invariant: 'instance.notOverbooked' } });
 
       expect(overbooked.contexts).toHaveLength(3);
@@ -500,7 +674,13 @@ describe('guardProspectiveWrite', () => {
       // Asking to repair what cannot be repaired is not a way to get the write
       // through: it is refused, and the refusal says there is nothing to run.
       await expect(
-        guardProspectiveWrite(prisma as never, scope, [overbooked], REPAIR, jest.fn())
+        guardProspectiveWrite(
+          prisma as never,
+          scope,
+          [overbooked],
+          repairing('instance.notOverbooked', [violation('instance-1')]),
+          jest.fn()
+        )
       ).rejects.toMatchObject({
         response: { invariant: 'instance.notOverbooked', repairable: false }
       });
@@ -532,7 +712,10 @@ describe('guardProspectiveWrite', () => {
           prisma as never,
           scope,
           [reachable],
-          { confirmed: true, repair: true },
+          both(
+            repairing(REACHABLE, [repairable('res-1'), violation('res-2')]),
+            confirming('instance.notOverbooked', [])
+          ),
           jest.fn()
         )
       ).rejects.toMatchObject({ response: { affectedCount: 2, repairable: false } });
@@ -562,23 +745,23 @@ describe('guardProspectiveWrite', () => {
       expect(reachable.repairCalls).toBe(0);
     });
 
-    it('still measures when the caller confirmed, because a repair needs the measurement', async () => {
-      const { prisma } = prismaDouble();
+    it('confirms instead of repairing when the operator chose to save anyway', async () => {
+      const { prisma, transactions } = prismaDouble();
       const reachable = invariantRepairing('reservation.reachable', [
         [],
-        [repairable('res-1')],
-        []
+        [repairable('res-1')]
       ]);
 
       await guardProspectiveWrite(
         prisma as never,
         scope,
         [reachable],
-        { confirmed: true, repair: true },
+        confirming(REACHABLE, [repairable('res-1')]),
         jest.fn()
       );
 
-      expect(reachable.repairCalls).toBe(1);
+      expect(reachable.repairCalls).toBe(0);
+      expect(transactions[0].outcome).toBe('committed');
     });
   });
 });

@@ -83,18 +83,18 @@ export function useUpdateLineMutation() {
     mutationFn: async ({
       id,
       payload,
-      confirmBreakingChange,
-      repairBreakingChange,
+      confirmationTokens,
+      repairTokens,
     }: {
       id: string
       payload: UpdateLineDto
-      confirmBreakingChange?: boolean
-      repairBreakingChange?: boolean
+      confirmationTokens?: string[]
+      repairTokens?: string[]
     }) => {
       const response = await linesControllerUpdate(id, {
         ...payload,
-        confirmBreakingChange,
-        repairBreakingChange,
+        confirmationTokens,
+        repairTokens,
       }).catch(throwBreakingChangeConflict)
       if (!isLineMutationSuccess<linesControllerUpdateResponse>(response)) {
         throw new Error("Neuspesno azuriranje linije")

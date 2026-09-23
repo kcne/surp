@@ -11,6 +11,7 @@ import {
   realignDayScheduleTx
 } from '../../rides/ride-schedule-alignment';
 import { CheckResult, Invariant, InvariantContext, RepairResult } from '../invariant.types';
+import { scheduleEditTransaction } from '../../prisma/schedule-lock';
 import { loadPairs, loadStationNames, stationNamer } from './tenant-lookups';
 
 /**
@@ -125,7 +126,7 @@ export async function syncDriftedPairs(ctx: InvariantContext): Promise<PairSyncO
       throw new Error('Invariant repairs require a root database client');
     }
 
-    const written = await ctx.prisma.$transaction(async (tx) => {
+    const written = await scheduleEditTransaction(ctx.prisma, ctx.tenantId, async (tx) => {
       let scheduleCount = 0;
       let stopCount = 0;
 

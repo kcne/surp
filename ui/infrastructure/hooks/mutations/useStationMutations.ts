@@ -66,18 +66,18 @@ export function useUpdateStationMutation() {
     mutationFn: async ({
       id,
       payload,
-      confirmBreakingChange,
-      repairBreakingChange,
+      confirmationTokens,
+      repairTokens,
     }: {
       id: string
       payload: UpdateStationDto
-      confirmBreakingChange?: boolean
-      repairBreakingChange?: boolean
+      confirmationTokens?: string[]
+      repairTokens?: string[]
     }) => {
       const response = await stationsControllerUpdate(id, {
         ...payload,
-        confirmBreakingChange,
-        repairBreakingChange,
+        confirmationTokens,
+        repairTokens,
       }).catch(throwBreakingChangeConflict)
       if (!isStationMutationSuccess<stationsControllerUpdateResponse>(response)) {
         throw new Error("Neuspesno azuriranje stanice")

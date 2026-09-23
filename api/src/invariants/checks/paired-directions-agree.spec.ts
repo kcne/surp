@@ -92,6 +92,7 @@ describe('pair.directionsAgree', () => {
     prismaMock.line.findMany.mockResolvedValue(pairedLines);
 
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
       ride: { findMany: jest.fn().mockResolvedValue([]) },
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
