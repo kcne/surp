@@ -82,6 +82,11 @@ async function main() {
   let drifted = 0;
   let estimatedTotal = 0;
   let reorderedTotal = 0;
+  // With APPLY=1 the totals come from what the locked transaction wrote, not
+  // from the scan: a schedule an edit settled in the meantime is skipped, and
+  // one that changed but still drifts is realigned from its current times.
+  let repaired = 0;
+  let skipped = 0;
 
   for (const line of lines) {
     const routeStationIds = routeStationIdsOf(line);
@@ -106,10 +111,13 @@ async function main() {
         );
         const aligned = buildAlignedStationTimes(routeStationIds, daySchedule.stationTimes);
         const estimated = aligned.filter((stationTime) => stationTime.isEstimated);
-        estimatedTotal += estimated.length;
 
-        if (reorderedStationIds.length > 0) {
-          reorderedTotal += 1;
+        if (!apply) {
+          estimatedTotal += estimated.length;
+
+          if (reorderedStationIds.length > 0) {
+            reorderedTotal += 1;
+          }
         }
 
         console.log(
@@ -139,15 +147,23 @@ async function main() {
         );
 
         if (!result) {
+          skipped += 1;
           console.log(`SKIP schedule=${daySchedule.id}: changed since the scan and no longer drifted.`);
+          continue;
         }
+
+        repaired += 1;
+        estimatedTotal += result.estimatedTimeCount;
+        reorderedTotal += result.reorderedScheduleIds.length;
       }
     }
   }
 
   console.log(
-    `\n${apply ? 'Repaired' : 'Would repair'} ${drifted} of ${scanned} day schedules` +
-      (apply ? '.' : '. Re-run with APPLY=1 to write.')
+    apply
+      ? `\nRepaired ${repaired} of ${drifted} drifted day schedules (${scanned} scanned).` +
+          (skipped > 0 ? ` Skipped ${skipped} that changed since the scan and no longer drift.` : '')
+      : `\nWould repair ${drifted} of ${scanned} day schedules. Re-run with APPLY=1 to write.`
   );
 
   if (estimatedTotal > 0) {
