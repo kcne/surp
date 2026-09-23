@@ -123,6 +123,7 @@ import type {
   UpdatePlatformTenantDto,
   UpdateReservationDto,
   UpdateRideDto,
+  UpdateRideExceptionDto,
   UpdateStationDto,
   UpdateTicketDto,
   UpdateUserDto,
@@ -7385,6 +7386,121 @@ export const useRidesControllerAddException = <TError = ErrorType<void | WouldBr
     }
     
 /**
+ * The departure keeps its ID, so reservations sold on it stay on it. Only ADDITIONAL exceptions can be edited; a retired one is not found.
+ * @summary Change the times of an additional departure in the current tenant.
+ */
+export type ridesControllerUpdateExceptionResponse200 = {
+  data: RideExceptionResponseDto
+  status: 200
+}
+
+export type ridesControllerUpdateExceptionResponse400 = {
+  data: void
+  status: 400
+}
+
+export type ridesControllerUpdateExceptionResponse401 = {
+  data: void
+  status: 401
+}
+
+export type ridesControllerUpdateExceptionResponse403 = {
+  data: void
+  status: 403
+}
+
+export type ridesControllerUpdateExceptionResponse404 = {
+  data: void
+  status: 404
+}
+
+export type ridesControllerUpdateExceptionResponse409 = {
+  data: WouldBreakReservationsDto | RideExceptionConflictDto
+  status: 409
+}
+
+export type ridesControllerUpdateExceptionResponseSuccess = (ridesControllerUpdateExceptionResponse200) & {
+  headers: Headers;
+};
+export type ridesControllerUpdateExceptionResponseError = (ridesControllerUpdateExceptionResponse400 | ridesControllerUpdateExceptionResponse401 | ridesControllerUpdateExceptionResponse403 | ridesControllerUpdateExceptionResponse404 | ridesControllerUpdateExceptionResponse409) & {
+  headers: Headers;
+};
+
+export type ridesControllerUpdateExceptionResponse = (ridesControllerUpdateExceptionResponseSuccess | ridesControllerUpdateExceptionResponseError)
+
+export const getRidesControllerUpdateExceptionUrl = (id: string,
+    exceptionId: string,) => {
+
+
+  
+
+  return `/rides/${id}/exceptions/${exceptionId}`
+}
+
+export const ridesControllerUpdateException = async (id: string,
+    exceptionId: string,
+    updateRideExceptionDto: UpdateRideExceptionDto, options?: RequestInit): Promise<ridesControllerUpdateExceptionResponse> => {
+  
+  return customInstance<ridesControllerUpdateExceptionResponse>(getRidesControllerUpdateExceptionUrl(id,exceptionId),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateRideExceptionDto,)
+  }
+);}
+  
+
+
+
+export const getRidesControllerUpdateExceptionMutationOptions = <TError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerUpdateException>>, TError,{id: string;exceptionId: string;data: UpdateRideExceptionDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof ridesControllerUpdateException>>, TError,{id: string;exceptionId: string;data: UpdateRideExceptionDto}, TContext> => {
+
+const mutationKey = ['ridesControllerUpdateException'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ridesControllerUpdateException>>, {id: string;exceptionId: string;data: UpdateRideExceptionDto}> = (props) => {
+          const {id,exceptionId,data} = props ?? {};
+
+          return  ridesControllerUpdateException(id,exceptionId,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RidesControllerUpdateExceptionMutationResult = NonNullable<Awaited<ReturnType<typeof ridesControllerUpdateException>>>
+    export type RidesControllerUpdateExceptionMutationBody = UpdateRideExceptionDto
+    export type RidesControllerUpdateExceptionMutationError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto>
+
+    /**
+ * @summary Change the times of an additional departure in the current tenant.
+ */
+export const useRidesControllerUpdateException = <TError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerUpdateException>>, TError,{id: string;exceptionId: string;data: UpdateRideExceptionDto}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof ridesControllerUpdateException>>,
+        TError,
+        {id: string;exceptionId: string;data: UpdateRideExceptionDto},
+        TContext
+      > => {
+      return useMutation(getRidesControllerUpdateExceptionMutationOptions(options), queryClient);
+    }
+    
+/**
+ * A SKIP is deleted. An ADDITIONAL departure is retired instead: it stops running and disappears from the ride, but keeps its ID for the reservations sold on it.
  * @summary Delete a ride exception in the current tenant.
  */
 export type ridesControllerRemoveExceptionResponse200 = {

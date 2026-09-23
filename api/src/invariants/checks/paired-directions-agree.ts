@@ -186,7 +186,9 @@ async function reconcileSchedulesForLineTx(
   const rides = await tx.ride.findMany({
     where: { lineId, tenantId },
     select: {
+      // Retired weekdays are left alone: restoring one writes new times.
       daySchedules: {
+        where: { retiredAt: null },
         select: {
           id: true,
           stationTimes: {

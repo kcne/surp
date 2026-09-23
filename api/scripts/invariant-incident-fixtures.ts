@@ -84,10 +84,15 @@ const fixtures: IncidentFixture[] = [
     }
   },
   {
-    name: 'scheduled weekday is removed after sale',
+    // Dropping a weekday retires its row rather than deleting it, so the check
+    // has to treat a retired weekday as not scheduled.
+    name: 'scheduled weekday is retired after sale',
     invariantKey: 'reservation.reachable',
     mutate: async (tx, state) => {
-      await tx.rideDaySchedule.delete({ where: { id: state.scheduleId } });
+      await tx.rideDaySchedule.update({
+        where: { id: state.scheduleId },
+        data: { retiredAt: new Date() }
+      });
     },
     matches: reason('WEEKDAY_NOT_SCHEDULED')
   },
@@ -131,7 +136,8 @@ const fixtures: IncidentFixture[] = [
     matches: reason('SKIPPED_BY_EXCEPTION')
   },
   {
-    name: 'ADDITIONAL exception is deleted after sale',
+    // Removing an additional departure retires it; a retired one never runs.
+    name: 'ADDITIONAL exception is retired after sale',
     invariantKey: 'reservation.reachable',
     mutate: async (tx, state) => {
       const exception = await tx.rideException.create({
@@ -151,7 +157,10 @@ const fixtures: IncidentFixture[] = [
         where: { id: state.reservationId },
         data: { rideDepartureTime: '12:00', rideArrivalTime: '14:00' }
       });
-      await tx.rideException.delete({ where: { id: exception.id } });
+      await tx.rideException.update({
+        where: { id: exception.id },
+        data: { retiredAt: new Date() }
+      });
     },
     matches: reason('DEPARTURE_TIME_MOVED')
   },

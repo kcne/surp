@@ -53,7 +53,10 @@ export async function findDriftedSchedules(
         select: {
           id: true,
           name: true,
+          // A retired weekday runs nothing, and restoring it always writes a
+          // fresh set of times, so its old stations are not drift.
           daySchedules: {
+            where: { retiredAt: null },
             select: {
               id: true,
               dayOfWeek: true,

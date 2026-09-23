@@ -59,7 +59,10 @@ const RIDE_SELECT = {
       }
     }
   },
+  // A retired weekday or additional departure does not run. Its reservations
+  // are left unreachable, exactly as they were when the row was deleted.
   daySchedules: {
+    where: { retiredAt: null },
     select: {
       dayOfWeek: true,
       stationTimes: { select: { orderIndex: true, time: true } }
@@ -145,7 +148,7 @@ async function buildReservationWindow(ctx: InvariantContext): Promise<Reservatio
           select: {
             ...RIDE_SELECT,
             exceptions: {
-              where: { exceptionDate: { gte: windowStart, lte: windowEnd } },
+              where: { exceptionDate: { gte: windowStart, lte: windowEnd }, retiredAt: null },
               select: { exceptionDate: true, type: true, departureTime: true, arrivalTime: true },
               orderBy: { createdAt: 'asc' }
             }

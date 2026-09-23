@@ -163,7 +163,7 @@ function toUiDaySchedules(
   return mapped
 }
 
-function toUiExceptions(exceptions: RideResponseDto["exceptions"]): RideException[] {
+export function toUiExceptions(exceptions: RideResponseDto["exceptions"]): RideException[] {
   return exceptions.map((exception) => ({
     id: exception.id,
     date: normalizeDate(exception.date) ?? "",

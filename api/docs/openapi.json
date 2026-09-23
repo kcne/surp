@@ -3980,7 +3980,99 @@
       }
     },
     "/rides/{id}/exceptions/{exceptionId}": {
+      "patch": {
+        "description": "The departure keeps its ID, so reservations sold on it stay on it. Only ADDITIONAL exceptions can be edited; a retired one is not found.",
+        "operationId": "RidesController_updateException",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exceptionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRideExceptionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RideExceptionResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure, equal departure and arrival times, or a SKIP exception."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ride or exception not found in current tenant."
+          },
+          "409": {
+            "description": "Either new times that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable, or another additional departure at the same date and times, which is not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/WouldBreakReservationsDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RideExceptionConflictDto"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Change the times of an additional departure in the current tenant.",
+        "tags": [
+          "Rides"
+        ]
+      },
       "delete": {
+        "description": "A SKIP is deleted. An ADDITIONAL departure is retired instead: it stops running and disappears from the ride, but keeps its ID for the reservations sold on it.",
         "operationId": "RidesController_removeException",
         "parameters": [
           {
@@ -9228,6 +9320,53 @@
         "required": [
           "date",
           "type"
+        ]
+      },
+      "UpdateRideExceptionDto": {
+        "type": "object",
+        "properties": {
+          "confirmationTokens": {
+            "example": [
+              "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e"
+            ],
+            "description": "confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repairTokens": {
+            "example": [],
+            "description": "confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confirmBreakingChange": {
+            "type": "boolean",
+            "deprecated": true,
+            "example": false,
+            "description": "Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead."
+          },
+          "repairBreakingChange": {
+            "type": "boolean",
+            "deprecated": true,
+            "example": false,
+            "description": "Ignored. Send repairTokens instead."
+          },
+          "departureTime": {
+            "type": "string",
+            "example": "09:15"
+          },
+          "arrivalTime": {
+            "type": "string",
+            "example": "10:45"
+          }
+        },
+        "required": [
+          "departureTime",
+          "arrivalTime"
         ]
       },
       "ConfirmBreakingChangeDto": {

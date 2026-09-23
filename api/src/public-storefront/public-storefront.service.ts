@@ -31,6 +31,7 @@ const PUBLIC_RIDE_SELECT = Prisma.validator<Prisma.RideSelect>()({
     }
   },
   daySchedules: {
+    where: { retiredAt: null },
     select: {
       dayOfWeek: true,
       stationTimes: {

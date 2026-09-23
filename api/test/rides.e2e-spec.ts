@@ -78,13 +78,20 @@ describe('RidesController (e2e)', () => {
       delete: jest.fn()
     },
     rideDaySchedule: {
+      findMany: jest.fn(),
       create: jest.fn(),
-      deleteMany: jest.fn()
+      update: jest.fn(),
+      updateMany: jest.fn()
+    },
+    rideDayScheduleStationTime: {
+      deleteMany: jest.fn(),
+      createMany: jest.fn()
     },
     rideException: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
       delete: jest.fn()
     },
     // Violation summaries name their stations, so the checks read this too.
@@ -96,7 +103,8 @@ describe('RidesController (e2e)', () => {
       count: jest.fn(),
       // The prospective checks load the reservation window inside the guard's
       // transaction; without this they read `undefined`.
-      findMany: jest.fn()
+      findMany: jest.fn(),
+      updateMany: jest.fn()
     }
   };
 
@@ -165,11 +173,15 @@ describe('RidesController (e2e)', () => {
     prismaMock.ride.update.mockResolvedValue({ ...baseRide });
     prismaMock.ride.delete.mockResolvedValue({ ...baseRide });
 
+    prismaMock.rideDaySchedule.findMany.mockResolvedValue([]);
     prismaMock.rideDaySchedule.create.mockResolvedValue({ id: 'schedule-1' });
-    prismaMock.rideDaySchedule.deleteMany.mockResolvedValue({ count: 1 });
 
     prismaMock.rideException.findMany.mockResolvedValue([]);
-    prismaMock.rideException.findFirst.mockResolvedValue({ id: 'exception-1' });
+    prismaMock.rideException.findFirst.mockResolvedValue({
+      id: 'exception-1',
+      type: RideExceptionType.SKIP,
+      exceptionDate: new Date('2026-03-25T00:00:00.000Z')
+    });
     prismaMock.rideException.create.mockResolvedValue({
       id: 'exception-1',
       exceptionDate: new Date('2026-03-25T00:00:00.000Z'),
@@ -330,6 +342,82 @@ describe('RidesController (e2e)', () => {
       .expect(409);
 
     expect(response.body.message).toBe('Cannot mix SKIP and ADDITIONAL exceptions on the same date');
+  });
+
+  describe('PATCH /rides/:id/exceptions/:exceptionId', () => {
+    const additional = {
+      id: 'exception-1',
+      exceptionDate: new Date('2026-03-25T00:00:00.000Z'),
+      type: RideExceptionType.ADDITIONAL,
+      departureTime: '15:00',
+      arrivalTime: '16:30',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    it('moves an additional departure to new times under the same ID', async () => {
+      prismaMock.rideException.findFirst
+        .mockResolvedValueOnce(additional)
+        .mockResolvedValueOnce(null);
+      prismaMock.rideException.update.mockResolvedValueOnce({
+        ...additional,
+        departureTime: '15:30',
+        arrivalTime: '17:00'
+      });
+
+      const response = await request(app.getHttpServer())
+        .patch('/rides/ride-1/exceptions/exception-1')
+        .set('X-Tenant-Slug', 'demo-tenant')
+        .set('Authorization', 'Bearer access-token-admin')
+        .send({ departureTime: '15:30', arrivalTime: '17:00' })
+        .expect(200);
+
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          id: 'exception-1',
+          date: '2026-03-25',
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '15:30',
+          arrivalTime: '17:00'
+        })
+      );
+    });
+
+    it('rejects a malformed time before reaching the service', async () => {
+      await request(app.getHttpServer())
+        .patch('/rides/ride-1/exceptions/exception-1')
+        .set('X-Tenant-Slug', 'demo-tenant')
+        .set('Authorization', 'Bearer access-token-admin')
+        .send({ departureTime: '25:00', arrivalTime: '17:00' })
+        .expect(400);
+
+      expect(prismaMock.rideException.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to edit a SKIP', async () => {
+      const response = await request(app.getHttpServer())
+        .patch('/rides/ride-1/exceptions/exception-1')
+        .set('X-Tenant-Slug', 'demo-tenant')
+        .set('Authorization', 'Bearer access-token-admin')
+        .send({ departureTime: '15:30', arrivalTime: '17:00' })
+        .expect(400);
+
+      expect(response.body.message).toBe('Only ADDITIONAL exceptions have times to edit');
+      expect(prismaMock.rideException.update).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 for an exception that is retired or not on this ride', async () => {
+      prismaMock.rideException.findFirst.mockResolvedValueOnce(null);
+
+      await request(app.getHttpServer())
+        .patch('/rides/ride-1/exceptions/exception-1')
+        .set('X-Tenant-Slug', 'demo-tenant')
+        .set('Authorization', 'Bearer access-token-admin')
+        .send({ departureTime: '15:30', arrivalTime: '17:00' })
+        .expect(404);
+    });
   });
 
   it('supports ride CRUD with status transitions', async () => {

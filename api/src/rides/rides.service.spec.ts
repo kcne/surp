@@ -51,13 +51,20 @@ describe('RidesService', () => {
       delete: jest.fn()
     },
     rideDaySchedule: {
+      findMany: jest.fn(),
       create: jest.fn(),
-      deleteMany: jest.fn()
+      update: jest.fn(),
+      updateMany: jest.fn()
+    },
+    rideDayScheduleStationTime: {
+      deleteMany: jest.fn(),
+      createMany: jest.fn()
     },
     rideException: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
       delete: jest.fn()
     }
   };
@@ -74,6 +81,8 @@ describe('RidesService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prismaMock.reservation.groupBy.mockResolvedValue([]);
+    // A ride with no weekday rows yet, so every submitted weekday is created.
+    prismaMock.rideDaySchedule.findMany.mockResolvedValue([]);
     // Nothing sold and nothing to name: the prospective checks find an empty
     // window and report no violations, which is what every test that is not
     // about them wants.
@@ -232,9 +241,9 @@ describe('RidesService', () => {
     await expect(service.update(auth, 'ride-missing', { capacity: 30 })).rejects.toBeInstanceOf(
       NotFoundException
     );
-    await expect(
-      service.replaceDayTimes(auth, 'ride-missing', [])
-    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.replaceDayTimes(auth, 'ride-missing', [])).rejects.toBeInstanceOf(
+      NotFoundException
+    );
 
     expect(prismaMock.reservation.findMany).not.toHaveBeenCalled();
   });
@@ -409,7 +418,8 @@ describe('RidesService', () => {
           }),
           findFirst: jest.fn().mockResolvedValue({ ...rideOnSale, capacity: capacityAfterWrite })
         },
-        rideDaySchedule: { create: jest.fn(), deleteMany: jest.fn() }
+        rideDaySchedule: prismaMock.rideDaySchedule,
+        rideDayScheduleStationTime: prismaMock.rideDayScheduleStationTime
       };
     };
 
@@ -1100,9 +1110,7 @@ describe('RidesService', () => {
           reservation: {
             findMany: jest.fn(async () => reservations.map((item) => ({ ...item }))),
             update: jest.fn(async ({ where, data }: never) => {
-              const target = reservations.find(
-                (item) => item.id === (where as { id: string }).id
-              )!;
+              const target = reservations.find((item) => item.id === (where as { id: string }).id)!;
               const patch = data as Record<string, unknown>;
               updates.push({ id: target.id, ...patch });
               Object.assign(target, patch);
@@ -1122,7 +1130,8 @@ describe('RidesService', () => {
               written ? storedRide('10:00', '11:30') : storedRide('09:00', '10:30')
             )
           },
-          rideDaySchedule: { create: jest.fn(), deleteMany: jest.fn() }
+          rideDaySchedule: prismaMock.rideDaySchedule,
+          rideDayScheduleStationTime: prismaMock.rideDayScheduleStationTime
         }
       };
     };
@@ -1184,6 +1193,343 @@ describe('RidesService', () => {
       // Confirming is the other answer: the write lands and the orphan stays
       // for the integrity report to show.
       expect(harness.updates).toHaveLength(0);
+    });
+  });
+
+  describe('keeping departure identities', () => {
+    const storedRecurring = (
+      daySchedules: Array<{ dayOfWeek: number }>,
+      overrides: Record<string, unknown> = {}
+    ) => ({
+      id: 'ride-1',
+      tenantId: 'tenant-1',
+      lineId: 'line-1',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      name: 'Ride',
+      capacity: 38,
+      type: RideType.RECURRING,
+      status: RideStatus.ACTIVE,
+      recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      line: {
+        id: 'line-1',
+        name: 'Line 1',
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-b',
+        intermediateStops: []
+      },
+      daySchedules: daySchedules.map(({ dayOfWeek }) => ({
+        dayOfWeek,
+        stationTimes: timesAt('09:00', '10:30')
+      })),
+      exceptions: [],
+      ...overrides
+    });
+
+    const timesAt = (departure: string, arrival: string) => [
+      { stationId: 'station-a', orderIndex: 0, time: departure },
+      { stationId: 'station-b', orderIndex: 1, time: arrival }
+    ];
+
+    const weekday = (dayOfWeek: number, departure = '09:00') => ({
+      dayOfWeek,
+      stationTimes: timesAt(departure, '10:30')
+    });
+
+    it('keeps a weekday row when its times change, retires a dropped one and restores a returning one', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue(
+        storedRecurring([{ dayOfWeek: 1 }, { dayOfWeek: 2 }])
+      );
+      prismaMock.rideDaySchedule.findMany.mockResolvedValue([
+        { id: 'schedule-mon', dayOfWeek: 1, retiredAt: null },
+        { id: 'schedule-tue', dayOfWeek: 2, retiredAt: null },
+        { id: 'schedule-wed', dayOfWeek: 3, retiredAt: new Date('2026-04-01T00:00:00.000Z') }
+      ]);
+
+      await service.replaceDayTimes(auth, 'ride-1', [weekday(1, '09:15'), weekday(3), weekday(4)]);
+
+      // Tuesday was dropped: retired, not deleted.
+      expect(prismaMock.rideDaySchedule.updateMany).toHaveBeenCalledTimes(1);
+      expect(prismaMock.rideDaySchedule.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['schedule-tue'] }, tenantId: 'tenant-1' },
+        data: expect.objectContaining({ retiredAt: expect.any(Date), updatedById: 'admin-1' })
+      });
+
+      // Monday kept its row; Wednesday got its old row back.
+      const updatedIds = prismaMock.rideDaySchedule.update.mock.calls.map(
+        ([args]: [{ where: { id: string } }]) => args.where.id
+      );
+      expect(updatedIds).toEqual(['schedule-mon', 'schedule-wed']);
+      for (const [args] of prismaMock.rideDaySchedule.update.mock.calls) {
+        expect(args.data).toEqual(expect.objectContaining({ retiredAt: null }));
+      }
+
+      // Their station times are rewritten under the same row.
+      expect(prismaMock.rideDayScheduleStationTime.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            rideDayScheduleId: 'schedule-mon',
+            orderIndex: 0,
+            time: '09:15'
+          }),
+          expect.objectContaining({
+            rideDayScheduleId: 'schedule-mon',
+            orderIndex: 1,
+            time: '10:30'
+          })
+        ]
+      });
+
+      // Only Thursday, which never existed, is new.
+      expect(prismaMock.rideDaySchedule.create).toHaveBeenCalledTimes(1);
+      expect(prismaMock.rideDaySchedule.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ dayOfWeek: 4 })
+      });
+    });
+
+    it('retires every weekday when a recurring ride becomes one-time, and restores them when it goes back', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue(storedRecurring([{ dayOfWeek: 1 }]));
+      prismaMock.rideDaySchedule.findMany.mockResolvedValue([
+        { id: 'schedule-mon', dayOfWeek: 1, retiredAt: null }
+      ]);
+
+      await service.update(auth, 'ride-1', {
+        type: RideType.ONE_TIME,
+        recurringStartDate: null as never,
+        oneTimeDate: '2026-05-04',
+        oneTimeDepartureTime: '09:00',
+        oneTimeArrivalTime: '10:30',
+        daySchedules: []
+      });
+
+      expect(prismaMock.rideDaySchedule.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['schedule-mon'] }, tenantId: 'tenant-1' },
+        data: expect.objectContaining({ retiredAt: expect.any(Date) })
+      });
+      expect(prismaMock.rideDaySchedule.create).not.toHaveBeenCalled();
+
+      jest.clearAllMocks();
+      prismaMock.ride.findFirst.mockResolvedValue(
+        storedRecurring([], {
+          type: RideType.ONE_TIME,
+          recurringStartDate: null,
+          oneTimeDate: new Date('2026-05-04T00:00:00.000Z'),
+          oneTimeDepartureTime: '09:00',
+          oneTimeArrivalTime: '10:30'
+        })
+      );
+      prismaMock.rideDaySchedule.findMany.mockResolvedValue([
+        { id: 'schedule-mon', dayOfWeek: 1, retiredAt: new Date('2026-04-01T00:00:00.000Z') }
+      ]);
+
+      await service.update(auth, 'ride-1', {
+        type: RideType.RECURRING,
+        recurringStartDate: '2026-03-20',
+        oneTimeDate: null as never,
+        oneTimeDepartureTime: null as never,
+        oneTimeArrivalTime: null as never,
+        daySchedules: [weekday(1)]
+      });
+
+      expect(prismaMock.rideDaySchedule.update).toHaveBeenCalledWith({
+        where: { id: 'schedule-mon' },
+        data: expect.objectContaining({ retiredAt: null })
+      });
+      expect(prismaMock.rideDaySchedule.create).not.toHaveBeenCalled();
+      expect(prismaMock.rideDaySchedule.updateMany).not.toHaveBeenCalled();
+    });
+
+    const exceptionRow = (overrides: Record<string, unknown> = {}) => ({
+      id: 'exception-1',
+      exceptionDate: new Date('2026-05-04T00:00:00.000Z'),
+      type: RideExceptionType.ADDITIONAL,
+      departureTime: '15:00',
+      arrivalTime: '16:30',
+      createdById: 'admin-1',
+      updatedById: 'admin-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...overrides
+    });
+
+    it('retires an additional departure instead of deleting it', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue(storedRecurring([{ dayOfWeek: 1 }]));
+      prismaMock.rideException.findFirst.mockResolvedValue(exceptionRow());
+      prismaMock.rideException.update.mockResolvedValue(exceptionRow());
+
+      await service.removeException(auth, 'ride-1', 'exception-1');
+
+      expect(prismaMock.rideException.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ retiredAt: null }) })
+      );
+      expect(prismaMock.rideException.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'exception-1' },
+          data: expect.objectContaining({ retiredAt: expect.any(Date) })
+        })
+      );
+      expect(prismaMock.rideException.delete).not.toHaveBeenCalled();
+    });
+
+    it('still deletes a SKIP, which nobody is booked on', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue(storedRecurring([{ dayOfWeek: 1 }]));
+      const skip = exceptionRow({
+        type: RideExceptionType.SKIP,
+        departureTime: null,
+        arrivalTime: null
+      });
+      prismaMock.rideException.findFirst.mockResolvedValue(skip);
+      prismaMock.rideException.delete.mockResolvedValue(skip);
+
+      await service.removeException(auth, 'ride-1', 'exception-1');
+
+      expect(prismaMock.rideException.delete).toHaveBeenCalled();
+      expect(prismaMock.rideException.update).not.toHaveBeenCalled();
+    });
+
+    it('does not find a retired exception to remove', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue(storedRecurring([{ dayOfWeek: 1 }]));
+      prismaMock.rideException.findFirst.mockResolvedValue(null);
+
+      await expect(service.removeException(auth, 'ride-1', 'exception-1')).rejects.toBeInstanceOf(
+        NotFoundException
+      );
+      expect(prismaMock.rideException.update).not.toHaveBeenCalled();
+      expect(prismaMock.rideException.delete).not.toHaveBeenCalled();
+    });
+
+    it('ignores retired additional departures when checking a new one is not a duplicate', async () => {
+      prismaMock.ride.findFirst.mockResolvedValue(storedRecurring([{ dayOfWeek: 1 }]));
+      prismaMock.rideException.findMany.mockResolvedValue([]);
+      prismaMock.rideException.create.mockResolvedValue(exceptionRow({ id: 'exception-2' }));
+
+      await service.addException(auth, 'ride-1', {
+        date: '2026-05-04',
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '15:00',
+        arrivalTime: '16:30'
+      });
+
+      expect(prismaMock.rideException.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ retiredAt: null }) })
+      );
+    });
+
+    describe('editing an additional departure in place', () => {
+      beforeEach(() => {
+        prismaMock.ride.findFirst.mockResolvedValue(storedRecurring([{ dayOfWeek: 1 }]));
+      });
+
+      it('keeps its ID and moves only the reservations that name it', async () => {
+        prismaMock.rideException.findFirst
+          .mockResolvedValueOnce(exceptionRow())
+          .mockResolvedValueOnce(null);
+        prismaMock.rideException.update.mockResolvedValue(
+          exceptionRow({ departureTime: '15:30', arrivalTime: '17:00' })
+        );
+
+        const result = await service.updateException(auth, 'ride-1', 'exception-1', {
+          departureTime: '15:30',
+          arrivalTime: '17:00'
+        });
+
+        expect(result).toEqual(
+          expect.objectContaining({
+            id: 'exception-1',
+            departureTime: '15:30',
+            arrivalTime: '17:00'
+          })
+        );
+        expect(prismaMock.rideException.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'exception-1' },
+            data: expect.objectContaining({ departureTime: '15:30', arrivalTime: '17:00' })
+          })
+        );
+        expect(prismaMock.rideException.create).not.toHaveBeenCalled();
+        expect(prismaMock.reservation.updateMany).toHaveBeenCalledWith({
+          where: {
+            tenantId: 'tenant-1',
+            rideExceptionId: 'exception-1',
+            status: ReservationStatus.ACTIVE
+          },
+          data: { rideDepartureTime: '15:30', rideArrivalTime: '17:00', updatedById: 'admin-1' }
+        });
+      });
+
+      it('refuses to edit a SKIP', async () => {
+        prismaMock.rideException.findFirst.mockResolvedValue(
+          exceptionRow({ type: RideExceptionType.SKIP, departureTime: null, arrivalTime: null })
+        );
+
+        await expect(
+          service.updateException(auth, 'ride-1', 'exception-1', {
+            departureTime: '15:30',
+            arrivalTime: '17:00'
+          })
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(prismaMock.rideException.update).not.toHaveBeenCalled();
+      });
+
+      it('does not find a retired or foreign exception', async () => {
+        prismaMock.rideException.findFirst.mockResolvedValue(null);
+
+        await expect(
+          service.updateException(auth, 'ride-1', 'exception-1', {
+            departureTime: '15:30',
+            arrivalTime: '17:00'
+          })
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(prismaMock.rideException.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              id: 'exception-1',
+              rideId: 'ride-1',
+              tenantId: 'tenant-1',
+              retiredAt: null
+            })
+          })
+        );
+      });
+
+      it('refuses times another live additional departure on that date already has', async () => {
+        prismaMock.rideException.findFirst
+          .mockResolvedValueOnce(exceptionRow())
+          .mockResolvedValueOnce({ id: 'exception-2' });
+
+        await expect(
+          service.updateException(auth, 'ride-1', 'exception-1', {
+            departureTime: '18:00',
+            arrivalTime: '19:30'
+          })
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(prismaMock.rideException.findFirst).toHaveBeenLastCalledWith({
+          where: expect.objectContaining({
+            retiredAt: null,
+            departureTime: '18:00',
+            arrivalTime: '19:30',
+            id: { not: 'exception-1' }
+          }),
+          select: { id: true }
+        });
+        expect(prismaMock.rideException.update).not.toHaveBeenCalled();
+      });
+
+      it('refuses equal departure and arrival times before touching anything', async () => {
+        await expect(
+          service.updateException(auth, 'ride-1', 'exception-1', {
+            departureTime: '15:30',
+            arrivalTime: '15:30'
+          })
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      });
     });
   });
 });

@@ -843,7 +843,9 @@ export class LinesService {
         tenantId
       },
       select: {
+        // Retired weekdays are left alone: restoring one writes new times.
         daySchedules: {
+          where: { retiredAt: null },
           select: {
             id: true,
             stationTimes: {

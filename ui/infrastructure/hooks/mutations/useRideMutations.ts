@@ -12,11 +12,13 @@ import {
   ridesControllerReplace,
   ridesControllerReplaceResponse,
   ridesControllerUpdate,
+  ridesControllerUpdateException,
   ridesControllerUpdateResponse,
 } from "@/infrastructure/generated/surp-api"
 import {
   toCreateRideDto,
   toCreateRideExceptionDto,
+  toUiExceptions,
   toUpdateRideDto,
 } from "@/infrastructure/mappers/rideMappers"
 import { ridesListQueryKey } from "@/infrastructure/hooks/queries/useRidesListQuery"
@@ -189,7 +191,7 @@ export function useUpdateRideMutation() {
           throw new Error("Neuspesno ucitavanje izuzetaka voznje")
         }
 
-        const existingExceptions = currentResponse.data.exceptions
+        const existingExceptions = toUiExceptions(currentResponse.data.exceptions)
         const nextExceptions = payload.exceptions ?? []
 
         const nextIds = new Set(nextExceptions.map((exception) => exception.id))
@@ -197,6 +199,20 @@ export function useUpdateRideMutation() {
 
         const toRemove = existingExceptions.filter((exception) => !nextIds.has(exception.id))
         const toAdd = nextExceptions.filter((exception) => !existingIds.has(exception.id))
+        // An additional departure whose times changed is edited in place, not
+        // removed and re-added: the reservations sold on it name its ID.
+        const existingById = new Map(existingExceptions.map((exception) => [exception.id, exception]))
+        const toRetime = nextExceptions.filter((exception) => {
+          const existing = existingById.get(exception.id)
+
+          return (
+            existing?.type === "additional" &&
+            exception.type === "additional" &&
+            Boolean(exception.departureTime && exception.arrivalTime) &&
+            (existing.departureTime !== exception.departureTime ||
+              existing.arrivalTime !== exception.arrivalTime)
+          )
+        })
 
         for (const exception of toRemove) {
           const step = `exception:remove:${exception.id}`
@@ -207,6 +223,20 @@ export function useUpdateRideMutation() {
           ).catch((error: unknown) => throwBreakingChangeConflict(error, step, anyWriteLanded))
           if (!isRideMutationSuccess(removeResponse)) {
             throw new Error("Neuspesno uklanjanje izuzetka voznje")
+          }
+
+          anyWriteLanded = true
+        }
+
+        for (const exception of toRetime) {
+          const step = `exception:update:${exception.id}`
+          const updateResponse = await ridesControllerUpdateException(id, exception.id, {
+            departureTime: exception.departureTime!,
+            arrivalTime: exception.arrivalTime!,
+            ...answeredFor(step),
+          }).catch((error: unknown) => throwBreakingChangeConflict(error, step, anyWriteLanded))
+          if (!isRideMutationSuccess(updateResponse)) {
+            throw new Error("Neuspesna izmena vremena dodatnog polaska")
           }
 
           anyWriteLanded = true

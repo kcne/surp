@@ -303,6 +303,7 @@ export * from './updateReservationDto';
 export * from './updateRideDto';
 export * from './updateRideDtoStatus';
 export * from './updateRideDtoType';
+export * from './updateRideExceptionDto';
 export * from './updateStationDto';
 export * from './updateStationDtoCategory';
 export * from './updateTicketDto';

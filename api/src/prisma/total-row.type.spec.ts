@@ -21,6 +21,9 @@ type ScheduleMutableColumns = keyof TotalRow<
   | 'createdAt'
   | 'updatedAt'
   | 'stationTimes'
+  // Set by reconciliation itself, never taken from the submitted schedule.
+  | 'retiredAt'
+  | 'reservations'
 >;
 type StationTimeMutableColumns = keyof TotalRow<
   Prisma.RideDayScheduleStationTimeUncheckedCreateInput,

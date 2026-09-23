@@ -388,7 +388,8 @@ export async function realignDayScheduleIfDriftedTx(
   input: { tenantId: string; rideDayScheduleId: string; actorId: string }
 ): Promise<ScheduleRealignOutcome | null> {
   const schedule = await tx.rideDaySchedule.findFirst({
-    where: { id: input.rideDayScheduleId, tenantId: input.tenantId },
+    // Retired since the scan: nothing runs on it, so there is nothing to fix.
+    where: { id: input.rideDayScheduleId, tenantId: input.tenantId, retiredAt: null },
     select: {
       stationTimes: {
         select: { stationId: true, orderIndex: true, time: true },

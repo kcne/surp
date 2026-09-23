@@ -49,6 +49,10 @@ export const PROSPECTIVE_INVARIANTS = {
     reservationSegmentValid
   ],
   rideException: [reservationReachable],
+  // Moving an additional departure can strand a reservation on its old time,
+  // and while readers still join by time, moving it onto another departure's
+  // time puts both departures' passengers in one bus.
+  rideExceptionEdit: [reservationReachable, instanceNotOverbooked],
   stationDeactivation: [routeStationsActive],
   passengerDeactivation: [reservationPassengerActive]
 } satisfies Record<string, readonly ProspectiveInvariant[]>;

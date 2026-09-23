@@ -58,6 +58,26 @@ enum ReservationStatus {
   CANCELLED
 }
 
+/**
+ * Which kind of departure a reservation was sold on. It picks which of the
+ * reservation's identity columns is set; see the CHECK constraint in the
+ * migration that added it.
+ */
+enum DepartureKind {
+  /**
+   * A weekday of a recurring ride. Names a RideDaySchedule.
+   */
+  RECURRING_BASE
+  /**
+   * A one-time ride's only departure. The ride is the whole identity.
+   */
+  ONE_TIME_BASE
+  /**
+   * An extra departure on one date. Names a RideException.
+   */
+  ADDITIONAL
+}
+
 enum AuditEventType {
   PASSWORD_RESET_ADMIN
   DOMAIN_CREATE
@@ -459,6 +479,16 @@ model Reservation {
    * is an ordinary agency action, which a plain @unique would reject.
    */
   returnOfReservationId String?
+  /**
+   * The departure this reservation was sold on, by identity rather than by
+   * its time. NULL on every column is a legacy row not yet resolved. The
+   * valid combinations are a CHECK constraint, and the two foreign keys carry
+   * rideId and tenantId, so a reservation can only name a departure of its own
+   * ride. rideDepartureTime and rideArrivalTime stay as display copies.
+   */
+  departureKind         DepartureKind?
+  rideDayScheduleId     String?
+  rideExceptionId       String?
   notes                 String?           @db.Text
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
@@ -469,6 +499,8 @@ model Reservation {
   arrivalStation        Station           @relation("ReservationArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
   returnOf              Reservation?      @relation("ReservationReturnLeg", fields: [returnOfReservationId], references: [id], onDelete: Restrict)
   returnLegs            Reservation[]     @relation("ReservationReturnLeg")
+  rideDaySchedule       RideDaySchedule?  @relation(fields: [rideDayScheduleId, rideId, tenantId], references: [id, rideId, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  rideException         RideException?    @relation(fields: [rideExceptionId, rideId, tenantId], references: [id, rideId, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId])
   @@index([rideId])
@@ -482,6 +514,8 @@ model Reservation {
   @@index([tenantId, rideId, travelDate, rideDepartureTime, groupId])
   @@index([tenantId, roundTripId, status])
   @@index([returnOfReservationId])
+  @@index([rideDayScheduleId])
+  @@index([rideExceptionId])
 }
 
 model Passenger {
@@ -544,6 +578,12 @@ model RideDaySchedule {
   tenantId     String
   rideId       String
   dayOfWeek    Int
+  /**
+   * Set when the weekday is dropped from the ride. The row and its ID stay,
+   * because reservations sold on it name it, and the same row is restored if
+   * the weekday comes back. Retired rows never run.
+   */
+  retiredAt    DateTime?
   createdById  String?
   updatedById  String?
   createdAt    DateTime                     @default(now())
@@ -551,8 +591,10 @@ model RideDaySchedule {
   tenant       Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   ride         Ride                         @relation(fields: [rideId], references: [id], onDelete: Cascade)
   stationTimes RideDayScheduleStationTime[]
+  reservations Reservation[]
 
   @@unique([rideId, dayOfWeek])
+  @@unique([id, rideId, tenantId])
   @@index([tenantId])
   @@index([rideId])
   @@index([updatedById])
@@ -589,13 +631,22 @@ model RideException {
   type          RideExceptionType
   departureTime String?
   arrivalTime   String?
+  /**
+   * Set when an ADDITIONAL departure is removed. It keeps its ID for the
+   * reservations that name it and never runs again; adding the same times
+   * back creates a new departure. SKIP rows are still deleted, and a CHECK
+   * constraint keeps this NULL on them.
+   */
+  retiredAt     DateTime?
   createdById   String?
   updatedById   String?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   ride          Ride              @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  reservations  Reservation[]
 
+  @@unique([id, rideId, tenantId])
   @@index([tenantId])
   @@index([rideId])
   @@index([rideId, exceptionDate])

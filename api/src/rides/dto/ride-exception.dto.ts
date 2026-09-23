@@ -28,3 +28,19 @@ export class CreateRideExceptionDto extends ConfirmBreakingChangeDto {
   @Matches(TIME_PATTERN, { message: 'arrivalTime must be in HH:mm format' })
   arrivalTime?: string;
 }
+
+/**
+ * New times for an ADDITIONAL exception. The date and type are not editable:
+ * a departure on another date, or a SKIP, is a different exception.
+ */
+export class UpdateRideExceptionDto extends ConfirmBreakingChangeDto {
+  @ApiProperty({ example: '09:15' })
+  @IsString()
+  @Matches(TIME_PATTERN, { message: 'departureTime must be in HH:mm format' })
+  departureTime!: string;
+
+  @ApiProperty({ example: '10:45' })
+  @IsString()
+  @Matches(TIME_PATTERN, { message: 'arrivalTime must be in HH:mm format' })
+  arrivalTime!: string;
+}

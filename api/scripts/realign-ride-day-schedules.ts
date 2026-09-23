@@ -63,7 +63,9 @@ async function main() {
         select: {
           id: true,
           name: true,
+          // Retired weekdays are left alone: restoring one writes new times.
           daySchedules: {
+            where: { retiredAt: null },
             select: {
               id: true,
               dayOfWeek: true,

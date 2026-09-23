@@ -20,7 +20,7 @@ import { Roles } from '../auth/roles.decorator';
 import { CreateRideDto } from './dto/create-ride.dto';
 import { ListRideInstancesQueryDto } from './dto/ride-instances.query.dto';
 import { ListRidesQueryDto } from './dto/list-rides.query.dto';
-import { CreateRideExceptionDto } from './dto/ride-exception.dto';
+import { CreateRideExceptionDto, UpdateRideExceptionDto } from './dto/ride-exception.dto';
 import { ReplaceRideDaySchedulesDto } from './dto/ride-day-time.dto';
 import {
   RideInstancesByDateResponseDto,
@@ -189,9 +189,47 @@ export class RidesController {
     return this.ridesService.addException(request.auth!, id, dto);
   }
 
+  @Patch(':id/exceptions/:exceptionId')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({
+    summary: 'Change the times of an additional departure in the current tenant.',
+    description:
+      'The departure keeps its ID, so reservations sold on it stay on it. Only ADDITIONAL exceptions can be edited; a retired one is not found.'
+  })
+  @ApiOkResponse({ type: RideExceptionResponseDto })
+  @ApiBadRequestResponse({
+    description: 'Validation failure, equal departure and arrival times, or a SKIP exception.'
+  })
+  @ApiExtraModels(WouldBreakReservationsDto, RideExceptionConflictDto)
+  @ApiConflictResponse({
+    description:
+      'Either new times that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable, or another additional departure at the same date and times, which is not.',
+    schema: {
+      oneOf: [
+        { $ref: getSchemaPath(WouldBreakReservationsDto) },
+        { $ref: getSchemaPath(RideExceptionConflictDto) }
+      ]
+    }
+  })
+  @ApiNotFoundResponse({ description: 'Ride or exception not found in current tenant.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
+  @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
+  updateException(
+    @Req() request: RequestWithAuth,
+    @Param('id') id: string,
+    @Param('exceptionId') exceptionId: string,
+    @Body() dto: UpdateRideExceptionDto
+  ): Promise<RideExceptionResponseDto> {
+    return this.ridesService.updateException(request.auth!, id, exceptionId, dto);
+  }
+
   @Delete(':id/exceptions/:exceptionId')
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Delete a ride exception in the current tenant.' })
+  @ApiOperation({
+    summary: 'Delete a ride exception in the current tenant.',
+    description:
+      'A SKIP is deleted. An ADDITIONAL departure is retired instead: it stops running and disappears from the ride, but keeps its ID for the reservations sold on it.'
+  })
   @ApiOkResponse({ type: RideExceptionResponseDto })
   @ApiNotFoundResponse({ description: 'Ride or exception not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })

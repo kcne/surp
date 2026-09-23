@@ -21,7 +21,7 @@ import { CreateRideDto } from './dto/create-ride.dto';
 import { ListRideInstancesQueryDto } from './dto/ride-instances.query.dto';
 import { ListRidesQueryDto } from './dto/list-rides.query.dto';
 import { RideDayScheduleInputDto } from './dto/ride-day-time.dto';
-import { CreateRideExceptionDto } from './dto/ride-exception.dto';
+import { CreateRideExceptionDto, UpdateRideExceptionDto } from './dto/ride-exception.dto';
 import {
   PaginatedRidesResponseDto,
   RideInstanceResponseDto,
@@ -72,7 +72,10 @@ const SAFE_RIDE_SELECT = Prisma.validator<Prisma.RideSelect>()({
       }
     }
   },
+  // Retired weekdays and additional departures keep their rows for the
+  // reservations that name them, but a ride no longer has them.
   daySchedules: {
+    where: { retiredAt: null },
     select: {
       dayOfWeek: true,
       stationTimes: {
@@ -91,6 +94,7 @@ const SAFE_RIDE_SELECT = Prisma.validator<Prisma.RideSelect>()({
     }
   },
   exceptions: {
+    where: { retiredAt: null },
     select: {
       id: true,
       exceptionDate: true,
@@ -113,19 +117,25 @@ const SAFE_RIDE_SELECT = Prisma.validator<Prisma.RideSelect>()({
   }
 });
 
+const RIDE_EXCEPTION_SELECT = Prisma.validator<Prisma.RideExceptionSelect>()({
+  id: true,
+  // The domain audit extension attributes a create or update from the row the
+  // write returns, and refuses one without a tenant. Left out, every exception
+  // write rolls back with that refusal.
+  tenantId: true,
+  exceptionDate: true,
+  type: true,
+  departureTime: true,
+  arrivalTime: true,
+  createdById: true,
+  updatedById: true,
+  createdAt: true,
+  updatedAt: true
+});
+
 type SelectedRide = Prisma.RideGetPayload<{ select: typeof SAFE_RIDE_SELECT }>;
 type RideExceptionRecord = Prisma.RideExceptionGetPayload<{
-  select: {
-    id: true;
-    exceptionDate: true;
-    type: true;
-    departureTime: true;
-    arrivalTime: true;
-    createdById: true;
-    updatedById: true;
-    createdAt: true;
-    updatedAt: true;
-  };
+  select: typeof RIDE_EXCEPTION_SELECT;
 }>;
 
 type RideWithInstanceMaterialization = Prisma.RideGetPayload<{
@@ -242,6 +252,10 @@ type RideDayScheduleMutableValues = TotalRow<
   | 'createdAt'
   | 'updatedAt'
   | 'stationTimes'
+  // Not an input: reconciliation decides it, restoring a returning weekday
+  // and retiring a dropped one.
+  | 'retiredAt'
+  | 'reservations'
 >;
 
 type RideStationTimeMutableValues = TotalRow<
@@ -309,8 +323,7 @@ export class RidesService {
           auth.tenantId,
           createdRide.id,
           auth.sub,
-          this.toTotalDaySchedules(normalizedSchedule.daySchedules),
-          false
+          this.toTotalDaySchedules(normalizedSchedule.daySchedules)
         );
       }
 
@@ -419,6 +432,7 @@ export class RidesService {
           }
         },
         daySchedules: {
+          where: { retiredAt: null },
           select: {
             dayOfWeek: true,
             stationTimes: {
@@ -438,7 +452,8 @@ export class RidesService {
         },
         exceptions: {
           where: {
-            exceptionDate: utcDate
+            exceptionDate: utcDate,
+            retiredAt: null
           },
           select: {
             exceptionDate: true,
@@ -583,8 +598,7 @@ export class RidesService {
           auth.tenantId,
           id,
           auth.sub,
-          this.toTotalDaySchedules(normalizedSchedule.daySchedules),
-          true
+          this.toTotalDaySchedules(normalizedSchedule.daySchedules)
         );
 
         return tx.ride.findFirst({
@@ -685,8 +699,7 @@ export class RidesService {
           auth.tenantId,
           id,
           auth.sub,
-          this.toTotalDaySchedules(daySchedules),
-          true
+          this.toTotalDaySchedules(daySchedules)
         );
 
         await tx.ride.update({
@@ -764,17 +777,7 @@ export class RidesService {
             },
             auth.sub
           ),
-          select: {
-            id: true,
-            exceptionDate: true,
-            type: true,
-            departureTime: true,
-            arrivalTime: true,
-            createdById: true,
-            updatedById: true,
-            createdAt: true,
-            updatedAt: true
-          }
+          select: RIDE_EXCEPTION_SELECT
         });
       }
     );
@@ -789,11 +792,14 @@ export class RidesService {
     exceptionDate: Date,
     dto: CreateRideExceptionDto
   ): Promise<void> {
+    // A retired additional departure no longer runs, so it neither conflicts
+    // with a new exception nor makes one a duplicate.
     const existingOnDate = await tx.rideException.findMany({
       where: {
         tenantId,
         rideId,
-        exceptionDate
+        exceptionDate,
+        retiredAt: null
       },
       select: {
         type: true,
@@ -828,16 +834,135 @@ export class RidesService {
     exceptionId: string,
     consent: ProspectiveWriteConsent = NO_CONSENT
   ): Promise<RideExceptionResponseDto> {
-    await this.getRideOrThrow(auth.tenantId, rideId);
+    const removed = await guardProspectiveWrite(
+      this.prisma,
+      { tenantId: auth.tenantId, actorId: auth.sub },
+      PROSPECTIVE_INVARIANTS.rideException,
+      consent,
+      (tx, existing: { type: RideExceptionType }) =>
+        // An additional departure is something reservations are sold on, so
+        // removing it retires it: the ID they name keeps existing, and adding
+        // the same times back later is a different departure. A SKIP names
+        // nothing and is still deleted.
+        existing.type === RideExceptionType.ADDITIONAL
+          ? tx.rideException.update({
+              where: { id: exceptionId },
+              data: withUpdateAudit({ retiredAt: new Date() }, auth.sub),
+              select: RIDE_EXCEPTION_SELECT
+            })
+          : tx.rideException.delete({
+              where: { id: exceptionId },
+              select: RIDE_EXCEPTION_SELECT
+            }),
+      (tx) => this.getLiveExceptionOrThrow(tx, auth.tenantId, rideId, exceptionId)
+    );
 
-    const existing = await this.prisma.rideException.findFirst({
+    return this.toExceptionResponse(removed);
+  }
+
+  /**
+   * Moves an additional departure to new times without changing which
+   * departure it is.
+   *
+   * Removing it and adding one at the new times would hand every reservation
+   * on it a departure that no longer exists. Edited in place, the ID those
+   * reservations name stays, and their display copies of the times follow.
+   */
+  async updateException(
+    auth: AccessTokenPayload,
+    rideId: string,
+    exceptionId: string,
+    dto: UpdateRideExceptionDto
+  ): Promise<RideExceptionResponseDto> {
+    const departureTime = dto.departureTime.trim();
+    const arrivalTime = dto.arrivalTime.trim();
+
+    if (this.isZeroDurationTimeRange(departureTime, arrivalTime)) {
+      throw new BadRequestException(
+        'ADDITIONAL exception departureTime and arrivalTime cannot be equal (overnight rides are allowed)'
+      );
+    }
+
+    const updated = await guardProspectiveWrite(
+      this.prisma,
+      { tenantId: auth.tenantId, actorId: auth.sub },
+      PROSPECTIVE_INVARIANTS.rideExceptionEdit,
+      consentFrom(dto),
+      async (tx) => {
+        const exception = await tx.rideException.update({
+          where: { id: exceptionId },
+          data: withUpdateAudit({ departureTime, arrivalTime }, auth.sub),
+          select: RIDE_EXCEPTION_SELECT
+        });
+
+        // Only reservations that name this departure. One that merely shares
+        // its old time is a legacy row, and moving it would be a guess.
+        await tx.reservation.updateMany({
+          where: {
+            tenantId: auth.tenantId,
+            rideExceptionId: exceptionId,
+            status: ReservationStatus.ACTIVE
+          },
+          data: {
+            rideDepartureTime: departureTime,
+            rideArrivalTime: arrivalTime,
+            updatedById: auth.sub
+          }
+        });
+
+        return exception;
+      },
+      async (tx) => {
+        const existing = await this.getLiveExceptionOrThrow(tx, auth.tenantId, rideId, exceptionId);
+
+        if (existing.type !== RideExceptionType.ADDITIONAL) {
+          throw new BadRequestException('Only ADDITIONAL exceptions have times to edit');
+        }
+
+        const duplicate = await tx.rideException.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            rideId,
+            exceptionDate: existing.exceptionDate,
+            type: RideExceptionType.ADDITIONAL,
+            retiredAt: null,
+            departureTime,
+            arrivalTime,
+            id: { not: exceptionId }
+          },
+          select: { id: true }
+        });
+
+        if (duplicate) {
+          throw new ConflictException(
+            'Additional exception with the same date and times already exists'
+          );
+        }
+      }
+    );
+
+    return this.toExceptionResponse(updated);
+  }
+
+  /** A retired exception is gone as far as the ride is concerned. */
+  private async getLiveExceptionOrThrow(
+    client: Prisma.TransactionClient | PrismaService,
+    tenantId: string,
+    rideId: string,
+    exceptionId: string
+  ): Promise<{ type: RideExceptionType; exceptionDate: Date }> {
+    await this.getRideOrThrow(tenantId, rideId, client);
+
+    const existing = await client.rideException.findFirst({
       where: {
         id: exceptionId,
         rideId,
-        tenantId: auth.tenantId
+        tenantId,
+        retiredAt: null
       },
       select: {
-        id: true
+        type: true,
+        exceptionDate: true
       }
     });
 
@@ -845,31 +970,7 @@ export class RidesService {
       throw new NotFoundException('Ride exception not found');
     }
 
-    const deleted = await guardProspectiveWrite(
-      this.prisma,
-      { tenantId: auth.tenantId, actorId: auth.sub },
-      PROSPECTIVE_INVARIANTS.rideException,
-      consent,
-      (tx) =>
-        tx.rideException.delete({
-          where: {
-            id: exceptionId
-          },
-          select: {
-            id: true,
-            exceptionDate: true,
-            type: true,
-            departureTime: true,
-            arrivalTime: true,
-            createdById: true,
-            updatedById: true,
-            createdAt: true,
-            updatedAt: true
-          }
-        })
-    );
-
-    return this.toExceptionResponse(deleted);
+    return existing;
   }
 
   async remove(
@@ -1206,46 +1307,83 @@ export class RidesService {
     return departureTime.trim() === arrivalTime.trim();
   }
 
+  /**
+   * Makes a ride's live weekdays exactly `daySchedules`, keeping every
+   * weekday's row and ID.
+   *
+   * Reservations name the weekday they were sold on, so a row is never
+   * deleted: a weekday that stays keeps its row, one that is dropped is
+   * retired, and one that comes back restores the same row it had, which
+   * `@@unique([rideId, dayOfWeek])` guarantees is the only one there is.
+   * Changing a ride to one-time passes no weekdays and so retires them all.
+   *
+   * Station times are replaced under the kept row by deleting and recreating
+   * them, as realignment does: (schedule, orderIndex) is unique, so updating
+   * them in place would collide partway through a reorder.
+   */
   private async replaceRideDaySchedulesTx(
     tx: Prisma.TransactionClient,
     tenantId: string,
     rideId: string,
     actorId: string,
-    daySchedules: TotalRideDaySchedule[],
-    deleteExisting: boolean
+    daySchedules: TotalRideDaySchedule[]
   ): Promise<void> {
-    if (deleteExisting) {
-      await tx.rideDaySchedule.deleteMany({
-        where: {
-          rideId,
-          tenantId
-        }
-      });
-    }
+    const existing = await tx.rideDaySchedule.findMany({
+      where: { rideId, tenantId },
+      select: { id: true, dayOfWeek: true, retiredAt: true }
+    });
+    const existingByDay = new Map(existing.map((row) => [row.dayOfWeek, row]));
+    const keptDays = new Set(daySchedules.map((schedule) => schedule.dayOfWeek));
 
-    if (!daySchedules.length) {
-      return;
+    const toRetire = existing.filter(
+      (row) => row.retiredAt === null && !keptDays.has(row.dayOfWeek)
+    );
+    if (toRetire.length > 0) {
+      await tx.rideDaySchedule.updateMany({
+        where: { id: { in: toRetire.map((row) => row.id) }, tenantId },
+        data: withUpdateAudit({ retiredAt: new Date() }, actorId)
+      });
     }
 
     // Both rows are spread, not named: the two value types are total over
     // their mutable columns, so a new column reaches the database instead of
     // silently taking its default here.
     for (const { stationTimes, ...scheduleValues } of daySchedules) {
-      await tx.rideDaySchedule.create({
-        data: withCreateAudit(
-          {
-            tenantId,
-            rideId,
-            ...scheduleValues,
-            stationTimes: {
-              create: stationTimes.map((stationTime) =>
-                withCreateAudit({ tenantId, ...stationTime }, actorId)
-              )
-            }
-          },
-          actorId
-        )
+      const kept = existingByDay.get(scheduleValues.dayOfWeek);
+
+      if (!kept) {
+        await tx.rideDaySchedule.create({
+          data: withCreateAudit(
+            {
+              tenantId,
+              rideId,
+              ...scheduleValues,
+              stationTimes: {
+                create: stationTimes.map((stationTime) =>
+                  withCreateAudit({ tenantId, ...stationTime }, actorId)
+                )
+              }
+            },
+            actorId
+          )
+        });
+        continue;
+      }
+
+      await tx.rideDaySchedule.update({
+        where: { id: kept.id },
+        data: withUpdateAudit({ ...scheduleValues, retiredAt: null }, actorId)
       });
+      await tx.rideDayScheduleStationTime.deleteMany({
+        where: { rideDayScheduleId: kept.id, tenantId }
+      });
+      if (stationTimes.length > 0) {
+        await tx.rideDayScheduleStationTime.createMany({
+          data: stationTimes.map((stationTime) =>
+            withCreateAudit({ tenantId, rideDayScheduleId: kept.id, ...stationTime }, actorId)
+          )
+        });
+      }
     }
   }
 
@@ -1325,7 +1463,9 @@ export class RidesService {
     };
   }
 
-  private toExceptionResponse(exception: RideExceptionRecord): RideExceptionResponseDto {
+  private toExceptionResponse(
+    exception: Omit<RideExceptionRecord, 'tenantId'>
+  ): RideExceptionResponseDto {
     return {
       id: exception.id,
       date: this.formatDate(exception.exceptionDate)!,
