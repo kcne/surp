@@ -13,6 +13,7 @@ import { loadReservationWindow } from './reservation-window';
 import { CheckResult, InvariantContext, ProspectiveInvariant, RepairResult } from '../invariant.types';
 import { loadStationNames } from './tenant-lookups';
 import { serbianPlural } from '../serbian-plural';
+import { inScheduleEdit } from '../in-schedule-edit';
 
 /**
  * A reservation is only ever reached through a ride instance, and instances are
@@ -355,7 +356,9 @@ export const reservationReachable: ProspectiveInvariant = {
   },
 
   async repair(ctx: InvariantContext, subjectIds?: ReadonlySet<string>): Promise<RepairResult> {
-    const { repairedCount, skippedCount } = await repairOrphanedReservations(ctx, subjectIds);
+    const { repairedCount, skippedCount } = await inScheduleEdit(ctx, (locked) =>
+      repairOrphanedReservations(locked, subjectIds)
+    );
 
     return { repairedCount, skippedCount };
   }

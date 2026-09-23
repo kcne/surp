@@ -53,6 +53,7 @@ function withCleanInvariantReads<T extends object>(tx: T, readRouteStations: Fin
 describe('LinesService', () => {
   const prismaMock = {
     $transaction: jest.fn(),
+    $executeRaw: jest.fn().mockResolvedValue(1),
     line: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -124,6 +125,12 @@ describe('LinesService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Removing a line checks and writes under the schedule lock, so the
+    // callback form is handed the mock itself. Tests that need a separate
+    // transaction client replace this.
+    prismaMock.$transaction.mockImplementation(async (arg: unknown) =>
+      typeof arg === 'function' ? (arg as (tx: typeof prismaMock) => unknown)(prismaMock) : undefined
+    );
     service = new LinesService(prismaMock as never);
   });
 
@@ -249,6 +256,7 @@ describe('LinesService', () => {
     prismaMock.line.findFirst.mockResolvedValue(baseLine);
 
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       ride: {
         findMany: jest.fn().mockResolvedValue([{ id: 'ride-1' }]),
         updateMany: jest.fn().mockResolvedValue({ count: 1 })
@@ -316,6 +324,7 @@ describe('LinesService', () => {
       ]);
 
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       line: {
         update: jest.fn().mockResolvedValue(baseLine),
         updateMany: jest.fn(),
@@ -402,6 +411,7 @@ describe('LinesService', () => {
 
     const realignmentRideRead = jest.fn();
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       line: {
         update: jest.fn().mockResolvedValue({ ...baseLine, isActive: false }),
         updateMany: jest.fn(),
@@ -440,6 +450,7 @@ describe('LinesService', () => {
       ]);
 
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       line: {
         update: jest.fn().mockResolvedValue(baseLine),
         updateMany: jest.fn(),
@@ -491,14 +502,14 @@ describe('LinesService', () => {
     const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
 
     await service.replaceStops(auth, 'line-1', [{ stationId: 'station-c', orderIndex: 1 }], {
-      confirmed: false,
-      repair: true
+      confirmationTokens: ['token-confirmed'],
+      repairTokens: ['token-repaired']
     });
 
     expect(update).toHaveBeenCalledWith(auth, 'line-1', {
       intermediateStops: [{ stationId: 'station-c', orderIndex: 1 }],
-      confirmBreakingChange: false,
-      repairBreakingChange: true
+      confirmationTokens: ['token-confirmed'],
+      repairTokens: ['token-repaired']
     });
 
     update.mockRestore();
@@ -523,6 +534,7 @@ describe('LinesService', () => {
       ]);
 
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       line: {
         update: jest.fn().mockResolvedValue(baseLine),
         updateMany: jest.fn(),
@@ -601,6 +613,7 @@ describe('LinesService', () => {
       ]);
 
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       line: {
         update: jest.fn().mockResolvedValue(baseLine),
         updateMany: jest.fn(),
@@ -662,6 +675,7 @@ describe('LinesService', () => {
       ]);
 
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       line: {
         update: jest.fn().mockResolvedValue(baseLine),
         updateMany: jest.fn(),
@@ -717,6 +731,7 @@ describe('LinesService', () => {
       .mockResolvedValueOnce([{ id: 'station-c', name: 'Mid 1' }]);
 
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       line: {
         update: jest.fn().mockResolvedValue(unpairedLine),
         updateMany: jest.fn(),

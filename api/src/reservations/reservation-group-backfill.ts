@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { withUpdateAudit } from '../prisma/audit-write.helper';
+import { acquireScheduleLocksShared } from '../prisma/schedule-lock';
 
 export interface ReservationGroupBackfillInspection {
   reservationCount: number;
@@ -83,6 +84,11 @@ export async function applyReservationGroupBackfill(
     }
 
     const batchResult = await prisma.$transaction(async (tx) => {
+      await acquireScheduleLocksShared(
+        tx,
+        missingGroups.map((missing) => missing.tenantId)
+      );
+
       let batchUpdatedCount = 0;
       let batchCreatedGroupCount = 0;
 
@@ -106,7 +112,7 @@ export async function applyReservationGroupBackfill(
       }
 
       return { batchUpdatedCount, batchCreatedGroupCount };
-    });
+    }, { timeout: 30_000 });
 
     updatedReservationCount += batchResult.batchUpdatedCount;
     createdGroupCount += batchResult.batchCreatedGroupCount;

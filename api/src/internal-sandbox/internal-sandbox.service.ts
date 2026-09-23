@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { acquireScheduleLockExclusive } from '../prisma/schedule-lock';
 
 const SANDBOX_TENANT_SLUG = 'sandbox-demo';
 const SANDBOX_TENANT_NAME = 'SURP Sandbox Demo';
@@ -90,6 +91,10 @@ export class InternalSandboxService {
           },
           select: { id: true }
         });
+
+        // A reset rewrites the tenant's whole schedule along with its
+        // reservations, so it takes the schedule lock the way an edit does.
+        await acquireScheduleLockExclusive(tx, tenant.id);
 
         const deleted = await this.clearTenantData(tx, tenant.id);
         const seeded = await this.seedTenantData(tx, tenant.id, passwordHash);

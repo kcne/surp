@@ -19,6 +19,16 @@ interface ConfirmBreakingChangeDialogProps {
   confirmation: WouldBreakReservationsDto | null
   /** An earlier part of the same edit was already saved before the refusal. */
   partiallyApplied?: boolean
+  /**
+   * The agency already answered this question, and the server asked again
+   * because the affected reservations changed in the meantime.
+   */
+  changedSinceAnswered?: boolean
+  /**
+   * The agency asked for a repair of exactly this set, and the repair could not
+   * settle all of it, so nothing was saved.
+   */
+  repairFailed?: boolean
   loading?: boolean
   onConfirm: () => Promise<void> | void
   /**
@@ -34,6 +44,8 @@ export function ConfirmBreakingChangeDialog({
   onOpenChange,
   confirmation,
   partiallyApplied = false,
+  changedSinceAnswered = false,
+  repairFailed = false,
   loading = false,
   onConfirm,
   onRepair,
@@ -46,6 +58,18 @@ export function ConfirmBreakingChangeDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Ova izmena pogadja postojece podatke</AlertDialogTitle>
           <AlertDialogDescription>
+            {changedSinceAnswered && (
+              <span className="mb-2 block font-medium text-foreground" role="status">
+                U medjuvremenu su se rezervacije promenile. Proverite novo stanje pre nego sto
+                ponovo odgovorite.
+              </span>
+            )}
+            {repairFailed && (
+              <span className="mb-2 block font-medium text-foreground" role="status">
+                Popravka nije mogla da resi sve pogodjene rezervacije, pa nista nije sacuvano.
+                Mozete ipak sacuvati bez popravke ili odustati.
+              </span>
+            )}
             {/* The server's sentence already carries the count, in Serbian that
                 agrees with it — repeating it here only risks disagreeing. */}
             <span className="block font-medium text-foreground">{confirmation?.message}</span>

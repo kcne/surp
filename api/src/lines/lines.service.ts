@@ -15,11 +15,14 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
+import { scheduleEditTransaction } from '../prisma/schedule-lock';
 import {
+  NO_CONSENT,
   PROSPECTIVE_INVARIANTS,
   ProspectiveWriteConsent,
   guardProspectiveWrite
 } from '../invariants/prospective-write';
+import { consentFrom } from '../invariants/dto/confirm-breaking-change.dto';
 import { CreateLineDto } from './dto/create-line.dto';
 import { LineResponseDto, PaginatedLinesResponseDto } from './dto/line.response.dto';
 import { LineStopInputDto } from './dto/line-stop.dto';
@@ -281,7 +284,7 @@ export class LinesService {
         this.prisma,
         { tenantId: auth.tenantId, actorId: auth.sub },
         PROSPECTIVE_INVARIANTS.lineUpdate,
-        { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
+        consentFrom(dto),
         async (tx) => {
           // Read inside the transaction, not before it. Every value below is
           // derived from the line as it stands, and a concurrent route edit
@@ -432,12 +435,12 @@ export class LinesService {
     auth: AccessTokenPayload,
     id: string,
     intermediateStops: LineStopInputDto[],
-    consent: ProspectiveWriteConsent = { confirmed: false, repair: false }
+    consent: ProspectiveWriteConsent = NO_CONSENT
   ): Promise<LineResponseDto> {
     return this.update(auth, id, {
       intermediateStops,
-      confirmBreakingChange: consent.confirmed,
-      repairBreakingChange: consent.repair
+      confirmationTokens: [...consent.confirmationTokens],
+      repairTokens: [...consent.repairTokens]
     });
   }
 
@@ -529,7 +532,9 @@ export class LinesService {
     await this.getLineOrThrow(auth.tenantId, id);
 
     if (cascade) {
-      return this.prisma.$transaction(async (tx) => {
+      // Cancelling every reservation and retiring the rides is a schedule edit:
+      // a booking still in flight must land before the cancellation sweeps it.
+      return scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
         const now = new Date();
         const rides = await tx.ride.findMany({
           where: {
@@ -591,34 +596,38 @@ export class LinesService {
       });
     }
 
-    const activeRideReferenceCount = await this.prisma.ride.count({
-      where: {
-        tenantId: auth.tenantId,
-        lineId: id,
-        status: RideStatus.ACTIVE
+    // Checked and written under the lock, so a ride activated on this line
+    // while the check ran cannot be left on a deactivated route.
+    return scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
+      const activeRideReferenceCount = await tx.ride.count({
+        where: {
+          tenantId: auth.tenantId,
+          lineId: id,
+          status: RideStatus.ACTIVE
+        }
+      });
+
+      if (activeRideReferenceCount > 0) {
+        throw new ConflictException(
+          'Line cannot be deleted because it has active rides. Use cascade=true to deactivate rides and cancel reservations.'
+        );
       }
-    });
 
-    if (activeRideReferenceCount > 0) {
-      throw new ConflictException(
-        'Line cannot be deleted because it has active rides. Use cascade=true to deactivate rides and cancel reservations.'
-      );
-    }
-
-    const deactivated = await this.prisma.line.update({
-      where: {
-        id
-      },
-      data: withUpdateAudit(
-        {
-          isActive: false
+      const deactivated = await tx.line.update({
+        where: {
+          id
         },
-        auth.sub
-      ),
-      select: SAFE_LINE_SELECT
-    });
+        data: withUpdateAudit(
+          {
+            isActive: false
+          },
+          auth.sub
+        ),
+        select: SAFE_LINE_SELECT
+      });
 
-    return this.toLineResponse(deactivated);
+      return this.toLineResponse(deactivated);
+    });
   }
 
   private async getLineOrThrow(

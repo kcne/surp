@@ -31,7 +31,7 @@ import {
 import { UpdateRideDto } from './dto/update-ride.dto';
 import { WouldBreakReservationsDto } from './dto/would-break-reservations.dto';
 import { RideExceptionConflictDto } from './dto/exception-conflict.dto';
-import { ConfirmBreakingChangeDto } from '../invariants/dto/confirm-breaking-change.dto';
+import { ConfirmBreakingChangeDto, consentFrom } from '../invariants/dto/confirm-breaking-change.dto';
 import { RidesService } from './rides.service';
 
 @ApiTags('Rides')
@@ -106,7 +106,7 @@ export class RidesController {
   @ApiConflictResponse({
     type: WouldBreakReservationsDto,
     description:
-      'The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with confirmBreakingChange to proceed.'
+      'The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.'
   })
   update(
     @Req() request: RequestWithAuth,
@@ -127,7 +127,7 @@ export class RidesController {
   @ApiConflictResponse({
     type: WouldBreakReservationsDto,
     description:
-      'The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with confirmBreakingChange to proceed.'
+      'The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.'
   })
   replace(
     @Req() request: RequestWithAuth,
@@ -158,7 +158,7 @@ export class RidesController {
       request.auth!,
       id,
       dto.daySchedules,
-      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true }
+      consentFrom(dto)
     );
   }
 
@@ -210,7 +210,7 @@ export class RidesController {
       request.auth!,
       id,
       exceptionId,
-      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true }
+      consentFrom(dto)
     );
   }
 

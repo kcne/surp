@@ -108,6 +108,65 @@ jobs:
           name: openapi-schema
           path: api/docs/openapi.json
 
+  api-db:
+    name: api database tests
+    runs-on: ubuntu-latest
+    needs: api-verify
+    timeout-minutes: 15
+
+    # Concurrency and constraint tests that a mocked Prisma cannot answer:
+    # whether two transactions wait for each other, and in which order.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: airtable_demo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d airtable_demo"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    defaults:
+      run:
+        working-directory: api
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/airtable_demo?schema=public
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: api/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Apply migrations
+        run: pnpm prisma:migrate:deploy
+
+      - name: Database tests
+        run: pnpm test:db
+
   api-e2e:
     name: api e2e tests
     runs-on: ubuntu-latest

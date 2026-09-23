@@ -1,10 +1,11 @@
 import {
   describeScheduleDrift,
   isScheduleAlignedToRoute,
-  realignDayScheduleTx,
+  realignDayScheduleIfDriftedTx,
   routeStationIdsOf
 } from '../../rides/ride-schedule-alignment';
 import { CheckResult, Invariant, InvariantContext, RepairResult } from '../invariant.types';
+import { scheduleEditTransaction } from '../../prisma/schedule-lock';
 import { loadStationNames, stationNamer } from './tenant-lookups';
 
 /**
@@ -128,22 +129,29 @@ export async function realignDriftedSchedules(ctx: InvariantContext): Promise<Re
     throw new Error('Invariant repairs require a root database client');
   }
 
+  const realigned: DriftedSchedule[] = [];
+
   for (const entry of drifted) {
-    const result = await ctx.prisma.$transaction((tx) =>
-      realignDayScheduleTx(tx, {
+    // The scan above only says where to look. The plan is recomputed under
+    // the lock, so an edit that landed while this waited is kept, not undone.
+    const result = await scheduleEditTransaction(ctx.prisma, entry.tenantId, (tx) =>
+      realignDayScheduleIfDriftedTx(tx, {
         tenantId: entry.tenantId,
         rideDayScheduleId: entry.rideDayScheduleId,
-        stationTimes: entry.stationTimes,
-        routeStationIds: entry.routeStationIds,
         actorId: ctx.actorId
       })
     );
 
+    if (!result) {
+      continue;
+    }
+
+    realigned.push(entry);
     estimatedTimeCount += result.estimatedTimeCount;
     reorderedScheduleCount += result.reorderedScheduleIds.length;
   }
 
-  return { drifted, estimatedTimeCount, reorderedScheduleCount };
+  return { drifted: realigned, estimatedTimeCount, reorderedScheduleCount };
 }
 
 const DAY_LABELS = [

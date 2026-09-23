@@ -21,6 +21,7 @@ import {
 } from "@/infrastructure/mappers/reservationMappers"
 import { reservationsByRideInstanceQueryKey } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
 import type { ReservationFormData, RideInstance } from "@/types"
+import { scheduleBeingUpdatedMessage } from "@/infrastructure/utils/breaking-change"
 
 function isReservationMutationSuccess<TResponse extends { status: number }>(
   response: TResponse
@@ -56,6 +57,11 @@ function getCancelReservationErrorMessage(response: reservationsControllerCancel
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
+  const scheduleBusy = scheduleBeingUpdatedMessage(error)
+  if (scheduleBusy) {
+    return scheduleBusy
+  }
+
   if (error instanceof Error && error.message) {
     return error.message
   }

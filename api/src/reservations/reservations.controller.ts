@@ -58,7 +58,10 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Create a single reservation in the current tenant.' })
   @ApiOkResponse({ type: ReservationResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure or route path violation.' })
-  @ApiConflictResponse({ description: 'Seat is already booked for overlapping route segment.' })
+  @ApiConflictResponse({
+    description:
+      'Seat is already booked for overlapping route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
+  })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
   create(
@@ -74,7 +77,10 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Create multiple reservations in the current tenant.' })
   @ApiOkResponse({ type: BatchReservationsResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure or route path violation.' })
-  @ApiConflictResponse({ description: 'Seat overlap or route segment capacity exhaustion.' })
+  @ApiConflictResponse({
+    description:
+      'Seat overlap or route segment capacity exhaustion. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
+  })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
   createBatch(
@@ -159,7 +165,10 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Update reservation in the current tenant.' })
   @ApiOkResponse({ type: ReservationResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure or route path violation.' })
-  @ApiConflictResponse({ description: 'Seat is already booked for overlapping route segment.' })
+  @ApiConflictResponse({
+    description:
+      'Seat is already booked for overlapping route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
+  })
   @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
@@ -181,7 +190,8 @@ export class ReservationsController {
   @ApiOkResponse({ type: ReservationResponseDto, isArray: true })
   @ApiBadRequestResponse({ description: 'Validation failure or cancelled reservation.' })
   @ApiConflictResponse({
-    description: 'The destination seat cannot be used for the route segment.'
+    description:
+      'The destination seat cannot be used for the route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
   })
   @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
@@ -200,6 +210,10 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Cancel reservation in the current tenant.' })
   @ApiOkResponse({ type: ReservationResponseDto })
   @ApiBadRequestResponse({ description: 'Reservation is already cancelled.' })
+  @ApiConflictResponse({
+    description:
+      'SCHEDULE_BEING_UPDATED, which is retryable: a schedule edit held the tenant\'s schedule longer than a booking waits.'
+  })
   @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })

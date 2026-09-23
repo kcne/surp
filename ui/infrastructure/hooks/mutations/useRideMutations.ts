@@ -25,7 +25,10 @@ import {
   ChangeNeedsConfirmationError,
   throwBreakingChangeConflict,
 } from "@/infrastructure/utils/breaking-change"
-import type { BreakingChangeAnswers } from "@/infrastructure/hooks/useConfirmableUpdate"
+import {
+  answerTokens,
+  type BreakingChangeAnswers,
+} from "@/infrastructure/hooks/useConfirmableUpdate"
 
 /** The confirmation key for the ride request itself; exceptions key by id. */
 const RIDE_STEP = "ride"
@@ -136,14 +139,7 @@ export function useUpdateRideMutation() {
        */
       answers?: BreakingChangeAnswers
     }) => {
-      const isConfirmed = (step: string) =>
-        answers?.confirmed.some((answer) => answer.step === step) === true
-      const isRepaired = (step: string) =>
-        answers?.repaired.some((answer) => answer.step === step) === true
-      const answeredFor = (step: string) => ({
-        confirmBreakingChange: isConfirmed(step),
-        repairBreakingChange: isRepaired(step),
-      })
+      const answeredFor = (step: string) => answerTokens(answers, step)
       const hasExceptionsUpdate = Array.isArray(payload.exceptions)
       // Whether any request in this edit has already been written. Every step
       // that lands sets it, not just the ride: an exception-only edit that

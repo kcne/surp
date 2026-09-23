@@ -13,6 +13,7 @@
     "test:watch": "jest --watch",
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
     "test:contract": "jest --runTestsByPath ./test/openapi.contract.spec.ts",
+    "test:db": "jest --config ./test/jest-db.json --runInBand",
     "openapi:generate": "ts-node --transpile-only scripts/generate-openapi.ts",
     "openapi:lint": "pnpm openapi:generate && ts-node --transpile-only scripts/lint-openapi.ts",
     "quality:gates": "pnpm lint && pnpm test:contract && pnpm openapi:lint",

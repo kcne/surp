@@ -3658,7 +3658,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with confirmBreakingChange to proceed.",
+            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3733,7 +3733,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with confirmBreakingChange to proceed.",
+            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4106,7 +4106,7 @@
             "description": "Insufficient role for this resource."
           },
           "409": {
-            "description": "Seat is already booked for overlapping route segment."
+            "description": "Seat is already booked for overlapping route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -4277,7 +4277,7 @@
             "description": "Insufficient role for this resource."
           },
           "409": {
-            "description": "Seat overlap or route segment capacity exhaustion."
+            "description": "Seat overlap or route segment capacity exhaustion. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -4571,7 +4571,7 @@
             "description": "Reservation not found in current tenant."
           },
           "409": {
-            "description": "Seat is already booked for overlapping route segment."
+            "description": "Seat is already booked for overlapping route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -4696,7 +4696,7 @@
             "description": "Reservation not found in current tenant."
           },
           "409": {
-            "description": "The destination seat cannot be used for the route segment."
+            "description": "The destination seat cannot be used for the route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -4754,6 +4754,9 @@
           },
           "404": {
             "description": "Reservation not found in current tenant."
+          },
+          "409": {
+            "description": "SCHEDULE_BEING_UPDATED, which is retryable: a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -6484,15 +6487,35 @@
       "UpdateStationDto": {
         "type": "object",
         "properties": {
+          "confirmationTokens": {
+            "example": [
+              "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e"
+            ],
+            "description": "confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repairTokens": {
+            "example": [],
+            "description": "confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "confirmBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
+            "description": "Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead."
           },
           "repairBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
+            "description": "Ignored. Send repairTokens instead."
           },
           "name": {
             "type": "string",
@@ -6544,10 +6567,20 @@
             "type": "string",
             "example": "Ova izmena cini 8 rezervacija nevidljivim."
           },
+          "confirmationToken": {
+            "type": "string",
+            "example": "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e",
+            "description": "Identifies the affected set described here. Send it back in confirmationTokens or repairTokens to answer this refusal. If the set changes before the answer arrives, the write is refused again with a new token."
+          },
+          "staleClient": {
+            "type": "boolean",
+            "example": true,
+            "description": "Present when the request answered with the retired confirmBreakingChange or repairBreakingChange boolean. The page predates tokens and must be reloaded; message says so."
+          },
           "repairable": {
             "type": "boolean",
             "example": true,
-            "description": "Whether resending with repairBreakingChange would settle every affected subject rather than leaving it broken."
+            "description": "Whether resending with confirmationToken in repairTokens would settle every affected subject rather than leaving it broken."
           },
           "repairMessage": {
             "type": "string",
@@ -6560,6 +6593,7 @@
           "invariant",
           "affectedCount",
           "message",
+          "confirmationToken",
           "repairable"
         ]
       },
@@ -6826,15 +6860,35 @@
       "UpdateLineDto": {
         "type": "object",
         "properties": {
+          "confirmationTokens": {
+            "example": [
+              "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e"
+            ],
+            "description": "confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repairTokens": {
+            "example": [],
+            "description": "confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "confirmBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
+            "description": "Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead."
           },
           "repairBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
+            "description": "Ignored. Send repairTokens instead."
           },
           "name": {
             "type": "string",
@@ -6881,15 +6935,35 @@
       "ReplaceLineStopsDto": {
         "type": "object",
         "properties": {
+          "confirmationTokens": {
+            "example": [
+              "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e"
+            ],
+            "description": "confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repairTokens": {
+            "example": [],
+            "description": "confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "confirmBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
+            "description": "Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead."
           },
           "repairBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
+            "description": "Ignored. Send repairTokens instead."
           },
           "intermediateStops": {
             "type": "array",
@@ -8248,15 +8322,35 @@
       "UpdatePassengerDto": {
         "type": "object",
         "properties": {
+          "confirmationTokens": {
+            "example": [
+              "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e"
+            ],
+            "description": "confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repairTokens": {
+            "example": [],
+            "description": "confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "confirmBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
+            "description": "Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead."
           },
           "repairBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
+            "description": "Ignored. Send repairTokens instead."
           },
           "firstName": {
             "type": "string",
@@ -8924,15 +9018,35 @@
       "UpdateRideDto": {
         "type": "object",
         "properties": {
+          "confirmationTokens": {
+            "example": [
+              "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e"
+            ],
+            "description": "confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repairTokens": {
+            "example": [],
+            "description": "confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "confirmBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
+            "description": "Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead."
           },
           "repairBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
+            "description": "Ignored. Send repairTokens instead."
           },
           "name": {
             "type": "string",
@@ -8994,15 +9108,35 @@
       "ReplaceRideDaySchedulesDto": {
         "type": "object",
         "properties": {
+          "confirmationTokens": {
+            "example": [
+              "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e"
+            ],
+            "description": "confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repairTokens": {
+            "example": [],
+            "description": "confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "confirmBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
+            "description": "Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead."
           },
           "repairBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
+            "description": "Ignored. Send repairTokens instead."
           },
           "daySchedules": {
             "type": "array",
@@ -9040,15 +9174,35 @@
       "CreateRideExceptionDto": {
         "type": "object",
         "properties": {
+          "confirmationTokens": {
+            "example": [
+              "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e"
+            ],
+            "description": "confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repairTokens": {
+            "example": [],
+            "description": "confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "confirmBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
+            "description": "Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead."
           },
           "repairBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
+            "description": "Ignored. Send repairTokens instead."
           },
           "date": {
             "type": "string",
@@ -9079,15 +9233,35 @@
       "ConfirmBreakingChangeDto": {
         "type": "object",
         "properties": {
+          "confirmationTokens": {
+            "example": [
+              "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e"
+            ],
+            "description": "confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repairTokens": {
+            "example": [],
+            "description": "confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "confirmBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers."
+            "description": "Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead."
           },
           "repairBreakingChange": {
             "type": "boolean",
+            "deprecated": true,
             "example": false,
-            "description": "Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true."
+            "description": "Ignored. Send repairTokens instead."
           }
         }
       },

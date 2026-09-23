@@ -10,6 +10,7 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
+import { reservationWriteTransaction } from '../prisma/schedule-lock';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { CreateReservationsBatchDto } from './dto/create-reservations-batch.dto';
 import { ListReservationCountsQueryDto } from './dto/reservation-counts.query.dto';
@@ -106,7 +107,7 @@ export class ReservationsService {
     auth: AccessTokenPayload,
     dto: CreateReservationDto
   ): Promise<ReservationResponseDto> {
-    const created = await this.prisma.$transaction((tx) =>
+    const created = await reservationWriteTransaction(this.prisma, auth.tenantId, (tx) =>
       this.createSingleInTransaction(tx, auth, dto, randomUUID())
     );
 
@@ -128,7 +129,7 @@ export class ReservationsService {
       }
     });
 
-    return this.prisma.$transaction(async (tx) => {
+    return reservationWriteTransaction(this.prisma, auth.tenantId, async (tx) => {
       const results: ReservationBatchItemResultDto[] = [];
       const groupIds = new Map<string, string>();
       const createdIds: string[] = [];
@@ -320,7 +321,7 @@ export class ReservationsService {
     dto: AssignReservationGroupDto
   ): Promise<ReservationResponseDto[]> {
     const ids = [...new Set(dto.reservationIds)];
-    return this.prisma.$transaction(async (tx) => {
+    return reservationWriteTransaction(this.prisma, auth.tenantId, async (tx) => {
       const reservations = await tx.reservation.findMany({
         where: { tenantId: auth.tenantId, id: { in: ids }, status: ReservationStatus.ACTIVE },
         select: SAFE_RESERVATION_SELECT
@@ -351,7 +352,7 @@ export class ReservationsService {
     id: string,
     dto: UpdateReservationDto
   ): Promise<ReservationResponseDto> {
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const updated = await reservationWriteTransaction(this.prisma, auth.tenantId, async (tx) => {
       const existing = await this.getReservationOrThrow(auth.tenantId, id, tx);
 
       if (existing.status === ReservationStatus.CANCELLED) {
@@ -483,7 +484,7 @@ export class ReservationsService {
     id: string,
     targetSeatNumber: number
   ): Promise<ReservationResponseDto[]> {
-    const moved = await this.prisma.$transaction(async (tx) => {
+    const moved = await reservationWriteTransaction(this.prisma, auth.tenantId, async (tx) => {
       // This first read only identifies the advisory-lock scope. Read the
       // source again after the lock, since another move may have completed
       // while this transaction was waiting for it.
@@ -601,7 +602,7 @@ export class ReservationsService {
     id: string,
     strict: boolean = false
   ): Promise<ReservationResponseDto> {
-    const cancelled = await this.prisma.$transaction(async (tx) => {
+    const cancelled = await reservationWriteTransaction(this.prisma, auth.tenantId, async (tx) => {
       const reservationBeforeLock = await this.getReservationOrThrow(auth.tenantId, id, tx);
 
       await this.acquireRideInstanceLock(tx, {

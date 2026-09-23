@@ -1,5 +1,6 @@
 import { PrismaClient, ReservationStatus } from '@prisma/client';
 import { withUpdateAudit } from '../prisma/audit-write.helper';
+import { reservationWriteTransaction } from '../prisma/schedule-lock';
 import { RouteSegment, routeStationOrder, segmentsOverlap } from '../reservations/route-segment';
 import { nameKeyForIdentity, phoneKeyForIdentity } from './passenger-match.util';
 
@@ -484,7 +485,7 @@ export async function applyDuplicatePassengerMerge(
   };
 
   for (const group of resolved.groups) {
-    const written = await prisma.$transaction(async (tx) => {
+    const written = await reservationWriteTransaction(prisma, group.tenantId, async (tx) => {
       const repointed = await tx.reservation.updateMany({
         where: {
           tenantId: group.tenantId,

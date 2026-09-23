@@ -9,11 +9,14 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
+import { scheduleEditTransaction } from '../prisma/schedule-lock';
 import {
+  NO_CONSENT,
   PROSPECTIVE_INVARIANTS,
   ProspectiveWriteConsent,
   guardProspectiveWrite
 } from '../invariants/prospective-write';
+import { consentFrom } from '../invariants/dto/confirm-breaking-change.dto';
 import { CreateRideDto } from './dto/create-ride.dto';
 import { ListRideInstancesQueryDto } from './dto/ride-instances.query.dto';
 import { ListRidesQueryDto } from './dto/list-rides.query.dto';
@@ -261,20 +264,23 @@ export class RidesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(auth: AccessTokenPayload, dto: CreateRideDto): Promise<RideResponseDto> {
-    const line = await this.ensureLineInTenant(auth.tenantId, dto.lineId);
+    // The route the new schedule is validated against is read under the
+    // schedule lock. Read before it, a line edit could realign every existing
+    // ride and commit, leaving this one created against the old stop list.
+    const created = await scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
+      const line = await this.ensureLineInTenant(auth.tenantId, dto.lineId, tx);
 
-    const normalizedSchedule = this.normalizeAndValidateSchedule({
-      type: dto.type,
-      routeStationIds: line.routeStationIds,
-      recurringStartDate: dto.recurringStartDate,
-      recurringEndDate: dto.recurringEndDate,
-      oneTimeDate: dto.oneTimeDate,
-      oneTimeDepartureTime: dto.oneTimeDepartureTime,
-      oneTimeArrivalTime: dto.oneTimeArrivalTime,
-      daySchedules: dto.daySchedules
-    });
+      const normalizedSchedule = this.normalizeAndValidateSchedule({
+        type: dto.type,
+        routeStationIds: line.routeStationIds,
+        recurringStartDate: dto.recurringStartDate,
+        recurringEndDate: dto.recurringEndDate,
+        oneTimeDate: dto.oneTimeDate,
+        oneTimeDepartureTime: dto.oneTimeDepartureTime,
+        oneTimeArrivalTime: dto.oneTimeArrivalTime,
+        daySchedules: dto.daySchedules
+      });
 
-    const created = await this.prisma.$transaction(async (tx) => {
       const createdRide = await tx.ride.create({
         data: withCreateAudit(
           {
@@ -538,13 +544,13 @@ export class RidesService {
     // a concurrent edit can invalidate before this one writes, and that edit is
     // then overwritten with values read before it existed — a departure time
     // moved back, a capacity change undone, with nothing to show it happened.
-    // Inside, the read and the write are one serializable unit and Postgres
-    // aborts the loser instead.
+    // Inside, the guard's exclusive schedule lock makes a second edit wait until
+    // this one commits, and it then reads the ride this one wrote.
     const updated = await guardProspectiveWrite(
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       PROSPECTIVE_INVARIANTS.rideUpdate,
-      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
+      consentFrom(dto),
       async (
         tx,
         prepared: { nextLineName: string; normalizedSchedule: RideScheduleNormalized }
@@ -661,7 +667,7 @@ export class RidesService {
     auth: AccessTokenPayload,
     id: string,
     daySchedules: RideDayScheduleInputDto[],
-    consent: ProspectiveWriteConsent = { confirmed: false, repair: false }
+    consent: ProspectiveWriteConsent = NO_CONSENT
   ): Promise<RideResponseDto> {
     // The route these times are checked against is read inside the write's own
     // transaction. Read before it, a line edit could land in between and leave
@@ -734,14 +740,14 @@ export class RidesService {
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       dto.type === RideExceptionType.SKIP ? PROSPECTIVE_INVARIANTS.rideException : [],
-      { confirmed: dto.confirmBreakingChange === true, repair: dto.repairBreakingChange === true },
+      consentFrom(dto),
       async (tx) => {
         // Inside the transaction, so the read that proves the exception is new
         // and the write that makes it exist cannot be separated. `RideException`
         // carries no unique constraint, so this read is the only thing standing
         // between two identical requests and two identical rows — which is what
-        // the serializable isolation is for: the second transaction's insert
-        // collides with the predicate this read locked, and Postgres aborts it.
+        // the guard's exclusive schedule lock is for: the second request waits
+        // for the first to commit, then this read finds the row it created.
         await this.ensureExceptionIsNew(tx, auth.tenantId, rideId, exceptionDate, dto);
 
         return tx.rideException.create({
@@ -820,7 +826,7 @@ export class RidesService {
     auth: AccessTokenPayload,
     rideId: string,
     exceptionId: string,
-    consent: ProspectiveWriteConsent = { confirmed: false, repair: false }
+    consent: ProspectiveWriteConsent = NO_CONSENT
   ): Promise<RideExceptionResponseDto> {
     await this.getRideOrThrow(auth.tenantId, rideId);
 
@@ -874,7 +880,9 @@ export class RidesService {
     await this.getRideOrThrow(auth.tenantId, id);
 
     if (cascade) {
-      return this.prisma.$transaction(async (tx) => {
+      // Cancelling every reservation and retiring the ride is a schedule edit:
+      // a booking still in flight must land before the cancellation sweeps it.
+      return scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
         const now = new Date();
 
         await tx.reservation.updateMany({
@@ -907,41 +915,46 @@ export class RidesService {
       });
     }
 
-    const activeReservationReferenceCount = await this.prisma.reservation.count({
-      where: {
-        tenantId: auth.tenantId,
-        rideId: id,
-        status: ReservationStatus.ACTIVE
+    // The count and the deactivation are one schedule edit. Counted outside
+    // the lock, a booking still in flight is invisible, and the ride would be
+    // retired under a passenger who was just sold a seat on it.
+    return scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
+      const activeReservationReferenceCount = await tx.reservation.count({
+        where: {
+          tenantId: auth.tenantId,
+          rideId: id,
+          status: ReservationStatus.ACTIVE
+        }
+      });
+
+      if (activeReservationReferenceCount > 0) {
+        throw new ConflictException(
+          'Ride cannot be deleted because it has active reservations. Use cascade=true to cancel reservations and deactivate ride.'
+        );
       }
-    });
 
-    if (activeReservationReferenceCount > 0) {
-      throw new ConflictException(
-        'Ride cannot be deleted because it has active reservations. Use cascade=true to cancel reservations and deactivate ride.'
-      );
-    }
-
-    const deactivated = await this.prisma.ride.update({
-      where: {
-        id
-      },
-      data: withUpdateAudit(
-        {
-          status: RideStatus.INACTIVE
+      const deactivated = await tx.ride.update({
+        where: {
+          id
         },
-        auth.sub
-      ),
-      select: SAFE_RIDE_SELECT
-    });
+        data: withUpdateAudit(
+          {
+            status: RideStatus.INACTIVE
+          },
+          auth.sub
+        ),
+        select: SAFE_RIDE_SELECT
+      });
 
-    return this.toRideResponse(deactivated);
+      return this.toRideResponse(deactivated);
+    });
   }
 
   /**
    * `client` defaults to the unguarded connection, but a caller that is going
-   * to write what it reads passes its transaction instead: the read then joins
-   * the write in one serializable unit, and a concurrent edit is aborted rather
-   * than quietly overwritten.
+   * to write what it reads passes its transaction instead: the read then happens
+   * under that transaction's schedule lock, so a concurrent edit waits rather
+   * than being quietly overwritten.
    */
   private async getRideOrThrow(
     tenantId: string,

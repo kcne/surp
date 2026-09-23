@@ -9,11 +9,14 @@ import { ChangeNeedsConfirmationError } from "@/infrastructure/utils/breaking-ch
  *
  * An edit can raise several invariant questions for the same request. Keep the
  * invariant with each answer so overriding one does not discard a repair the
- * agency chose for another.
+ * agency chose for another. The token is what the answer actually sends: the
+ * server's name for the exact set of reservations the agency was shown, so an
+ * answer never stretches to cover passengers booked after the question.
  */
 export interface BreakingChangeAnswer {
   step: string
   invariant: string
+  token: string
 }
 
 export interface BreakingChangeAnswers {
@@ -22,6 +25,23 @@ export interface BreakingChangeAnswers {
 }
 
 const NO_ANSWERS: BreakingChangeAnswers = { confirmed: [], repaired: [] }
+
+/**
+ * The request fields that carry the answers, for one step of an edit or, with
+ * no step, for an edit that is a single request.
+ */
+export function answerTokens(
+  answers: BreakingChangeAnswers | undefined,
+  step?: string
+): { confirmationTokens: string[]; repairTokens: string[] } {
+  const forStep = (entries: BreakingChangeAnswer[] = []) =>
+    entries.filter((answer) => step === undefined || answer.step === step).map((answer) => answer.token)
+
+  return {
+    confirmationTokens: forStep(answers?.confirmed),
+    repairTokens: forStep(answers?.repaired),
+  }
+}
 
 /**
  * The two-step an update takes when the server refuses it.
@@ -53,6 +73,8 @@ export function useConfirmableUpdate<TVariables>({
     step: string
     confirmation: WouldBreakReservationsDto
     partiallyApplied: boolean
+    changedSinceAnswered: boolean
+    repairFailed: boolean
   } | null>(null)
 
   const attempt = async (
@@ -65,12 +87,28 @@ export function useConfirmableUpdate<TVariables>({
       setPending(null)
     } catch (error) {
       if (error instanceof ChangeNeedsConfirmationError) {
+        const { invariant, confirmationToken, repairable } = error.confirmation
+        const answerTo = (entries: BreakingChangeAnswer[]) =>
+          entries.find((answer) => answer.step === error.step && answer.invariant === invariant)
+        const confirmedBefore = answerTo(answers.confirmed)
+        const repairedBefore = answerTo(answers.repaired)
+        const previous = confirmedBefore ?? repairedBefore
+
         setPending({
           variables,
           answers,
           step: error.step,
           confirmation: error.confirmation,
           partiallyApplied: previouslyApplied || error.partiallyApplied,
+          // A new token for a question already answered means the affected
+          // reservations changed in between. The same token means they did not.
+          changedSinceAnswered: previous !== undefined && previous.token !== confirmationToken,
+          // The same set, refused after asking for a repair: the repair could
+          // not settle every one, and it rolled back with the rest of the edit.
+          repairFailed:
+            repairedBefore !== undefined &&
+            repairedBefore.token === confirmationToken &&
+            !repairable,
         })
       }
 
@@ -85,12 +123,13 @@ export function useConfirmableUpdate<TVariables>({
   const answering = (
     answers: BreakingChangeAnswers,
     step: string,
-    invariant: string,
+    confirmation: WouldBreakReservationsDto,
     as: keyof BreakingChangeAnswers
   ): BreakingChangeAnswers => {
+    const { invariant, confirmationToken: token } = confirmation
     const without = (entries: BreakingChangeAnswer[]) =>
       entries.filter((answered) => answered.step !== step || answered.invariant !== invariant)
-    const answer = { step, invariant }
+    const answer = { step, invariant, token }
 
     return as === "confirmed"
       ? { confirmed: [...without(answers.confirmed), answer], repaired: without(answers.repaired) }
@@ -105,7 +144,7 @@ export function useConfirmableUpdate<TVariables>({
     try {
       await attempt(
         pending.variables,
-        answering(pending.answers, pending.step, pending.confirmation.invariant, as),
+        answering(pending.answers, pending.step, pending.confirmation, as),
         pending.partiallyApplied
       )
       onConfirmed?.()
@@ -130,6 +169,8 @@ export function useConfirmableUpdate<TVariables>({
       },
       confirmation: pending?.confirmation ?? null,
       partiallyApplied: pending?.partiallyApplied ?? false,
+      changedSinceAnswered: pending?.changedSinceAnswered ?? false,
+      repairFailed: pending?.repairFailed ?? false,
       onConfirm: answer("confirmed"),
       onRepair: answer("repaired"),
     },

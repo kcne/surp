@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient, ReservationStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { withUpdateAudit } from '../prisma/audit-write.helper';
+import { RESERVATION_LOCK_TIMEOUT_MS, acquireScheduleLockShared } from '../prisma/schedule-lock';
 import { phoneKeyForIdentity } from '../passengers/passenger-match.util';
 import { LEGACY_RETURN_LOOKUP_DAYS, isActiveReturnLegConflict } from './return-leg-link';
 
@@ -694,6 +695,8 @@ export async function applyReturnLegBackfill(
   for (const link of resolved.links) {
     try {
       const written = await prisma.$transaction(async (tx) => {
+        await acquireScheduleLockShared(tx, link.tenantId);
+
         const linked = await tx.reservation.updateMany({
           where: {
             id: link.returnReservationId,
@@ -728,7 +731,11 @@ export async function applyReturnLegBackfill(
         }
 
         return true;
-      }, { maxWait: LINK_TRANSACTION_TIMEOUT_MS, timeout: LINK_TRANSACTION_TIMEOUT_MS });
+      }, {
+        maxWait: LINK_TRANSACTION_TIMEOUT_MS,
+        // Room to wait out a schedule edit on top of the link itself.
+        timeout: LINK_TRANSACTION_TIMEOUT_MS + RESERVATION_LOCK_TIMEOUT_MS
+      });
 
       if (written) {
         result.linkedCount += 1;

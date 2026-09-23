@@ -8,9 +8,19 @@
 import type { UpdatePassengerDtoPassengerType } from './updatePassengerDtoPassengerType';
 
 export interface UpdatePassengerDto {
-  /** Allows unresolved violations. May be combined with repairBreakingChange when separate invariants need separate answers. */
+  /** confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed. */
+  confirmationTokens?: string[];
+  /** confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write. */
+  repairTokens?: string[];
+  /**
+   * Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead.
+   * @deprecated
+   */
   confirmBreakingChange?: boolean;
-  /** Applies the change and repairs affected reservations. A failed repair refuses the whole write even when confirmBreakingChange is also true. */
+  /**
+   * Ignored. Send repairTokens instead.
+   * @deprecated
+   */
   repairBreakingChange?: boolean;
   firstName?: string;
   lastName?: string;

@@ -2,6 +2,7 @@ import { withUpdateAudit } from '../../prisma/audit-write.helper';
 import { formatDateOnly } from '../../rides/ride-instance-materialization';
 import { CheckResult, Invariant, InvariantContext, RepairResult } from '../invariant.types';
 import { loadReservationWindow } from './reservation-window';
+import { inScheduleEdit } from '../in-schedule-edit';
 
 /**
  * A reservation stores the arrival time of the departure it sits on, and that
@@ -103,19 +104,21 @@ export const reservationArrivalCurrent: Invariant = {
    * ago, so what is written is the arrival time the ride carries right now.
    */
   async repair(ctx: InvariantContext): Promise<RepairResult> {
-    const scan = await scanForStaleArrivalTimes(ctx);
+    return inScheduleEdit(ctx, async (locked) => {
+      const scan = await scanForStaleArrivalTimes(locked);
 
-    let repairedCount = 0;
+      let repairedCount = 0;
 
-    for (const item of scan.items) {
-      await ctx.prisma.reservation.update({
-        where: { id: item.reservationId },
-        data: withUpdateAudit({ rideArrivalTime: item.currentArrivalTime }, ctx.actorId)
-      });
+      for (const item of scan.items) {
+        await locked.prisma.reservation.update({
+          where: { id: item.reservationId },
+          data: withUpdateAudit({ rideArrivalTime: item.currentArrivalTime }, locked.actorId)
+        });
 
-      repairedCount += 1;
-    }
+        repairedCount += 1;
+      }
 
-    return { repairedCount, skippedCount: 0 };
+      return { repairedCount, skippedCount: 0 };
+    });
   }
 };

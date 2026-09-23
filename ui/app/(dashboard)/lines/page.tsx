@@ -18,7 +18,7 @@ import { useLinesListQuery } from "@/infrastructure/hooks/queries/useLinesListQu
 import type { CreateLineDto, UpdateLineDto } from "@/infrastructure/generated/model"
 import type { Line } from "@/types"
 import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
-import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
+import { answerTokens, useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
 
 export default function LinesPage() {
   const linesQuery = useLinesListQuery()
@@ -50,8 +50,7 @@ export default function LinesPage() {
     update: (variables, answers) =>
       updateLineMutation.mutateAsync({
         ...variables,
-        confirmBreakingChange: answers.confirmed.length > 0,
-        repairBreakingChange: answers.repaired.length > 0,
+        ...answerTokens(answers),
       }),
     onConfirmed: closeModal,
   })

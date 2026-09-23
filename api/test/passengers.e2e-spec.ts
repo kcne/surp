@@ -11,6 +11,8 @@ describe('PassengersController (e2e)', () => {
 
   const prismaMock = {
     $transaction: jest.fn(),
+    // The schedule lock a guarded write takes before anything else.
+    $executeRaw: jest.fn().mockResolvedValue(1),
     onModuleInit: jest.fn(),
     onModuleDestroy: jest.fn(),
     enableShutdownHooks: jest.fn(),

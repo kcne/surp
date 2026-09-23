@@ -13,7 +13,11 @@ export interface WouldBreakReservationsDto {
   /** New invariant violations the proposed change would introduce. */
   affectedCount: number;
   message: string;
-  /** Whether resending with repairBreakingChange would settle every affected subject rather than leaving it broken. */
+  /** Identifies the affected set described here. Send it back in confirmationTokens or repairTokens to answer this refusal. If the set changes before the answer arrives, the write is refused again with a new token. */
+  confirmationToken: string;
+  /** Present when the request answered with the retired confirmBreakingChange or repairBreakingChange boolean. The page predates tokens and must be reloaded; message says so. */
+  staleClient?: boolean;
+  /** Whether resending with confirmationToken in repairTokens would settle every affected subject rather than leaving it broken. */
   repairable: boolean;
   /** What the repair would do, in Serbian. Present when repairable. */
   repairMessage?: string;

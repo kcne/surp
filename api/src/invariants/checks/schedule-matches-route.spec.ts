@@ -95,10 +95,48 @@ describe('schedule.matchesRoute', () => {
     expect(drifted).toEqual([]);
   });
 
+  it('leaves a schedule alone when an edit aligned it while the repair waited for the lock', async () => {
+    prismaMock.line.findMany.mockResolvedValue([lineWithDriftedRide]);
+
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      rideDaySchedule: {
+        findFirst: jest.fn().mockResolvedValue({
+          // What the edit committed: every stop on the route, with its own times.
+          stationTimes: [
+            { stationId: 'station-a', orderIndex: 0, time: '07:00' },
+            { stationId: 'station-c', orderIndex: 1, time: '07:30' },
+            { stationId: 'station-d', orderIndex: 2, time: '08:00' },
+            { stationId: 'station-b', orderIndex: 3, time: '09:00' }
+          ],
+          ride: { line: lineWithDriftedRide }
+        })
+      },
+      rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
+    };
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(tx)
+    );
+
+    const result = await realignDriftedSchedules(ctx);
+
+    expect(result.drifted).toEqual([]);
+    expect(tx.rideDayScheduleStationTime.deleteMany).not.toHaveBeenCalled();
+    expect(tx.rideDayScheduleStationTime.createMany).not.toHaveBeenCalled();
+  });
+
   it('rewrites drifted schedules and preserves times of surviving stations', async () => {
     prismaMock.line.findMany.mockResolvedValue([lineWithDriftedRide]);
 
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      // Re-read under the lock: the plan is recomputed from this, not the scan.
+      rideDaySchedule: {
+        findFirst: jest.fn().mockResolvedValue({
+          stationTimes: lineWithDriftedRide.rides[0].daySchedules[0].stationTimes,
+          ride: { line: lineWithDriftedRide }
+        })
+      },
       rideDayScheduleStationTime: {
         deleteMany: jest.fn(),
         createMany: jest.fn()

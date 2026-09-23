@@ -1258,10 +1258,12 @@ describe('ReservationsService', () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
-  it('takes distinct departure locks in sorted order before creating any reservation', async () => {
+  it('takes the shared schedule lock, then distinct departure locks in sorted order, before creating any reservation', async () => {
     const events: string[] = [];
-    prismaMock.$executeRaw.mockImplementation(async (_strings: TemplateStringsArray, key: string) => {
-      events.push(`lock:${key}`);
+    prismaMock.$executeRaw.mockImplementation(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = strings.join('?');
+      if (sql.includes('pg_advisory_xact_lock_shared')) events.push(`schedule:${values[1]}`);
+      else if (sql.includes('pg_advisory_xact_lock(hashtext')) events.push(`lock:${values[0]}`);
       return 1;
     });
     const create = prismaMock.reservation.create.getMockImplementation()!;
@@ -1278,6 +1280,7 @@ describe('ReservationsService', () => {
     await service.createBatch(auth, { items: [item('2026-04-01'), item('2026-03-30'), { ...item('2026-04-01'), seatNumber: 2 }] });
 
     expect(events).toEqual([
+      'schedule:tenant-1',
       'lock:tenant-1:ride-1:2026-03-30:09:00',
       'lock:tenant-1:ride-1:2026-04-01:09:00',
       'create', 'create', 'create'
@@ -1296,8 +1299,11 @@ describe('ReservationsService', () => {
       items: [item('2026-02-31', 1), item('2026-03-03', 2)]
     });
 
-    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
-    expect(prismaMock.$executeRaw.mock.calls[0][1]).toBe('tenant-1:ride-1:2026-03-03:09:00');
+    const departureLocks = prismaMock.$executeRaw.mock.calls.filter(([strings]: [TemplateStringsArray]) =>
+      strings.join('?').includes('pg_advisory_xact_lock(hashtext')
+    );
+    expect(departureLocks).toHaveLength(1);
+    expect(departureLocks[0][1]).toBe('tenant-1:ride-1:2026-03-03:09:00');
     expect(result.items[0].reservation?.travelDate).toBe('2026-03-03');
     expect(result.items[0].reservation?.groupId).toBe(result.items[1].reservation?.groupId);
   });
