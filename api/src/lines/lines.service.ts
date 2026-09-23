@@ -596,34 +596,38 @@ export class LinesService {
       });
     }
 
-    const activeRideReferenceCount = await this.prisma.ride.count({
-      where: {
-        tenantId: auth.tenantId,
-        lineId: id,
-        status: RideStatus.ACTIVE
+    // Checked and written under the lock, so a ride activated on this line
+    // while the check ran cannot be left on a deactivated route.
+    return scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
+      const activeRideReferenceCount = await tx.ride.count({
+        where: {
+          tenantId: auth.tenantId,
+          lineId: id,
+          status: RideStatus.ACTIVE
+        }
+      });
+
+      if (activeRideReferenceCount > 0) {
+        throw new ConflictException(
+          'Line cannot be deleted because it has active rides. Use cascade=true to deactivate rides and cancel reservations.'
+        );
       }
-    });
 
-    if (activeRideReferenceCount > 0) {
-      throw new ConflictException(
-        'Line cannot be deleted because it has active rides. Use cascade=true to deactivate rides and cancel reservations.'
-      );
-    }
-
-    const deactivated = await this.prisma.line.update({
-      where: {
-        id
-      },
-      data: withUpdateAudit(
-        {
-          isActive: false
+      const deactivated = await tx.line.update({
+        where: {
+          id
         },
-        auth.sub
-      ),
-      select: SAFE_LINE_SELECT
-    });
+        data: withUpdateAudit(
+          {
+            isActive: false
+          },
+          auth.sub
+        ),
+        select: SAFE_LINE_SELECT
+      });
 
-    return this.toLineResponse(deactivated);
+      return this.toLineResponse(deactivated);
+    });
   }
 
   private async getLineOrThrow(

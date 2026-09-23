@@ -264,20 +264,23 @@ export class RidesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(auth: AccessTokenPayload, dto: CreateRideDto): Promise<RideResponseDto> {
-    const line = await this.ensureLineInTenant(auth.tenantId, dto.lineId);
+    // The route the new schedule is validated against is read under the
+    // schedule lock. Read before it, a line edit could realign every existing
+    // ride and commit, leaving this one created against the old stop list.
+    const created = await scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
+      const line = await this.ensureLineInTenant(auth.tenantId, dto.lineId, tx);
 
-    const normalizedSchedule = this.normalizeAndValidateSchedule({
-      type: dto.type,
-      routeStationIds: line.routeStationIds,
-      recurringStartDate: dto.recurringStartDate,
-      recurringEndDate: dto.recurringEndDate,
-      oneTimeDate: dto.oneTimeDate,
-      oneTimeDepartureTime: dto.oneTimeDepartureTime,
-      oneTimeArrivalTime: dto.oneTimeArrivalTime,
-      daySchedules: dto.daySchedules
-    });
+      const normalizedSchedule = this.normalizeAndValidateSchedule({
+        type: dto.type,
+        routeStationIds: line.routeStationIds,
+        recurringStartDate: dto.recurringStartDate,
+        recurringEndDate: dto.recurringEndDate,
+        oneTimeDate: dto.oneTimeDate,
+        oneTimeDepartureTime: dto.oneTimeDepartureTime,
+        oneTimeArrivalTime: dto.oneTimeArrivalTime,
+        daySchedules: dto.daySchedules
+      });
 
-    const created = await this.prisma.$transaction(async (tx) => {
       const createdRide = await tx.ride.create({
         data: withCreateAudit(
           {
@@ -912,34 +915,39 @@ export class RidesService {
       });
     }
 
-    const activeReservationReferenceCount = await this.prisma.reservation.count({
-      where: {
-        tenantId: auth.tenantId,
-        rideId: id,
-        status: ReservationStatus.ACTIVE
+    // The count and the deactivation are one schedule edit. Counted outside
+    // the lock, a booking still in flight is invisible, and the ride would be
+    // retired under a passenger who was just sold a seat on it.
+    return scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
+      const activeReservationReferenceCount = await tx.reservation.count({
+        where: {
+          tenantId: auth.tenantId,
+          rideId: id,
+          status: ReservationStatus.ACTIVE
+        }
+      });
+
+      if (activeReservationReferenceCount > 0) {
+        throw new ConflictException(
+          'Ride cannot be deleted because it has active reservations. Use cascade=true to cancel reservations and deactivate ride.'
+        );
       }
-    });
 
-    if (activeReservationReferenceCount > 0) {
-      throw new ConflictException(
-        'Ride cannot be deleted because it has active reservations. Use cascade=true to cancel reservations and deactivate ride.'
-      );
-    }
-
-    const deactivated = await this.prisma.ride.update({
-      where: {
-        id
-      },
-      data: withUpdateAudit(
-        {
-          status: RideStatus.INACTIVE
+      const deactivated = await tx.ride.update({
+        where: {
+          id
         },
-        auth.sub
-      ),
-      select: SAFE_RIDE_SELECT
-    });
+        data: withUpdateAudit(
+          {
+            status: RideStatus.INACTIVE
+          },
+          auth.sub
+        ),
+        select: SAFE_RIDE_SELECT
+      });
 
-    return this.toRideResponse(deactivated);
+      return this.toRideResponse(deactivated);
+    });
   }
 
   /**

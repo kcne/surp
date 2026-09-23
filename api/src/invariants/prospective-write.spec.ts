@@ -372,6 +372,31 @@ describe('guardProspectiveWrite', () => {
       ).rejects.toMatchObject({ response: { invariant: 'instance.notOverbooked' } });
     });
 
+    it('tells a page that predates tokens to reload, rather than asking it again', async () => {
+      const { prisma, transactions } = prismaDouble();
+      const reachable = invariantRepairing(REACHABLE, [[], [repairable('res-1')]]);
+
+      await expect(
+        guardProspectiveWrite(
+          prisma as never,
+          scope,
+          [reachable],
+          { ...UNANSWERED, fromStaleClient: true },
+          jest.fn()
+        )
+      ).rejects.toMatchObject({
+        response: {
+          code: 'WOULD_BREAK_RESERVATIONS',
+          staleClient: true,
+          // It can only answer with the boolean again, so no repair is offered.
+          repairable: false,
+          message: expect.stringContaining('Osvezite stranicu')
+        }
+      });
+      expect(reachable.repairCalls).toBe(0);
+      expect(transactions[0].outcome).toBe('rolled-back');
+    });
+
     it('does not depend on the order the violations were reported in', () => {
       expect(confirmationTokenFor({ key: REACHABLE }, [violation('b'), violation('a')])).toBe(
         confirmationTokenFor({ key: REACHABLE }, [violation('a'), violation('b')])

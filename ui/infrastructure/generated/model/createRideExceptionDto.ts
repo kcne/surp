@@ -13,7 +13,7 @@ export interface CreateRideExceptionDto {
   /** confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write. */
   repairTokens?: string[];
   /**
-   * Ignored. Send confirmationTokens instead.
+   * Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead.
    * @deprecated
    */
   confirmBreakingChange?: boolean;

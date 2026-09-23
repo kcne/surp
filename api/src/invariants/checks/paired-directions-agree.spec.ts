@@ -93,6 +93,9 @@ describe('pair.directionsAgree', () => {
 
     const tx = {
       $executeRaw: jest.fn().mockResolvedValue(1),
+      // The pair is scanned again under the lock before anything is written.
+      line: prismaMock.line,
+      station: prismaMock.station,
       lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
       ride: { findMany: jest.fn().mockResolvedValue([]) },
       rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
@@ -116,6 +119,38 @@ describe('pair.directionsAgree', () => {
       { stationId: 'station-d', orderIndex: 1 },
       { stationId: 'station-c', orderIndex: 2 }
     ]);
+  });
+
+  it('writes nothing when an edit settled the pair while the repair waited for the lock', async () => {
+    prismaMock.line.findMany.mockResolvedValueOnce(pairedLines);
+
+    // What the edit committed: the inbound now calls at station-d too.
+    const settled = [
+      pairedLines[0],
+      {
+        ...pairedLines[1],
+        intermediateStops: [
+          { stationId: 'station-d', orderIndex: 1 },
+          { stationId: 'station-c', orderIndex: 2 }
+        ]
+      }
+    ];
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      line: { findMany: jest.fn().mockResolvedValue(settled) },
+      station: prismaMock.station,
+      lineStop: { deleteMany: jest.fn(), createMany: jest.fn() },
+      ride: { findMany: jest.fn().mockResolvedValue([]) },
+      rideDayScheduleStationTime: { deleteMany: jest.fn(), createMany: jest.fn() }
+    };
+    prismaMock.$transaction.mockImplementation(async (callback: (db: typeof tx) => unknown) =>
+      callback(tx)
+    );
+
+    const result = await syncDriftedPairs(ctx);
+
+    expect(result.syncedPairCount).toBe(0);
+    expect(tx.lineStop.createMany).not.toHaveBeenCalled();
   });
 
   it('skips a pair whose directions genuinely disagree rather than guessing', async () => {

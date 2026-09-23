@@ -24,7 +24,7 @@ import {
   buildAlignedStationTimes,
   describeScheduleDrift,
   isScheduleAlignedToRoute,
-  realignDayScheduleTx,
+  realignDayScheduleIfDriftedTx,
   routeStationIdsOf,
 } from '../src/rides/ride-schedule-alignment';
 
@@ -127,16 +127,20 @@ async function main() {
         // Same helper the service and the maintenance endpoint use, so the
         // offline repair cannot drift from the online one.
         // A schedule edit like any other: it waits for bookings in flight and
-        // holds new ones back until the rewritten times are committed.
-        await scheduleEditTransaction(prisma, line.tenantId, (tx) =>
-          realignDayScheduleTx(tx, {
+        // holds new ones back until the rewritten times are committed. What it
+        // writes is recomputed under the lock, so an edit that landed since the
+        // scan above is kept rather than overwritten with the scanned copy.
+        const result = await scheduleEditTransaction(prisma, line.tenantId, (tx) =>
+          realignDayScheduleIfDriftedTx(tx, {
             tenantId: line.tenantId,
             rideDayScheduleId: daySchedule.id,
-            stationTimes: daySchedule.stationTimes,
-            routeStationIds,
             actorId: actorId as string,
           })
         );
+
+        if (!result) {
+          console.log(`SKIP schedule=${daySchedule.id}: changed since the scan and no longer drifted.`);
+        }
       }
     }
   }

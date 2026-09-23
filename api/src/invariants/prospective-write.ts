@@ -71,6 +71,12 @@ export interface ProspectiveWriteScope {
 export interface ProspectiveWriteConsent {
   confirmationTokens: readonly string[];
   repairTokens: readonly string[];
+  /**
+   * The request answered with the retired boolean and no token: a page loaded
+   * before tokens existed. It cannot send a token back, so asking it the same
+   * question again would loop; the refusal tells the operator to reload.
+   */
+  fromStaleClient?: boolean;
 }
 
 export const NO_CONSENT: ProspectiveWriteConsent = { confirmationTokens: [], repairTokens: [] };
@@ -166,6 +172,10 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
         continue;
       }
 
+      if (consent.fromStaleClient) {
+        throw staleClientRefusal(invariant, added, token);
+      }
+
       throw breakingChange(invariant, added, token);
     }
 
@@ -191,6 +201,31 @@ function breakingChange(
       : {})
   });
 }
+
+/**
+ * The refusal for a page that answered with the retired boolean. Its message
+ * leads with the fix, because an old page shows only the message and keeps
+ * resending the boolean however often it is asked. Nothing is offered to
+ * repair: the answer would come back as a boolean too.
+ */
+function staleClientRefusal(
+  invariant: ProspectiveInvariant,
+  added: readonly Violation[],
+  confirmationToken: string
+): ConflictException {
+  return new ConflictException({
+    code: 'WOULD_BREAK_RESERVATIONS',
+    invariant: invariant.key,
+    affectedCount: added.length,
+    confirmationToken,
+    staleClient: true,
+    message: `${STALE_CLIENT_MESSAGE} ${invariant.breakingChangeMessage(added.length)}`,
+    repairable: false
+  });
+}
+
+const STALE_CLIENT_MESSAGE =
+  'Ova stranica je zastarela i ne moze da potvrdi izmenu. Osvezite stranicu (F5) i sacuvajte ponovo.';
 
 /**
  * Whether running this invariant's repair would settle every one of these

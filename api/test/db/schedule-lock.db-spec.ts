@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { AccessTokenPayload } from '../../src/auth/auth.types';
+import { realignDriftedSchedules } from '../../src/invariants/checks/schedule-matches-route';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import {
   acquireScheduleLockShared,
@@ -58,6 +59,8 @@ async function isStillPending(promise: Promise<unknown>): Promise<boolean> {
 
 interface Seeded {
   auth: AccessTokenPayload;
+  lineId: string;
+  scheduleId: string;
   rideId: string;
   passengerId: string;
   travelDate: string;
@@ -184,6 +187,8 @@ async function seedTenant(prisma: PrismaService): Promise<Seeded> {
 
   return {
     auth: { sub: actorId, tenantId, role: UserRole.ADMIN, username: `db-admin-${suffix}` },
+    lineId,
+    scheduleId,
     rideId,
     passengerId,
     travelDate: dateOnly(travel),
@@ -388,6 +393,108 @@ describe('tenant schedule lock (real database)', () => {
 
     edit.release();
     await edit.done;
+  });
+
+  it('makes a plain ride delete wait for a booking in flight, then refuse', async () => {
+    const inFlight = holdBooking((tx) =>
+      tx.reservation.create({
+        data: {
+          ...booking(seeded, 3),
+          travelDate: new Date(`${seeded.travelDate}T00:00:00.000Z`),
+          tenantId: seeded.auth.tenantId,
+          status: ReservationStatus.ACTIVE,
+          groupId: randomUUID(),
+          createdById: seeded.auth.sub,
+          updatedById: seeded.auth.sub
+        }
+      })
+    );
+    await inFlight.acquired;
+
+    const removal = rides.remove(seeded.auth, seeded.rideId);
+
+    expect(await isStillPending(removal)).toBe(true);
+
+    inFlight.release();
+    await inFlight.done;
+
+    // Counted after the booking committed, so the ride is not retired under it.
+    await expect(removal).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      prisma.ride.findUniqueOrThrow({ where: { id: seeded.rideId }, select: { status: true } })
+    ).resolves.toEqual({ status: RideStatus.ACTIVE });
+  });
+
+  it('keeps an edit that landed while a realign repair waited for the lock', async () => {
+    // A stop is added to the route behind the schedule's back, so the schedule
+    // drifts and the repair has something to plan.
+    const middle = randomUUID();
+    await prisma.station.create({
+      data: {
+        id: middle,
+        tenantId: seeded.auth.tenantId,
+        name: `Middle ${middle.slice(0, 8)}`,
+        address: 'Test Street',
+        category: StationCategory.BUS_STOP,
+        isActive: true,
+        createdById: seeded.auth.sub,
+        updatedById: seeded.auth.sub
+      }
+    });
+    await prisma.lineStop.create({
+      data: {
+        tenantId: seeded.auth.tenantId,
+        lineId: seeded.lineId,
+        stationId: middle,
+        orderIndex: 1,
+        isBoarding: true,
+        isDropoff: true,
+        createdById: seeded.auth.sub,
+        updatedById: seeded.auth.sub
+      }
+    });
+
+    // An operator's edit aligns the schedule with times of their own, and is
+    // still uncommitted when the repair scans.
+    const edit = holdEdit(async (tx) => {
+      await tx.rideDayScheduleStationTime.deleteMany({
+        where: { rideDayScheduleId: seeded.scheduleId }
+      });
+      await tx.rideDayScheduleStationTime.createMany({
+        data: [
+          { stationId: seeded.stations.first, orderIndex: 0, time: '07:00' },
+          { stationId: middle, orderIndex: 1, time: '07:40' },
+          { stationId: seeded.stations.last, orderIndex: 2, time: '08:30' }
+        ].map((entry) => ({
+          ...entry,
+          tenantId: seeded.auth.tenantId,
+          rideDayScheduleId: seeded.scheduleId,
+          createdById: seeded.auth.sub,
+          updatedById: seeded.auth.sub
+        }))
+      });
+    });
+    await edit.acquired;
+
+    const repair = realignDriftedSchedules({
+      tenantId: seeded.auth.tenantId,
+      actorId: seeded.auth.sub,
+      prisma,
+      windowDays: 30
+    });
+
+    expect(await isStillPending(repair)).toBe(true);
+
+    edit.release();
+    await edit.done;
+
+    await expect(repair).resolves.toMatchObject({ drifted: [] });
+    const times = await prisma.rideDayScheduleStationTime.findMany({
+      where: { rideDayScheduleId: seeded.scheduleId },
+      orderBy: { orderIndex: 'asc' },
+      select: { time: true }
+    });
+    expect(times.map((entry) => entry.time)).toEqual(['07:00', '07:40', '08:30']);
   });
 
   it('refuses a confirmation whose affected set changed after it was shown', async () => {

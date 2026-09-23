@@ -74,6 +74,7 @@ export function useConfirmableUpdate<TVariables>({
     confirmation: WouldBreakReservationsDto
     partiallyApplied: boolean
     changedSinceAnswered: boolean
+    repairFailed: boolean
   } | null>(null)
 
   const attempt = async (
@@ -86,11 +87,12 @@ export function useConfirmableUpdate<TVariables>({
       setPending(null)
     } catch (error) {
       if (error instanceof ChangeNeedsConfirmationError) {
-        const answeredThis = (entries: BreakingChangeAnswer[]) =>
-          entries.some(
-            (answer) =>
-              answer.step === error.step && answer.invariant === error.confirmation.invariant
-          )
+        const { invariant, confirmationToken, repairable } = error.confirmation
+        const answerTo = (entries: BreakingChangeAnswer[]) =>
+          entries.find((answer) => answer.step === error.step && answer.invariant === invariant)
+        const confirmedBefore = answerTo(answers.confirmed)
+        const repairedBefore = answerTo(answers.repaired)
+        const previous = confirmedBefore ?? repairedBefore
 
         setPending({
           variables,
@@ -98,9 +100,15 @@ export function useConfirmableUpdate<TVariables>({
           step: error.step,
           confirmation: error.confirmation,
           partiallyApplied: previouslyApplied || error.partiallyApplied,
-          // Asked again about a question already answered: the server only
-          // does that when the reservations it affects changed in between.
-          changedSinceAnswered: answeredThis(answers.confirmed) || answeredThis(answers.repaired),
+          // A new token for a question already answered means the affected
+          // reservations changed in between. The same token means they did not.
+          changedSinceAnswered: previous !== undefined && previous.token !== confirmationToken,
+          // The same set, refused after asking for a repair: the repair could
+          // not settle every one, and it rolled back with the rest of the edit.
+          repairFailed:
+            repairedBefore !== undefined &&
+            repairedBefore.token === confirmationToken &&
+            !repairable,
         })
       }
 
@@ -162,6 +170,7 @@ export function useConfirmableUpdate<TVariables>({
       confirmation: pending?.confirmation ?? null,
       partiallyApplied: pending?.partiallyApplied ?? false,
       changedSinceAnswered: pending?.changedSinceAnswered ?? false,
+      repairFailed: pending?.repairFailed ?? false,
       onConfirm: answer("confirmed"),
       onRepair: answer("repaired"),
     },

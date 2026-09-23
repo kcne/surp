@@ -40,6 +40,13 @@ export class WouldBreakReservationsDto {
   })
   confirmationToken!: string;
 
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      'Present when the request answered with the retired confirmBreakingChange or repairBreakingChange boolean. The page predates tokens and must be reloaded; message says so.'
+  })
+  staleClient?: boolean;
+
   /**
    * True only when a repair exists for this invariant *and* it would settle
    * every one of the affected subjects. Partial repair is not offered: an

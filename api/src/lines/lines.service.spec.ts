@@ -53,6 +53,7 @@ function withCleanInvariantReads<T extends object>(tx: T, readRouteStations: Fin
 describe('LinesService', () => {
   const prismaMock = {
     $transaction: jest.fn(),
+    $executeRaw: jest.fn().mockResolvedValue(1),
     line: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -124,6 +125,12 @@ describe('LinesService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Removing a line checks and writes under the schedule lock, so the
+    // callback form is handed the mock itself. Tests that need a separate
+    // transaction client replace this.
+    prismaMock.$transaction.mockImplementation(async (arg: unknown) =>
+      typeof arg === 'function' ? (arg as (tx: typeof prismaMock) => unknown)(prismaMock) : undefined
+    );
     service = new LinesService(prismaMock as never);
   });
 

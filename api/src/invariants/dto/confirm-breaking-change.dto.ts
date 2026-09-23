@@ -43,14 +43,15 @@ export class ConfirmBreakingChangeDto {
   repairTokens?: string[];
 
   /**
-   * Still accepted so a tab loaded before tokens existed gets a refusal it
-   * can answer rather than a validation error — but it permits nothing. An
-   * answer that names no refusal cannot say what it agreed to.
+   * Still accepted so a tab loaded before tokens existed gets a readable
+   * refusal rather than a validation error — but it permits nothing. An answer
+   * that names no refusal cannot say what it agreed to, and a page that sends
+   * it cannot send a token either, so the refusal tells the operator to reload.
    */
   @ApiPropertyOptional({
     deprecated: true,
     example: false,
-    description: 'Ignored. Send confirmationTokens instead.'
+    description: 'Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead.'
   })
   @IsOptional()
   @IsBoolean()
@@ -67,8 +68,15 @@ export class ConfirmBreakingChangeDto {
 }
 
 export function consentFrom(dto: ConfirmBreakingChangeDto): ProspectiveWriteConsent {
+  const confirmationTokens = dto.confirmationTokens ?? [];
+  const repairTokens = dto.repairTokens ?? [];
+
   return {
-    confirmationTokens: dto.confirmationTokens ?? [],
-    repairTokens: dto.repairTokens ?? []
+    confirmationTokens,
+    repairTokens,
+    fromStaleClient:
+      confirmationTokens.length === 0 &&
+      repairTokens.length === 0 &&
+      (dto.confirmBreakingChange === true || dto.repairBreakingChange === true)
   };
 }

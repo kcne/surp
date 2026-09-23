@@ -372,3 +372,57 @@ export async function realignDayScheduleTx(
     ]
   });
 }
+
+/**
+ * Realigns one schedule from what the database says now, not from a plan read
+ * earlier.
+ *
+ * Repairs find drift in a scan outside any lock, then fix each schedule under
+ * the tenant's exclusive schedule lock. By the time the lock is granted,
+ * another edit may have moved the route or the times. Writing the scanned
+ * copy would undo that edit, so this re-reads both under the lock and does
+ * nothing when the schedule is gone or already agrees with its route.
+ */
+export async function realignDayScheduleIfDriftedTx(
+  tx: ScheduleAlignmentDbClient,
+  input: { tenantId: string; rideDayScheduleId: string; actorId: string }
+): Promise<ScheduleRealignOutcome | null> {
+  const schedule = await tx.rideDaySchedule.findFirst({
+    where: { id: input.rideDayScheduleId, tenantId: input.tenantId },
+    select: {
+      stationTimes: {
+        select: { stationId: true, orderIndex: true, time: true },
+        orderBy: { orderIndex: 'asc' }
+      },
+      ride: {
+        select: {
+          line: {
+            select: {
+              departureStationId: true,
+              arrivalStationId: true,
+              intermediateStops: { select: { stationId: true, orderIndex: true } }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (!schedule) {
+    return null;
+  }
+
+  const routeStationIds = routeStationIdsOf(schedule.ride.line);
+
+  if (isScheduleAlignedToRoute(schedule.stationTimes, routeStationIds)) {
+    return null;
+  }
+
+  return realignDayScheduleTx(tx, {
+    tenantId: input.tenantId,
+    rideDayScheduleId: input.rideDayScheduleId,
+    stationTimes: schedule.stationTimes,
+    routeStationIds,
+    actorId: input.actorId
+  });
+}

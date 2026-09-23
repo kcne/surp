@@ -455,7 +455,11 @@ describe('RidesService', () => {
       await expect(
         service.update(auth, 'ride-1', { capacity: 30, confirmBreakingChange: true })
       ).rejects.toMatchObject({
-        response: { code: 'WOULD_BREAK_RESERVATIONS', confirmationToken: expect.any(String) }
+        response: {
+          code: 'WOULD_BREAK_RESERVATIONS',
+          staleClient: true,
+          message: expect.stringContaining('Osvezite stranicu')
+        }
       });
     });
 

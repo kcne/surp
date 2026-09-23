@@ -120,19 +120,28 @@ export async function syncDriftedPairs(ctx: InvariantContext): Promise<PairSyncO
       continue;
     }
 
-    const mergedStopIds = entry.mergedStopIds;
-
     if (!('$transaction' in ctx.prisma)) {
       throw new Error('Invariant repairs require a root database client');
     }
 
     const written = await scheduleEditTransaction(ctx.prisma, ctx.tenantId, async (tx) => {
+      // The scan above only says which pairs to look at. The routes are read
+      // again under the lock: an edit that landed while this waited may have
+      // settled the pair, or changed it, and must not be written over.
+      const { drifted: current } = await findDriftedPairs({ ...ctx, prisma: tx });
+      const fresh = current.find((candidate) => candidate.item.pairKey === entry.item.pairKey);
+
+      if (!fresh?.mergedStopIds) {
+        return null;
+      }
+
+      const mergedStopIds = fresh.mergedStopIds;
       let scheduleCount = 0;
       let stopCount = 0;
 
       for (const { line, reverse, opposite } of [
-        { line: entry.outbound, reverse: false, opposite: entry.inbound },
-        { line: entry.inbound, reverse: true, opposite: entry.outbound }
+        { line: fresh.outbound, reverse: false, opposite: fresh.inbound },
+        { line: fresh.inbound, reverse: true, opposite: fresh.outbound }
       ]) {
         const nextStops = stopsForDirection(line, mergedStopIds, reverse, opposite);
         stopCount += Math.max(nextStops.length - line.intermediateStops.length, 0);
@@ -148,6 +157,11 @@ export async function syncDriftedPairs(ctx: InvariantContext): Promise<PairSyncO
 
       return { scheduleCount, stopCount };
     });
+
+    if (!written) {
+      skippedPairCount += 1;
+      continue;
+    }
 
     syncedPairCount += 1;
     addedStopCount += written.stopCount;
