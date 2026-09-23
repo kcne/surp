@@ -556,6 +556,128 @@ describe('departure identity (real database)', () => {
       expect(recreated.id).not.toBe(created.id);
     });
 
+    it('refuses to move an additional departure onto a base departure where a seat is already sold', async () => {
+      // Seat 1 is sold on the 09:00 weekday run and on a 15:00 additional
+      // departure. Readers still join by time, so moving the additional one to
+      // 09:00 puts both passengers in seat 1 of one bus, well under capacity.
+      const additional = await rides.addException(seeded.auth, seeded.rideId, {
+        date: seeded.travelDate,
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '15:00',
+        arrivalTime: '16:30'
+      });
+      await prisma.reservation.create({
+        data: reservationData(
+          seeded,
+          { departureKind: DepartureKind.RECURRING_BASE, rideDayScheduleId: seeded.scheduleId },
+          1
+        )
+      });
+      await prisma.reservation.create({
+        data: reservationData(
+          seeded,
+          { departureKind: DepartureKind.ADDITIONAL, rideExceptionId: additional.id },
+          1,
+          { departure: '15:00', arrival: '16:30' }
+        )
+      });
+
+      const moving = rides.updateException(seeded.auth, seeded.rideId, additional.id, {
+        departureTime: '09:00',
+        arrivalTime: '11:00'
+      });
+
+      await expect(moving).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'WOULD_BREAK_RESERVATIONS',
+          invariant: 'reservation.seatUnique'
+        })
+      });
+      await expect(
+        prisma.rideException.findUniqueOrThrow({ where: { id: additional.id } })
+      ).resolves.toEqual(expect.objectContaining({ departureTime: '15:00' }));
+    });
+
+    it('records retiring and retiming an additional departure in the audit log', async () => {
+      const created = await rides.addException(seeded.auth, seeded.rideId, {
+        date: seeded.travelDate,
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '15:00',
+        arrivalTime: '16:30'
+      });
+      await rides.updateException(seeded.auth, seeded.rideId, created.id, {
+        departureTime: '15:30',
+        arrivalTime: '17:00'
+      });
+      await rides.removeException(seeded.auth, seeded.rideId, created.id);
+
+      const events = await prisma.auditEvent.findMany({
+        where: {
+          tenantId: seeded.auth.tenantId,
+          entityType: 'RideException',
+          entityId: created.id
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+      const changes = events.map(
+        (event) => event.metadata as { action: string; changes: Record<string, unknown> }
+      );
+
+      expect(changes.map((entry) => entry.action)).toEqual(['create', 'update', 'update']);
+      // The create records the whole row, not the columns the service returns.
+      expect(Object.keys(changes[0].changes)).toEqual(
+        expect.arrayContaining(['rideId', 'exceptionDate', 'type', 'departureTime', 'retiredAt'])
+      );
+      expect(changes[1].changes).toEqual({
+        departureTime: { before: '15:00', after: '15:30' },
+        arrivalTime: { before: '16:30', after: '17:00' }
+      });
+      expect(changes[2].changes).toEqual({
+        retiredAt: { before: null, after: expect.any(String) }
+      });
+    });
+
+    it('lets only one of two concurrent edits take the same times', async () => {
+      const [first, second] = [
+        await rides.addException(seeded.auth, seeded.rideId, {
+          date: seeded.travelDate,
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '15:00',
+          arrivalTime: '16:30'
+        }),
+        await rides.addException(seeded.auth, seeded.rideId, {
+          date: seeded.travelDate,
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '18:00',
+          arrivalTime: '19:30'
+        })
+      ];
+
+      // The duplicate check reads, then the edit writes. The exclusive schedule
+      // lock makes the second edit wait and then read what the first wrote.
+      const outcomes = await Promise.allSettled(
+        [first, second].map((exception) =>
+          rides.updateException(seeded.auth, seeded.rideId, exception.id, {
+            departureTime: '20:00',
+            arrivalTime: '21:30'
+          })
+        )
+      );
+
+      expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+      expect(outcomes.find((outcome) => outcome.status === 'rejected')).toEqual({
+        status: 'rejected',
+        reason: expect.objectContaining({
+          message: 'Additional exception with the same date and times already exists'
+        })
+      });
+      await expect(
+        prisma.rideException.count({
+          where: { rideId: seeded.rideId, departureTime: '20:00', retiredAt: null }
+        })
+      ).resolves.toBe(1);
+    });
+
     it('refuses to move an additional departure onto the times of another', async () => {
       const first = await rides.addException(seeded.auth, seeded.rideId, {
         date: seeded.travelDate,

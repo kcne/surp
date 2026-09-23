@@ -8,15 +8,11 @@ import { reservationPassengerActive } from './checks/passenger-active';
 import { reservationReachable } from './checks/reservation-reachable';
 import { rideLineActive } from './checks/ride-line-active';
 import { routeStationsActive } from './checks/route-stations-active';
+import { reservationSeatUnique } from './checks/seat-unique';
 import { reservationSeatWithinCapacity } from './checks/seat-within-capacity';
 import { reservationSegmentValid } from './checks/segment-valid';
 import { reservationStationsOnRoute } from './checks/stations-on-route';
-import {
-  Invariant,
-  InvariantContext,
-  ProspectiveInvariant,
-  Violation
-} from './invariant.types';
+import { Invariant, InvariantContext, ProspectiveInvariant, Violation } from './invariant.types';
 
 /**
  * How far ahead a prospective check looks.
@@ -51,8 +47,9 @@ export const PROSPECTIVE_INVARIANTS = {
   rideException: [reservationReachable],
   // Moving an additional departure can strand a reservation on its old time,
   // and while readers still join by time, moving it onto another departure's
-  // time puts both departures' passengers in one bus.
-  rideExceptionEdit: [reservationReachable, instanceNotOverbooked],
+  // time puts both departures' passengers in one bus: too many of them, or
+  // two in one seat long before the bus is full.
+  rideExceptionEdit: [reservationReachable, instanceNotOverbooked, reservationSeatUnique],
   stationDeactivation: [routeStationsActive],
   passengerDeactivation: [reservationPassengerActive]
 } satisfies Record<string, readonly ProspectiveInvariant[]>;
@@ -237,13 +234,8 @@ const STALE_CLIENT_MESSAGE =
  * change would be fixed, and then left holding three broken reservations, is
  * worse off than one told plainly that this is a telephone call.
  */
-function isFullyRepairable(
-  invariant: ProspectiveInvariant,
-  added: readonly Violation[]
-): boolean {
-  return (
-    typeof invariant.repair === 'function' && added.every((violation) => violation.canRepair)
-  );
+function isFullyRepairable(invariant: ProspectiveInvariant, added: readonly Violation[]): boolean {
+  return typeof invariant.repair === 'function' && added.every((violation) => violation.canRepair);
 }
 
 /**

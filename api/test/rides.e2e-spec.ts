@@ -116,25 +116,27 @@ describe('RidesController (e2e)', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    prismaMock.tenant.findUnique.mockImplementation(async ({ where }: { where: { slug: string } }) => {
-      if (where.slug === 'demo-tenant') {
-        return {
-          id: 'tenant-1',
-          slug: 'demo-tenant',
-          isActive: true
-        };
-      }
+    prismaMock.tenant.findUnique.mockImplementation(
+      async ({ where }: { where: { slug: string } }) => {
+        if (where.slug === 'demo-tenant') {
+          return {
+            id: 'tenant-1',
+            slug: 'demo-tenant',
+            isActive: true
+          };
+        }
 
-      if (where.slug === 'other-tenant') {
-        return {
-          id: 'tenant-2',
-          slug: 'other-tenant',
-          isActive: true
-        };
-      }
+        if (where.slug === 'other-tenant') {
+          return {
+            id: 'tenant-2',
+            slug: 'other-tenant',
+            isActive: true
+          };
+        }
 
-      return null;
-    });
+        return null;
+      }
+    );
 
     jwtServiceMock.verify.mockImplementation((token: string) => {
       if (token === 'access-token-admin') {
@@ -272,7 +274,9 @@ describe('RidesController (e2e)', () => {
       })
       .expect(400);
 
-    expect(response.body.message).toBe('Recurring rides require at least one day schedule definition');
+    expect(response.body.message).toBe(
+      'Recurring rides require at least one day schedule definition'
+    );
   });
 
   it('requires date and times for one-time rides', async () => {
@@ -341,7 +345,9 @@ describe('RidesController (e2e)', () => {
       })
       .expect(409);
 
-    expect(response.body.message).toBe('Cannot mix SKIP and ADDITIONAL exceptions on the same date');
+    expect(response.body.message).toBe(
+      'Cannot mix SKIP and ADDITIONAL exceptions on the same date'
+    );
   });
 
   describe('PATCH /rides/:id/exceptions/:exceptionId', () => {
@@ -383,6 +389,29 @@ describe('RidesController (e2e)', () => {
           arrivalTime: '17:00'
         })
       );
+    });
+
+    it('DELETE retires an additional departure instead of deleting it', async () => {
+      prismaMock.rideException.findFirst.mockResolvedValueOnce(additional);
+      prismaMock.rideException.update.mockResolvedValueOnce({
+        ...additional,
+        retiredAt: new Date()
+      });
+
+      const response = await request(app.getHttpServer())
+        .delete('/rides/ride-1/exceptions/exception-1')
+        .set('X-Tenant-Slug', 'demo-tenant')
+        .set('Authorization', 'Bearer access-token-admin')
+        .send({})
+        .expect(200);
+
+      expect(response.body).toEqual(expect.objectContaining({ id: 'exception-1' }));
+      expect(response.body).not.toHaveProperty('retiredAt');
+      expect(prismaMock.rideException.update).toHaveBeenCalledWith({
+        where: { id: 'exception-1' },
+        data: expect.objectContaining({ retiredAt: expect.any(Date), updatedById: 'admin-1' })
+      });
+      expect(prismaMock.rideException.delete).not.toHaveBeenCalled();
     });
 
     it('rejects a malformed time before reaching the service', async () => {

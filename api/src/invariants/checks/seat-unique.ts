@@ -1,5 +1,6 @@
 import { segmentsOverlap } from '../../reservations/route-segment';
-import { CheckResult, Invariant, InvariantContext } from '../invariant.types';
+import { CheckResult, InvariantContext, ProspectiveInvariant } from '../invariant.types';
+import { serbianPlural } from '../serbian-plural';
 import { InstanceOccupancy, OccupiedSeat, loadInstanceOccupancy } from './seat-occupancy';
 import { loadStationNames, stationNamer } from './tenant-lookups';
 
@@ -121,7 +122,7 @@ function clashItem(
   };
 }
 
-export const reservationSeatUnique: Invariant = {
+export const reservationSeatUnique: ProspectiveInvariant = {
   key: 'reservation.seatUnique',
   title: 'Jedno sediste nosi samo jednog putnika',
   description:
@@ -129,6 +130,9 @@ export const reservationSeatUnique: Invariant = {
   manualAdvice:
     'Dva putnika drze isto sediste u isto vreme. Pozovite jednog od njih i prebacite ga na slobodno sediste na tom polasku — koji se od njih pomera je odluka agencije, ne sistema.',
   severity: 'critical',
+
+  breakingChangeMessage: (count) =>
+    `Ova izmena stavlja ${serbianPlural(count, 'putnika', 'putnika', 'putnika')} na sediste koje je vec zauzeto.`,
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const { items, scannedReservationCount } = await findSeatClashes(ctx);

@@ -117,26 +117,25 @@ const SAFE_RIDE_SELECT = Prisma.validator<Prisma.RideSelect>()({
   }
 });
 
-const RIDE_EXCEPTION_SELECT = Prisma.validator<Prisma.RideExceptionSelect>()({
-  id: true,
-  // The domain audit extension attributes a create or update from the row the
-  // write returns, and refuses one without a tenant. Left out, every exception
-  // write rolls back with that refusal.
-  tenantId: true,
-  exceptionDate: true,
-  type: true,
-  departureTime: true,
-  arrivalTime: true,
-  createdById: true,
-  updatedById: true,
-  createdAt: true,
-  updatedAt: true
-});
-
 type SelectedRide = Prisma.RideGetPayload<{ select: typeof SAFE_RIDE_SELECT }>;
-type RideExceptionRecord = Prisma.RideExceptionGetPayload<{
-  select: typeof RIDE_EXCEPTION_SELECT;
-}>;
+/**
+ * What an exception response is built from. Exception writes return the whole
+ * row rather than selecting these columns: the domain audit extension records
+ * a create or update by diffing the row the write returns against the row
+ * before it, so a narrower select writes a history with columns missing.
+ */
+type RideExceptionRecord = Pick<
+  Prisma.RideExceptionGetPayload<object>,
+  | 'id'
+  | 'exceptionDate'
+  | 'type'
+  | 'departureTime'
+  | 'arrivalTime'
+  | 'createdById'
+  | 'updatedById'
+  | 'createdAt'
+  | 'updatedAt'
+>;
 
 type RideWithInstanceMaterialization = Prisma.RideGetPayload<{
   select: {
@@ -776,8 +775,7 @@ export class RidesService {
                 dto.type === RideExceptionType.ADDITIONAL ? dto.arrivalTime!.trim() : null
             },
             auth.sub
-          ),
-          select: RIDE_EXCEPTION_SELECT
+          )
         });
       }
     );
@@ -847,12 +845,10 @@ export class RidesService {
         existing.type === RideExceptionType.ADDITIONAL
           ? tx.rideException.update({
               where: { id: exceptionId },
-              data: withUpdateAudit({ retiredAt: new Date() }, auth.sub),
-              select: RIDE_EXCEPTION_SELECT
+              data: withUpdateAudit({ retiredAt: new Date() }, auth.sub)
             })
           : tx.rideException.delete({
-              where: { id: exceptionId },
-              select: RIDE_EXCEPTION_SELECT
+              where: { id: exceptionId }
             }),
       (tx) => this.getLiveExceptionOrThrow(tx, auth.tenantId, rideId, exceptionId)
     );
@@ -891,8 +887,7 @@ export class RidesService {
       async (tx) => {
         const exception = await tx.rideException.update({
           where: { id: exceptionId },
-          data: withUpdateAudit({ departureTime, arrivalTime }, auth.sub),
-          select: RIDE_EXCEPTION_SELECT
+          data: withUpdateAudit({ departureTime, arrivalTime }, auth.sub)
         });
 
         // Only reservations that name this departure. One that merely shares
@@ -1463,9 +1458,7 @@ export class RidesService {
     };
   }
 
-  private toExceptionResponse(
-    exception: Omit<RideExceptionRecord, 'tenantId'>
-  ): RideExceptionResponseDto {
+  private toExceptionResponse(exception: RideExceptionRecord): RideExceptionResponseDto {
     return {
       id: exception.id,
       date: this.formatDate(exception.exceptionDate)!,
