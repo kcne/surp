@@ -1164,6 +1164,44 @@ describe('ReservationsService', () => {
     expect(prismaMock.reservation.update).toHaveBeenCalledTimes(2);
   });
 
+  it('shares one booking marker when a batch adds returns to saved outbound legs', async () => {
+    prismaMock.ride.findFirst.mockResolvedValue({
+      ...routeRide,
+      line: {
+        ...routeRide.line,
+        departureStationId: 'station-c',
+        arrivalStationId: 'station-a',
+        intermediateStops: []
+      }
+    });
+    prismaMock.reservation.findFirst.mockImplementation(async ({ where }: { where: { id?: string; returnOfReservationId?: string } }) =>
+      where.returnOfReservationId
+        ? null
+        : { ...baseReservation, id: where.id, roundTripId: null }
+    );
+
+    const returning = (seatNumber: number, outboundId: string) => ({
+      rideId: 'ride-return', passengerId: 'passenger-1', travelDate: '2026-04-06',
+      rideDepartureTime: '18:00', rideArrivalTime: '19:30', seatNumber,
+      departureStationId: 'station-c', arrivalStationId: 'station-a',
+      returnOfReservationId: outboundId
+    });
+    const result = await service.createBatch(auth, {
+      items: [returning(12, 'outbound-1'), returning(13, 'outbound-2')]
+    });
+
+    const marker = result.items[0].reservation?.roundTripId;
+    expect(marker).toEqual(expect.any(String));
+    expect(result.items[1].reservation?.roundTripId).toBe(marker);
+    expect(prismaMock.reservation.update).toHaveBeenCalledTimes(2);
+    expect(prismaMock.reservation.update).toHaveBeenNthCalledWith(1,
+      expect.objectContaining({ where: { id: 'outbound-1' }, data: expect.objectContaining({ roundTripId: marker }) })
+    );
+    expect(prismaMock.reservation.update).toHaveBeenNthCalledWith(2,
+      expect.objectContaining({ where: { id: 'outbound-2' }, data: expect.objectContaining({ roundTripId: marker }) })
+    );
+  });
+
   it('rolls back outbound rows when a linked return cannot be created', async () => {
     await expect(service.createBatch(auth, { items: [
       {
