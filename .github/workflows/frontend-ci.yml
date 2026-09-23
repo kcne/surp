@@ -25,8 +25,8 @@ on:
       - ".github/workflows/frontend-ci.yml"
 
 jobs:
-  ui-lint:
-    name: ui lint
+  ui-verify:
+    name: ui verify
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -56,11 +56,22 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # `next lint` does not type-check and the build only runs on push, so
+      # without this a type error reaches master before anything catches it.
+      - name: Type check
+        run: pnpm exec tsc --noEmit
+
+      # Covers the message catalogs too: an incomplete or divergent catalog
+      # fails here rather than showing up as a Serbian string on an English
+      # page, which nobody reports.
+      - name: Unit tests
+        run: pnpm test
+
   ui-build:
     name: ui build
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: ui-lint
+    needs: ui-verify
     if: |
       github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' && inputs.run_build)

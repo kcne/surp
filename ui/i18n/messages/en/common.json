@@ -1,0 +1,84 @@
+{
+  "weekdays": {
+    "long": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    "short": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "narrow": ["S", "M", "T", "W", "T", "F", "S"]
+  },
+  "months": {
+    "long": [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ],
+    "short": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  },
+  "duration": {
+    "hour": "h",
+    "minute": "min"
+  },
+  "actions": {
+    "add": "Add",
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm",
+    "copy": "Copy",
+    "delete": "Delete",
+    "edit": "Edit",
+    "export": "Export",
+    "filter": "Filter",
+    "import": "Import",
+    "next": "Next",
+    "previous": "Previous",
+    "print": "Print",
+    "reset": "Reset",
+    "retry": "Try again",
+    "save": "Save",
+    "search": "Search"
+  },
+  "states": {
+    "empty": "No data",
+    "error": "Something went wrong",
+    "loading": "Loading…",
+    "noResults": "No results",
+    "saving": "Saving…"
+  },
+  "labels": {
+    "actions": "Actions",
+    "all": "All",
+    "date": "Date",
+    "from": "From",
+    "no": "No",
+    "none": "None",
+    "optional": "Optional",
+    "required": "Required",
+    "status": "Status",
+    "time": "Time",
+    "to": "To",
+    "yes": "Yes"
+  },
+  "pagination": {
+    "rowsPerPage": "Rows per page",
+    "pageOf": "Page {page} of {total}",
+    "showing": "{count, plural, =0 {No rows shown} one {Showing # row} other {Showing # rows}}"
+  },
+  "counts": {
+    "passengers": "{count, plural, =0 {No passengers} one {# passenger} other {# passengers}}",
+    "reservations": "{count, plural, =0 {No reservations} one {# reservation} other {# reservations}}",
+    "seats": "{count, plural, =0 {No seats available} one {# seat available} other {# seats available}}"
+  },
+  "language": {
+    "label": "Language",
+    "sr": "Serbian",
+    "en": "English"
+  }
+}

@@ -1,15 +1,24 @@
 import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns"
 
-// Get Serbian day names
-export const getDayName = (dayIndex: number): string => {
-  const dayNames = ["Nedelja", "Ponedeljak", "Utorak", "Sreda", "Četvrtak", "Petak", "Subota"]
-  return dayNames[dayIndex]
-}
+import { DEFAULT_LOCALE } from "@/i18n/locales"
+import {
+  formatBusinessDate,
+  formatClockTime,
+  formatDate as formatDateIntl,
+  formatDuration as formatDurationIntl,
+  getWeekdayName,
+} from "@/i18n/format"
 
-export const getShortDayName = (dayIndex: number): string => {
-  const dayNames = ["Ned", "Pon", "Uto", "Sre", "Čet", "Pet", "Sub"]
-  return dayNames[dayIndex]
-}
+/**
+ * Day names pinned to the default locale, kept for call sites that have not
+ * been translated yet. New code should call `getWeekdayName` from
+ * `@/i18n/format` with the active locale.
+ */
+export const getDayName = (dayIndex: number): string =>
+  getWeekdayName(dayIndex, DEFAULT_LOCALE, "long")
+
+export const getShortDayName = (dayIndex: number): string =>
+  getWeekdayName(dayIndex, DEFAULT_LOCALE, "short")
 
 // Format date to YYYY-MM-DD
 export const formatDateToISO = (date: Date): string => {
@@ -17,22 +26,8 @@ export const formatDateToISO = (date: Date): string => {
 }
 
 // Format duration in minutes as "Xh Ym" / "Xh" / "Ym"
-export const formatDuration = (durationInMinutes?: number): string | null => {
-  if (!durationInMinutes || durationInMinutes <= 0) return null
-
-  const hours = Math.floor(durationInMinutes / 60)
-  const minutes = durationInMinutes % 60
-
-  if (hours > 0 && minutes > 0) {
-    return `${hours}h ${minutes}min`
-  }
-
-  if (hours > 0) {
-    return `${hours}h`
-  }
-
-  return `${minutes}min`
-}
+export const formatDuration = (durationInMinutes?: number): string | null =>
+  formatDurationIntl(durationInMinutes, DEFAULT_LOCALE)
 
 // Parse YYYY-MM-DD to Date
 export const parseISODate = (dateString: string): Date => {
@@ -82,14 +77,11 @@ export const isExceptionDate = (date: Date, exceptions: Array<{ date: string; ty
 }
 
 // Format date for display
-export const formatDateDisplay = (date: Date | string): string => {
-  const d = typeof date === "string" ? parseISODate(date) : date
-  return format(d, "d. MMMM yyyy")
-}
+export const formatDateDisplay = (date: Date | string): string =>
+  typeof date === "string"
+    ? formatBusinessDate(date, DEFAULT_LOCALE)
+    : formatDateIntl(date, DEFAULT_LOCALE)
 
 // Format time for display
-export const formatTimeDisplay = (time: string): string => {
-  // time is in HH:MM format
-  return time
-}
+export const formatTimeDisplay = (time: string): string => formatClockTime(time)
 
