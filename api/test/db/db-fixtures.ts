@@ -159,11 +159,10 @@ export async function seedTenant(prisma: PrismaService): Promise<Seeded> {
 }
 
 /**
- * Tables a seeded tenant writes to, children first. Deleted with raw SQL so
- * the audit extension does not record the cleanup as edits.
+ * Tables a seeded tenant writes to, children first. The audit triggers record
+ * the cleanup's deletes too, so `AuditEvent` goes after every audited table.
  */
 const TENANT_TABLES = [
-  'AuditEvent',
   'Reservation',
   'Passenger',
   'RideDayScheduleStationTime',
@@ -172,6 +171,7 @@ const TENANT_TABLES = [
   'Ride',
   'LineStop',
   'Line',
+  'AuditEvent',
   'Station',
   'RefreshSession',
   'User'
