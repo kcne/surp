@@ -45,9 +45,13 @@ export const domainAuditExtension = Prisma.defineExtension((prisma) =>
             findMany: (input: RecordValue) => Promise<RecordValue[]>;
           };
           const input = args as RecordValue;
-          const before = await recordsBefore(delegate, operation, input);
-          const result = await query(args);
-          const after = recordsAfter(operation, input, result);
+          const columns = columnsOf(model);
+          const widened = widenSelect(operation, input, columns);
+          const before = (await recordsBefore(delegate, operation, input)).map((row) =>
+            pick(row, columns)
+          );
+          const result = await query(widened.args as typeof args);
+          const after = recordsAfter(operation, input, result).map((row) => pick(row, columns));
 
           await Promise.all(
             auditEntries(model, operation, before, after, input).map((entry) =>
@@ -55,7 +59,7 @@ export const domainAuditExtension = Prisma.defineExtension((prisma) =>
             )
           );
 
-          return result;
+          return widened.added.length > 0 ? without(result, widened.added) : result;
         }
       }
     }
@@ -75,6 +79,64 @@ async function recordsBefore(
   }
 
   return delegate.findMany({ where: (args.where as RecordValue | undefined) ?? {} });
+}
+
+/** Operations whose returned row is the audited "after" state. */
+const RETURNS_AUDITED_ROW = new Set(['create', 'update', 'upsert']);
+
+const columnsByModel = new Map(
+  Prisma.dmmf.datamodel.models.map((model) => [
+    model.name,
+    model.fields
+      .filter((field) => field.kind === 'scalar' || field.kind === 'enum')
+      .map((field) => field.name)
+  ])
+);
+
+function columnsOf(model: string): string[] {
+  const columns = columnsByModel.get(model);
+  if (!columns) throw new Error(`Cannot audit ${model}: unknown model`);
+  return columns;
+}
+
+/**
+ * The returned row is the audit record, so it has to be the whole row whatever
+ * the caller selected: a narrowed `select` drops `tenantId` and the actor, and
+ * the write fails. The columns the caller didn't ask for are added here and
+ * removed from the result again, so the caller still gets the shape it asked for.
+ */
+function widenSelect(
+  operation: string,
+  args: RecordValue,
+  columns: string[]
+): { args: RecordValue; added: string[] } {
+  if (!RETURNS_AUDITED_ROW.has(operation) || !isRecord(args.select)) return { args, added: [] };
+
+  const select = args.select;
+  const added = columns.filter((column) => select[column] !== true);
+  if (added.length === 0) return { args, added };
+
+  return {
+    args: {
+      ...args,
+      select: { ...select, ...Object.fromEntries(added.map((column) => [column, true])) }
+    },
+    added
+  };
+}
+
+/** Relations a write selected or included are not part of the audited row. */
+function pick(row: RecordValue, columns: string[]): RecordValue {
+  return Object.fromEntries(
+    columns.filter((column) => column in row).map((column) => [column, row[column]])
+  );
+}
+
+function without(result: unknown, fields: string[]): unknown {
+  if (!isRecord(result)) return result;
+  const trimmed = { ...result };
+  for (const field of fields) delete trimmed[field];
+  return trimmed;
 }
 
 function recordsAfter(operation: string, args: RecordValue, result: unknown): RecordValue[] {
@@ -116,7 +178,11 @@ function entryFor(
   after?: RecordValue
 ): Prisma.AuditEventCreateManyInput {
   const current = after ?? before!;
-  const actorUserId = stringField(after, 'updatedById') ?? stringField(after, 'createdById') ?? stringField(before, 'updatedById') ?? stringField(before, 'createdById');
+  const actorUserId =
+    stringField(after, 'updatedById') ??
+    stringField(after, 'createdById') ??
+    stringField(before, 'updatedById') ??
+    stringField(before, 'createdById');
   const tenantId = stringField(current, 'tenantId');
 
   if (!actorUserId || !tenantId) {
@@ -144,10 +210,12 @@ function changedFields(before?: RecordValue, after?: RecordValue): RecordValue {
   const changes: RecordValue = {};
 
   for (const field of fields) {
-    if (['id', 'tenantId', 'createdAt', 'updatedAt', 'createdById', 'updatedById'].includes(field)) continue;
+    if (['id', 'tenantId', 'createdAt', 'updatedAt', 'createdById', 'updatedById'].includes(field))
+      continue;
     const previous = before?.[field];
     const current = after?.[field];
-    if (!sameValue(previous, current)) changes[field] = { before: jsonValue(previous), after: jsonValue(current) };
+    if (!sameValue(previous, current))
+      changes[field] = { before: jsonValue(previous), after: jsonValue(current) };
   }
 
   return changes;
