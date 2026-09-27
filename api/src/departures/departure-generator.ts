@@ -5,6 +5,7 @@ import {
   dayOfWeekOf
 } from '../rides/ride-instance-materialization';
 import { addDays } from './agency-date';
+import { SYSTEM_ACTOR_ID } from './system-actor';
 
 /**
  * What the timetable says should run, as departures.
@@ -165,10 +166,17 @@ function scheduleStops(
   }));
 }
 
+/**
+ * A SKIP without an author still cancels the date, as it hides the date from
+ * the materializer. The audit trigger refuses such a row today, but the schema
+ * allows it, so it is credited to the system actor rather than dropped.
+ */
 function cancellationOf(skip: GeneratorException | undefined): PlannedCancellation | null {
-  const by = skip?.updatedById ?? skip?.createdById;
+  if (!skip) {
+    return null;
+  }
 
-  return skip && by ? { at: skip.createdAt, by } : null;
+  return { at: skip.createdAt, by: skip.updatedById ?? skip.createdById ?? SYSTEM_ACTOR_ID };
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   generateDepartures,
   scheduleKey
 } from './departure-generator';
+import { SYSTEM_ACTOR_ID } from './system-actor';
 
 // 5 October 2026 is a Monday.
 const MONDAY = '2026-10-05';
@@ -165,6 +166,20 @@ describe('generateDepartures', () => {
     expect(departure.cancellation).toEqual({
       at: new Date('2026-09-20T08:00:00Z'),
       by: 'editor'
+    });
+  });
+
+  it('still cancels the date for a SKIP with no author, credited to the system actor', () => {
+    const [departure] = generateDepartures(
+      [recurringRide()],
+      [exception({ createdById: null, updatedById: null })],
+      MONDAY,
+      MONDAY
+    );
+
+    expect(departure.cancellation).toEqual({
+      at: new Date('2026-09-20T08:00:00Z'),
+      by: SYSTEM_ACTOR_ID
     });
   });
 

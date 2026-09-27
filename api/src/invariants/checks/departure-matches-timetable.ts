@@ -19,9 +19,10 @@ import { CheckResult, Invariant, InvariantContext, Violation } from '../invarian
  * window, and reports each difference. Past departures keep what they ran with
  * and `LEGACY` rows belong to the backfill, so neither is compared.
  *
- * Reported, never repaired: every timetable write already runs the sync, so a
- * difference means a write that bypassed it or a nightly run that failed, and
- * both deserve a look before anything is rewritten.
+ * Reported, never repaired: once `DEPARTURES_SYNC_ENABLED` is set, every
+ * timetable write runs the sync, so a difference means the switch is still off,
+ * a write bypassed the sync, or a nightly run failed. Each deserves a look
+ * before anything is rewritten.
  */
 
 export type DepartureMismatchReason =
@@ -106,13 +107,18 @@ export const departureMatchesTimetable: Invariant = {
   description:
     'Polasci se cuvaju uz red voznje i uskoro ce rezervacije pokazivati na njih. Polazak koji nedostaje, visak ili polazak sa starim vremenom znacio bi da putnik vidi drugaciji autobus od onog koji saobraca.',
   manualAdvice:
-    'Svaka izmena reda voznje sama uskladjuje polaske, pa razlika znaci da je nesto zaobislo to uskladjivanje. Prijavite je podrsci pre nego sto menjate red voznje.',
+    'Kada je automatsko uskladjivanje polazaka ukljuceno, svaka izmena reda voznje sama uskladjuje polaske. Razlika znaci da uskladjivanje jos nije ukljuceno ili da ga je nesto zaobislo. Prijavite je podrsci pre nego sto menjate red voznje.',
   severity: 'warning',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const plan = await planDepartureSync(ctx.prisma, ctx.tenantId);
     const violations: Violation[] = [
-      ...plan.creates.map(missing),
+      // The newest day enters the window at the agency's midnight and is
+      // stored by the nightly job at 02:00. A run in between is not drift; if
+      // the job fails, the day is reported from tomorrow's run.
+      ...plan.creates
+        .filter((departure) => departure.serviceDate < plan.window.to)
+        .map(missing),
       ...[...plan.drops, ...plan.deletes].map(leftOver),
       ...plan.updates.map((update) => differs(update.stored, update.fields))
     ];
