@@ -15,6 +15,7 @@ import {
 import { hash } from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { acquireScheduleLockExclusive } from '../prisma/schedule-lock';
+import { syncDepartures } from '../departures/departure-sync';
 
 const SANDBOX_TENANT_SLUG = 'sandbox-demo';
 const SANDBOX_TENANT_NAME = 'SURP Sandbox Demo';
@@ -125,6 +126,7 @@ export class InternalSandboxService {
     deleted.ticketComments = (await tx.ticketComment.deleteMany({ where: { tenantId } })).count;
     deleted.tickets = (await tx.ticket.deleteMany({ where: { tenantId } })).count;
     deleted.reservations = (await tx.reservation.deleteMany({ where: { tenantId } })).count;
+    deleted.departures = (await tx.departure.deleteMany({ where: { tenantId } })).count;
     deleted.rideExceptions = (await tx.rideException.deleteMany({ where: { tenantId } })).count;
     deleted.rideDayScheduleStationTimes = (
       await tx.rideDayScheduleStationTime.deleteMany({ where: { tenantId } })
@@ -166,6 +168,7 @@ export class InternalSandboxService {
     seeded.stations = await this.createStations(tx, tenantId, user.id);
     seeded.lines = await this.createLines(tx, tenantId, user.id);
     seeded.rides = await this.createRides(tx, tenantId, user.id);
+    seeded.departures = (await syncDepartures(tx, { tenantId, actorId: user.id })).created;
     seeded.passengers = await this.createPassengers(tx, tenantId, user.id);
     seeded.reservations = await this.createReservations(tx, tenantId, user.id);
     seeded.storefront = await this.createStorefront(tx, tenantId);

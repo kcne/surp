@@ -1,5 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { DepartureSyncScope, syncDepartures } from '../departures/departure-sync';
+import { departureSyncEnabled } from '../departures/departure-sync-enabled';
 
 /**
  * The one lock every writer that depends on a tenant's schedule agrees on.
@@ -141,18 +143,46 @@ export function reservationWriteTransaction<T>(
 /**
  * A transaction for anything that changes what the schedule materializes, or
  * rewrites reservations as a maintenance operation.
+ *
+ * After the work, and still under the lock, the tenant's future departures are
+ * brought in step with the timetable the work left behind, credited to
+ * `scope.actorId`. Doing it here rather than in each writer means no timetable
+ * write, repair or script can forget to. It runs once `DEPARTURES_SYNC_ENABLED`
+ * is set, which the rollout does only after the first fill.
+ *
+ * `scope.actorId` is also the transaction's audit actor, so a row this edit
+ * deletes is credited to the person editing rather than to whoever last wrote
+ * the row (`record_domain_audit`).
  */
 export function scheduleEditTransaction<T>(
   prisma: ScheduleLockRoot,
-  tenantId: string,
+  scope: DepartureSyncScope,
   work: (tx: Prisma.TransactionClient) => Promise<T>,
-  options: { timeout?: number } = {}
+  {
+    departureSync = true,
+    ...options
+  }: {
+    timeout?: number;
+    /**
+     * Off for work that syncs departures itself, like the nightly job, and for
+     * work that cannot change the timetable, like a passenger edit: the sync
+     * reads the whole tenant while every booking waits on the lock.
+     */
+    departureSync?: boolean;
+  } = {}
 ): Promise<T> {
   return prisma.$transaction(
     async (tx) => {
-      await acquireScheduleLockExclusive(tx, tenantId);
+      await acquireScheduleLockExclusive(tx, scope.tenantId);
+      await tx.$executeRaw`SELECT set_config('surp.audit_actor', ${scope.actorId}, true)`;
 
-      return work(tx);
+      const result = await work(tx);
+
+      if (departureSync && departureSyncEnabled()) {
+        await syncDepartures(tx, scope);
+      }
+
+      return result;
     },
     { ...SCHEDULE_EDIT_OPTIONS, ...options }
   );

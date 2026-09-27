@@ -102,7 +102,7 @@ describe('tenant schedule lock (real database)', () => {
   function holdEdit(write: (tx: Prisma.TransactionClient) => Promise<unknown>) {
     const acquired = deferred();
     const release = deferred();
-    const done = scheduleEditTransaction(prisma, seeded.auth.tenantId, async (tx) => {
+    const done = scheduleEditTransaction(prisma, { tenantId: seeded.auth.tenantId, actorId: seeded.auth.sub }, async (tx) => {
       await write(tx);
       acquired.resolve();
       await release.promise;

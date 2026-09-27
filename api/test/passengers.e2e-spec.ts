@@ -6,6 +6,10 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
+// Every schedule edit ends by syncing departures, which the database specs
+// cover; here it would run against the mocked client.
+jest.mock('../src/departures/departure-sync', () => ({ syncDepartures: jest.fn() }));
+
 describe('PassengersController (e2e)', () => {
   let app: INestApplication;
 

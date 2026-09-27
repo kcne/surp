@@ -356,8 +356,10 @@ export const reservationReachable: ProspectiveInvariant = {
   },
 
   async repair(ctx: InvariantContext, subjectIds?: ReadonlySet<string>): Promise<RepairResult> {
-    const { repairedCount, skippedCount } = await inScheduleEdit(ctx, (locked) =>
-      repairOrphanedReservations(locked, subjectIds)
+    const { repairedCount, skippedCount } = await inScheduleEdit(
+      ctx,
+      (locked) => repairOrphanedReservations(locked, subjectIds),
+      { changesTimetable: false }
     );
 
     return { repairedCount, skippedCount };

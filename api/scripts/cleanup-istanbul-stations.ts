@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { scheduleEditTransaction } from '../src/prisma/schedule-lock';
+import { SYSTEM_ACTOR_ID } from '../src/departures/system-actor';
 
 /**
  * Cleanup: merge duplicate Istanbul stations.
@@ -88,7 +89,7 @@ async function main() {
 
   // Moves stops on lines and the reservations that board there, so it runs
   // as a schedule edit: no booking is in flight while it rewrites them.
-  await scheduleEditTransaction(prisma, TENANT_ID, async (tx) => {
+  await scheduleEditTransaction(prisma, { tenantId: TENANT_ID, actorId: SYSTEM_ACTOR_ID }, async (tx) => {
     // 4a. Lines — departure station
     if (linesAsDeparture.length > 0) {
       const result = await tx.line.updateMany({

@@ -53,6 +53,12 @@ enum RideExceptionType {
   ADDITIONAL
 }
 
+enum DepartureSource {
+  SCHEDULE
+  EXTRA
+  LEGACY
+}
+
 enum ReservationStatus {
   ACTIVE
   CANCELLED
@@ -166,6 +172,8 @@ model Tenant {
   rideDaySchedules            RideDaySchedule[]
   rideDayScheduleStationTimes RideDayScheduleStationTime[]
   rideExceptions              RideException[]
+  departures                  Departure[]
+  departureStops              DepartureStop[]
   reservations                Reservation[]
   auditEvents                 AuditEvent[]
   tickets                     Ticket[]
@@ -373,6 +381,7 @@ model Station {
   rideDayScheduleStationTimes RideDayScheduleStationTime[]
   departureForReservation     Reservation[]                @relation("ReservationDepartureStation")
   arrivalForReservation       Reservation[]                @relation("ReservationArrivalStation")
+  departureStops              DepartureStop[]
 
   @@index([tenantId])
   @@index([tenantId, name])
@@ -398,6 +407,7 @@ model Line {
   arrivalStation     Station           @relation("LineArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
   intermediateStops  LineStop[]
   rides              Ride[]
+  departures         Departure[]
 
   @@index([tenantId])
   @@index([tenantId, isActive])
@@ -459,6 +469,13 @@ model Reservation {
    * is an ordinary agency action, which a plain @unique would reject.
    */
   returnOfReservationId String?
+  /**
+   * The departure this seat is on. Nullable until every row is linked (#27):
+   * bookings fill it from PR 1b, the backfill links the rest, and a later
+   * migration makes it required. The foreign key also carries rideId and
+   * travelDate, so a linked reservation cannot disagree with its departure.
+   */
+  departureId           String?
   notes                 String?           @db.Text
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
@@ -469,9 +486,11 @@ model Reservation {
   arrivalStation        Station           @relation("ReservationArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
   returnOf              Reservation?      @relation("ReservationReturnLeg", fields: [returnOfReservationId], references: [id], onDelete: Restrict)
   returnLegs            Reservation[]     @relation("ReservationReturnLeg")
+  departure             Departure?        @relation(fields: [departureId, rideId, travelDate, tenantId], references: [id, rideId, serviceDate, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId])
   @@index([rideId])
+  @@index([departureId])
   @@index([passengerId])
   @@index([tenantId, rideId, travelDate])
   @@index([tenantId, rideId, travelDate, rideDepartureTime])
@@ -482,6 +501,83 @@ model Reservation {
   @@index([tenantId, rideId, travelDate, rideDepartureTime, groupId])
   @@index([tenantId, roundTripId, status])
   @@index([returnOfReservationId])
+}
+
+/**
+ * One bus on one service date (#27). The timetable (`Ride`) says what should
+ * run; a departure is what does run, and what a reservation will point at.
+ * A SCHEDULE departure is identified by (rideId, serviceDate) and is written
+ * only by the generator in `src/departures`. An EXTRA is an extra bus with its
+ * own identity; until PR 3 each one mirrors an ADDITIONAL `RideException`
+ * through `rideExceptionId`. LEGACY rows are written only by the backfill, for
+ * past reservations the timetable no longer produces.
+ * Whether a departure runs is two facts with separate owners:
+ * `timetableDroppedAt` belongs to the generator, `cancelledAt` and
+ * `cancelledById` belong to people. It runs when neither is set.
+ * Partial unique indexes and CHECK constraints live in the migration, because
+ * Prisma cannot express them.
+ */
+model Departure {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  rideId             String
+  serviceDate        DateTime        @db.Date
+  source             DepartureSource
+  lineId             String
+  departureTime      String
+  arrivalTime        String
+  capacity           Int
+  timetableDroppedAt DateTime?
+  cancelledAt        DateTime?
+  cancelledById      String?
+  /**
+   * Temporary: the ADDITIONAL exception an EXTRA mirrors, until PR 3.
+   */
+  rideExceptionId    String?
+  createdById        String?
+  updatedById        String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  tenant             Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ride               Ride            @relation(fields: [rideId], references: [id], onDelete: Restrict)
+  line               Line            @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  rideException      RideException?  @relation(fields: [rideExceptionId], references: [id], onDelete: SetNull)
+  stops              DepartureStop[]
+  reservations       Reservation[]
+
+  @@unique([id, rideId, serviceDate, tenantId])
+  @@index([tenantId, serviceDate])
+  @@index([rideId, serviceDate])
+  @@index([lineId])
+  @@index([rideExceptionId])
+  @@index([updatedById])
+}
+
+/**
+ * The stops and times a departure runs with, copied from the timetable when
+ * the departure is written, so a past departure keeps the route it ran.
+ */
+model DepartureStop {
+  id          String    @id @default(cuid())
+  tenantId    String
+  departureId String
+  stationId   String
+  orderIndex  Int
+  time        String?
+  isBoarding  Boolean
+  isDropoff   Boolean
+  createdById String?
+  updatedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  departure   Departure @relation(fields: [departureId], references: [id], onDelete: Cascade)
+  station     Station   @relation(fields: [stationId], references: [id], onDelete: Restrict)
+
+  @@unique([departureId, orderIndex])
+  @@unique([departureId, stationId])
+  @@index([tenantId])
+  @@index([stationId])
 }
 
 model Passenger {
@@ -531,6 +627,7 @@ model Ride {
   line                 Line              @relation(fields: [lineId], references: [id], onDelete: Restrict)
   daySchedules         RideDaySchedule[]
   exceptions           RideException[]
+  departures           Departure[]
   reservations         Reservation[]
 
   @@index([tenantId])
@@ -595,6 +692,7 @@ model RideException {
   updatedAt     DateTime          @updatedAt
   tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   ride          Ride              @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  departures    Departure[]
 
   @@index([tenantId])
   @@index([rideId])

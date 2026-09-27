@@ -6,6 +6,10 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
+// Every schedule edit ends by syncing departures, which the database specs
+// cover; here it would run against the mocked client.
+jest.mock('../src/departures/departure-sync', () => ({ syncDepartures: jest.fn() }));
+
 describe('StationsController (e2e)', () => {
   let app: INestApplication;
 
@@ -34,6 +38,9 @@ describe('StationsController (e2e)', () => {
       findMany: jest.fn()
     },
     reservation: {
+      count: jest.fn()
+    },
+    departureStop: {
       count: jest.fn()
     }
   };
@@ -223,8 +230,8 @@ describe('StationsController (e2e)', () => {
 
   it('rejects delete when station is referenced by line or reservation', async () => {
     prismaMock.$transaction
-      .mockResolvedValueOnce([1, 0])
-      .mockResolvedValueOnce([0, 1]);
+      .mockResolvedValueOnce([1, 0, 0])
+      .mockResolvedValueOnce([0, 1, 0]);
 
     const lineLinked = await request(app.getHttpServer())
       .delete('/stations/station-1')
@@ -232,7 +239,7 @@ describe('StationsController (e2e)', () => {
       .set('Authorization', 'Bearer access-token-admin')
       .expect(409);
 
-    expect(lineLinked.body.message).toContain('referenced by at least one line or reservation');
+    expect(lineLinked.body.message).toContain('referenced by at least one line, departure or reservation');
 
     const reservationLinked = await request(app.getHttpServer())
       .delete('/stations/station-1')
@@ -240,7 +247,7 @@ describe('StationsController (e2e)', () => {
       .set('Authorization', 'Bearer access-token-admin')
       .expect(409);
 
-    expect(reservationLinked.body.message).toContain('referenced by at least one line or reservation');
+    expect(reservationLinked.body.message).toContain('referenced by at least one line, departure or reservation');
   });
 
   it('supports full station CRUD for tenant', async () => {
@@ -301,7 +308,7 @@ describe('StationsController (e2e)', () => {
 
     expect(updated.body.isActive).toBe(false);
 
-    prismaMock.$transaction.mockResolvedValueOnce([0, 0]);
+    prismaMock.$transaction.mockResolvedValueOnce([0, 0, 0]);
 
     const removed = await request(app.getHttpServer())
       .delete('/stations/station-1')

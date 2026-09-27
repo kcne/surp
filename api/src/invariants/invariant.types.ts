@@ -35,6 +35,7 @@ export type ViolationSubject =
   | 'ride-instance'
   | 'ride'
   | 'ride-schedule'
+  | 'departure'
   | 'line-pair'
   | 'line'
   | 'system';

@@ -267,7 +267,7 @@ export class RidesService {
     // The route the new schedule is validated against is read under the
     // schedule lock. Read before it, a line edit could realign every existing
     // ride and commit, leaving this one created against the old stop list.
-    const created = await scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
+    const created = await scheduleEditTransaction(this.prisma, { tenantId: auth.tenantId, actorId: auth.sub }, async (tx) => {
       const line = await this.ensureLineInTenant(auth.tenantId, dto.lineId, tx);
 
       const normalizedSchedule = this.normalizeAndValidateSchedule({
@@ -882,7 +882,7 @@ export class RidesService {
     if (cascade) {
       // Cancelling every reservation and retiring the ride is a schedule edit:
       // a booking still in flight must land before the cancellation sweeps it.
-      return scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
+      return scheduleEditTransaction(this.prisma, { tenantId: auth.tenantId, actorId: auth.sub }, async (tx) => {
         const now = new Date();
 
         await tx.reservation.updateMany({
@@ -918,7 +918,7 @@ export class RidesService {
     // The count and the deactivation are one schedule edit. Counted outside
     // the lock, a booking still in flight is invisible, and the ride would be
     // retired under a passenger who was just sold a seat on it.
-    return scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
+    return scheduleEditTransaction(this.prisma, { tenantId: auth.tenantId, actorId: auth.sub }, async (tx) => {
       const activeReservationReferenceCount = await tx.reservation.count({
         where: {
           tenantId: auth.tenantId,

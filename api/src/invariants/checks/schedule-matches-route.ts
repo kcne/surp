@@ -134,7 +134,7 @@ export async function realignDriftedSchedules(ctx: InvariantContext): Promise<Re
   for (const entry of drifted) {
     // The scan above only says where to look. The plan is recomputed under
     // the lock, so an edit that landed while this waited is kept, not undone.
-    const result = await scheduleEditTransaction(ctx.prisma, entry.tenantId, (tx) =>
+    const result = await scheduleEditTransaction(ctx.prisma, { ...ctx, tenantId: entry.tenantId }, (tx) =>
       realignDayScheduleIfDriftedTx(tx, {
         tenantId: entry.tenantId,
         rideDayScheduleId: entry.rideDayScheduleId,

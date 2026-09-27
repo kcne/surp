@@ -1,6 +1,10 @@
 import { findDriftedPairs, syncDriftedPairs } from './paired-directions-agree';
 import { InvariantContext } from '../invariant.types';
 
+// Every schedule edit ends by syncing departures; that sync has its own tests
+// and would otherwise run against this spec's mocked transaction.
+jest.mock('../../departures/departure-sync', () => ({ syncDepartures: jest.fn() }));
+
 /**
  * Moved here from the maintenance service spec when #24 replaced the four
  * settings cards with one page.
