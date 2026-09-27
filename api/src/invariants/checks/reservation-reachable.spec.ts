@@ -11,8 +11,9 @@ import { InvariantContext } from '../invariant.types';
 
 const prismaMock = {
   ride: { findMany: jest.fn() },
-  reservation: { findMany: jest.fn(), update: jest.fn() },
-  station: { findMany: jest.fn() }
+  reservation: { findMany: jest.fn(), findUniqueOrThrow: jest.fn(), update: jest.fn() },
+  station: { findMany: jest.fn() },
+  departure: { findMany: jest.fn() }
 };
 
 // A context per test, not per file: checks sharing one context share one load
@@ -94,6 +95,11 @@ describe('reservation.reachable', () => {
     jest.clearAllMocks();
     prismaMock.station.findMany.mockResolvedValue([]);
     prismaMock.ride.findMany.mockResolvedValue([strandedRide]);
+    prismaMock.reservation.findUniqueOrThrow.mockResolvedValue({
+      rideId: 'ride-1',
+      travelDate
+    });
+    prismaMock.departure.findMany.mockResolvedValue([]);
   });
 
   it('points stranded reservations at the instance that replaced their departure time', async () => {

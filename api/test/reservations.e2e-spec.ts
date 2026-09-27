@@ -112,6 +112,10 @@ describe('ReservationsController (e2e)', () => {
     },
     passenger: {
       findFirst: jest.fn()
+    },
+    // No stored departures: bookings go ahead unlinked, as they did before.
+    departure: {
+      findMany: jest.fn().mockResolvedValue([])
     }
   };
 

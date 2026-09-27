@@ -36,6 +36,9 @@ describe('ReservationsService', () => {
     },
     passenger: {
       findFirst: jest.fn()
+    },
+    departure: {
+      findMany: jest.fn()
     }
   };
 
@@ -111,6 +114,7 @@ describe('ReservationsService', () => {
     service = new ReservationsService(prismaMock as never);
 
     prismaMock.$executeRaw.mockResolvedValue(1);
+    prismaMock.departure.findMany.mockResolvedValue([]);
 
     prismaMock.$transaction.mockImplementation(async (input: unknown) => {
       if (typeof input === 'function') {
@@ -387,6 +391,63 @@ describe('ReservationsService', () => {
     expect(result.departureStationId).toBe('station-a');
     expect(result.arrivalStationId).toBe('station-d');
     expect(result.groupId).toEqual(expect.any(String));
+  });
+
+  describe('departure link', () => {
+    const book = () =>
+      service.create(auth, {
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 21,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-d'
+      });
+
+    it('stamps the only departure that matches the ride, date and time', async () => {
+      prismaMock.departure.findMany.mockResolvedValue([{ id: 'departure-1' }]);
+
+      await book();
+
+      expect(prismaMock.departure.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            tenantId: 'tenant-1',
+            rideId: 'ride-1',
+            serviceDate: new Date('2026-03-30T00:00:00.000Z'),
+            departureTime: '09:00',
+            source: { in: ['SCHEDULE', 'EXTRA'] }
+          },
+          take: 2
+        })
+      );
+      expect(prismaMock.reservation.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ departureId: 'departure-1' }) })
+      );
+    });
+
+    it('books without a link when two departures leave at that time', async () => {
+      prismaMock.departure.findMany.mockResolvedValue([
+        { id: 'departure-1' },
+        { id: 'departure-extra' }
+      ]);
+
+      await expect(book()).resolves.toMatchObject({ seatNumber: 21 });
+
+      expect(prismaMock.reservation.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ departureId: null }) })
+      );
+    });
+
+    it('books without a link when no departure is stored', async () => {
+      await expect(book()).resolves.toMatchObject({ seatNumber: 21 });
+
+      expect(prismaMock.reservation.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ departureId: null }) })
+      );
+    });
   });
 
   describe('return legs', () => {

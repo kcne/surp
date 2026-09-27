@@ -15,6 +15,11 @@ import {
 import { hash } from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { acquireScheduleLockExclusive } from '../prisma/schedule-lock';
+import {
+  LINKABLE_SOURCES,
+  indexLinkableDepartures,
+  uniqueDepartureMatch
+} from '../departures/departure-link';
 import { syncDepartures } from '../departures/departure-sync';
 
 const SANDBOX_TENANT_SLUG = 'sandbox-demo';
@@ -396,6 +401,23 @@ export class InternalSandboxService {
         }
       }
     });
+
+    // Linked by the same rule a booking uses, so demo data looks like
+    // production and `reservation.departureLinked` stays quiet here.
+    const departureIndex = indexLinkableDepartures(
+      await tx.departure.findMany({
+        where: { tenantId, source: { in: [...LINKABLE_SOURCES] } },
+        select: { id: true, rideId: true, serviceDate: true, departureTime: true }
+      })
+    );
+    for (const reservation of reservations) {
+      reservation.departureId = uniqueDepartureMatch(
+        departureIndex,
+        reservation.rideId,
+        reservation.travelDate as Date,
+        reservation.rideDepartureTime
+      );
+    }
 
     const result = await tx.reservation.createMany({ data: reservations });
 

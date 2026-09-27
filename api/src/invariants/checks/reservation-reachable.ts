@@ -1,3 +1,4 @@
+import { resolveDepartureLink } from '../../departures/departure-link';
 import { withUpdateAudit } from '../../prisma/audit-write.helper';
 import { formatDateOnly } from '../../rides/ride-instance-materialization';
 import {
@@ -112,12 +113,26 @@ export async function repairOrphanedReservations(
       continue;
     }
 
+    // The new time can belong to another bus on the same date, an extra, so
+    // the departure link is matched again rather than kept (#27 PR 1b).
+    const { rideId, travelDate } = await ctx.prisma.reservation.findUniqueOrThrow({
+      where: { id: item.reservationId },
+      select: { rideId: true, travelDate: true }
+    });
+    const departureId = await resolveDepartureLink(ctx.prisma, {
+      tenantId: ctx.tenantId,
+      rideId,
+      travelDate,
+      departureTime: item.targetDepartureTime
+    });
+
     // A prospective write passes its transaction here, so a later failure
     // rolls back every selected update along with the proposed write.
     await ctx.prisma.reservation.update({
       where: { id: item.reservationId },
       data: withUpdateAudit(
         {
+          departureId,
           rideDepartureTime: item.targetDepartureTime,
           rideArrivalTime: item.targetArrivalTime ?? undefined,
           seatNumber: item.targetSeatNumber

@@ -7,6 +7,7 @@ import {
 import { Prisma, ReservationStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { AccessTokenPayload } from '../auth/auth.types';
+import { resolveDepartureLink } from '../departures/departure-link';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
@@ -922,12 +923,23 @@ export class ReservationsService {
       capacity: rideContext.capacity
     });
 
+    // After the lock, like every read that decides this booking. Nothing reads
+    // the link yet (#27 PR 1b); a booking with no unique match stays unlinked
+    // and goes ahead exactly as before.
+    const departureId = await resolveDepartureLink(tx, {
+      tenantId: auth.tenantId,
+      rideId: dto.rideId,
+      travelDate,
+      departureTime: dto.rideDepartureTime
+    });
+
     try {
       return await tx.reservation.create({
         data: withCreateAudit(
           {
             tenantId: auth.tenantId,
             rideId: dto.rideId,
+            departureId,
             passengerId: dto.passengerId,
             travelDate,
             rideDepartureTime: dto.rideDepartureTime,
