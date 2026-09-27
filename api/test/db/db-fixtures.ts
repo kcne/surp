@@ -164,6 +164,8 @@ export async function seedTenant(prisma: PrismaService): Promise<Seeded> {
  */
 const TENANT_TABLES = [
   'Reservation',
+  'DepartureStop',
+  'Departure',
   'Passenger',
   'RideDayScheduleStationTime',
   'RideDaySchedule',
