@@ -534,7 +534,7 @@ export class LinesService {
     if (cascade) {
       // Cancelling every reservation and retiring the rides is a schedule edit:
       // a booking still in flight must land before the cancellation sweeps it.
-      return scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
+      return scheduleEditTransaction(this.prisma, { tenantId: auth.tenantId, actorId: auth.sub }, async (tx) => {
         const now = new Date();
         const rides = await tx.ride.findMany({
           where: {
@@ -598,7 +598,7 @@ export class LinesService {
 
     // Checked and written under the lock, so a ride activated on this line
     // while the check ran cannot be left on a deactivated route.
-    return scheduleEditTransaction(this.prisma, auth.tenantId, async (tx) => {
+    return scheduleEditTransaction(this.prisma, { tenantId: auth.tenantId, actorId: auth.sub }, async (tx) => {
       const activeRideReferenceCount = await tx.ride.count({
         where: {
           tenantId: auth.tenantId,

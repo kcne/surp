@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
+import { DeparturesModule } from './departures/departures.module';
 import { envValidationSchema } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { InternalSandboxModule } from './internal-sandbox/internal-sandbox.module';
@@ -42,6 +43,7 @@ import { InvariantsModule } from './invariants/invariants.module';
     ScheduleModule.forRoot(),
     PrismaModule,
     InvariantsModule,
+    DeparturesModule,
     HealthModule,
     InternalSandboxModule,
     AuthModule,

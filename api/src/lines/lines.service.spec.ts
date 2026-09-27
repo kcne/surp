@@ -8,6 +8,10 @@ import {
 } from '@prisma/client';
 import { LinesService } from './lines.service';
 
+// Every schedule edit ends by syncing departures; that sync has its own tests
+// and would otherwise run against this spec's mocked transaction.
+jest.mock('../departures/departure-sync', () => ({ syncDepartures: jest.fn() }));
+
 type FindManyArgs = { select?: Record<string, unknown>; where?: { id?: unknown } };
 type FindMany = (args: FindManyArgs) => Promise<unknown>;
 

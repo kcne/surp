@@ -155,7 +155,8 @@ export class StationsService {
   async remove(auth: AccessTokenPayload, id: string): Promise<StationResponseDto> {
     await this.ensureTenantStationExists(auth.tenantId, id);
 
-    const [lineReferenceCount, reservationReferenceCount] = await this.prisma.$transaction([
+    const [lineReferenceCount, reservationReferenceCount, departureReferenceCount] =
+      await this.prisma.$transaction([
       this.prisma.line.count({
         where: {
           tenantId: auth.tenantId,
@@ -167,12 +168,17 @@ export class StationsService {
           tenantId: auth.tenantId,
           OR: [{ departureStationId: id }, { arrivalStationId: id }]
         }
+      }),
+      // A departure keeps the stops it ran with, so a station a bus has
+      // called at stays referenced after it leaves the route.
+      this.prisma.departureStop.count({
+        where: { tenantId: auth.tenantId, stationId: id }
       })
     ]);
 
-    if (lineReferenceCount > 0 || reservationReferenceCount > 0) {
+    if (lineReferenceCount > 0 || reservationReferenceCount > 0 || departureReferenceCount > 0) {
       throw new ConflictException(
-        'Station cannot be deleted because it is referenced by at least one line or reservation'
+        'Station cannot be deleted because it is referenced by at least one line, departure or reservation'
       );
     }
 

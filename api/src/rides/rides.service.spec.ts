@@ -8,6 +8,10 @@ import {
 } from '@prisma/client';
 import { RidesService } from './rides.service';
 
+// Every schedule edit ends by syncing departures; that sync has its own tests
+// and would otherwise run against this spec's mocked transaction.
+jest.mock('../departures/departure-sync', () => ({ syncDepartures: jest.fn() }));
+
 /** The token a refusal hands out, which is what the operator's answer carries back. */
 async function refusalToken(refused: Promise<unknown>): Promise<string> {
   try {

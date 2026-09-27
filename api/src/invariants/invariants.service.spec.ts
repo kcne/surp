@@ -40,6 +40,7 @@ describe('INVARIANTS registry', () => {
       'reservation.seatWithinCapacity',
       'instance.notOverbooked',
       'schedule.matchesRoute',
+      'departure.matchesTimetable',
       'pair.directionsAgree',
       'pair.terminiReachable',
       'route.stationsActive',

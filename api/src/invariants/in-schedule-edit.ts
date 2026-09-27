@@ -18,7 +18,7 @@ export function inScheduleEdit<T>(
     return work(ctx);
   }
 
-  return scheduleEditTransaction(ctx.prisma, ctx.tenantId, (tx: Prisma.TransactionClient) =>
+  return scheduleEditTransaction(ctx.prisma, ctx, (tx: Prisma.TransactionClient) =>
     // A fresh context: checks cache the window they read against the context
     // they were given, and this one must be read under the lock.
     work({ ...ctx, prisma: tx })

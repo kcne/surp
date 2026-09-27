@@ -18,6 +18,9 @@ describe('StationsService', () => {
     },
     reservation: {
       count: jest.fn()
+    },
+    departureStop: {
+      count: jest.fn()
     }
   };
 
@@ -91,21 +94,32 @@ describe('StationsService', () => {
 
   it('blocks delete when station is referenced by lines', async () => {
     prismaMock.station.findFirst.mockResolvedValue({ id: 'station-1' });
-    prismaMock.$transaction.mockResolvedValue([1, 0]);
+    prismaMock.$transaction.mockResolvedValue([1, 0, 0]);
 
     await expect(service.remove(auth, 'station-1')).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('blocks delete when station is referenced by reservations', async () => {
     prismaMock.station.findFirst.mockResolvedValue({ id: 'station-1' });
-    prismaMock.$transaction.mockResolvedValue([0, 2]);
+    prismaMock.$transaction.mockResolvedValue([0, 2, 0]);
 
     await expect(service.remove(auth, 'station-1')).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('blocks delete when a departure stopped at the station', async () => {
+    prismaMock.station.findFirst.mockResolvedValue({ id: 'station-1' });
+    prismaMock.$transaction.mockResolvedValue([0, 0, 3]);
+
+    await expect(service.remove(auth, 'station-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(prismaMock.departureStop.count).toHaveBeenCalledWith({
+      where: { tenantId: 'tenant-1', stationId: 'station-1' }
+    });
+    expect(prismaMock.station.delete).not.toHaveBeenCalled();
+  });
+
   it('deletes station when no references exist', async () => {
     prismaMock.station.findFirst.mockResolvedValue({ id: 'station-1' });
-    prismaMock.$transaction.mockResolvedValue([0, 0]);
+    prismaMock.$transaction.mockResolvedValue([0, 0, 0]);
     prismaMock.station.delete.mockResolvedValue({
       id: 'station-1',
       tenantId: 'tenant-1',

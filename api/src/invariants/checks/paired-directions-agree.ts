@@ -124,7 +124,7 @@ export async function syncDriftedPairs(ctx: InvariantContext): Promise<PairSyncO
       throw new Error('Invariant repairs require a root database client');
     }
 
-    const written = await scheduleEditTransaction(ctx.prisma, ctx.tenantId, async (tx) => {
+    const written = await scheduleEditTransaction(ctx.prisma, ctx, async (tx) => {
       // The scan above only says which pairs to look at. The routes are read
       // again under the lock: an edit that landed while this waited may have
       // settled the pair, or changed it, and must not be written over.

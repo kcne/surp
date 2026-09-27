@@ -31,7 +31,8 @@
     "passengers:duplicates:merge": "ts-node --transpile-only scripts/merge-duplicate-passengers.ts",
     "reservations:return-legs:backfill": "ts-node --transpile-only scripts/backfill-reservation-return-legs.ts",
     "reservations:return-legs:review": "ts-node --transpile-only scripts/review-ambiguous-return-legs.ts",
-    "schedules:realign": "ts-node --transpile-only scripts/realign-ride-day-schedules.ts"
+    "schedules:realign": "ts-node --transpile-only scripts/realign-ride-day-schedules.ts",
+    "departures:sync": "ts-node --transpile-only scripts/sync-departures.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1011.0",

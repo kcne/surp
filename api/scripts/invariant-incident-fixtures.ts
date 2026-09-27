@@ -14,6 +14,7 @@ import {
 import { InvariantContext, Violation } from '../src/invariants/invariant.types';
 import { INVARIANTS, findInvariant } from '../src/invariants/registry';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { syncDepartures } from '../src/departures/departure-sync';
 import { dayOfWeekOf, formatDateOnly } from '../src/rides/ride-instance-materialization';
 
 interface FixtureState {
@@ -46,6 +47,12 @@ interface IncidentFixture {
    * the ones it must.
    */
   expects?: 'violation' | 'silence';
+  /**
+   * Every timetable write syncs departures, so the runner does too after
+   * `mutate`, the way `scheduleEditTransaction` would. A fixture that stands
+   * for a write that bypassed the sync opts out.
+   */
+  skipDepartureSync?: boolean;
   mutate(tx: Prisma.TransactionClient, state: FixtureState): Promise<void>;
   matches?(violation: Violation, state: FixtureState): boolean;
 }
@@ -298,6 +305,128 @@ const fixtures: IncidentFixture[] = [
 
       await createReturnLeg(tx, state, { seatNumber: 2, daysAfter: 14 });
     }
+  },
+  {
+    name: 'departure time is rewritten outside the timetable sync',
+    invariantKey: 'departure.matchesTimetable',
+    skipDepartureSync: true,
+    mutate: async (tx, state) => {
+      await tx.departure.updateMany({
+        where: { rideId: state.rideId, serviceDate: state.travelDate },
+        data: { departureTime: '09:15' }
+      });
+    },
+    matches: reason('FIELDS_DIFFER')
+  },
+  {
+    name: 'timetable stop time changes without a departure sync',
+    invariantKey: 'departure.matchesTimetable',
+    skipDepartureSync: true,
+    mutate: async (tx, state) => {
+      await tx.rideDayScheduleStationTime.update({
+        where: { id: state.stationTimeIds.middle },
+        data: { time: '10:10' }
+      });
+    },
+    matches: (violation) =>
+      violation.detail.reason === 'FIELDS_DIFFER' &&
+      (violation.detail.fields as string[]).includes('stops')
+  },
+  {
+    name: 'departure is deleted outside the timetable sync',
+    invariantKey: 'departure.matchesTimetable',
+    skipDepartureSync: true,
+    mutate: async (tx, state) => {
+      await tx.departure.deleteMany({
+        where: { rideId: state.rideId, serviceDate: state.travelDate }
+      });
+    },
+    matches: reason('MISSING')
+  },
+  {
+    name: 'weekday is removed from the timetable without a departure sync',
+    invariantKey: 'departure.matchesTimetable',
+    skipDepartureSync: true,
+    mutate: async (tx, state) => {
+      await tx.rideDaySchedule.delete({ where: { id: state.scheduleId } });
+    },
+    matches: reason('NOT_IN_TIMETABLE')
+  },
+  {
+    name: 'extra bus outlives its exception',
+    invariantKey: 'departure.matchesTimetable',
+    skipDepartureSync: true,
+    mutate: async (tx, state) => {
+      const exception = await tx.rideException.create({
+        data: {
+          id: fixtureId('exception-extra-gone'),
+          tenantId: state.tenantId,
+          rideId: state.rideId,
+          exceptionDate: state.travelDate,
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '15:00',
+          arrivalTime: '17:00',
+          createdById: state.actorId,
+          updatedById: state.actorId
+        }
+      });
+      await syncDepartures(tx, { tenantId: state.tenantId, actorId: state.actorId });
+      await tx.rideException.delete({ where: { id: exception.id } });
+    },
+    matches: reason('EXCEPTION_GONE')
+  },
+  {
+    name: 'agency timezone is not a known zone',
+    invariantKey: 'departure.matchesTimetable',
+    mutate: async (tx, state) => {
+      await tx.tenant.update({ where: { id: state.tenantId }, data: { timezone: 'Europe/Beograd' } });
+    },
+    matches: reason('TIMEZONE_INVALID')
+  },
+  {
+    // Every timetable write syncs departures in the same transaction, so a
+    // routine edit, extra bus and cancelled date must leave the check quiet.
+    name: 'timetable edit, extra bus and cancelled date are synced',
+    invariantKey: 'departure.matchesTimetable',
+    expects: 'silence',
+    mutate: async (tx, state) => {
+      await tx.ride.update({ where: { id: state.rideId }, data: { capacity: 6 } });
+      await tx.rideDayScheduleStationTime.update({
+        where: { id: state.stationTimeIds.last },
+        data: { time: '11:05' }
+      });
+      await tx.reservation.update({
+        where: { id: state.reservationId },
+        data: { rideArrivalTime: '11:05' }
+      });
+
+      const nextWeek = new Date(state.travelDate);
+      nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
+      await tx.rideException.createMany({
+        data: [
+          {
+            id: fixtureId('exception-silent-extra'),
+            type: RideExceptionType.ADDITIONAL,
+            exceptionDate: state.travelDate,
+            departureTime: '15:00',
+            arrivalTime: '17:00'
+          },
+          {
+            id: fixtureId('exception-silent-skip'),
+            type: RideExceptionType.SKIP,
+            exceptionDate: nextWeek,
+            departureTime: null,
+            arrivalTime: null
+          }
+        ].map((exception) => ({
+          ...exception,
+          tenantId: state.tenantId,
+          rideId: state.rideId,
+          createdById: state.actorId,
+          updatedById: state.actorId
+        }))
+      });
+    }
   }
 ];
 
@@ -388,6 +517,10 @@ export async function runIncidentFixtures(prisma: PrismaClient): Promise<Inciden
         }
 
         await fixture.mutate(tx, state);
+
+        if (!fixture.skipDepartureSync) {
+          await syncDepartures(tx, { tenantId: state.tenantId, actorId: state.actorId });
+        }
 
         if (fixture.expects === 'silence') {
           // The same assertion the baseline just made, so a check that learns
@@ -621,6 +754,8 @@ async function seedValidFixture(
       updatedById: actorId
     }
   });
+
+  await syncDepartures(tx, { tenantId, actorId });
 
   return {
     tenantId,

@@ -100,7 +100,7 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
   /** Read and validate the proposed write before scanning the tenant. */
   prepare?: (tx: Prisma.TransactionClient) => Promise<TPrepared>
 ): Promise<TResult> {
-  return scheduleEditTransaction(prisma, scope.tenantId, async (tx) => {
+  return scheduleEditTransaction(prisma, scope, async (tx) => {
     // Cheap existence and payload validation can run before the tenant-wide
     // baseline scan while still reading the state this transaction will write.
     const prepared = prepare ? await prepare(tx) : (undefined as TPrepared);

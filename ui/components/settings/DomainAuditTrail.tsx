@@ -14,6 +14,8 @@ const entityFor = (violation: InvariantHistoryViolationDto) => {
       return "Ride"
     case "ride-schedule":
       return "RideDaySchedule"
+    case "departure":
+      return "Departure"
     default:
       return ""
   }

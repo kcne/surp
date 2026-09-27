@@ -138,7 +138,7 @@ async function main() {
         // holds new ones back until the rewritten times are committed. What it
         // writes is recomputed under the lock, so an edit that landed since the
         // scan above is kept rather than overwritten with the scanned copy.
-        const result = await scheduleEditTransaction(prisma, line.tenantId, (tx) =>
+        const result = await scheduleEditTransaction(prisma, { tenantId: line.tenantId, actorId: actorId! }, (tx) =>
           realignDayScheduleIfDriftedTx(tx, {
             tenantId: line.tenantId,
             rideDayScheduleId: daySchedule.id,

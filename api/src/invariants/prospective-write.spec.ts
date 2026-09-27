@@ -1,6 +1,11 @@
 import { Prisma } from '@prisma/client';
+import { syncDepartures } from '../departures/departure-sync';
 import { confirmationTokenFor, guardProspectiveWrite, ProspectiveWriteConsent } from './prospective-write';
 import { InvariantContext, ProspectiveInvariant, Violation } from './invariant.types';
+
+// Every schedule edit ends by syncing departures; that sync has its own tests
+// and would otherwise run against this spec's mocked transaction.
+jest.mock('../departures/departure-sync', () => ({ syncDepartures: jest.fn() }));
 
 function violation(subjectId: string, magnitude?: number): Violation {
   return {
@@ -455,6 +460,23 @@ describe('guardProspectiveWrite', () => {
       // The callbacks do their own read-then-write — the exception that must not
       // already exist — so the lock is not the checks' to skip.
       expect(statements[0]).toContain('pg_advisory_xact_lock(');
+    });
+
+    it('syncs departures after the write, in its transaction, credited to the editor', async () => {
+      const { prisma } = prismaDouble();
+      const order: string[] = [];
+      const sync = syncDepartures as jest.MockedFunction<typeof syncDepartures>;
+      sync.mockImplementationOnce(async () => {
+        order.push('sync');
+        return { created: 0, updated: 0, dropped: 0, deleted: 0 };
+      });
+
+      await guardProspectiveWrite(prisma as never, scope, [], UNANSWERED, async () => {
+        order.push('write');
+      });
+
+      expect(order).toEqual(['write', 'sync']);
+      expect(sync).toHaveBeenCalledWith(expect.objectContaining({ marker: 'transaction' }), scope);
     });
 
     it('does not retry a failure behind the operator\'s back', async () => {
