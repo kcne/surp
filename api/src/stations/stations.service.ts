@@ -126,7 +126,8 @@ export class StationsService {
 
     return guardProspectiveWrite(
       this.prisma,
-      { tenantId: auth.tenantId, actorId: auth.sub },
+      // Departures carry only a station's ID, which no station edit changes.
+      { tenantId: auth.tenantId, actorId: auth.sub, changesTimetable: false },
       dto.isActive === false ? PROSPECTIVE_INVARIANTS.stationDeactivation : [],
       consentFrom(dto),
       (tx) =>

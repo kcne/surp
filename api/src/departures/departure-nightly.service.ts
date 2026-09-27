@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { scheduleEditTransaction } from '../prisma/schedule-lock';
 import { DepartureSyncCounts, syncDepartures } from './departure-sync';
+import { departureSyncEnabled } from './departure-sync-enabled';
 import { SYSTEM_ACTOR_ID } from './system-actor';
 
 export interface NightlyTenantOutcome {
@@ -26,15 +26,12 @@ export interface NightlyTenantOutcome {
 export class DepartureNightlyService {
   private readonly logger = new Logger(DepartureNightlyService.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: ConfigService
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   // Before the 03:00 audit retention job.
   @Cron('0 2 * * *', { name: 'departures-nightly', timeZone: 'Europe/Belgrade' })
   async runScheduled(): Promise<void> {
-    if (!this.config.get<boolean>('DEPARTURES_NIGHTLY_ENABLED')) {
+    if (!departureSyncEnabled()) {
       return;
     }
 

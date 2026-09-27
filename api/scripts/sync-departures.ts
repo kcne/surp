@@ -10,8 +10,12 @@
  * One tenant:        pnpm departures:sync --tenant=<tenant id>
  *
  * Run the dry run and the apply against a restored production backup before
- * applying to production, and compare the counts of the two runs. Enable
- * DEPARTURES_NIGHTLY_ENABLED only after the first apply.
+ * applying to production, and compare the counts of the two runs. Set
+ * DEPARTURES_SYNC_ENABLED only after the first apply, then run the dry run
+ * again: edits made between the apply and the switch did not sync, and a
+ * second apply writes what they changed.
+ *
+ * The script itself runs whether or not the switch is set.
  */
 import { PrismaClient } from '@prisma/client';
 import { planDepartureSync, syncDepartures } from '../src/departures/departure-sync';

@@ -13,14 +13,29 @@ describe('DepartureNightlyService', () => {
     $transaction: jest.fn((work: (client: typeof tx) => Promise<unknown>) => work(tx))
   };
 
+  const syncSwitch = process.env.DEPARTURES_SYNC_ENABLED;
+
   function service(enabled: boolean) {
-    const config = { get: jest.fn(() => enabled) };
-    return new DepartureNightlyService(prismaMock as never, config as never);
+    if (enabled) {
+      process.env.DEPARTURES_SYNC_ENABLED = 'true';
+    } else {
+      delete process.env.DEPARTURES_SYNC_ENABLED;
+    }
+
+    return new DepartureNightlyService(prismaMock as never);
   }
 
   beforeEach(() => {
     jest.clearAllMocks();
     prismaMock.tenant.findMany.mockResolvedValue([{ id: 'tenant-a' }, { id: 'tenant-b' }]);
+  });
+
+  afterAll(() => {
+    if (syncSwitch === undefined) {
+      delete process.env.DEPARTURES_SYNC_ENABLED;
+    } else {
+      process.env.DEPARTURES_SYNC_ENABLED = syncSwitch;
+    }
   });
 
   it('does nothing until it is enabled', async () => {
@@ -42,8 +57,10 @@ describe('DepartureNightlyService', () => {
       'insertOnly',
       expect.any(Date)
     );
-    // The exclusive lock, then no second (full) sync from the transaction helper.
-    expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
+    // Per tenant, the exclusive lock and the audit actor, then no second
+    // (full) sync from the transaction helper.
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(4);
+    expect(syncMock).not.toHaveBeenCalledWith(tx, expect.anything());
   });
 
   it('keeps going when one tenant fails', async () => {

@@ -12,15 +12,24 @@ import { InvariantContext } from './invariant.types';
  */
 export function inScheduleEdit<T>(
   ctx: InvariantContext,
-  work: (ctx: InvariantContext) => Promise<T>
+  work: (ctx: InvariantContext) => Promise<T>,
+  /**
+   * False for a repair that rewrites only reservations, which the departure
+   * generator does not read, so the edit skips the tenant-wide departure sync.
+   */
+  { changesTimetable = true }: { changesTimetable?: boolean } = {}
 ): Promise<T> {
   if (!('$transaction' in ctx.prisma)) {
     return work(ctx);
   }
 
-  return scheduleEditTransaction(ctx.prisma, ctx, (tx: Prisma.TransactionClient) =>
-    // A fresh context: checks cache the window they read against the context
-    // they were given, and this one must be read under the lock.
-    work({ ...ctx, prisma: tx })
+  return scheduleEditTransaction(
+    ctx.prisma,
+    ctx,
+    (tx: Prisma.TransactionClient) =>
+      // A fresh context: checks cache the window they read against the context
+      // they were given, and this one must be read under the lock.
+      work({ ...ctx, prisma: tx }),
+    { departureSync: changesTimetable }
   );
 }

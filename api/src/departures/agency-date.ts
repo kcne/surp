@@ -16,6 +16,8 @@ export const DEPARTURE_HORIZON_DAYS = 365;
 
 export interface AgencyTimezone {
   timezone: string;
+  /** The tenant's own value, trimmed, or null when it has none. */
+  configured: string | null;
   /** The tenant's own value was set but is not a zone the runtime knows. */
   invalid: boolean;
 }
@@ -29,14 +31,14 @@ export function resolveAgencyTimezone(timezone: string | null | undefined): Agen
   const trimmed = timezone?.trim();
 
   if (!trimmed) {
-    return { timezone: DEFAULT_AGENCY_TIMEZONE, invalid: false };
+    return { timezone: DEFAULT_AGENCY_TIMEZONE, configured: null, invalid: false };
   }
 
   try {
     new Intl.DateTimeFormat('en-CA', { timeZone: trimmed });
-    return { timezone: trimmed, invalid: false };
+    return { timezone: trimmed, configured: trimmed, invalid: false };
   } catch {
-    return { timezone: DEFAULT_AGENCY_TIMEZONE, invalid: true };
+    return { timezone: DEFAULT_AGENCY_TIMEZONE, configured: trimmed, invalid: true };
   }
 }
 

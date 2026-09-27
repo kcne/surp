@@ -45,7 +45,7 @@ export function DomainAuditTrail({ violation }: { violation: InvariantHistoryVio
           <p className="font-medium">
             {actionLabel(event.action)} · {new Date(event.createdAt).toLocaleString("sr-RS")}
           </p>
-          <p className="text-muted-foreground">Korisnik: {event.actorUserId}</p>
+          <p className="text-muted-foreground">Korisnik: {actorLabel(event.actorUserId)}</p>
           {Object.entries(event.changes).map(([field, value]) => (
             <p key={field} className="break-all text-muted-foreground">
               {field}: {formatChange(value)}
@@ -55,6 +55,11 @@ export function DomainAuditTrail({ violation }: { violation: InvariantHistoryVio
       ))}
     </section>
   )
+}
+
+/** Writes nobody in particular made, like the nightly departure sync, carry a fixed system ID. */
+function actorLabel(actorUserId: string) {
+  return actorUserId === "system:departures" ? "Sistem (uskladjivanje polazaka)" : actorUserId
 }
 
 function actionLabel(action: string) {

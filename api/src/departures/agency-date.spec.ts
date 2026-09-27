@@ -24,17 +24,20 @@ describe('agency date', () => {
   it('falls back to Belgrade for a missing zone without calling it invalid', () => {
     expect(resolveAgencyTimezone(null)).toEqual({
       timezone: DEFAULT_AGENCY_TIMEZONE,
+      configured: null,
       invalid: false
     });
     expect(resolveAgencyTimezone('  ')).toEqual({
       timezone: DEFAULT_AGENCY_TIMEZONE,
+      configured: null,
       invalid: false
     });
   });
 
-  it('falls back to Belgrade for an unknown zone and says so', () => {
-    expect(resolveAgencyTimezone('Europe/Beograd')).toEqual({
+  it('falls back to Belgrade for an unknown zone, and keeps the stored value to report', () => {
+    expect(resolveAgencyTimezone(' Europe/Beograd ')).toEqual({
       timezone: DEFAULT_AGENCY_TIMEZONE,
+      configured: 'Europe/Beograd',
       invalid: true
     });
   });
@@ -42,6 +45,7 @@ describe('agency date', () => {
   it('keeps a known zone', () => {
     expect(resolveAgencyTimezone('Europe/Sarajevo')).toEqual({
       timezone: 'Europe/Sarajevo',
+      configured: 'Europe/Sarajevo',
       invalid: false
     });
   });

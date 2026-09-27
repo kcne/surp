@@ -381,7 +381,10 @@ const fixtures: IncidentFixture[] = [
     mutate: async (tx, state) => {
       await tx.tenant.update({ where: { id: state.tenantId }, data: { timezone: 'Europe/Beograd' } });
     },
-    matches: reason('TIMEZONE_INVALID')
+    // The stored value is what the agency has to correct, so it is reported.
+    matches: (violation) =>
+      reason('TIMEZONE_INVALID')(violation) &&
+      violation.detail.configuredTimezone === 'Europe/Beograd'
   },
   {
     // Every timetable write syncs departures in the same transaction, so a

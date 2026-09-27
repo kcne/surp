@@ -1,8 +1,15 @@
-import { DepartureSource, Prisma, RideExceptionType, RideStatus } from '@prisma/client';
+import {
+  AuditEventType,
+  DepartureSource,
+  Prisma,
+  RideExceptionType,
+  RideStatus
+} from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { DepartureNightlyService } from '../../src/departures/departure-nightly.service';
 import { syncDepartures } from '../../src/departures/departure-sync';
 import { SYSTEM_ACTOR_ID } from '../../src/departures/system-actor';
+import { PassengersService } from '../../src/passengers/passengers.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { scheduleEditTransaction } from '../../src/prisma/schedule-lock';
 import { RidesService } from '../../src/rides/rides.service';
@@ -40,15 +47,28 @@ function daysFromToday(days: number): Date {
 describe('departures (real database)', () => {
   let prisma: PrismaService;
   let rides: RidesService;
+  let passengers: PassengersService;
   let seeded: Seeded;
+  const syncSwitch = process.env.DEPARTURES_SYNC_ENABLED;
 
   beforeAll(async () => {
     prisma = new PrismaService();
     await prisma.$connect();
     rides = new RidesService(prisma);
+    passengers = new PassengersService(prisma);
+  });
+
+  beforeEach(() => {
+    // As production runs once the first fill is done.
+    process.env.DEPARTURES_SYNC_ENABLED = 'true';
   });
 
   afterAll(async () => {
+    if (syncSwitch === undefined) {
+      delete process.env.DEPARTURES_SYNC_ENABLED;
+    } else {
+      process.env.DEPARTURES_SYNC_ENABLED = syncSwitch;
+    }
     await prisma.$disconnect();
   });
 
@@ -265,17 +285,44 @@ describe('departures (real database)', () => {
 
       const [after] = await onTravelDate({
         id: true,
+        updatedById: true,
         stops: {
-          select: { stationId: true, time: true, isBoarding: true, isDropoff: true },
+          select: {
+            stationId: true,
+            time: true,
+            isBoarding: true,
+            isDropoff: true,
+            createdById: true
+          },
           orderBy: { orderIndex: 'asc' }
         }
       });
       expect(after.id).toBe(before.id);
       expect(after.stops).toEqual([
-        { stationId: seeded.stations.first, time: '09:00', isBoarding: true, isDropoff: false },
-        { stationId: middle, time: '10:00', isBoarding: false, isDropoff: true },
-        { stationId: seeded.stations.last, time: '11:00', isBoarding: false, isDropoff: true }
+        {
+          stationId: seeded.stations.first,
+          time: '09:00',
+          isBoarding: true,
+          isDropoff: false,
+          createdById: seeded.auth.sub
+        },
+        {
+          stationId: middle,
+          time: '10:00',
+          isBoarding: false,
+          isDropoff: true,
+          createdById: seeded.auth.sub
+        },
+        {
+          stationId: seeded.stations.last,
+          time: '11:00',
+          isBoarding: false,
+          isDropoff: true,
+          createdById: seeded.auth.sub
+        }
       ]);
+      // Only the stops changed, so the departure row itself is not rewritten.
+      expect(after.updatedById).toBe(SYSTEM_ACTOR_ID);
     });
 
     it('deletes departures of a dropped weekday that nothing references, and brings them back', async () => {
@@ -294,6 +341,61 @@ describe('departures (real database)', () => {
         }
       ]);
       expect(await onTravelDate()).toHaveLength(1);
+    });
+
+    it('credits the departures and stops an edit deletes to the editor, not to their last writer', async () => {
+      await rides.replaceDayTimes(seeded.auth, seeded.rideId, []);
+
+      const deletes = await prisma.auditEvent.groupBy({
+        by: ['entityType', 'actorUserId'],
+        where: { tenantId: seeded.auth.tenantId, type: AuditEventType.DOMAIN_DELETE },
+        _count: { _all: true }
+      });
+      const byEntity = Object.fromEntries(
+        deletes.map((group) => [`${group.entityType}:${group.actorUserId}`, group._count._all])
+      );
+
+      // Every departure and every one of its two stops was last written by
+      // the first fill's system actor; the delete is still the editor's.
+      expect(byEntity[`Departure:${seeded.auth.sub}`]).toBeGreaterThanOrEqual(52);
+      expect(byEntity[`DepartureStop:${seeded.auth.sub}`]).toBe(
+        2 * byEntity[`Departure:${seeded.auth.sub}`]
+      );
+      expect(byEntity[`Departure:${SYSTEM_ACTOR_ID}`]).toBeUndefined();
+      expect(byEntity[`DepartureStop:${SYSTEM_ACTOR_ID}`]).toBeUndefined();
+    });
+
+    it('rolls the timetable write back when the sync refuses what it would write', async () => {
+      // A time the API would refuse, written past it: the departure CHECK is
+      // the last line, and it takes the edit down with it.
+      const edit = scheduleEditTransaction(prisma, editor(), (tx) =>
+        tx.rideDayScheduleStationTime.updateMany({
+          where: { tenantId: seeded.auth.tenantId, stationId: seeded.stations.first },
+          data: { time: '9:00' }
+        })
+      );
+
+      await expect(edit).rejects.toThrow(/Departure_departureTime_format/);
+      const times = await prisma.rideDayScheduleStationTime.findMany({
+        where: { tenantId: seeded.auth.tenantId, stationId: seeded.stations.first },
+        select: { time: true }
+      });
+      expect(times).toEqual([{ time: '09:00' }]);
+      const [departure] = await onTravelDate({ departureTime: true });
+      expect(departure.departureTime).toBe('09:00');
+    });
+
+    it('leaves departures alone on a passenger edit, which the generator does not read', async () => {
+      // Drift the passenger edit would repair if it synced.
+      await prisma.departure.updateMany({
+        where: { rideId: seeded.rideId },
+        data: { capacity: 3 }
+      });
+
+      await passengers.update(seeded.auth, seeded.passengerId, { firstName: 'Mila' });
+
+      const [departure] = await onTravelDate({ capacity: true });
+      expect(departure.capacity).toBe(3);
     });
 
     it('keeps a referenced departure the timetable drops, and restores it with the same ID', async () => {
@@ -429,9 +531,36 @@ describe('departures (real database)', () => {
     });
   });
 
+  describe('before DEPARTURES_SYNC_ENABLED is set', () => {
+    beforeEach(() => {
+      delete process.env.DEPARTURES_SYNC_ENABLED;
+    });
+
+    it('lets a timetable edit through without writing departures', async () => {
+      await rides.update(seeded.auth, seeded.rideId, { capacity: 40 });
+
+      const [departure] = await onTravelDate({ capacity: true, updatedById: true });
+      expect(departure).toEqual({ capacity: 48, updatedById: SYSTEM_ACTOR_ID });
+    });
+
+    it('does not run the nightly job', async () => {
+      await prisma.departure.deleteMany({
+        where: { rideId: seeded.rideId, serviceDate: new Date(seeded.otherTravelDate) }
+      });
+
+      await new DepartureNightlyService(prisma).runScheduled();
+
+      expect(
+        await prisma.departure.count({
+          where: { rideId: seeded.rideId, serviceDate: new Date(seeded.otherTravelDate) }
+        })
+      ).toBe(0);
+    });
+  });
+
   describe('the nightly job', () => {
     function nightly() {
-      return new DepartureNightlyService(prisma, { get: () => true } as never);
+      return new DepartureNightlyService(prisma);
     }
 
     it('adds only what is missing', async () => {

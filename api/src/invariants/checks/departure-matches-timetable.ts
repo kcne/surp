@@ -106,7 +106,7 @@ export const departureMatchesTimetable: Invariant = {
   description:
     'Polasci se cuvaju uz red voznje i uskoro ce rezervacije pokazivati na njih. Polazak koji nedostaje, visak ili polazak sa starim vremenom znacio bi da putnik vidi drugaciji autobus od onog koji saobraca.',
   manualAdvice:
-    'Svaka izmena reda voznje sama uskladjuje polaske, pa razlika znaci da je nesto zaobislo tu proveru. Prijavite je podrsci pre nego sto menjate red voznje.',
+    'Svaka izmena reda voznje sama uskladjuje polaske, pa razlika znaci da je nesto zaobislo to uskladjivanje. Prijavite je podrsci pre nego sto menjate red voznje.',
   severity: 'warning',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
@@ -121,10 +121,11 @@ export const departureMatchesTimetable: Invariant = {
       violations.push({
         subjectType: 'system',
         subjectId: ctx.tenantId,
-        summary: `Vremenska zona agencije nije ispravna, pa se datumi racunaju po zoni ${plan.timezone}.`,
+        summary: `Vremenska zona agencije "${plan.configuredTimezone}" nije ispravna, pa se datumi racunaju po zoni ${plan.timezone}.`,
         detail: {
           reason: 'TIMEZONE_INVALID' satisfies DepartureMismatchReason,
-          timezone: plan.timezone
+          configuredTimezone: plan.configuredTimezone,
+          fallbackTimezone: plan.timezone
         },
         canRepair: false
       });

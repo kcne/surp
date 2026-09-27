@@ -73,7 +73,10 @@ export interface DepartureUpdate {
 
 export interface DepartureSyncPlan {
   window: DepartureWindow;
+  /** The zone the window was read in. */
   timezone: string;
+  /** The tenant's own setting, as stored. */
+  configuredTimezone: string | null;
   timezoneInvalid: boolean;
   /** Every departure the timetable produces inside the window. */
   plannedCount: number;
@@ -97,6 +100,17 @@ export async function planDepartureSync(
   tenantId: string,
   now: Date = new Date()
 ): Promise<DepartureSyncPlan> {
+  // Handed a root client (the check, the dry run), the reads share one
+  // snapshot. Otherwise each would run on its own connection, and an edit
+  // committing between them would show up as drift that is not there.
+  if ('$transaction' in db) {
+    return db.$transaction((tx) => planDepartureSync(tx, tenantId, now), {
+      isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+      maxWait: 5_000,
+      timeout: 30_000
+    });
+  }
+
   const tenant = await db.tenant.findUniqueOrThrow({
     where: { id: tenantId },
     select: { timezone: true }
@@ -113,6 +127,7 @@ export async function planDepartureSync(
   return {
     window,
     timezone: zone.timezone,
+    configuredTimezone: zone.configured,
     timezoneInvalid: zone.invalid,
     plannedCount: planned.length,
     ...diff(planned, stored)
@@ -132,9 +147,7 @@ export async function applyDepartureSync(
     return { created: plan.creates.length, updated: 0, dropped: 0, deleted: 0 };
   }
 
-  for (const update of plan.updates) {
-    await updateDeparture(tx, update, scope);
-  }
+  await updateDepartures(tx, plan.updates, scope);
 
   if (plan.drops.length > 0) {
     await tx.departure.updateMany({
@@ -320,14 +333,30 @@ async function createDepartures(
   });
 }
 
-async function updateDeparture(
+/**
+ * Writes every update in a handful of statements, because it runs while every
+ * booking of the tenant waits on the schedule lock. Departures that end up
+ * with the same values share one `updateMany`: a capacity change on a daily
+ * ride is one statement per distinct weekday timing, not one per date. Stops
+ * are replaced in one delete and one insert across every departure whose stops
+ * changed, and a departure whose only change is its stops keeps its row as is.
+ */
+async function updateDepartures(
   tx: Prisma.TransactionClient,
-  { stored, planned, fields }: DepartureUpdate,
+  updates: readonly DepartureUpdate[],
   scope: DepartureSyncScope
 ): Promise<void> {
-  await tx.departure.update({
-    where: { id: stored.id },
-    data: {
+  const groups = new Map<
+    string,
+    { data: Prisma.DepartureUncheckedUpdateManyInput; ids: string[] }
+  >();
+
+  for (const { stored, planned, fields } of updates) {
+    if (fields.every((field) => field === 'stops')) {
+      continue;
+    }
+
+    const data: Prisma.DepartureUncheckedUpdateManyInput = {
       lineId: planned.lineId,
       departureTime: planned.departureTime,
       arrivalTime: planned.arrivalTime,
@@ -336,13 +365,30 @@ async function updateDeparture(
       cancelledAt: planned.cancellation?.at ?? null,
       cancelledById: planned.cancellation?.by ?? null,
       updatedById: scope.actorId
-    }
-  });
+    };
+    const key = JSON.stringify(data);
+    const group = groups.get(key) ?? { data, ids: [] as string[] };
 
-  if (fields.includes('stops')) {
-    await tx.departureStop.deleteMany({ where: { departureId: stored.id } });
-    await tx.departureStop.createMany({ data: stopRows(stored.id, planned.stops, scope) });
+    group.ids.push(stored.id);
+    groups.set(key, group);
   }
+
+  for (const { data, ids } of groups.values()) {
+    await tx.departure.updateMany({ where: { id: { in: ids } }, data });
+  }
+
+  const restopped = updates.filter(({ fields }) => fields.includes('stops'));
+
+  if (restopped.length === 0) {
+    return;
+  }
+
+  await tx.departureStop.deleteMany({
+    where: { departureId: { in: restopped.map(({ stored }) => stored.id) } }
+  });
+  await tx.departureStop.createMany({
+    data: restopped.flatMap(({ stored, planned }) => stopRows(stored.id, planned.stops, scope))
+  });
 }
 
 function stopRows(departureId: string, stops: readonly PlannedStop[], scope: DepartureSyncScope) {

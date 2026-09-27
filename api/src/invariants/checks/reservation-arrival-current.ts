@@ -119,6 +119,6 @@ export const reservationArrivalCurrent: Invariant = {
       }
 
       return { repairedCount, skippedCount: 0 };
-    });
+    }, { changesTimetable: false });
   }
 };

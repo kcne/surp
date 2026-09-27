@@ -56,6 +56,12 @@ export const PROSPECTIVE_INVARIANTS = {
 export interface ProspectiveWriteScope {
   tenantId: string;
   actorId: string;
+  /**
+   * False for a write the departure generator does not read, like a passenger
+   * or station edit. It then skips the departure sync every schedule edit
+   * ends with, which reads the whole tenant while bookings wait on the lock.
+   */
+  changesTimetable?: boolean;
 }
 
 /**
@@ -180,7 +186,7 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
     }
 
     return result;
-  });
+  }, { departureSync: scope.changesTimetable !== false });
 }
 
 function breakingChange(

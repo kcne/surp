@@ -190,7 +190,8 @@ export class PassengersService {
 
     return guardProspectiveWrite(
       this.prisma,
-      { tenantId: auth.tenantId, actorId: auth.sub },
+      // The departure generator does not read passengers, so no sync is needed.
+      { tenantId: auth.tenantId, actorId: auth.sub, changesTimetable: false },
       dto.isActive === false ? PROSPECTIVE_INVARIANTS.passengerDeactivation : [],
       consentFrom(dto),
       (tx) =>
