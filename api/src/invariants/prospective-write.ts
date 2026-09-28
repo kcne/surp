@@ -1,6 +1,8 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash } from 'crypto';
+import { departureSyncEnabled } from '../departures/departure-sync-enabled';
+import { syncDepartures } from '../departures/departure-sync';
 import { PrismaService } from '../prisma/prisma.service';
 import { scheduleEditTransaction } from '../prisma/schedule-lock';
 import { instanceNotOverbooked } from './checks/instance-not-overbooked';
@@ -149,6 +151,16 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
         }
 
         const shown = added;
+
+        // The edit syncs departures only once its work is done, and a repair
+        // that links a reservation to its departure must see the departures
+        // this write produces: matched against the old times, a reservation
+        // moved to its bus's new time would find no bus and lose its link.
+        // The sync at the end still runs, and deletes a departure the repair
+        // moved every reservation off.
+        if (scope.changesTimetable !== false && departureSyncEnabled()) {
+          await syncDepartures(tx, scope);
+        }
 
         await invariant.repair(
           // Nothing has written since the post-write scan, so its cached

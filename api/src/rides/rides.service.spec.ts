@@ -6,6 +6,7 @@ import {
   RideType,
   UserRole
 } from '@prisma/client';
+import { syncDepartures } from '../departures/departure-sync';
 import { RidesService } from './rides.service';
 
 // Every schedule edit ends by syncing departures; that sync has its own tests
@@ -995,6 +996,20 @@ describe('RidesService', () => {
   // registry has a repair for, so the refusal can offer to fix it rather than
   // only to be overridden.
   describe('moving the departure time under a sold reservation', () => {
+    const syncSwitch = process.env.DEPARTURES_SYNC_ENABLED;
+
+    beforeAll(() => {
+      process.env.DEPARTURES_SYNC_ENABLED = 'true';
+    });
+
+    afterAll(() => {
+      if (syncSwitch === undefined) {
+        delete process.env.DEPARTURES_SYNC_ENABLED;
+      } else {
+        process.env.DEPARTURES_SYNC_ENABLED = syncSwitch;
+      }
+    });
+
     const travelDate = (() => {
       const date = new Date();
       date.setUTCDate(date.getUTCDate() + 60);
@@ -1103,6 +1118,9 @@ describe('RidesService', () => {
           $executeRaw: jest.fn().mockResolvedValue(1),
           reservation: {
             findMany: jest.fn(async () => reservations.map((item) => ({ ...item }))),
+            findUniqueOrThrow: jest.fn(async ({ where }: never) =>
+              reservations.find((item) => item.id === (where as { id: string }).id)
+            ),
             update: jest.fn(async ({ where, data }: never) => {
               const target = reservations.find(
                 (item) => item.id === (where as { id: string }).id
@@ -1115,6 +1133,8 @@ describe('RidesService', () => {
             })
           },
           station: { findMany: jest.fn().mockResolvedValue([]) },
+          // The departure the moved reservation is linked to again.
+          departure: { findMany: jest.fn().mockResolvedValue([{ id: 'departure-1' }]) },
           ride: {
             findMany: jest.fn(async () => [
               written ? windowedRide('10:00', '11:30') : windowedRide('09:00', '10:30')
@@ -1170,11 +1190,19 @@ describe('RidesService', () => {
       expect(harness.updates).toEqual([
         expect.objectContaining({
           id: 'reservation-1',
+          departureId: 'departure-1',
           rideDepartureTime: '10:00',
           rideArrivalTime: '11:30'
         })
       ]);
       expect(harness.tx.reservation.findMany).toHaveBeenCalledTimes(3);
+      // Departures are synced before the repair looks for the moved bus, and
+      // again once the edit is done.
+      const sync = jest.mocked(syncDepartures);
+      expect(sync).toHaveBeenCalledTimes(2);
+      expect(sync.mock.invocationCallOrder[0]).toBeLessThan(
+        harness.tx.departure.findMany.mock.invocationCallOrder[0]
+      );
     });
 
     it('leaves the reservation where it is when the caller only overrides', async () => {

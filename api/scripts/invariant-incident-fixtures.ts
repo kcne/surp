@@ -14,7 +14,9 @@ import {
 import { InvariantContext, Violation } from '../src/invariants/invariant.types';
 import { INVARIANTS, findInvariant } from '../src/invariants/registry';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { resolveDepartureLink } from '../src/departures/departure-link';
 import { syncDepartures } from '../src/departures/departure-sync';
+import { DEPARTURE_LINK_REQUIRED_FROM } from '../src/invariants/checks/reservation-departure-linked';
 import { dayOfWeekOf, formatDateOnly } from '../src/rides/ride-instance-materialization';
 
 interface FixtureState {
@@ -337,6 +339,12 @@ const fixtures: IncidentFixture[] = [
     invariantKey: 'departure.matchesTimetable',
     skipDepartureSync: true,
     mutate: async (tx, state) => {
+      // A linked departure cannot be deleted at all, so the booking lets go
+      // of it first.
+      await tx.reservation.update({
+        where: { id: state.reservationId },
+        data: { departureId: null }
+      });
       await tx.departure.deleteMany({
         where: { rideId: state.rideId, serviceDate: state.travelDate }
       });
@@ -430,6 +438,68 @@ const fixtures: IncidentFixture[] = [
         }))
       });
     }
+  },
+  {
+    name: 'booking is saved without its departure link',
+    invariantKey: 'reservation.departureLinked',
+    mutate: async (tx, state) => {
+      await createUnlinkedSeat(tx, state, { seatNumber: 2, createdAt: AFTER_LINK_CUTOFF });
+    },
+    matches: reason('LINKABLE_UNLINKED')
+  },
+  {
+    // The link rule refuses to guess between two buses leaving at one time,
+    // and the booking is reported instead.
+    name: 'booking cannot tell a same-time extra from the timetable bus',
+    invariantKey: 'reservation.departureLinked',
+    mutate: async (tx, state) => {
+      await createExtraBus(tx, state, { id: 'exception-same-time', departureTime: '09:00' });
+      await createUnlinkedSeat(tx, state, { seatNumber: 2, createdAt: AFTER_LINK_CUTOFF });
+    },
+    matches: reason('NO_UNIQUE_MATCH')
+  },
+  {
+    name: 'booking is linked to an extra bus it was not sold on',
+    invariantKey: 'reservation.departureLinked',
+    mutate: async (tx, state) => {
+      const extra = await createExtraBus(tx, state, {
+        id: 'exception-wrong-link',
+        departureTime: '15:00'
+      });
+      await tx.reservation.update({
+        where: { id: state.reservationId },
+        data: { departureId: extra.id }
+      });
+    },
+    matches: reason('WRONG_LINK')
+  },
+  {
+    name: 'booked date is cancelled',
+    invariantKey: 'reservation.departureLinked',
+    mutate: async (tx, state) => {
+      await tx.rideException.create({
+        data: {
+          id: fixtureId('exception-booked-skip'),
+          tenantId: state.tenantId,
+          rideId: state.rideId,
+          exceptionDate: state.travelDate,
+          type: RideExceptionType.SKIP,
+          createdById: state.actorId,
+          updatedById: state.actorId
+        }
+      });
+    },
+    matches: (violation, state) =>
+      reason('NOT_RUNNING')(violation) && violation.subjectId === state.reservationId
+  },
+  {
+    // Bookings from before linking went live are the backfill's (PR 2).
+    name: 'booking from before departure linking stays unlinked',
+    invariantKey: 'reservation.departureLinked',
+    expects: 'silence',
+    mutate: async (tx, state) => {
+      await createUnlinkedSeat(tx, state, { seatNumber: 2, createdAt: BEFORE_LINK_CUTOFF });
+    }
   }
 ];
 
@@ -456,6 +526,7 @@ async function createReturnLeg(
     data: {
       tenantId: state.tenantId,
       rideId: state.rideId,
+      departureId: await departureOf(tx, state, travelDate),
       passengerId: state.passengerId,
       travelDate,
       rideDepartureTime: '09:00',
@@ -482,6 +553,7 @@ async function createSeatOnSameDeparture(
     data: {
       tenantId: state.tenantId,
       rideId: state.rideId,
+      departureId: await departureOf(tx, state, state.travelDate),
       passengerId: state.passengerId,
       travelDate: state.travelDate,
       rideDepartureTime: '09:00',
@@ -494,6 +566,75 @@ async function createSeatOnSameDeparture(
       createdById: state.actorId,
       updatedById: state.actorId
     }
+  });
+}
+
+/** The 09:00 departure a booking on `travelDate` links to, as a booking would. */
+function departureOf(tx: Prisma.TransactionClient, state: FixtureState, travelDate: Date) {
+  return resolveDepartureLink(tx, {
+    tenantId: state.tenantId,
+    rideId: state.rideId,
+    travelDate,
+    departureTime: '09:00'
+  });
+}
+
+/**
+ * A seat on the seeded departure that carries no departure link, booked at
+ * `createdAt`. The cutoff is a fixed date, so each fixture states which side
+ * of it the booking falls on instead of depending on today's date.
+ */
+function createUnlinkedSeat(
+  tx: Prisma.TransactionClient,
+  state: FixtureState,
+  { seatNumber, createdAt }: { seatNumber: number; createdAt: Date }
+) {
+  return tx.reservation.create({
+    data: {
+      tenantId: state.tenantId,
+      rideId: state.rideId,
+      passengerId: state.passengerId,
+      travelDate: state.travelDate,
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '11:00',
+      seatNumber,
+      status: ReservationStatus.ACTIVE,
+      departureStationId: state.stationIds.middle,
+      arrivalStationId: state.stationIds.last,
+      groupId: `${state.groupId}-unlinked-${seatNumber}`,
+      createdAt,
+      createdById: state.actorId,
+      updatedById: state.actorId
+    }
+  });
+}
+
+const AFTER_LINK_CUTOFF = new Date(DEPARTURE_LINK_REQUIRED_FROM.getTime() + 60_000);
+const BEFORE_LINK_CUTOFF = new Date(DEPARTURE_LINK_REQUIRED_FROM.getTime() - 86_400_000);
+
+async function createExtraBus(
+  tx: Prisma.TransactionClient,
+  state: FixtureState,
+  { id, departureTime }: { id: string; departureTime: string }
+) {
+  await tx.rideException.create({
+    data: {
+      id: fixtureId(id),
+      tenantId: state.tenantId,
+      rideId: state.rideId,
+      exceptionDate: state.travelDate,
+      type: RideExceptionType.ADDITIONAL,
+      departureTime,
+      arrivalTime: '17:00',
+      createdById: state.actorId,
+      updatedById: state.actorId
+    }
+  });
+  await syncDepartures(tx, { tenantId: state.tenantId, actorId: state.actorId });
+
+  return tx.departure.findFirstOrThrow({
+    where: { rideExceptionId: fixtureId(id) },
+    select: { id: true }
   });
 }
 
@@ -739,11 +880,22 @@ async function seedValidFixture(
       updatedById: actorId
     }
   });
+  // Departures first, so the seeded booking links to its own the way a
+  // booking made through the API does.
+  await syncDepartures(tx, { tenantId, actorId });
+  const departureId = await resolveDepartureLink(tx, {
+    tenantId,
+    rideId,
+    travelDate,
+    departureTime: '09:00'
+  });
+
   await tx.reservation.create({
     data: {
       id: reservationId,
       tenantId,
       rideId,
+      departureId,
       passengerId,
       travelDate,
       rideDepartureTime: '09:00',
@@ -757,8 +909,6 @@ async function seedValidFixture(
       updatedById: actorId
     }
   });
-
-  await syncDepartures(tx, { tenantId, actorId });
 
   return {
     tenantId,
