@@ -1,6 +1,7 @@
 import { DepartureSource, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { formatDateOnly } from '../rides/ride-instance-materialization';
+import { departureSyncEnabled } from './departure-sync-enabled';
 
 /**
  * Which stored departure a reservation belongs to, from the times it carries.
@@ -50,6 +51,21 @@ export async function resolveDepartureLink(
   });
 
   return candidates.length === 1 ? candidates[0].id : null;
+}
+
+/**
+ * The link a booking or a repair stamps, which is the match above only while
+ * departures are kept in step with the timetable. With the sync off, an extra
+ * bus added since the first fill has no stored row, so a booking on it at the
+ * timetable bus's time would match the timetable bus uniquely: a wrong link,
+ * and one the check cannot see once the extra is stored and the time is
+ * shared. Until the sync is on, bookings stay unlinked for the backfill.
+ */
+export async function departureLinkForWrite(
+  db: Db,
+  input: DepartureLinkInput
+): Promise<string | null> {
+  return departureSyncEnabled() ? resolveDepartureLink(db, input) : null;
 }
 
 export function departureLinkKey(rideId: string, serviceDate: Date, departureTime: string): string {

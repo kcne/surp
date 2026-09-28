@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DepartureSource, RideExceptionType } from '@prisma/client';
 import { indexLinkableDepartures } from '../../src/departures/departure-link';
@@ -10,6 +11,7 @@ import {
 } from '../../src/invariants/checks/reservation-departure-linked';
 import { reservationReachable } from '../../src/invariants/checks/reservation-reachable';
 import { InvariantContext } from '../../src/invariants/invariant.types';
+import { guardProspectiveWrite, NO_CONSENT } from '../../src/invariants/prospective-write';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { scheduleEditTransaction } from '../../src/prisma/schedule-lock';
 import { ReservationsService } from '../../src/reservations/reservations.service';
@@ -90,6 +92,20 @@ describe('departure links (real database)', () => {
       prisma,
       windowDays: 30
     };
+  }
+
+  /** The token an operator sends back to ask for the repair they were offered. */
+  async function repairTokenOf(refused: Promise<unknown>): Promise<string> {
+    const error = await refused.then(
+      () => {
+        throw new Error('expected the write to be refused');
+      },
+      (reason: unknown) => reason
+    );
+    expect(error).toBeInstanceOf(ConflictException);
+
+    return ((error as ConflictException).getResponse() as { confirmationToken: string })
+      .confirmationToken;
   }
 
   it('links a booking to its timetable departure', async () => {
@@ -175,7 +191,86 @@ describe('departure links (real database)', () => {
     ]);
   });
 
+  it('leaves a booking unlinked before the sync is on, when an extra may have no row yet', async () => {
+    delete process.env.DEPARTURES_SYNC_ENABLED;
+    // With the sync off, an extra at the timetable bus's time is not stored,
+    // so the timetable bus is the only match and linking would guess wrong.
+    await rides.addException(seeded.auth, seeded.rideId, {
+      date: seeded.travelDate,
+      type: RideExceptionType.ADDITIONAL,
+      departureTime: '09:00',
+      arrivalTime: '11:00'
+    });
+    expect(await departuresOnTravelDate()).toHaveLength(1);
+
+    const reservation = await book(1);
+
+    expect(await linkOf(reservation.id)).toBeNull();
+  });
+
   describe('the reservation.reachable repair', () => {
+    it('keeps the link when an operator repairs during the edit that moved the bus', async () => {
+      const [departure] = await departuresOnTravelDate();
+      const reservation = await book(1);
+      const scope = { tenantId: seeded.auth.tenantId, actorId: seeded.auth.sub };
+      const moveFirstStop = (tx: Parameters<Parameters<PrismaService['$transaction']>[0]>[0]) =>
+        tx.rideDayScheduleStationTime.updateMany({
+          where: { rideDayScheduleId: seeded.scheduleId, orderIndex: 0 },
+          data: { time: '08:30' }
+        });
+      const token = await repairTokenOf(
+        guardProspectiveWrite(prisma, scope, [reservationReachable], NO_CONSENT, moveFirstStop)
+      );
+
+      await guardProspectiveWrite(
+        prisma,
+        scope,
+        [reservationReachable],
+        { confirmationTokens: [], repairTokens: [token] },
+        moveFirstStop
+      );
+
+      const repaired = await prisma.reservation.findUniqueOrThrow({
+        where: { id: reservation.id },
+        select: { departureId: true, rideDepartureTime: true }
+      });
+      expect(repaired).toEqual({ departureId: departure.id, rideDepartureTime: '08:30' });
+      expect(await departuresOnTravelDate()).toEqual([
+        expect.objectContaining({ id: departure.id, departureTime: '08:30' })
+      ]);
+    });
+
+    it('moves the link to the timetable bus when an extra is removed with a repair, and deletes the extra', async () => {
+      const [timetableBus] = await departuresOnTravelDate();
+      const exception = await rides.addException(seeded.auth, seeded.rideId, {
+        date: seeded.travelDate,
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '15:00',
+        arrivalTime: '17:00'
+      });
+      const reservation = await book(1, '15:00');
+      expect(await linkOf(reservation.id)).not.toBe(timetableBus.id);
+      const token = await repairTokenOf(
+        rides.removeException(seeded.auth, seeded.rideId, exception.id)
+      );
+
+      await rides.removeException(seeded.auth, seeded.rideId, exception.id, {
+        confirmationTokens: [],
+        repairTokens: [token]
+      });
+
+      const repaired = await prisma.reservation.findUniqueOrThrow({
+        where: { id: reservation.id },
+        select: { departureId: true, rideDepartureTime: true }
+      });
+      expect(repaired).toEqual({ departureId: timetableBus.id, rideDepartureTime: '09:00' });
+      // Dropped by the sync before the repair while it still had a passenger,
+      // then deleted by the sync at the end once it had none.
+      expect(await departuresOnTravelDate()).toEqual([
+        expect.objectContaining({ id: timetableBus.id, source: DepartureSource.SCHEDULE })
+      ]);
+    });
+
     it('keeps the link when it moves a reservation to the new time of the same bus', async () => {
       const [departure] = await departuresOnTravelDate();
       const reservation = await book(1);

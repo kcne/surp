@@ -568,6 +568,73 @@ describe('guardProspectiveWrite', () => {
       expect(reachable.repairSubjects).toEqual([['res-1', 'res-2']]);
     });
 
+    it('syncs departures before the repair, so it links to the buses this write produced', async () => {
+      process.env.DEPARTURES_SYNC_ENABLED = 'true';
+      const { prisma, tx } = prismaDouble();
+      const order: string[] = [];
+      const recordSync = async () => {
+        order.push('sync');
+        return { created: 0, updated: 0, dropped: 0, deleted: 0 };
+      };
+      jest.mocked(syncDepartures).mockImplementationOnce(recordSync).mockImplementationOnce(recordSync);
+      const reachable = invariantRepairing(
+        REACHABLE,
+        [[], [repairable('res-1')], []],
+        async () => {
+          order.push('repair');
+        }
+      );
+
+      await guardProspectiveWrite(
+        prisma as never,
+        scope,
+        [reachable],
+        repairing(REACHABLE, [repairable('res-1')]),
+        async () => {
+          order.push('write');
+        }
+      );
+
+      // Once before the repair, and once at the end for a departure the repair
+      // moved everyone off.
+      expect(order).toEqual(['write', 'sync', 'repair', 'sync']);
+      expect(syncDepartures).toHaveBeenNthCalledWith(1, tx, scope);
+    });
+
+    it('does not sync before a repair when the write cannot change the timetable', async () => {
+      process.env.DEPARTURES_SYNC_ENABLED = 'true';
+      const { prisma } = prismaDouble();
+      const reachable = invariantRepairing(REACHABLE, [[], [repairable('res-1')], []]);
+
+      await guardProspectiveWrite(
+        prisma as never,
+        { ...scope, changesTimetable: false },
+        [reachable],
+        repairing(REACHABLE, [repairable('res-1')]),
+        jest.fn()
+      );
+
+      expect(reachable.repairCalls).toBe(1);
+      expect(syncDepartures).not.toHaveBeenCalled();
+    });
+
+    it('does not sync before a repair until DEPARTURES_SYNC_ENABLED is set', async () => {
+      delete process.env.DEPARTURES_SYNC_ENABLED;
+      const { prisma } = prismaDouble();
+      const reachable = invariantRepairing(REACHABLE, [[], [repairable('res-1')], []]);
+
+      await guardProspectiveWrite(
+        prisma as never,
+        scope,
+        [reachable],
+        repairing(REACHABLE, [repairable('res-1')]),
+        jest.fn()
+      );
+
+      expect(reachable.repairCalls).toBe(1);
+      expect(syncDepartures).not.toHaveBeenCalled();
+    });
+
     it('does not pass pre-existing violations to the repair', async () => {
       const { prisma } = prismaDouble();
       const reachable = invariantRepairing('reservation.reachable', [

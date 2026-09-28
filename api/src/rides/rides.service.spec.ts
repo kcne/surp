@@ -6,6 +6,7 @@ import {
   RideType,
   UserRole
 } from '@prisma/client';
+import { syncDepartures } from '../departures/departure-sync';
 import { RidesService } from './rides.service';
 
 // Every schedule edit ends by syncing departures; that sync has its own tests
@@ -995,6 +996,20 @@ describe('RidesService', () => {
   // registry has a repair for, so the refusal can offer to fix it rather than
   // only to be overridden.
   describe('moving the departure time under a sold reservation', () => {
+    const syncSwitch = process.env.DEPARTURES_SYNC_ENABLED;
+
+    beforeAll(() => {
+      process.env.DEPARTURES_SYNC_ENABLED = 'true';
+    });
+
+    afterAll(() => {
+      if (syncSwitch === undefined) {
+        delete process.env.DEPARTURES_SYNC_ENABLED;
+      } else {
+        process.env.DEPARTURES_SYNC_ENABLED = syncSwitch;
+      }
+    });
+
     const travelDate = (() => {
       const date = new Date();
       date.setUTCDate(date.getUTCDate() + 60);
@@ -1181,6 +1196,13 @@ describe('RidesService', () => {
         })
       ]);
       expect(harness.tx.reservation.findMany).toHaveBeenCalledTimes(3);
+      // Departures are synced before the repair looks for the moved bus, and
+      // again once the edit is done.
+      const sync = jest.mocked(syncDepartures);
+      expect(sync).toHaveBeenCalledTimes(2);
+      expect(sync.mock.invocationCallOrder[0]).toBeLessThan(
+        harness.tx.departure.findMany.mock.invocationCallOrder[0]
+      );
     });
 
     it('leaves the reservation where it is when the caller only overrides', async () => {
