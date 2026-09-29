@@ -1,4 +1,5 @@
 import {
+  DepartureSource,
   LineDirection,
   LineDirectionMode,
   PassengerType,
@@ -16,7 +17,6 @@ import { INVARIANTS, findInvariant } from '../src/invariants/registry';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { resolveDepartureLink } from '../src/departures/departure-link';
 import { syncDepartures } from '../src/departures/departure-sync';
-import { DEPARTURE_LINK_REQUIRED_FROM } from '../src/invariants/checks/reservation-departure-linked';
 import { dayOfWeekOf, formatDateOnly } from '../src/rides/ride-instance-materialization';
 
 interface FixtureState {
@@ -387,7 +387,10 @@ const fixtures: IncidentFixture[] = [
     name: 'agency timezone is not a known zone',
     invariantKey: 'departure.matchesTimetable',
     mutate: async (tx, state) => {
-      await tx.tenant.update({ where: { id: state.tenantId }, data: { timezone: 'Europe/Beograd' } });
+      await tx.tenant.update({
+        where: { id: state.tenantId },
+        data: { timezone: 'Europe/Beograd' }
+      });
     },
     // The stored value is what the agency has to correct, so it is reported.
     matches: (violation) =>
@@ -443,7 +446,7 @@ const fixtures: IncidentFixture[] = [
     name: 'booking is saved without its departure link',
     invariantKey: 'reservation.departureLinked',
     mutate: async (tx, state) => {
-      await createUnlinkedSeat(tx, state, { seatNumber: 2, createdAt: AFTER_LINK_CUTOFF });
+      await createUnlinkedSeat(tx, state, 2);
     },
     matches: reason('LINKABLE_UNLINKED')
   },
@@ -454,7 +457,7 @@ const fixtures: IncidentFixture[] = [
     invariantKey: 'reservation.departureLinked',
     mutate: async (tx, state) => {
       await createExtraBus(tx, state, { id: 'exception-same-time', departureTime: '09:00' });
-      await createUnlinkedSeat(tx, state, { seatNumber: 2, createdAt: AFTER_LINK_CUTOFF });
+      await createUnlinkedSeat(tx, state, 2);
     },
     matches: reason('NO_UNIQUE_MATCH')
   },
@@ -493,12 +496,45 @@ const fixtures: IncidentFixture[] = [
       reason('NOT_RUNNING')(violation) && violation.subjectId === state.reservationId
   },
   {
-    // Bookings from before linking went live are the backfill's (PR 2).
-    name: 'booking from before departure linking stays unlinked',
+    name: 'active booking is linked to a LEGACY departure',
+    invariantKey: 'reservation.departureLinked',
+    mutate: async (tx, state) => {
+      const legacy = await createLegacyDeparture(tx, state, '09:00', '11:00');
+      await tx.reservation.update({
+        where: { id: state.reservationId },
+        data: { departureId: legacy.id }
+      });
+    },
+    matches: (violation, state) =>
+      reason('ON_LEGACY')(violation) && violation.subjectId === state.reservationId
+  },
+  {
+    // What `departures:backfill` writes for a cancelled booking whose time
+    // the timetable no longer produces: a LEGACY departure nothing else reads.
+    name: 'cancelled booking on a LEGACY departure stays quiet',
     invariantKey: 'reservation.departureLinked',
     expects: 'silence',
     mutate: async (tx, state) => {
-      await createUnlinkedSeat(tx, state, { seatNumber: 2, createdAt: BEFORE_LINK_CUTOFF });
+      const legacy = await createLegacyDeparture(tx, state, '07:00', '09:00');
+      await tx.reservation.create({
+        data: {
+          tenantId: state.tenantId,
+          rideId: state.rideId,
+          departureId: legacy.id,
+          passengerId: state.passengerId,
+          travelDate: state.travelDate,
+          rideDepartureTime: '07:00',
+          rideArrivalTime: '09:00',
+          seatNumber: 2,
+          status: ReservationStatus.CANCELLED,
+          cancelledAt: new Date(),
+          departureStationId: state.stationIds.first,
+          arrivalStationId: state.stationIds.last,
+          groupId: `${state.groupId}-legacy`,
+          createdById: state.actorId,
+          updatedById: state.actorId
+        }
+      });
     }
   }
 ];
@@ -579,16 +615,8 @@ function departureOf(tx: Prisma.TransactionClient, state: FixtureState, travelDa
   });
 }
 
-/**
- * A seat on the seeded departure that carries no departure link, booked at
- * `createdAt`. The cutoff is a fixed date, so each fixture states which side
- * of it the booking falls on instead of depending on today's date.
- */
-function createUnlinkedSeat(
-  tx: Prisma.TransactionClient,
-  state: FixtureState,
-  { seatNumber, createdAt }: { seatNumber: number; createdAt: Date }
-) {
+/** A seat on the seeded departure that carries no departure link. */
+function createUnlinkedSeat(tx: Prisma.TransactionClient, state: FixtureState, seatNumber: number) {
   return tx.reservation.create({
     data: {
       tenantId: state.tenantId,
@@ -602,15 +630,35 @@ function createUnlinkedSeat(
       departureStationId: state.stationIds.middle,
       arrivalStationId: state.stationIds.last,
       groupId: `${state.groupId}-unlinked-${seatNumber}`,
-      createdAt,
       createdById: state.actorId,
       updatedById: state.actorId
     }
   });
 }
 
-const AFTER_LINK_CUTOFF = new Date(DEPARTURE_LINK_REQUIRED_FROM.getTime() + 60_000);
-const BEFORE_LINK_CUTOFF = new Date(DEPARTURE_LINK_REQUIRED_FROM.getTime() - 86_400_000);
+/** A LEGACY departure on the seeded ride and date, as `departures:backfill` writes one. */
+function createLegacyDeparture(
+  tx: Prisma.TransactionClient,
+  state: FixtureState,
+  departureTime: string,
+  arrivalTime: string
+) {
+  return tx.departure.create({
+    data: {
+      tenantId: state.tenantId,
+      rideId: state.rideId,
+      serviceDate: state.travelDate,
+      source: DepartureSource.LEGACY,
+      lineId: state.lineId,
+      departureTime,
+      arrivalTime,
+      capacity: 4,
+      createdById: state.actorId,
+      updatedById: state.actorId
+    },
+    select: { id: true }
+  });
+}
 
 async function createExtraBus(
   tx: Prisma.TransactionClient,
