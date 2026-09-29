@@ -6,7 +6,7 @@ import { DepartureSyncScope, syncDepartures } from '../departures/departure-sync
  * The one lock every writer that depends on a tenant's schedule agrees on.
  *
  * Reservation writers take it shared: two bookings never wait on each other
- * here, only on the per-departure lock that follows it. Anything that changes
+ * here, only on the departure row lock that follows it (`lockDepartures`). Anything that changes
  * what the schedule materializes, or rewrites reservations wholesale — a
  * guarded edit, a repair, realignment — takes it exclusive. The edit therefore
  * waits for bookings already in flight, then runs alone: its before and after
@@ -21,7 +21,7 @@ import { DepartureSyncScope, syncDepartures } from '../departures/departure-sync
  * steady stream of bookings cannot starve an edit.
  *
  * Keys use the two-integer form, which Postgres keeps apart from the one-bigint
- * form the per-departure locks use, so the two can never collide.
+ * form other advisory locks use, so the two can never collide.
  */
 const TENANT_SCHEDULE_LOCK_NAMESPACE = 27_001;
 

@@ -571,6 +571,8 @@ async function updateDepartures(
     await tx.departure.updateMany({ where: { id: { in: ids } }, data });
   }
 
+  await rewriteReservationTimes(tx, updates, scope);
+
   const restopped = updates.filter(({ fields }) => fields.includes('stops'));
 
   if (restopped.length === 0) {
@@ -583,6 +585,50 @@ async function updateDepartures(
   await tx.departureStop.createMany({
     data: restopped.flatMap(({ stored, planned }) => stopRows(stored.id, planned.stops, scope))
   });
+}
+
+/**
+ * Keeps the time copies a booked departure's reservations carry in step with
+ * it (#27, PR 3b). Seats are counted and locked by `departureId`, so a time
+ * change strands nobody; the copies are what the passenger is told and what
+ * old tabs still book by, so they follow the bus. The guard asks before an
+ * edit changes a booked departure's time (`reservation.departureTimeKept`).
+ */
+async function rewriteReservationTimes(
+  tx: Prisma.TransactionClient,
+  updates: readonly DepartureUpdate[],
+  scope: DepartureSyncScope
+): Promise<void> {
+  const groups = new Map<string, { departureTime: string; arrivalTime: string; ids: string[] }>();
+
+  for (const { stored, planned, fields } of updates) {
+    const retimed = fields.includes('departureTime') || fields.includes('arrivalTime');
+
+    if (!retimed || stored.referenceCount === 0) {
+      continue;
+    }
+
+    const key = `${planned.departureTime}-${planned.arrivalTime}`;
+    const group = groups.get(key) ?? {
+      departureTime: planned.departureTime,
+      arrivalTime: planned.arrivalTime,
+      ids: [] as string[]
+    };
+
+    group.ids.push(stored.id);
+    groups.set(key, group);
+  }
+
+  for (const { departureTime, arrivalTime, ids } of groups.values()) {
+    await tx.reservation.updateMany({
+      where: { tenantId: scope.tenantId, departureId: { in: ids } },
+      data: {
+        rideDepartureTime: departureTime,
+        rideArrivalTime: arrivalTime,
+        updatedById: scope.actorId
+      }
+    });
+  }
 }
 
 function stopRows(departureId: string, stops: readonly PlannedStop[], scope: DepartureSyncScope) {

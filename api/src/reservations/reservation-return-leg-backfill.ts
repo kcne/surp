@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient, ReservationStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { withUpdateAudit } from '../prisma/audit-write.helper';
+import { lockDepartures } from '../departures/departure-lock';
 import { RESERVATION_LOCK_TIMEOUT_MS, acquireScheduleLockShared } from '../prisma/schedule-lock';
 import { phoneKeyForIdentity } from '../passengers/passenger-match.util';
 import { LEGACY_RETURN_LOOKUP_DAYS, isActiveReturnLegConflict } from './return-leg-link';
@@ -696,6 +697,15 @@ export async function applyReturnLegBackfill(
     try {
       const written = await prisma.$transaction(async (tx) => {
         await acquireScheduleLockShared(tx, link.tenantId);
+
+        const legs = await tx.reservation.findMany({
+          where: {
+            tenantId: link.tenantId,
+            id: { in: [link.returnReservationId, link.outboundReservationId] }
+          },
+          select: { departureId: true }
+        });
+        await lockDepartures(tx, legs.map((leg) => leg.departureId));
 
         const linked = await tx.reservation.updateMany({
           where: {

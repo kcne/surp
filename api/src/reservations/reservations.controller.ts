@@ -57,10 +57,12 @@ export class ReservationsController {
   @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
   @ApiOperation({ summary: 'Create a single reservation in the current tenant.' })
   @ApiOkResponse({ type: ReservationResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failure or route path violation.' })
+  @ApiBadRequestResponse({
+    description: 'Validation failure, route path violation, or a travel date past the stored departure window.'
+  })
   @ApiConflictResponse({
     description:
-      'Seat is already booked for overlapping route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
+      'Seat is already booked for overlapping route segment. DEPARTURE_NOT_FOUND when departureId names no departure of the tenant, or, without it, no single departure leaves at rideDepartureTime; DEPARTURE_CHANGED when the sent ride, date or times disagree with the departure, and DEPARTURE_NOT_RUNNING when it is cancelled or no longer in the timetable. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
   })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
@@ -76,10 +78,12 @@ export class ReservationsController {
   @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
   @ApiOperation({ summary: 'Create multiple reservations in the current tenant.' })
   @ApiOkResponse({ type: BatchReservationsResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failure or route path violation.' })
+  @ApiBadRequestResponse({
+    description: 'Validation failure, route path violation, or a travel date past the stored departure window.'
+  })
   @ApiConflictResponse({
     description:
-      'Seat overlap or route segment capacity exhaustion. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
+      'Seat overlap or route segment capacity exhaustion. DEPARTURE_NOT_FOUND, DEPARTURE_CHANGED and DEPARTURE_NOT_RUNNING as on a single create. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
   })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
@@ -167,7 +171,7 @@ export class ReservationsController {
   @ApiBadRequestResponse({ description: 'Validation failure or route path violation.' })
   @ApiConflictResponse({
     description:
-      'Seat is already booked for overlapping route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
+      'Seat is already booked for overlapping route segment. RESERVATION_NOT_LINKED when the reservation has no departure. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
   })
   @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
@@ -191,7 +195,7 @@ export class ReservationsController {
   @ApiBadRequestResponse({ description: 'Validation failure or cancelled reservation.' })
   @ApiConflictResponse({
     description:
-      'The destination seat cannot be used for the route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
+      'The destination seat cannot be used for the route segment. RESERVATION_NOT_LINKED when the reservation has no departure. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
   })
   @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })

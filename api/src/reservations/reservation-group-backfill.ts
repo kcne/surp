@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { withUpdateAudit } from '../prisma/audit-write.helper';
+import { lockDepartures } from '../departures/departure-lock';
 import { acquireScheduleLocksShared } from '../prisma/schedule-lock';
 
 export interface ReservationGroupBackfillInspection {
@@ -91,6 +92,21 @@ export async function applyReservationGroupBackfill(
 
       let batchUpdatedCount = 0;
       let batchCreatedGroupCount = 0;
+
+      const affected = await tx.reservation.findMany({
+        where: {
+          OR: missingGroups.map((missing) => ({
+            tenantId: missing.tenantId,
+            rideId: missing.rideId,
+            travelDate: missing.travelDate,
+            rideDepartureTime: missing.rideDepartureTime,
+            passengerId: missing.passengerId,
+            groupId: null
+          }))
+        },
+        select: { departureId: true }
+      });
+      await lockDepartures(tx, affected.map((reservation) => reservation.departureId));
 
       for (const missing of missingGroups) {
         const update = await tx.reservation.updateMany({

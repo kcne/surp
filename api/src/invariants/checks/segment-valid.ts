@@ -1,7 +1,7 @@
 import { formatDateOnly } from '../../rides/ride-instance-materialization';
 import { routeBoardingDropoffSets, routeStationOrder } from '../../reservations/route-segment';
 import { CheckResult, InvariantContext, ProspectiveInvariant } from '../invariant.types';
-import { loadReservationWindow } from './reservation-window';
+import { loadReservationWindow, WindowedRoute } from './reservation-window';
 import { loadStationNames, stationNamer } from './tenant-lookups';
 import { serbianPlural } from '../serbian-plural';
 
@@ -55,9 +55,9 @@ export async function findInvalidSegments(ctx: InvariantContext): Promise<{
   const window = await loadReservationWindow(ctx);
   const toName = stationNamer(await loadStationNames(ctx));
   const items: InvalidSegmentItem[] = [];
-  // One numbering per ride rather than per reservation, matching the seat
-  // checks: the route behind a ride does not change mid-scan.
-  const routeByRideId = new Map<string, RouteShape>();
+  // One numbering per route rather than per reservation, matching the seat
+  // checks: the route behind a departure does not change mid-scan.
+  const shapeByRoute = new Map<WindowedRoute, RouteShape>();
 
   for (const reservation of window.reservations) {
     const ride = window.rideOf(reservation);
@@ -66,14 +66,15 @@ export async function findInvalidSegments(ctx: InvariantContext): Promise<{
       continue;
     }
 
+    const stops = window.routeOf(reservation, ride);
     const route =
-      routeByRideId.get(ride.id) ??
-      routeByRideId
-        .set(ride.id, {
-          stationOrderById: routeStationOrder(ride.line),
-          ...routeBoardingDropoffSets(ride.line)
+      shapeByRoute.get(stops) ??
+      shapeByRoute
+        .set(stops, {
+          stationOrderById: routeStationOrder(stops),
+          ...routeBoardingDropoffSets(stops)
         })
-        .get(ride.id)!;
+        .get(stops)!;
 
     const departureOrder = route.stationOrderById.get(reservation.departureStationId);
     const arrivalOrder = route.stationOrderById.get(reservation.arrivalStationId);

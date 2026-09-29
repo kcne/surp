@@ -10,7 +10,11 @@ const prismaMock = {
   reservation: { findMany },
   $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>, options?: unknown) => {
     expect(options).toBeDefined();
-    return callback({ $executeRaw: jest.fn().mockResolvedValue(1), reservation: { updateMany } });
+    return callback({
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      reservation: { findMany: jest.fn().mockResolvedValue([]), updateMany }
+    });
   })
 };
 

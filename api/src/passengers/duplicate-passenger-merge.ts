@@ -1,5 +1,6 @@
 import { PrismaClient, ReservationStatus } from '@prisma/client';
 import { withUpdateAudit } from '../prisma/audit-write.helper';
+import { lockDepartures } from '../departures/departure-lock';
 import { reservationWriteTransaction } from '../prisma/schedule-lock';
 import { RouteSegment, routeStationOrder, segmentsOverlap } from '../reservations/route-segment';
 import { nameKeyForIdentity, phoneKeyForIdentity } from './passenger-match.util';
@@ -486,6 +487,15 @@ export async function applyDuplicatePassengerMerge(
 
   for (const group of resolved.groups) {
     const written = await reservationWriteTransaction(prisma, group.tenantId, async (tx) => {
+      // The buses these reservations are on, locked like any other write to
+      // their seats (#27, PR 3b). A merge can span many departures; the lock
+      // takes them in ID order, as every other writer does.
+      const affected = await tx.reservation.findMany({
+        where: { tenantId: group.tenantId, passengerId: { in: group.retiredPassengerIds } },
+        select: { departureId: true }
+      });
+      await lockDepartures(tx, affected.map((reservation) => reservation.departureId));
+
       const repointed = await tx.reservation.updateMany({
         where: {
           tenantId: group.tenantId,

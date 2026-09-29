@@ -4100,7 +4100,7 @@
             }
           },
           "400": {
-            "description": "Validation failure or route path violation."
+            "description": "Validation failure, route path violation, or a travel date past the stored departure window."
           },
           "401": {
             "description": "Missing or invalid access token."
@@ -4109,7 +4109,7 @@
             "description": "Insufficient role for this resource."
           },
           "409": {
-            "description": "Seat is already booked for overlapping route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
+            "description": "Seat is already booked for overlapping route segment. DEPARTURE_NOT_FOUND when departureId names no departure of the tenant, or, without it, no single departure leaves at rideDepartureTime; DEPARTURE_CHANGED when the sent ride, date or times disagree with the departure, and DEPARTURE_NOT_RUNNING when it is cancelled or no longer in the timetable. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -4271,7 +4271,7 @@
             }
           },
           "400": {
-            "description": "Validation failure or route path violation."
+            "description": "Validation failure, route path violation, or a travel date past the stored departure window."
           },
           "401": {
             "description": "Missing or invalid access token."
@@ -4280,7 +4280,7 @@
             "description": "Insufficient role for this resource."
           },
           "409": {
-            "description": "Seat overlap or route segment capacity exhaustion. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
+            "description": "Seat overlap or route segment capacity exhaustion. DEPARTURE_NOT_FOUND, DEPARTURE_CHANGED and DEPARTURE_NOT_RUNNING as on a single create. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -4574,7 +4574,7 @@
             "description": "Reservation not found in current tenant."
           },
           "409": {
-            "description": "Seat is already booked for overlapping route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
+            "description": "Seat is already booked for overlapping route segment. RESERVATION_NOT_LINKED when the reservation has no departure. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -4699,7 +4699,7 @@
             "description": "Reservation not found in current tenant."
           },
           "409": {
-            "description": "The destination seat cannot be used for the route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
+            "description": "The destination seat cannot be used for the route segment. RESERVATION_NOT_LINKED when the reservation has no departure. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -9295,6 +9295,11 @@
             "type": "string",
             "description": "Set on a return leg, naming the outbound reservation it belongs to. The outbound leg must be active, belong to the same passenger, travel the reversed station pair, and have no other active return leg."
           },
+          "departureId": {
+            "type": "string",
+            "example": "departure-id-123",
+            "description": "The departure to book. rideId, travelDate, rideDepartureTime and rideArrivalTime must agree with it, or the request is refused with 409 DEPARTURE_CHANGED. Without it the departure is the only one of the ride leaving at rideDepartureTime on travelDate. Either way, 409 DEPARTURE_NOT_FOUND when there is no such departure. A departure that is cancelled or no longer in the timetable is refused with 409 DEPARTURE_NOT_RUNNING, and a date past the stored window with 400."
+          },
           "rideId": {
             "type": "string",
             "example": "ride-id-123"
@@ -9415,6 +9420,11 @@
           "rideId": {
             "type": "string"
           },
+          "departureId": {
+            "type": "object",
+            "nullable": true,
+            "description": "The departure (one bus on one date) the seat is on. Null only for a row the departure backfill could not link, which reservation.departureLinked reports."
+          },
           "passengerId": {
             "type": "string"
           },
@@ -9505,6 +9515,7 @@
           "id",
           "tenantId",
           "rideId",
+          "departureId",
           "passengerId",
           "createdById",
           "updatedById",
@@ -9534,6 +9545,11 @@
           "returnOfReservationId": {
             "type": "string",
             "description": "Set on a return leg, naming the outbound reservation it belongs to. The outbound leg must be active, belong to the same passenger, travel the reversed station pair, and have no other active return leg."
+          },
+          "departureId": {
+            "type": "string",
+            "example": "departure-id-123",
+            "description": "The departure to book. rideId, travelDate, rideDepartureTime and rideArrivalTime must agree with it, or the request is refused with 409 DEPARTURE_CHANGED. Without it the departure is the only one of the ride leaving at rideDepartureTime on travelDate. Either way, 409 DEPARTURE_NOT_FOUND when there is no such departure. A departure that is cancelled or no longer in the timetable is refused with 409 DEPARTURE_NOT_RUNNING, and a date past the stored window with 400."
           },
           "rideId": {
             "type": "string",

@@ -7,7 +7,15 @@ import {
 import { Prisma, ReservationStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { AccessTokenPayload } from '../auth/auth.types';
-import { resolveDepartureLink } from '../departures/departure-link';
+import {
+  BookingDeparture,
+  BookingDepartureRequest,
+  assertBookable,
+  departureRoute,
+  loadBookingDeparture,
+  resolveBookingDepartureId
+} from '../departures/booking-departure';
+import { lockDepartures } from '../departures/departure-lock';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
 import { PrismaService } from '../prisma/prisma.service';
@@ -40,6 +48,7 @@ const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
   id: true,
   tenantId: true,
   rideId: true,
+  departureId: true,
   passengerId: true,
   createdById: true,
   updatedById: true,
@@ -88,8 +97,8 @@ const SAFE_RESERVATION_SELECT = Prisma.validator<Prisma.ReservationSelect>()({
 
 type SelectedReservation = Prisma.ReservationGetPayload<{ select: typeof SAFE_RESERVATION_SELECT }>;
 
-type RideRouteContext = {
-  rideId: string;
+type DepartureRouteContext = {
+  departureId: string;
   capacity: number;
   stationOrderById: Map<string, number>;
   /** Stations on the route where a passenger may board. */
@@ -136,22 +145,17 @@ export class ReservationsService {
       const createdIds: string[] = [];
       const batchRoundTripId = randomUUID();
 
-      const instanceKeyFor = (item: CreateReservationDto): string =>
-        this.rideInstanceKey({
-          tenantId: auth.tenantId,
-          rideId: item.rideId,
-          travelDate: this.toUtcDate(item.travelDate),
-          rideDepartureTime: item.rideDepartureTime
-        });
-
-      const lockKeys = [...new Set(dto.items.map(instanceKeyFor))].sort();
-      for (const key of lockKeys) {
-        await this.acquireRideInstanceLockByKey(tx, key);
+      // Every departure of the batch is named first and locked in one go, in
+      // ID order, so two batches sharing buses cannot each hold one the other
+      // waits for.
+      const departureIds: string[] = [];
+      for (const item of dto.items) {
+        departureIds.push(await resolveBookingDepartureId(tx, this.bookingRequest(auth, item)));
       }
+      await lockDepartures(tx, departureIds);
 
-      const groupIdFor = (item: CreateReservationDto): string => {
-        const instanceKey = instanceKeyFor(item);
-        const key = dto.travelTogether ? instanceKey : `${instanceKey}:${item.passengerId}`;
+      const groupIdFor = (item: CreateReservationDto, departureId: string): string => {
+        const key = dto.travelTogether ? departureId : `${departureId}:${item.passengerId}`;
         const existing = groupIds.get(key);
         if (existing) {
           return existing;
@@ -169,8 +173,8 @@ export class ReservationsService {
           tx,
           auth,
           { ...item, returnOfReservationId: outboundId },
-          groupIdFor(item),
-          { lockHeld: true, roundTripId: batchRoundTripId }
+          groupIdFor(item, departureIds[index]),
+          { lockedDepartureId: departureIds[index], roundTripId: batchRoundTripId }
         );
         createdIds.push(created.id);
 
@@ -330,12 +334,11 @@ export class ReservationsService {
       if (reservations.length !== ids.length) {
         throw new NotFoundException('One or more active reservations were not found');
       }
-      const departures = new Set(
-        reservations.map((item) => `${item.rideId}:${item.travelDate.toISOString()}:${item.rideDepartureTime}`)
-      );
-      if (departures.size !== 1) {
+      const departures = new Set(reservations.map((item) => item.departureId));
+      if (departures.size !== 1 || departures.has(null)) {
         throw new BadRequestException('Reservations must belong to the same departure');
       }
+      await lockDepartures(tx, departures);
       await tx.reservation.updateMany({
         where: { tenantId: auth.tenantId, id: { in: ids }, status: ReservationStatus.ACTIVE },
         data: withUpdateAudit({ groupId: dto.groupId }, auth.sub)
@@ -354,6 +357,11 @@ export class ReservationsService {
     dto: UpdateReservationDto
   ): Promise<ReservationResponseDto> {
     const updated = await reservationWriteTransaction(this.prisma, auth.tenantId, async (tx) => {
+      // Read once to find the bus, and again under its lock, since another
+      // write on the same bus may have landed while this one waited.
+      const beforeLock = await this.getReservationOrThrow(auth.tenantId, id, tx);
+      const departureId = this.linkedDepartureOrThrow(beforeLock);
+      await lockDepartures(tx, [departureId]);
       const existing = await this.getReservationOrThrow(auth.tenantId, id, tx);
 
       if (existing.status === ReservationStatus.CANCELLED) {
@@ -369,34 +377,19 @@ export class ReservationsService {
       const arrivalStationId = dto.arrivalStationId ?? existing.arrivalStationId;
       const seatNumber = dto.seatNumber ?? existing.seatNumber;
 
-      // Updating never moves a reservation to a different ride (rideId isn't
-      // part of UpdateReservationDto), so this is never the "new reservation
-      // on a deactivated line" case the active-line guard exists for.
-      const rideContext = await this.getRideRouteContext(auth.tenantId, existing.rideId, tx, {
-        requireActiveLine: false
-      });
-      const segment = this.validateAndResolveSegment(
-        rideContext,
-        departureStationId,
-        arrivalStationId
+      // Updating never moves a reservation to another departure, and a
+      // passenger on a bus that no longer runs can still be edited: the
+      // departure is read for its seats and route, not asked whether it runs.
+      const route = this.routeContextOf(
+        await loadBookingDeparture(tx, auth.tenantId, departureId)
       );
-
-      await this.acquireRideInstanceLock(tx, {
-        tenantId: auth.tenantId,
-        rideId: existing.rideId,
-        travelDate: existing.travelDate,
-        rideDepartureTime: existing.rideDepartureTime
-      });
+      const segment = this.validateAndResolveSegment(route, departureStationId, arrivalStationId);
 
       await this.ensureSeatAndCapacityAreAvailable(tx, {
         tenantId: auth.tenantId,
-        rideId: existing.rideId,
-        travelDate: existing.travelDate,
-        rideDepartureTime: existing.rideDepartureTime,
+        route,
         seatNumber,
         segment,
-        stationOrderById: rideContext.stationOrderById,
-        capacity: rideContext.capacity,
         excludeReservationIds: [existing.id]
       });
 
@@ -486,17 +479,12 @@ export class ReservationsService {
     targetSeatNumber: number
   ): Promise<ReservationResponseDto[]> {
     const moved = await reservationWriteTransaction(this.prisma, auth.tenantId, async (tx) => {
-      // This first read only identifies the advisory-lock scope. Read the
+      // This first read only identifies the departure to lock. Read the
       // source again after the lock, since another move may have completed
       // while this transaction was waiting for it.
       const sourceBeforeLock = await this.getReservationOrThrow(auth.tenantId, id, tx);
-
-      await this.acquireRideInstanceLock(tx, {
-        tenantId: auth.tenantId,
-        rideId: sourceBeforeLock.rideId,
-        travelDate: sourceBeforeLock.travelDate,
-        rideDepartureTime: sourceBeforeLock.rideDepartureTime
-      });
+      const departureId = this.linkedDepartureOrThrow(sourceBeforeLock);
+      await lockDepartures(tx, [departureId]);
 
       const source = await this.getReservationOrThrow(auth.tenantId, id, tx);
 
@@ -508,13 +496,13 @@ export class ReservationsService {
         return [source];
       }
 
-      // Moving a seat keeps this reservation on the same ride, so a
-      // deactivated line must not prevent the change.
-      const rideContext = await this.getRideRouteContext(auth.tenantId, source.rideId, tx, {
-        requireActiveLine: false
-      });
+      // Moving a seat keeps this reservation on the same departure, so one
+      // that no longer runs must not prevent the change.
+      const route = this.routeContextOf(
+        await loadBookingDeparture(tx, auth.tenantId, departureId)
+      );
       const sourceSegment = this.validateAndResolveSegment(
-        rideContext,
+        route,
         source.departureStationId,
         source.arrivalStationId
       );
@@ -522,9 +510,7 @@ export class ReservationsService {
       const activeReservations = await tx.reservation.findMany({
         where: {
           tenantId: auth.tenantId,
-          rideId: source.rideId,
-          travelDate: source.travelDate,
-          rideDepartureTime: source.rideDepartureTime,
+          departureId,
           status: ReservationStatus.ACTIVE
         },
         select: SAFE_RESERVATION_SELECT
@@ -536,7 +522,7 @@ export class ReservationsService {
         }
 
         const destinationSegment = this.validateAndResolveSegment(
-          rideContext,
+          route,
           reservation.departureStationId,
           reservation.arrivalStationId
         );
@@ -546,31 +532,23 @@ export class ReservationsService {
       const excludedReservationIds = destination ? [source.id, destination.id] : [source.id];
       await this.ensureSeatAndCapacityAreAvailable(tx, {
         tenantId: auth.tenantId,
-        rideId: source.rideId,
-        travelDate: source.travelDate,
-        rideDepartureTime: source.rideDepartureTime,
+        route,
         seatNumber: targetSeatNumber,
         segment: sourceSegment,
-        stationOrderById: rideContext.stationOrderById,
-        capacity: rideContext.capacity,
         excludeReservationIds: excludedReservationIds
       });
 
       if (destination) {
         const destinationSegment = this.validateAndResolveSegment(
-          rideContext,
+          route,
           destination.departureStationId,
           destination.arrivalStationId
         );
         await this.ensureSeatAndCapacityAreAvailable(tx, {
           tenantId: auth.tenantId,
-          rideId: source.rideId,
-          travelDate: source.travelDate,
-          rideDepartureTime: source.rideDepartureTime,
+          route,
           seatNumber: source.seatNumber,
           segment: destinationSegment,
-          stationOrderById: rideContext.stationOrderById,
-          capacity: rideContext.capacity,
           excludeReservationIds: excludedReservationIds
         });
       }
@@ -606,12 +584,9 @@ export class ReservationsService {
     const cancelled = await reservationWriteTransaction(this.prisma, auth.tenantId, async (tx) => {
       const reservationBeforeLock = await this.getReservationOrThrow(auth.tenantId, id, tx);
 
-      await this.acquireRideInstanceLock(tx, {
-        tenantId: auth.tenantId,
-        rideId: reservationBeforeLock.rideId,
-        travelDate: reservationBeforeLock.travelDate,
-        rideDepartureTime: reservationBeforeLock.rideDepartureTime
-      });
+      // Cancelling is never refused for want of a departure: an unlinked row
+      // frees no seat anyone else can count, so it has nothing to lock.
+      await lockDepartures(tx, [reservationBeforeLock.departureId]);
 
       const existing = await this.getReservationOrThrow(auth.tenantId, id, tx);
       if (existing.status === ReservationStatus.CANCELLED) {
@@ -660,64 +635,52 @@ export class ReservationsService {
     return reservation;
   }
 
-  private async getRideRouteContext(
-    tenantId: string,
-    rideId: string,
-    db: ReservationDbClient = this.prisma,
-    options: { requireActiveLine?: boolean } = {}
-  ): Promise<RideRouteContext> {
-    const { requireActiveLine = true } = options;
-    const ride = await db.ride.findFirst({
-      where: {
-        id: rideId,
-        tenantId
-      },
-      select: {
-        id: true,
-        capacity: true,
-        line: {
-          select: {
-            isActive: true,
-            departureStationId: true,
-            arrivalStationId: true,
-            intermediateStops: {
-              select: {
-                stationId: true,
-                orderIndex: true,
-                isBoarding: true,
-                isDropoff: true
-              },
-              orderBy: {
-                orderIndex: 'asc'
-              }
-            }
-          }
-        }
-      }
-    });
-
-    if (!ride) {
-      throw new BadRequestException('Ride must exist in the current tenant');
-    }
-
-    if (requireActiveLine && !ride.line.isActive) {
-      throw new BadRequestException('Ride line is deactivated and cannot take new reservations');
-    }
-
-    const stationOrderById = routeStationOrder(ride.line);
-    const { boardingStationIds, dropoffStationIds } = routeBoardingDropoffSets(ride.line);
+  /**
+   * Seats and route of the departure a reservation is on (#27, PR 3b): its
+   * capacity, and its stored stops, which keep the route a past departure ran
+   * with and carry every station of an extra bus.
+   */
+  private routeContextOf(departure: BookingDeparture): DepartureRouteContext {
+    const route = departureRoute(departure.stops);
 
     return {
-      rideId: ride.id,
-      capacity: ride.capacity,
-      stationOrderById,
-      boardingStationIds,
-      dropoffStationIds
+      departureId: departure.id,
+      capacity: departure.capacity,
+      stationOrderById: routeStationOrder(route),
+      ...routeBoardingDropoffSets(route)
+    };
+  }
+
+  /**
+   * Every reservation is linked since PR 2's backfill, and every booking links
+   * itself, so an unlinked row is drift `reservation.departureLinked` reports.
+   * Its seats cannot be counted on any bus, so it is not edited until linked.
+   */
+  private linkedDepartureOrThrow(reservation: SelectedReservation): string {
+    if (!reservation.departureId) {
+      throw new ConflictException({
+        code: 'RESERVATION_NOT_LINKED',
+        message:
+          'Rezervacija nije vezana za polazak, pa ne moze da se menja. Pokrenite proveru "Rezervacija je vezana za svoj polazak" ili javite podrsci.'
+      });
+    }
+
+    return reservation.departureId;
+  }
+
+  private bookingRequest(auth: AccessTokenPayload, dto: CreateReservationDto): BookingDepartureRequest {
+    return {
+      tenantId: auth.tenantId,
+      departureId: dto.departureId,
+      rideId: dto.rideId,
+      travelDate: this.toUtcDate(dto.travelDate),
+      departureTime: dto.rideDepartureTime,
+      arrivalTime: dto.rideArrivalTime
     };
   }
 
   private validateAndResolveSegment(
-    route: RideRouteContext,
+    route: DepartureRouteContext,
     departureStationId: string,
     arrivalStationId: string
   ): RouteSegment {
@@ -780,26 +743,24 @@ export class ReservationsService {
     db: ReservationDbClient,
     input: {
       tenantId: string;
-      rideId: string;
-      travelDate: Date;
-      rideDepartureTime: string;
+      route: DepartureRouteContext;
       seatNumber: number;
       segment: RouteSegment;
-      stationOrderById: Map<string, number>;
-      capacity: number;
       excludeReservationIds?: string[];
     }
   ): Promise<void> {
-    if (input.seatNumber > input.capacity) {
+    const { capacity, stationOrderById } = input.route;
+
+    if (input.seatNumber > capacity) {
       throw new ConflictException('Seat number exceeds ride capacity');
     }
 
     const existing = await db.reservation.findMany({
       where: {
         tenantId: input.tenantId,
-        rideId: input.rideId,
-        travelDate: input.travelDate,
-        rideDepartureTime: input.rideDepartureTime,
+        // Counted by the bus, never by the time copies: a reservation whose
+        // copy a route edit left behind still holds its seat (#14).
+        departureId: input.route.departureId,
         status: ReservationStatus.ACTIVE,
         ...(input.excludeReservationIds?.length
           ? {
@@ -820,8 +781,8 @@ export class ReservationsService {
     let overlappingReservationsCount = 0;
     let offRouteConflict = false;
     const hasOverlapSeatConflict = existing.some((item) => {
-      const departureOrder = input.stationOrderById.get(item.departureStationId);
-      const arrivalOrder = input.stationOrderById.get(item.arrivalStationId);
+      const departureOrder = stationOrderById.get(item.departureStationId);
+      const arrivalOrder = stationOrderById.get(item.arrivalStationId);
 
       // Another active reservation on this departure names a station that is
       // not on the current route, so its segment cannot be placed and cannot be
@@ -859,7 +820,7 @@ export class ReservationsService {
       throw new ConflictException('Seat is already booked for this route segment');
     }
 
-    if (overlappingReservationsCount >= input.capacity) {
+    if (overlappingReservationsCount >= capacity) {
       throw new ConflictException('Ride capacity is exhausted for this route segment');
     }
   }
@@ -869,29 +830,37 @@ export class ReservationsService {
     auth: AccessTokenPayload,
     dto: CreateReservationDto,
     groupId: string,
-    options: { lockHeld?: boolean; roundTripId?: string } = {}
+    options: { lockedDepartureId?: string; roundTripId?: string } = {}
   ): Promise<SelectedReservation> {
-    const rideContext = await this.getRideRouteContext(auth.tenantId, dto.rideId, tx);
+    const request = this.bookingRequest(auth, dto);
+    let departureId = options.lockedDepartureId;
+
+    if (!departureId) {
+      departureId = await resolveBookingDepartureId(tx, request);
+      await lockDepartures(tx, [departureId]);
+    }
+
+    // Read under the row lock, like every read that decides this booking: a
+    // cancellation or another booking on this bus has landed by now.
+    const departure = await loadBookingDeparture(tx, auth.tenantId, departureId);
+    assertBookable(departure, request);
+
+    if (!departure.line.isActive) {
+      throw new BadRequestException('Ride line is deactivated and cannot take new reservations');
+    }
+
+    const route = this.routeContextOf(departure);
     await this.ensurePassengerExistsInTenant(auth.tenantId, dto.passengerId, tx);
 
     const segment = this.validateAndResolveSegment(
-      rideContext,
+      route,
       dto.departureStationId,
       dto.arrivalStationId
     );
 
-    const travelDate = this.toUtcDate(dto.travelDate);
+    const travelDate = departure.serviceDate;
 
-    if (!options.lockHeld) {
-      await this.acquireRideInstanceLock(tx, {
-        tenantId: auth.tenantId,
-        rideId: dto.rideId,
-        travelDate,
-        rideDepartureTime: dto.rideDepartureTime
-      });
-    }
-
-    // After the advisory lock, never before: linking row-locks the outbound
+    // After the departure lock, never before: linking row-locks the outbound
     // reservation to stamp its booking marker, and update takes these two
     // locks in this order. Taking them the other way round here lets a create
     // and an update on the same pair each hold what the other waits for, and
@@ -907,30 +876,16 @@ export class ReservationsService {
             departureStationId: dto.departureStationId,
             arrivalStationId: dto.arrivalStationId,
             travelDate,
-            rideDepartureTime: dto.rideDepartureTime
+            rideDepartureTime: departure.departureTime
           }
         })
       : null;
 
     await this.ensureSeatAndCapacityAreAvailable(tx, {
       tenantId: auth.tenantId,
-      rideId: dto.rideId,
-      travelDate,
-      rideDepartureTime: dto.rideDepartureTime,
+      route,
       seatNumber: dto.seatNumber,
-      segment,
-      stationOrderById: rideContext.stationOrderById,
-      capacity: rideContext.capacity
-    });
-
-    // After the lock, like every read that decides this booking. Nothing reads
-    // the link yet (#27 PR 1b); a booking with no unique match stays unlinked
-    // and goes ahead exactly as before.
-    const departureId = await resolveDepartureLink(tx, {
-      tenantId: auth.tenantId,
-      rideId: dto.rideId,
-      travelDate,
-      departureTime: dto.rideDepartureTime
+      segment
     });
 
     try {
@@ -938,12 +893,13 @@ export class ReservationsService {
         data: withCreateAudit(
           {
             tenantId: auth.tenantId,
-            rideId: dto.rideId,
-            departureId,
+            // From the departure, not the request: the copies are the bus's.
+            rideId: departure.rideId,
+            departureId: departure.id,
             passengerId: dto.passengerId,
             travelDate,
-            rideDepartureTime: dto.rideDepartureTime,
-            rideArrivalTime: dto.rideArrivalTime,
+            rideDepartureTime: departure.departureTime,
+            rideArrivalTime: departure.arrivalTime,
             seatNumber: dto.seatNumber,
             departureStationId: dto.departureStationId,
             arrivalStationId: dto.arrivalStationId,
@@ -965,31 +921,6 @@ export class ReservationsService {
     } catch (error) {
       throw asReturnLegConflict(error);
     }
-  }
-
-  private async acquireRideInstanceLock(
-    tx: Prisma.TransactionClient,
-    input: {
-      tenantId: string;
-      rideId: string;
-      travelDate: Date;
-      rideDepartureTime: string;
-    }
-  ): Promise<void> {
-    await this.acquireRideInstanceLockByKey(tx, this.rideInstanceKey(input));
-  }
-
-  private rideInstanceKey(input: {
-    tenantId: string;
-    rideId: string;
-    travelDate: Date;
-    rideDepartureTime: string;
-  }): string {
-    return [input.tenantId, input.rideId, this.formatDate(input.travelDate), input.rideDepartureTime].join(':');
-  }
-
-  private async acquireRideInstanceLockByKey(tx: Prisma.TransactionClient, lockKey: string): Promise<void> {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
   }
 
   private toUtcDate(date: string): Date {
@@ -1017,6 +948,7 @@ export class ReservationsService {
       departureStationId: reservation.departureStationId,
       arrivalStationId: reservation.arrivalStationId,
       groupId: reservation.groupId,
+      departureId: reservation.departureId,
       roundTripId: reservation.roundTripId,
       returnOfReservationId: reservation.returnOfReservationId,
       notes: reservation.notes,

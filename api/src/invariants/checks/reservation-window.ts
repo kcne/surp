@@ -6,6 +6,7 @@ import {
   materializeInstanceTimesForDate,
   utcDateOf
 } from '../../rides/ride-instance-materialization';
+import { StopRoute, routeFromStops } from '../../departures/booking-departure';
 import { InvariantContext } from '../invariant.types';
 import { RideDayInstances } from './orphaned-reservations';
 
@@ -23,6 +24,7 @@ import { RideDayInstances } from './orphaned-reservations';
 const RESERVATION_SELECT = {
   id: true,
   rideId: true,
+  departureId: true,
   travelDate: true,
   rideDepartureTime: true,
   rideArrivalTime: true,
@@ -67,6 +69,24 @@ const RIDE_SELECT = {
   }
 } as const;
 
+const DEPARTURE_SELECT = {
+  id: true,
+  source: true,
+  departureTime: true,
+  arrivalTime: true,
+  capacity: true,
+  cancelledAt: true,
+  timetableDroppedAt: true,
+  stops: {
+    select: { stationId: true, isBoarding: true, isDropoff: true },
+    orderBy: { orderIndex: 'asc' }
+  }
+} as const;
+
+export type WindowedDeparture = Prisma.DepartureGetPayload<{ select: typeof DEPARTURE_SELECT }>;
+
+export type WindowedRoute = StopRoute;
+
 export type WindowedReservation = Prisma.ReservationGetPayload<{
   select: typeof RESERVATION_SELECT;
 }> & { travelDate: Date };
@@ -88,6 +108,17 @@ export interface ReservationWindow {
   windowEndDate: string;
   reservations: WindowedReservation[];
   rideOf(reservation: WindowedReservation): WindowedRide | undefined;
+  /**
+   * The stored departure a linked reservation is on (#27). Seats are counted
+   * on it and its stops are the route, so the checks judge the bus the
+   * booking was checked against rather than the timetable's reading of it.
+   */
+  departureOf(reservation: WindowedReservation): WindowedDeparture | undefined;
+  /**
+   * The route the reservation's stations are read against: its departure's
+   * stored stops, or, for a row with no departure, its ride's line.
+   */
+  routeOf(reservation: WindowedReservation, ride: WindowedRide): WindowedRoute;
   /** What the ride does on one travel date: instances, plus why, if none. */
   dayOf(ride: WindowedRide, travelDate: string): RideDayInstances;
 }
@@ -153,6 +184,22 @@ async function buildReservationWindow(ctx: InvariantContext): Promise<Reservatio
         });
 
   const rideById = new Map(rides.map((ride) => [ride.id, ride]));
+  const departureIds = [
+    ...new Set(
+      reservations
+        .map((reservation) => reservation.departureId)
+        .filter((id): id is string => Boolean(id))
+    )
+  ];
+  const departures =
+    departureIds.length === 0
+      ? []
+      : await ctx.prisma.departure.findMany({
+          where: { id: { in: departureIds }, tenantId: ctx.tenantId },
+          select: DEPARTURE_SELECT
+        });
+  const departureById = new Map(departures.map((departure) => [departure.id, departure]));
+  const routeByDepartureId = new Map<string, WindowedRoute>();
 
   // Instances are derived per ride and date, so cache them: a busy ride can
   // carry dozens of reservations on the same day.
@@ -163,6 +210,31 @@ async function buildReservationWindow(ctx: InvariantContext): Promise<Reservatio
     windowEndDate,
     reservations,
     rideOf: (reservation) => rideById.get(reservation.rideId),
+    departureOf: (reservation) =>
+      reservation.departureId ? departureById.get(reservation.departureId) : undefined,
+    routeOf: (reservation, ride) => {
+      const departure = reservation.departureId
+        ? departureById.get(reservation.departureId)
+        : undefined;
+
+      if (!departure) {
+        return ride.line;
+      }
+
+      const cached = routeByDepartureId.get(departure.id);
+
+      if (cached) {
+        return cached;
+      }
+
+      // Only a half-written departure has fewer than its two termini, and the
+      // line is a better guess for it than a route of nothing.
+      const route = routeFromStops(departure.stops) ?? ride.line;
+
+      routeByDepartureId.set(departure.id, route);
+
+      return route;
+    },
     dayOf: (ride, travelDate) => {
       const key = `${ride.id}:${travelDate}`;
       const cached = dayCache.get(key);

@@ -46,10 +46,14 @@ export async function scanForStaleArrivalTimes(ctx: InvariantContext): Promise<{
       continue;
     }
 
-    const day = window.dayOf(ride, travelDate);
-    const instance = day.instances.find(
-      (candidate) => candidate.departureTime === reservation.rideDepartureTime
-    );
+    // A linked reservation's copy follows its departure (#27, PR 3b), which
+    // the sync rewrites; one with no departure follows the timetable.
+    const departure = window.departureOf(reservation);
+    const instance = departure
+      ? departure
+      : window
+          .dayOf(ride, travelDate)
+          .instances.find((candidate) => candidate.departureTime === reservation.rideDepartureTime);
 
     // A reservation no instance reaches is unreachable, which is a different
     // invariant's finding. Reporting it here too would double-count the same

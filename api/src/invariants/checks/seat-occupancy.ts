@@ -2,7 +2,7 @@ import { formatDateOnly } from '../../rides/ride-instance-materialization';
 import { RouteSegment, routeStationOrder } from '../../reservations/route-segment';
 import { InvariantContext } from '../invariant.types';
 import { classifyReservation } from './orphaned-reservations';
-import { loadReservationWindow, WindowedRide } from './reservation-window';
+import { loadReservationWindow, WindowedRide, WindowedRoute } from './reservation-window';
 
 /**
  * Who is sitting where, on every departure inside the window.
@@ -13,17 +13,20 @@ import { loadReservationWindow, WindowedRide } from './reservation-window';
  * each with the stretch of route it occupies a seat for. Building it once means
  * the three of them cannot disagree about which passengers are on the same bus.
  *
- * That grouping is the whole point of these checks. The application groups by
- * the stored `rideId : travelDate : rideDepartureTime`, and so does the
- * advisory lock taken before a booking is accepted. When a route edit moves the
- * departure time, reservations booked before the edit keep the old time and the
- * one bus splits into two locking domains: a booking taken in one cannot see
- * the seats held in the other, and the seat is sold twice. That is how 40 seats
- * were resold in #14.
+ * That grouping is the whole point of these checks. Until #27 PR 3b the
+ * application grouped by the stored `rideId : travelDate : rideDepartureTime`,
+ * and so did the advisory lock taken before a booking was accepted. When a
+ * route edit moved the departure time, reservations booked before the edit
+ * kept the old time and the one bus split into two locking domains: a booking
+ * taken in one could not see the seats held in the other, and the seat was
+ * sold twice. That is how 40 seats were resold in #14.
  *
- * So this resolves each reservation onto the instance that will actually carry
- * it, not the one its stored string names, and puts the drifted reservations
- * back beside the current ones where the clash is visible.
+ * Booking now counts and locks seats on the stored departure, and so does
+ * this: a linked reservation is grouped by its `departureId`, with that
+ * departure's capacity and stops. A reservation with no departure is still
+ * resolved onto the instance that will actually carry it, not the one its
+ * stored string names, and put back beside the current ones where the clash
+ * is visible.
  */
 
 export interface OccupiedSeat {
@@ -47,7 +50,10 @@ export interface OccupiedSeat {
 }
 
 export interface InstanceOccupancy {
-  /** `rideId : travelDate : departureTime`, the key the app joins on. */
+  /**
+   * `departure:<id>` for a stored departure, the bus booking counts seats on.
+   * `rideId : travelDate : departureTime` for reservations with none.
+   */
   instanceKey: string;
   rideId: string;
   rideName: string;
@@ -105,9 +111,9 @@ export function loadInstanceOccupancy(ctx: InvariantContext): Promise<OccupancyS
 async function scanInstanceOccupancy(ctx: InvariantContext): Promise<OccupancyScan> {
   const window = await loadReservationWindow(ctx);
   const byKey = new Map<string, InstanceOccupancy>();
-  // One numbering per ride rather than per reservation: a busy ride carries
-  // hundreds of them and the route behind it does not change mid-scan.
-  const stationOrderByRideId = new Map<string, Map<string, number>>();
+  // One numbering per route rather than per reservation: a busy departure
+  // carries dozens of them and the route behind it does not change mid-scan.
+  const stationOrderByRoute = new Map<WindowedRoute, Map<string, number>>();
 
   for (const reservation of window.reservations) {
     const travelDate = formatDateOnly(reservation.travelDate)!;
@@ -117,21 +123,40 @@ async function scanInstanceOccupancy(ctx: InvariantContext): Promise<OccupancySc
       continue;
     }
 
-    const day = window.dayOf(ride, travelDate);
-    const classification = classifyReservation({ ...reservation, travelDate }, day);
-    const departureTime = classification
-      ? classification.targetDepartureTime
-      : reservation.rideDepartureTime;
+    const departure = window.departureOf(reservation);
+    let instanceKey: string;
+    let departureTime: string;
+    let capacity: number;
 
-    if (!departureTime) {
-      continue;
+    if (departure) {
+      // The bus itself (#27, PR 3b): booking counts and locks seats on it,
+      // so a time copy that drifted cannot split it in two here either.
+      instanceKey = `departure:${departure.id}`;
+      departureTime = departure.departureTime;
+      capacity = departure.capacity;
+    } else {
+      const day = window.dayOf(ride, travelDate);
+      const classification = classifyReservation({ ...reservation, travelDate }, day);
+      const resolved = classification
+        ? classification.targetDepartureTime
+        : reservation.rideDepartureTime;
+
+      if (!resolved) {
+        continue;
+      }
+
+      instanceKey = `${ride.id}:${travelDate}:${resolved}`;
+      departureTime = resolved;
+      capacity = ride.capacity;
     }
 
-    const instanceKey = `${ride.id}:${travelDate}:${departureTime}`;
-    const instance = byKey.get(instanceKey) ?? emptyInstance(ride, travelDate, departureTime);
+    const route = window.routeOf(reservation, ride);
+    const instance =
+      byKey.get(instanceKey) ??
+      emptyInstance(ride, route, instanceKey, travelDate, departureTime, capacity);
     const stationOrderById =
-      stationOrderByRideId.get(ride.id) ??
-      stationOrderByRideId.set(ride.id, routeStationOrder(ride.line)).get(ride.id)!;
+      stationOrderByRoute.get(route) ??
+      stationOrderByRoute.set(route, routeStationOrder(route)).get(route)!;
     const departureOrder = stationOrderById.get(reservation.departureStationId);
     const arrivalOrder = stationOrderById.get(reservation.arrivalStationId);
 
@@ -162,21 +187,24 @@ async function scanInstanceOccupancy(ctx: InvariantContext): Promise<OccupancySc
 
 function emptyInstance(
   ride: WindowedRide,
+  route: WindowedRoute,
+  instanceKey: string,
   travelDate: string,
-  departureTime: string
+  departureTime: string,
+  capacity: number
 ): InstanceOccupancy {
   return {
-    instanceKey: `${ride.id}:${travelDate}:${departureTime}`,
+    instanceKey,
     rideId: ride.id,
     rideName: ride.name,
     lineName: ride.line.name,
     travelDate,
     departureTime,
-    capacity: ride.capacity,
+    capacity,
     stationIds: [
-      ride.line.departureStationId,
-      ...ride.line.intermediateStops.map((stop) => stop.stationId),
-      ride.line.arrivalStationId
+      route.departureStationId,
+      ...route.intermediateStops.map((stop) => stop.stationId),
+      route.arrivalStationId
     ],
     seats: []
   };

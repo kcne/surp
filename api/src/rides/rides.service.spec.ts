@@ -1125,8 +1125,25 @@ describe('RidesService', () => {
             })
           },
           station: { findMany: jest.fn().mockResolvedValue([]) },
-          // The departure the moved reservation is linked to again.
-          departure: { findMany: jest.fn().mockResolvedValue([{ id: 'departure-1' }]) },
+          // The departure the moved reservation is linked to again, which the
+          // scan after the repair then reads the bus from.
+          departure: {
+            findMany: jest.fn().mockResolvedValue([
+              {
+                id: 'departure-1',
+                source: 'SCHEDULE',
+                departureTime: '10:00',
+                arrivalTime: '11:30',
+                capacity: 38,
+                cancelledAt: null,
+                timetableDroppedAt: null,
+                stops: [
+                  { stationId: 'station-a', isBoarding: true, isDropoff: false },
+                  { stationId: 'station-b', isBoarding: false, isDropoff: true }
+                ]
+              }
+            ])
+          },
           ride: {
             findMany: jest.fn(async () => [
               written ? windowedRide('10:00', '11:30') : windowedRide('09:00', '10:30')
@@ -1174,6 +1191,7 @@ describe('RidesService', () => {
     it('moves the reservation onto the new departure when asked to repair', async () => {
       const token = await refusalToken(service.update(auth, 'ride-1', movedLater));
       harness = transactionMoving();
+      jest.mocked(syncDepartures).mockClear();
 
       await expect(
         service.update(auth, 'ride-1', { ...movedLater, repairTokens: [token] })
@@ -1188,8 +1206,8 @@ describe('RidesService', () => {
         })
       ]);
       expect(harness.tx.reservation.findMany).toHaveBeenCalledTimes(3);
-      // Departures are synced before the repair looks for the moved bus, and
-      // again once the edit is done.
+      // Departures are synced before the after-scan, so the repair finds the
+      // moved bus, and again once the edit is done.
       const sync = jest.mocked(syncDepartures);
       expect(sync).toHaveBeenCalledTimes(2);
       expect(sync.mock.invocationCallOrder[0]).toBeLessThan(

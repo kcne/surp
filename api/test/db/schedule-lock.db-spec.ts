@@ -1,6 +1,8 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma, ReservationStatus, RideStatus, StationCategory } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { syncDepartures } from '../../src/departures/departure-sync';
+import { SYSTEM_ACTOR_ID } from '../../src/departures/system-actor';
 import { realignDriftedSchedules } from '../../src/invariants/checks/schedule-matches-route';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import {
@@ -79,6 +81,10 @@ describe('tenant schedule lock (real database)', () => {
 
   beforeEach(async () => {
     seeded = await seedTenant(prisma);
+    // Bookings name a stored departure since #27 PR 3b; this is the first fill.
+    await prisma.$transaction((tx) =>
+      syncDepartures(tx, { tenantId: seeded.auth.tenantId, actorId: SYSTEM_ACTOR_ID })
+    );
   });
 
   afterEach(async () => {
