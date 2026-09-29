@@ -17,6 +17,12 @@ import { INVARIANTS, findInvariant } from '../src/invariants/registry';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { resolveDepartureLink } from '../src/departures/departure-link';
 import { syncDepartures } from '../src/departures/departure-sync';
+import {
+  cancelScheduledDeparture,
+  insertExtraDeparture,
+  restoreScheduledDeparture,
+  retireExtraDeparture
+} from '../src/departures/exception-departures';
 import { dayOfWeekOf, formatDateOnly } from '../src/rides/ride-instance-materialization';
 
 interface FixtureState {
@@ -32,6 +38,8 @@ interface FixtureState {
   stationIds: { first: string; middle: string; last: string; alternate: string };
   stationTimeIds: { first: string; middle: string; last: string };
   lineStopId: string;
+  /** Set by a fixture that has to name the departure its violation is on. */
+  extraDepartureId?: string;
 }
 
 interface IncidentFixture {
@@ -125,17 +133,7 @@ const fixtures: IncidentFixture[] = [
     name: 'SKIP exception is added on a sold date',
     invariantKey: 'reservation.reachable',
     mutate: async (tx, state) => {
-      await tx.rideException.create({
-        data: {
-          id: fixtureId('exception-skip'),
-          tenantId: state.tenantId,
-          rideId: state.rideId,
-          exceptionDate: state.travelDate,
-          type: RideExceptionType.SKIP,
-          createdById: state.actorId,
-          updatedById: state.actorId
-        }
-      });
+      await skipDate(tx, state, 'exception-skip');
     },
     matches: reason('SKIPPED_BY_EXCEPTION')
   },
@@ -143,24 +141,12 @@ const fixtures: IncidentFixture[] = [
     name: 'ADDITIONAL exception is deleted after sale',
     invariantKey: 'reservation.reachable',
     mutate: async (tx, state) => {
-      const exception = await tx.rideException.create({
-        data: {
-          id: fixtureId('exception-additional'),
-          tenantId: state.tenantId,
-          rideId: state.rideId,
-          exceptionDate: state.travelDate,
-          type: RideExceptionType.ADDITIONAL,
-          departureTime: '12:00',
-          arrivalTime: '14:00',
-          createdById: state.actorId,
-          updatedById: state.actorId
-        }
-      });
+      await addExtra(tx, state, { id: 'exception-additional', departureTime: '12:00' });
       await tx.reservation.update({
         where: { id: state.reservationId },
         data: { rideDepartureTime: '12:00', rideArrivalTime: '14:00' }
       });
-      await tx.rideException.delete({ where: { id: exception.id } });
+      await removeException(tx, state, 'exception-additional');
     },
     matches: reason('DEPARTURE_TIME_MOVED')
   },
@@ -361,27 +347,85 @@ const fixtures: IncidentFixture[] = [
     matches: reason('NOT_IN_TIMETABLE')
   },
   {
-    name: 'extra bus outlives its exception',
+    name: 'extra bus keeps running after its ride is deactivated, without a sync',
     invariantKey: 'departure.matchesTimetable',
     skipDepartureSync: true,
     mutate: async (tx, state) => {
-      const exception = await tx.rideException.create({
+      const extra = await addExtra(tx, state, {
+        id: 'exception-extra-inactive',
+        departureTime: '15:00'
+      });
+      await tx.ride.update({ where: { id: state.rideId }, data: { status: RideStatus.INACTIVE } });
+      state.extraDepartureId = extra.id;
+    },
+    matches: (violation, state) =>
+      reason('FIELDS_DIFFER')(violation) &&
+      violation.subjectId === state.extraDepartureId &&
+      (violation.detail.fields as string[]).includes('timetableDroppedAt')
+  },
+  {
+    name: 'SKIP is recorded without cancelling its departure',
+    invariantKey: 'departure.matchesExceptions',
+    mutate: async (tx, state) => {
+      await tx.rideException.create({
         data: {
-          id: fixtureId('exception-extra-gone'),
-          tenantId: state.tenantId,
-          rideId: state.rideId,
-          exceptionDate: state.travelDate,
-          type: RideExceptionType.ADDITIONAL,
-          departureTime: '15:00',
-          arrivalTime: '17:00',
-          createdById: state.actorId,
-          updatedById: state.actorId
+          ...exceptionRow(state, 'exception-skip-only'),
+          type: RideExceptionType.SKIP
         }
       });
-      await syncDepartures(tx, { tenantId: state.tenantId, actorId: state.actorId });
-      await tx.rideException.delete({ where: { id: exception.id } });
     },
-    matches: reason('EXCEPTION_GONE')
+    matches: reason('SKIP_NOT_APPLIED')
+  },
+  {
+    name: 'departure is cancelled without a SKIP',
+    invariantKey: 'departure.matchesExceptions',
+    mutate: async (tx, state) => {
+      await tx.departure.updateMany({
+        where: { rideId: state.rideId, serviceDate: state.travelDate },
+        data: { cancelledAt: new Date(), cancelledById: state.actorId }
+      });
+    },
+    matches: reason('CANCELLED_WITHOUT_SKIP')
+  },
+  {
+    name: 'ADDITIONAL is recorded without its extra bus',
+    invariantKey: 'departure.matchesExceptions',
+    mutate: async (tx, state) => {
+      await tx.rideException.create({
+        data: {
+          ...exceptionRow(state, 'exception-additional-only'),
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '15:00',
+          arrivalTime: '17:00'
+        }
+      });
+    },
+    matches: reason('ADDITIONAL_NOT_APPLIED')
+  },
+  {
+    name: 'extra bus outlives its ADDITIONAL without being cancelled',
+    invariantKey: 'departure.matchesExceptions',
+    mutate: async (tx, state) => {
+      await addExtra(tx, state, { id: 'exception-extra-gone', departureTime: '15:00' });
+      // Past the endpoint, which would have deleted or cancelled the bus.
+      await tx.rideException.delete({ where: { id: fixtureId('exception-extra-gone') } });
+    },
+    matches: reason('EXTRA_WITHOUT_ADDITIONAL')
+  },
+  {
+    name: 'extra bus is cancelled while its ADDITIONAL stays',
+    invariantKey: 'departure.matchesExceptions',
+    mutate: async (tx, state) => {
+      const extra = await addExtra(tx, state, {
+        id: 'exception-extra-cancelled',
+        departureTime: '15:00'
+      });
+      await tx.departure.update({
+        where: { id: extra.id },
+        data: { cancelledAt: new Date(), cancelledById: state.actorId }
+      });
+    },
+    matches: reason('CANCELLED_EXTRA_HAS_ADDITIONAL')
   },
   {
     name: 'agency timezone is not a known zone',
@@ -416,30 +460,28 @@ const fixtures: IncidentFixture[] = [
 
       const nextWeek = new Date(state.travelDate);
       nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
-      await tx.rideException.createMany({
-        data: [
-          {
-            id: fixtureId('exception-silent-extra'),
-            type: RideExceptionType.ADDITIONAL,
-            exceptionDate: state.travelDate,
-            departureTime: '15:00',
-            arrivalTime: '17:00'
-          },
-          {
-            id: fixtureId('exception-silent-skip'),
-            type: RideExceptionType.SKIP,
-            exceptionDate: nextWeek,
-            departureTime: null,
-            arrivalTime: null
-          }
-        ].map((exception) => ({
-          ...exception,
-          tenantId: state.tenantId,
-          rideId: state.rideId,
-          createdById: state.actorId,
-          updatedById: state.actorId
-        }))
-      });
+      await addExtra(tx, state, { id: 'exception-silent-extra', departureTime: '15:00' });
+      await skipDate(tx, state, 'exception-silent-skip', nextWeek);
+
+      // A later edit keeps the cancellation and the extra, which the sync
+      // no longer reads from the exception rows.
+      await syncDepartures(tx, { tenantId: state.tenantId, actorId: state.actorId });
+      await tx.ride.update({ where: { id: state.rideId }, data: { capacity: 5 } });
+    }
+  },
+  {
+    // What the exception endpoints leave behind when a SKIP and an extra bus
+    // are added and taken away again.
+    name: 'extra bus and cancelled date are removed again',
+    invariantKey: 'departure.matchesExceptions',
+    expects: 'silence',
+    mutate: async (tx, state) => {
+      const nextWeek = new Date(state.travelDate);
+      nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
+      await addExtra(tx, state, { id: 'exception-undone-extra', departureTime: '15:00' });
+      await skipDate(tx, state, 'exception-undone-skip', nextWeek);
+      await removeException(tx, state, 'exception-undone-extra');
+      await removeException(tx, state, 'exception-undone-skip');
     }
   },
   {
@@ -480,17 +522,7 @@ const fixtures: IncidentFixture[] = [
     name: 'booked date is cancelled',
     invariantKey: 'reservation.departureLinked',
     mutate: async (tx, state) => {
-      await tx.rideException.create({
-        data: {
-          id: fixtureId('exception-booked-skip'),
-          tenantId: state.tenantId,
-          rideId: state.rideId,
-          exceptionDate: state.travelDate,
-          type: RideExceptionType.SKIP,
-          createdById: state.actorId,
-          updatedById: state.actorId
-        }
-      });
+      await skipDate(tx, state, 'exception-booked-skip');
     },
     matches: (violation, state) =>
       reason('NOT_RUNNING')(violation) && violation.subjectId === state.reservationId
@@ -660,30 +692,91 @@ function createLegacyDeparture(
   });
 }
 
-async function createExtraBus(
+/**
+ * An extra bus, stored before PR 3a when it shares the timetable bus's time:
+ * the endpoints refuse a new same-time pair, but the ones already stored stay.
+ */
+function createExtraBus(
   tx: Prisma.TransactionClient,
   state: FixtureState,
   { id, departureTime }: { id: string; departureTime: string }
 ) {
+  return addExtra(tx, state, { id, departureTime, allowSameTime: true });
+}
+
+function exceptionRow(state: FixtureState, id: string, exceptionDate: Date = state.travelDate) {
+  return {
+    id: fixtureId(id),
+    tenantId: state.tenantId,
+    rideId: state.rideId,
+    exceptionDate,
+    createdById: state.actorId,
+    updatedById: state.actorId
+  };
+}
+
+function decisionOf(state: FixtureState) {
+  return { tenantId: state.tenantId, rideId: state.rideId, actorId: state.actorId };
+}
+
+/*
+ * The fixtures write operator decisions the way the exception endpoints do:
+ * the exception row and its departure together (#27, PR 3a). A fixture that
+ * stands for a write that recorded only one half writes that half itself.
+ */
+
+async function skipDate(
+  tx: Prisma.TransactionClient,
+  state: FixtureState,
+  id: string,
+  date: Date = state.travelDate
+) {
+  const exception = await tx.rideException.create({
+    data: { ...exceptionRow(state, id, date), type: RideExceptionType.SKIP }
+  });
+  await cancelScheduledDeparture(tx, decisionOf(state), date, {
+    at: exception.createdAt,
+    by: state.actorId
+  });
+}
+
+async function addExtra(
+  tx: Prisma.TransactionClient,
+  state: FixtureState,
+  {
+    id,
+    departureTime,
+    allowSameTime = false
+  }: { id: string; departureTime: string; allowSameTime?: boolean }
+) {
+  const arrivalTime = departureTime === '12:00' ? '14:00' : '17:00';
   await tx.rideException.create({
     data: {
-      id: fixtureId(id),
-      tenantId: state.tenantId,
-      rideId: state.rideId,
-      exceptionDate: state.travelDate,
+      ...exceptionRow(state, id),
       type: RideExceptionType.ADDITIONAL,
       departureTime,
-      arrivalTime: '17:00',
-      createdById: state.actorId,
-      updatedById: state.actorId
+      arrivalTime
     }
   });
-  await syncDepartures(tx, { tenantId: state.tenantId, actorId: state.actorId });
 
-  return tx.departure.findFirstOrThrow({
-    where: { rideExceptionId: fixtureId(id) },
-    select: { id: true }
-  });
+  return insertExtraDeparture(
+    tx,
+    decisionOf(state),
+    { rideExceptionId: fixtureId(id), serviceDate: state.travelDate, departureTime, arrivalTime },
+    { allowSameTime }
+  );
+}
+
+async function removeException(tx: Prisma.TransactionClient, state: FixtureState, id: string) {
+  const exception = await tx.rideException.findUniqueOrThrow({ where: { id: fixtureId(id) } });
+
+  if (exception.type === RideExceptionType.SKIP) {
+    await restoreScheduledDeparture(tx, decisionOf(state), exception.exceptionDate);
+  } else {
+    await retireExtraDeparture(tx, decisionOf(state), exception.id);
+  }
+
+  await tx.rideException.delete({ where: { id: exception.id } });
 }
 
 export async function runIncidentFixtures(prisma: PrismaClient): Promise<IncidentFixtureResult[]> {

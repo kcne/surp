@@ -15,6 +15,7 @@ import { scheduleMatchesRoute } from './checks/schedule-matches-route';
 import { reservationStationsOnRoute } from './checks/stations-on-route';
 import { terminiReachable } from './checks/termini-reachable';
 import { backupFresh } from './checks/backup-fresh';
+import { departureMatchesExceptions } from './checks/departure-matches-exceptions';
 import { departureMatchesTimetable } from './checks/departure-matches-timetable';
 import { reservationDepartureLinked } from './checks/reservation-departure-linked';
 
@@ -44,6 +45,7 @@ export const INVARIANTS: readonly Invariant[] = [
   instanceNotOverbooked,
   scheduleMatchesRoute,
   departureMatchesTimetable,
+  departureMatchesExceptions,
   reservationDepartureLinked,
   pairedDirectionsAgree,
   terminiReachable,

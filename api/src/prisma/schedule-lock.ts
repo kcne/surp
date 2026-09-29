@@ -1,7 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { DepartureSyncScope, syncDepartures } from '../departures/departure-sync';
-import { departureSyncEnabled } from '../departures/departure-sync-enabled';
 
 /**
  * The one lock every writer that depends on a tenant's schedule agrees on.
@@ -147,8 +146,7 @@ export function reservationWriteTransaction<T>(
  * After the work, and still under the lock, the tenant's future departures are
  * brought in step with the timetable the work left behind, credited to
  * `scope.actorId`. Doing it here rather than in each writer means no timetable
- * write, repair or script can forget to. It runs once `DEPARTURES_SYNC_ENABLED`
- * is set, which the rollout does only after the first fill.
+ * write, repair or script can forget to.
  *
  * `scope.actorId` is also the transaction's audit actor, so a row this edit
  * deletes is credited to the person editing rather than to whoever last wrote
@@ -178,7 +176,7 @@ export function scheduleEditTransaction<T>(
 
       const result = await work(tx);
 
-      if (departureSync && departureSyncEnabled()) {
+      if (departureSync) {
         await syncDepartures(tx, scope);
       }
 

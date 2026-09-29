@@ -13,15 +13,7 @@ describe('DepartureNightlyService', () => {
     $transaction: jest.fn((work: (client: typeof tx) => Promise<unknown>) => work(tx))
   };
 
-  const syncSwitch = process.env.DEPARTURES_SYNC_ENABLED;
-
-  function service(enabled: boolean) {
-    if (enabled) {
-      process.env.DEPARTURES_SYNC_ENABLED = 'true';
-    } else {
-      delete process.env.DEPARTURES_SYNC_ENABLED;
-    }
-
+  function service() {
     return new DepartureNightlyService(prismaMock as never);
   }
 
@@ -30,25 +22,10 @@ describe('DepartureNightlyService', () => {
     prismaMock.tenant.findMany.mockResolvedValue([{ id: 'tenant-a' }, { id: 'tenant-b' }]);
   });
 
-  afterAll(() => {
-    if (syncSwitch === undefined) {
-      delete process.env.DEPARTURES_SYNC_ENABLED;
-    } else {
-      process.env.DEPARTURES_SYNC_ENABLED = syncSwitch;
-    }
-  });
-
-  it('does nothing until it is enabled', async () => {
-    await service(false).runScheduled();
-
-    expect(prismaMock.tenant.findMany).not.toHaveBeenCalled();
-    expect(syncMock).not.toHaveBeenCalled();
-  });
-
   it('inserts only, as the system actor, under each tenant schedule lock', async () => {
     syncMock.mockResolvedValue({ created: 1, updated: 0, dropped: 0, deleted: 0 });
 
-    await service(true).runScheduled();
+    await service().runScheduled();
 
     expect(syncMock).toHaveBeenCalledTimes(2);
     expect(syncMock).toHaveBeenCalledWith(
@@ -68,7 +45,7 @@ describe('DepartureNightlyService', () => {
       .mockRejectedValueOnce(new Error('boom'))
       .mockResolvedValueOnce({ created: 3, updated: 0, dropped: 0, deleted: 0 });
 
-    const outcomes = await service(true).run();
+    const outcomes = await service().run();
 
     expect(outcomes).toEqual([
       { tenantId: 'tenant-a', error: 'boom' },

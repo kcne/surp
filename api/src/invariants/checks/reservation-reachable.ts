@@ -1,4 +1,4 @@
-import { departureLinkForWrite } from '../../departures/departure-link';
+import { resolveDepartureLink } from '../../departures/departure-link';
 import { withUpdateAudit } from '../../prisma/audit-write.helper';
 import { formatDateOnly } from '../../rides/ride-instance-materialization';
 import {
@@ -119,7 +119,7 @@ export async function repairOrphanedReservations(
       where: { id: item.reservationId },
       select: { rideId: true, travelDate: true }
     });
-    const departureId = await departureLinkForWrite(ctx.prisma, {
+    const departureId = await resolveDepartureLink(ctx.prisma, {
       tenantId: ctx.tenantId,
       rideId,
       travelDate,

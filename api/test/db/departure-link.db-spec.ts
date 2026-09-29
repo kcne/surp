@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DepartureSource, RideExceptionType } from '@prisma/client';
 import { indexLinkableDepartures } from '../../src/departures/departure-link';
 import { syncDepartures } from '../../src/departures/departure-sync';
+import { insertExtraDeparture } from '../../src/departures/exception-departures';
 import { SYSTEM_ACTOR_ID } from '../../src/departures/system-actor';
 import { InternalSandboxService } from '../../src/internal-sandbox/internal-sandbox.service';
 import {
@@ -29,7 +30,6 @@ describe('departure links (real database)', () => {
   let rides: RidesService;
   let reservations: ReservationsService;
   let seeded: Seeded;
-  const syncSwitch = process.env.DEPARTURES_SYNC_ENABLED;
 
   beforeAll(async () => {
     prisma = new PrismaService();
@@ -39,16 +39,10 @@ describe('departure links (real database)', () => {
   });
 
   afterAll(async () => {
-    if (syncSwitch === undefined) {
-      delete process.env.DEPARTURES_SYNC_ENABLED;
-    } else {
-      process.env.DEPARTURES_SYNC_ENABLED = syncSwitch;
-    }
     await prisma.$disconnect();
   });
 
   beforeEach(async () => {
-    process.env.DEPARTURES_SYNC_ENABLED = 'true';
     seeded = await seedTenant(prisma);
     await prisma.$transaction((tx) =>
       syncDepartures(tx, { tenantId: seeded.auth.tenantId, actorId: SYSTEM_ACTOR_ID })
@@ -116,12 +110,32 @@ describe('departure links (real database)', () => {
     expect(await linkOf(reservation.id)).toBe(departure.id);
   });
 
-  it('leaves a booking unlinked when an extra bus leaves at the same time', async () => {
-    await rides.addException(seeded.auth, seeded.rideId, {
-      date: seeded.travelDate,
-      type: RideExceptionType.ADDITIONAL,
-      departureTime: '09:00',
-      arrivalTime: '11:00'
+  it('leaves a booking unlinked when an extra bus stored before PR 3a leaves at the same time', async () => {
+    // The endpoint refuses a new same-time extra, so this is one already stored.
+    await prisma.$transaction(async (tx) => {
+      const exception = await tx.rideException.create({
+        data: {
+          tenantId: seeded.auth.tenantId,
+          rideId: seeded.rideId,
+          exceptionDate: new Date(seeded.travelDate),
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '09:00',
+          arrivalTime: '11:00',
+          createdById: seeded.auth.sub,
+          updatedById: seeded.auth.sub
+        }
+      });
+      await insertExtraDeparture(
+        tx,
+        { tenantId: seeded.auth.tenantId, rideId: seeded.rideId, actorId: seeded.auth.sub },
+        {
+          rideExceptionId: exception.id,
+          serviceDate: new Date(seeded.travelDate),
+          departureTime: '09:00',
+          arrivalTime: '11:00'
+        },
+        { allowSameTime: true }
+      );
     });
     expect(await departuresOnTravelDate()).toHaveLength(2);
 
@@ -191,23 +205,6 @@ describe('departure links (real database)', () => {
     ]);
   });
 
-  it('leaves a booking unlinked before the sync is on, when an extra may have no row yet', async () => {
-    delete process.env.DEPARTURES_SYNC_ENABLED;
-    // With the sync off, an extra at the timetable bus's time is not stored,
-    // so the timetable bus is the only match and linking would guess wrong.
-    await rides.addException(seeded.auth, seeded.rideId, {
-      date: seeded.travelDate,
-      type: RideExceptionType.ADDITIONAL,
-      departureTime: '09:00',
-      arrivalTime: '11:00'
-    });
-    expect(await departuresOnTravelDate()).toHaveLength(1);
-
-    const reservation = await book(1);
-
-    expect(await linkOf(reservation.id)).toBeNull();
-  });
-
   describe('the reservation.reachable repair', () => {
     it('keeps the link when an operator repairs during the edit that moved the bus', async () => {
       const [departure] = await departuresOnTravelDate();
@@ -240,7 +237,7 @@ describe('departure links (real database)', () => {
       ]);
     });
 
-    it('moves the link to the timetable bus when an extra is removed with a repair, and deletes the extra', async () => {
+    it('moves the link to the timetable bus when an extra is removed with a repair, and keeps the extra cancelled', async () => {
       const [timetableBus] = await departuresOnTravelDate();
       const exception = await rides.addException(seeded.auth, seeded.rideId, {
         date: seeded.travelDate,
@@ -264,10 +261,14 @@ describe('departure links (real database)', () => {
         select: { departureId: true, rideDepartureTime: true }
       });
       expect(repaired).toEqual({ departureId: timetableBus.id, rideDepartureTime: '09:00' });
-      // Dropped by the sync before the repair while it still had a passenger,
-      // then deleted by the sync at the end once it had none.
-      expect(await departuresOnTravelDate()).toEqual([
-        expect.objectContaining({ id: timetableBus.id, source: DepartureSource.SCHEDULE })
+      // Cancelled while it still had a passenger. The sync never deletes an
+      // extra bus, so it stays on record, cancelled, after the repair.
+      const extras = await prisma.departure.findMany({
+        where: { rideId: seeded.rideId, source: DepartureSource.EXTRA },
+        select: { cancelledAt: true, cancelledById: true, rideExceptionId: true }
+      });
+      expect(extras).toEqual([
+        { cancelledAt: expect.any(Date), cancelledById: seeded.auth.sub, rideExceptionId: null }
       ]);
     });
 

@@ -68,7 +68,9 @@ describe('RidesController (e2e)', () => {
     enableShutdownHooks: jest.fn(),
     isHealthy: jest.fn(),
     tenant: {
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
+      // The agency's zone, which dates an exception can be added for.
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null })
     },
     line: {
       findFirst: jest.fn()
@@ -311,6 +313,12 @@ describe('RidesController (e2e)', () => {
     expect(response.body.id).toBe('ride-1');
   });
 
+  const nextWeek = (() => {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() + 7);
+    return date.toISOString().slice(0, 10);
+  })();
+
   it('rejects invalid exception combinations', async () => {
     prismaMock.rideException.findMany.mockResolvedValueOnce([
       {
@@ -326,7 +334,7 @@ describe('RidesController (e2e)', () => {
       .set('X-Tenant-Slug', 'demo-tenant')
       .set('Authorization', 'Bearer access-token-admin')
       .send({
-        date: '2026-03-25',
+        date: nextWeek,
         type: RideExceptionType.ADDITIONAL,
         departureTime: '11:00',
         arrivalTime: '12:00'
@@ -334,6 +342,18 @@ describe('RidesController (e2e)', () => {
       .expect(409);
 
     expect(response.body.message).toBe('Cannot mix SKIP and ADDITIONAL exceptions on the same date');
+  });
+
+  it('refuses an exception dated before the agency\'s today, and writes nothing', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/rides/ride-1/exceptions')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({ date: '2026-03-25', type: RideExceptionType.SKIP })
+      .expect(400);
+
+    expect(response.body.message).toContain('van dozvoljenog opsega');
+    expect(prismaMock.rideException.create).not.toHaveBeenCalled();
   });
 
   it('supports ride CRUD with status transitions', async () => {

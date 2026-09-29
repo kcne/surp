@@ -1,11 +1,10 @@
-import { RideExceptionType, RideStatus, RideType } from '@prisma/client';
+import { RideStatus, RideType } from '@prisma/client';
 import {
   MaterializationRide,
   baseInstanceForDate,
   dayOfWeekOf
 } from '../rides/ride-instance-materialization';
 import { addDays } from './agency-date';
-import { SYSTEM_ACTOR_ID } from './system-actor';
 
 /**
  * What the timetable says should run, as departures.
@@ -14,6 +13,10 @@ import { SYSTEM_ACTOR_ID } from './system-actor';
  * stored rows, and `departure.matchesTimetable` reports any difference, so the
  * two can only agree if they call the same code. `baseInstanceForDate` stays
  * the one rule for whether a ride runs on a date and at what times.
+ *
+ * Operator decisions are not part of it (#27, PR 3a). A cancellation or an
+ * extra bus is written on the departure by the person who decides it, and the
+ * sync never sets, clears or removes one.
  */
 
 export interface GeneratorStationTime {
@@ -31,22 +34,14 @@ export interface GeneratorRide extends MaterializationRide {
     isActive: boolean;
     departureStationId: string;
     arrivalStationId: string;
-    intermediateStops: Array<{ stationId: string; isBoarding: boolean; isDropoff: boolean }>;
+    intermediateStops: Array<{
+      stationId: string;
+      orderIndex: number;
+      isBoarding: boolean;
+      isDropoff: boolean;
+    }>;
   };
   daySchedules: Array<{ dayOfWeek: number; stationTimes: GeneratorStationTime[] }>;
-}
-
-export interface GeneratorException {
-  id: string;
-  rideId: string;
-  /** `YYYY-MM-DD`. */
-  exceptionDate: string;
-  type: RideExceptionType;
-  departureTime: string | null;
-  arrivalTime: string | null;
-  createdAt: Date;
-  createdById: string | null;
-  updatedById: string | null;
 }
 
 export interface PlannedStop {
@@ -63,7 +58,7 @@ export interface PlannedCancellation {
 }
 
 export interface PlannedDeparture {
-  /** `schedule:<rideId>:<date>` or `extra:<rideExceptionId>`. */
+  /** `schedule:<rideId>:<date>`, or `extra:<departureId>` for a stored extra. */
   key: string;
   source: 'SCHEDULE' | 'EXTRA';
   rideId: string;
@@ -75,10 +70,10 @@ export interface PlannedDeparture {
   capacity: number;
   rideExceptionId: string | null;
   /**
-   * Until PR 3, a SKIP exception is how a person cancels a date, so it is
-   * mirrored as the cancellation, credited to whoever wrote the SKIP.
+   * Set only by `departures:backfill` for a past date, where the SKIP rows are
+   * the record of what was cancelled. The sync never plans one.
    */
-  cancellation: PlannedCancellation | null;
+  cancellation?: PlannedCancellation | null;
   stops: PlannedStop[];
 }
 
@@ -86,8 +81,8 @@ export function scheduleKey(rideId: string, serviceDate: string): string {
   return `schedule:${rideId}:${serviceDate}`;
 }
 
-export function extraKey(rideExceptionId: string): string {
-  return `extra:${rideExceptionId}`;
+export function extraKey(departureId: string): string {
+  return `extra:${departureId}`;
 }
 
 /** Only an ACTIVE ride on an active line has departures. */
@@ -101,7 +96,7 @@ export function rideRuns(ride: Pick<GeneratorRide, 'status' | 'line'>): boolean 
  * its line stop's flags.
  */
 function stopFlags(
-  ride: GeneratorRide,
+  ride: Pick<GeneratorRide, 'line'>,
   stationId: string,
   position: number,
   count: number
@@ -119,28 +114,31 @@ function stopFlags(
   return { isBoarding: lineStop?.isBoarding ?? true, isDropoff: lineStop?.isDropoff ?? true };
 }
 
-/** Only the line's endpoints are known for a one-time ride or an extra bus. */
-function endpointStops(
-  ride: GeneratorRide,
+/**
+ * The whole line path, for a one-time ride or an extra bus: they have no day
+ * schedule, but booking checks a station pair against the whole line, so the
+ * stored stops must hold every stop it accepts. Only the ends have a time.
+ */
+export function linePathStops(
+  ride: Pick<GeneratorRide, 'line'>,
   departureTime: string,
   arrivalTime: string
 ): PlannedStop[] {
-  return [
-    {
-      stationId: ride.line.departureStationId,
-      orderIndex: 0,
-      time: departureTime,
-      isBoarding: true,
-      isDropoff: false
-    },
-    {
-      stationId: ride.line.arrivalStationId,
-      orderIndex: 1,
-      time: arrivalTime,
-      isBoarding: false,
-      isDropoff: true
-    }
+  const middle = [...ride.line.intermediateStops].sort(
+    (left, right) => left.orderIndex - right.orderIndex
+  );
+  const path = [
+    ride.line.departureStationId,
+    ...middle.map((stop) => stop.stationId),
+    ride.line.arrivalStationId
   ];
+
+  return path.map((stationId, position) => ({
+    stationId,
+    orderIndex: position,
+    time: position === 0 ? departureTime : position === path.length - 1 ? arrivalTime : null,
+    ...stopFlags(ride, stationId, position, path.length)
+  }));
 }
 
 function scheduleStops(
@@ -150,7 +148,7 @@ function scheduleStops(
   arrivalTime: string
 ): PlannedStop[] {
   if (ride.type === RideType.ONE_TIME) {
-    return endpointStops(ride, departureTime, arrivalTime);
+    return linePathStops(ride, departureTime, arrivalTime);
   }
 
   const schedule = ride.daySchedules.find((entry) => entry.dayOfWeek === dayOfWeek)!;
@@ -167,38 +165,16 @@ function scheduleStops(
 }
 
 /**
- * A SKIP without an author still cancels the date, as it hides the date from
- * the materializer. The audit trigger refuses such a row today, but the schema
- * allows it, so it is credited to the system actor rather than dropped.
- */
-function cancellationOf(skip: GeneratorException | undefined): PlannedCancellation | null {
-  if (!skip) {
-    return null;
-  }
-
-  return { at: skip.createdAt, by: skip.updatedById ?? skip.createdById ?? SYSTEM_ACTOR_ID };
-}
-
-/**
- * Every departure the timetable produces from `from` to `to`, both included.
- *
- * `exceptions` may hold any dates; only those inside the window are used.
+ * Every `SCHEDULE` departure the timetable produces from `from` to `to`, both
+ * included. Extra buses are not produced: they exist because someone added
+ * one, and only `planExtra` shapes them.
  */
 export function generateDepartures(
   rides: readonly GeneratorRide[],
-  exceptions: readonly GeneratorException[],
   from: string,
   to: string
 ): PlannedDeparture[] {
   const planned: PlannedDeparture[] = [];
-  const exceptionsByRideDate = new Map<string, GeneratorException[]>();
-
-  exceptions
-    .filter((exception) => exception.exceptionDate >= from && exception.exceptionDate <= to)
-    .forEach((exception) => {
-      const key = `${exception.rideId}:${exception.exceptionDate}`;
-      exceptionsByRideDate.set(key, [...(exceptionsByRideDate.get(key) ?? []), exception]);
-    });
 
   for (const ride of rides) {
     if (!rideRuns(ride)) {
@@ -213,10 +189,6 @@ export function generateDepartures(
         continue;
       }
 
-      const skip = (exceptionsByRideDate.get(`${ride.id}:${date}`) ?? []).find(
-        (exception) => exception.type === RideExceptionType.SKIP
-      );
-
       planned.push({
         key: scheduleKey(ride.id, date),
         source: 'SCHEDULE',
@@ -227,45 +199,46 @@ export function generateDepartures(
         arrivalTime: base.arrivalTime,
         capacity: ride.capacity,
         rideExceptionId: null,
-        cancellation: cancellationOf(skip),
         stops: scheduleStops(ride, dayOfWeek, base.departureTime, base.arrivalTime)
       });
     }
   }
 
-  const ridesById = new Map(rides.map((ride) => [ride.id, ride]));
-
-  // The same filter the materializer applies: an ADDITIONAL without both
-  // times produces no instance. A SKIP never removes an extra bus.
-  for (const extras of exceptionsByRideDate.values()) {
-    for (const exception of extras) {
-      const ride = ridesById.get(exception.rideId);
-
-      if (
-        !ride ||
-        !rideRuns(ride) ||
-        exception.type !== RideExceptionType.ADDITIONAL ||
-        !exception.departureTime ||
-        !exception.arrivalTime
-      ) {
-        continue;
-      }
-
-      planned.push({
-        key: extraKey(exception.id),
-        source: 'EXTRA',
-        rideId: ride.id,
-        serviceDate: exception.exceptionDate,
-        lineId: ride.lineId,
-        departureTime: exception.departureTime,
-        arrivalTime: exception.arrivalTime,
-        capacity: ride.capacity,
-        rideExceptionId: exception.id,
-        cancellation: null,
-        stops: endpointStops(ride, exception.departureTime, exception.arrivalTime)
-      });
-    }
-  }
-
   return planned;
+}
+
+export interface ExtraInput {
+  /** Keys the plan; the stored departure's ID, or the exception's for a new one. */
+  keyId: string;
+  serviceDate: string;
+  departureTime: string;
+  arrivalTime: string;
+  capacity: number;
+  rideExceptionId: string | null;
+}
+
+/**
+ * An extra bus as its ride shapes it. Its times and capacity are the
+ * operator's; its line and stops follow the ride, and it runs only while the
+ * ride does (`dropped`).
+ */
+export function planExtra(
+  ride: GeneratorRide,
+  extra: ExtraInput
+): { departure: PlannedDeparture; dropped: boolean } {
+  return {
+    departure: {
+      key: extraKey(extra.keyId),
+      source: 'EXTRA',
+      rideId: ride.id,
+      serviceDate: extra.serviceDate,
+      lineId: ride.lineId,
+      departureTime: extra.departureTime,
+      arrivalTime: extra.arrivalTime,
+      capacity: extra.capacity,
+      rideExceptionId: extra.rideExceptionId,
+      stops: linePathStops(ride, extra.departureTime, extra.arrivalTime)
+    },
+    dropped: !rideRuns(ride)
+  };
 }

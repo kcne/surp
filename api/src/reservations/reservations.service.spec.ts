@@ -394,20 +394,6 @@ describe('ReservationsService', () => {
   });
 
   describe('departure link', () => {
-    const syncSwitch = process.env.DEPARTURES_SYNC_ENABLED;
-
-    beforeEach(() => {
-      process.env.DEPARTURES_SYNC_ENABLED = 'true';
-    });
-
-    afterEach(() => {
-      if (syncSwitch === undefined) {
-        delete process.env.DEPARTURES_SYNC_ENABLED;
-      } else {
-        process.env.DEPARTURES_SYNC_ENABLED = syncSwitch;
-      }
-    });
-
     const book = () =>
       service.create(auth, {
         rideId: 'ride-1',
@@ -450,18 +436,6 @@ describe('ReservationsService', () => {
 
       await expect(book()).resolves.toMatchObject({ seatNumber: 21 });
 
-      expect(prismaMock.reservation.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ departureId: null }) })
-      );
-    });
-
-    it('books without a link before departures follow the timetable', async () => {
-      delete process.env.DEPARTURES_SYNC_ENABLED;
-      prismaMock.departure.findMany.mockResolvedValue([{ id: 'departure-1' }]);
-
-      await expect(book()).resolves.toMatchObject({ seatNumber: 21 });
-
-      expect(prismaMock.departure.findMany).not.toHaveBeenCalled();
       expect(prismaMock.reservation.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ departureId: null }) })
       );

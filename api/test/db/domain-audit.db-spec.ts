@@ -1,4 +1,6 @@
 import { AuditEventType, RideExceptionType, RideStatus, RideType } from '@prisma/client';
+import { syncDepartures } from '../../src/departures/departure-sync';
+import { SYSTEM_ACTOR_ID } from '../../src/departures/system-actor';
 import { NO_CONSENT } from '../../src/invariants/prospective-write';
 import { LinesService } from '../../src/lines/lines.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -76,6 +78,10 @@ describe('domain audit (real database)', () => {
   });
 
   it('cancels one date of a ride', async () => {
+    // A SKIP cancels a stored departure, so the date needs one first.
+    await prisma.$transaction((tx) =>
+      syncDepartures(tx, { tenantId: seeded.auth.tenantId, actorId: SYSTEM_ACTOR_ID })
+    );
     const created = await rides.addException(seeded.auth, seeded.rideId, {
       date: seeded.travelDate,
       type: RideExceptionType.SKIP

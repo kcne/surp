@@ -1,5 +1,4 @@
 import {
-  departureLinkForWrite,
   indexLinkableDepartures,
   resolveDepartureLink,
   uniqueDepartureMatch
@@ -39,44 +38,13 @@ describe('resolveDepartureLink', () => {
   });
 
   it('refuses to guess between two departures at the same time', async () => {
-    await expect(lookup([{ id: 'departure-1' }, { id: 'departure-extra' }]).result).resolves.toBeNull();
+    await expect(
+      lookup([{ id: 'departure-1' }, { id: 'departure-extra' }]).result
+    ).resolves.toBeNull();
   });
 
   it('leaves the booking unlinked when nothing matches', async () => {
     await expect(lookup([]).result).resolves.toBeNull();
-  });
-});
-
-describe('departureLinkForWrite', () => {
-  const syncSwitch = process.env.DEPARTURES_SYNC_ENABLED;
-  const input = {
-    tenantId: 'tenant-1',
-    rideId: 'ride-1',
-    travelDate: serviceDate,
-    departureTime: '09:00'
-  };
-
-  afterEach(() => {
-    if (syncSwitch === undefined) {
-      delete process.env.DEPARTURES_SYNC_ENABLED;
-    } else {
-      process.env.DEPARTURES_SYNC_ENABLED = syncSwitch;
-    }
-  });
-
-  it('links by the match rule while departures follow the timetable', async () => {
-    process.env.DEPARTURES_SYNC_ENABLED = 'true';
-    const db = { departure: { findMany: jest.fn().mockResolvedValue([{ id: 'departure-1' }]) } };
-
-    await expect(departureLinkForWrite(db as never, input)).resolves.toBe('departure-1');
-  });
-
-  it('links nothing before the sync is on, when an extra bus may have no row yet', async () => {
-    delete process.env.DEPARTURES_SYNC_ENABLED;
-    const db = { departure: { findMany: jest.fn().mockResolvedValue([{ id: 'departure-1' }]) } };
-
-    await expect(departureLinkForWrite(db as never, input)).resolves.toBeNull();
-    expect(db.departure.findMany).not.toHaveBeenCalled();
   });
 });
 

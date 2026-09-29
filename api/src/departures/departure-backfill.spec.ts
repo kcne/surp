@@ -1,13 +1,22 @@
-import { DepartureSource, ReservationStatus } from '@prisma/client';
+import {
+  DepartureSource,
+  ReservationStatus,
+  RideExceptionType,
+  RideStatus,
+  RideType
+} from '@prisma/client';
 import {
   BackfillInput,
   BackfillReservation,
   BackfillStoredDeparture,
   computeDepartureBackfill,
   countDepartureBackfill,
+  generateHistory,
+  HistoryException,
   legacyArrival
 } from './departure-backfill';
-import { PlannedDeparture, scheduleKey } from './departure-generator';
+import { GeneratorRide, PlannedDeparture, extraKey, scheduleKey } from './departure-generator';
+import { SYSTEM_ACTOR_ID } from './system-actor';
 
 const today = '2026-09-28';
 const past = '2026-09-10';
@@ -434,5 +443,145 @@ describe('legacyArrival', () => {
     expect(legacyArrival([sold('late', '00:10', 5), sold('early', '23:50', 1)]).chosen).toBe(
       '23:50'
     );
+  });
+});
+
+describe('generateHistory', () => {
+  // 5 October 2026 is a Monday.
+  const MONDAY = '2026-10-05';
+  const TUESDAY = '2026-10-06';
+
+  function ride(overrides: Partial<GeneratorRide> = {}): GeneratorRide {
+    return {
+      id: 'ride-1',
+      lineId: 'line-1',
+      capacity: 48,
+      status: RideStatus.ACTIVE,
+      type: RideType.RECURRING,
+      recurringStartDate: new Date('2026-01-01T00:00:00Z'),
+      recurringEndDate: null,
+      oneTimeDate: null,
+      oneTimeDepartureTime: null,
+      oneTimeArrivalTime: null,
+      line: {
+        isActive: true,
+        departureStationId: 'st-a',
+        arrivalStationId: 'st-c',
+        intermediateStops: [
+          { stationId: 'st-b', orderIndex: 0, isBoarding: false, isDropoff: true }
+        ]
+      },
+      daySchedules: [
+        {
+          dayOfWeek: 1,
+          stationTimes: [
+            { stationId: 'st-a', orderIndex: 0, time: '09:00' },
+            { stationId: 'st-c', orderIndex: 1, time: '11:00' }
+          ]
+        }
+      ],
+      ...overrides
+    };
+  }
+
+  function exception(overrides: Partial<HistoryException>): HistoryException {
+    return {
+      id: 'exc-1',
+      rideId: 'ride-1',
+      exceptionDate: MONDAY,
+      type: RideExceptionType.SKIP,
+      departureTime: null,
+      arrivalTime: null,
+      createdAt: new Date('2026-09-20T08:00:00Z'),
+      createdById: 'user-1',
+      updatedById: 'user-1',
+      ...overrides
+    };
+  }
+
+  it('reads a SKIP as the cancellation of that date, credited to its author', () => {
+    const [departure] = generateHistory(
+      [ride()],
+      [exception({ createdById: 'creator', updatedById: 'editor' })],
+      MONDAY,
+      MONDAY
+    );
+
+    expect(departure.cancellation).toEqual({
+      at: new Date('2026-09-20T08:00:00Z'),
+      by: 'editor'
+    });
+  });
+
+  it('credits a SKIP with no author to the system actor', () => {
+    const [departure] = generateHistory(
+      [ride()],
+      [exception({ createdById: null, updatedById: null })],
+      MONDAY,
+      MONDAY
+    );
+
+    expect(departure.cancellation?.by).toBe(SYSTEM_ACTOR_ID);
+  });
+
+  it('reads an ADDITIONAL as an extra bus keyed by its exception, on the whole line path', () => {
+    const planned = generateHistory(
+      [ride()],
+      [
+        exception({ id: 'skip' }),
+        exception({
+          id: 'extra',
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '15:00',
+          arrivalTime: '17:30'
+        })
+      ],
+      MONDAY,
+      MONDAY
+    );
+
+    const extra = planned.find((departure) => departure.source === 'EXTRA')!;
+    expect(extra).toMatchObject({
+      key: extraKey('extra'),
+      rideExceptionId: 'extra',
+      departureTime: '15:00',
+      cancellation: null
+    });
+    expect(extra.stops.map((stop) => stop.stationId)).toEqual(['st-a', 'st-b', 'st-c']);
+    // A SKIP never removes an extra bus.
+    expect(
+      planned.find((departure) => departure.source === 'SCHEDULE')!.cancellation
+    ).not.toBeNull();
+  });
+
+  it('ignores an ADDITIONAL without both times, on a ride that does not run, or outside the window', () => {
+    const planned = generateHistory(
+      [ride(), ride({ id: 'ride-off', status: RideStatus.INACTIVE })],
+      [
+        exception({
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '15:00',
+          arrivalTime: null
+        }),
+        exception({
+          id: 'off',
+          rideId: 'ride-off',
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '15:00',
+          arrivalTime: '17:00'
+        }),
+        exception({
+          id: 'later',
+          exceptionDate: '2026-10-12',
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '15:00',
+          arrivalTime: '17:00'
+        })
+      ],
+      MONDAY,
+      TUESDAY
+    );
+
+    expect(planned.map((departure) => departure.source)).toEqual(['SCHEDULE']);
   });
 });

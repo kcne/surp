@@ -7,18 +7,8 @@ import { InvariantContext, ProspectiveInvariant, Violation } from './invariant.t
 // and would otherwise run against this spec's mocked transaction.
 jest.mock('../departures/departure-sync', () => ({ syncDepartures: jest.fn() }));
 
-const syncSwitch = process.env.DEPARTURES_SYNC_ENABLED;
-
 beforeEach(() => {
   jest.mocked(syncDepartures).mockClear();
-});
-
-afterAll(() => {
-  if (syncSwitch === undefined) {
-    delete process.env.DEPARTURES_SYNC_ENABLED;
-  } else {
-    process.env.DEPARTURES_SYNC_ENABLED = syncSwitch;
-  }
 });
 
 function violation(subjectId: string, magnitude?: number): Violation {
@@ -479,7 +469,6 @@ describe('guardProspectiveWrite', () => {
     });
 
     it('syncs departures after the write, in its transaction, credited to the editor', async () => {
-      process.env.DEPARTURES_SYNC_ENABLED = 'true';
       const { prisma, tx } = prismaDouble();
       const order: string[] = [];
       const sync = syncDepartures as jest.MockedFunction<typeof syncDepartures>;
@@ -501,20 +490,7 @@ describe('guardProspectiveWrite', () => {
       );
     });
 
-    it('does not sync departures before DEPARTURES_SYNC_ENABLED is set', async () => {
-      delete process.env.DEPARTURES_SYNC_ENABLED;
-      const { prisma } = prismaDouble();
-      const write = jest.fn().mockResolvedValue('written');
-
-      await expect(guardProspectiveWrite(prisma as never, scope, [], UNANSWERED, write)).resolves.toBe(
-        'written'
-      );
-
-      expect(syncDepartures).not.toHaveBeenCalled();
-    });
-
     it('does not sync departures for a write that cannot change the timetable', async () => {
-      process.env.DEPARTURES_SYNC_ENABLED = 'true';
       const { prisma } = prismaDouble();
       const write = jest.fn().mockResolvedValue('written');
 
@@ -569,7 +545,6 @@ describe('guardProspectiveWrite', () => {
     });
 
     it('syncs departures before the repair, so it links to the buses this write produced', async () => {
-      process.env.DEPARTURES_SYNC_ENABLED = 'true';
       const { prisma, tx } = prismaDouble();
       const order: string[] = [];
       const recordSync = async () => {
@@ -602,30 +577,12 @@ describe('guardProspectiveWrite', () => {
     });
 
     it('does not sync before a repair when the write cannot change the timetable', async () => {
-      process.env.DEPARTURES_SYNC_ENABLED = 'true';
       const { prisma } = prismaDouble();
       const reachable = invariantRepairing(REACHABLE, [[], [repairable('res-1')], []]);
 
       await guardProspectiveWrite(
         prisma as never,
         { ...scope, changesTimetable: false },
-        [reachable],
-        repairing(REACHABLE, [repairable('res-1')]),
-        jest.fn()
-      );
-
-      expect(reachable.repairCalls).toBe(1);
-      expect(syncDepartures).not.toHaveBeenCalled();
-    });
-
-    it('does not sync before a repair until DEPARTURES_SYNC_ENABLED is set', async () => {
-      delete process.env.DEPARTURES_SYNC_ENABLED;
-      const { prisma } = prismaDouble();
-      const reachable = invariantRepairing(REACHABLE, [[], [repairable('res-1')], []]);
-
-      await guardProspectiveWrite(
-        prisma as never,
-        scope,
         [reachable],
         repairing(REACHABLE, [repairable('res-1')]),
         jest.fn()

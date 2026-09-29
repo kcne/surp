@@ -9,8 +9,9 @@ export const DEFAULT_AGENCY_TIMEZONE = 'Europe/Belgrade';
 
 /**
  * How far ahead departures are stored. The nightly job adds the day that
- * enters the window; booking lead time is at most 88 days on the 22 September
- * restore, and later dates get on-demand departures in PR 3.
+ * enters the window. Booking lead time is at most 88 days on the 22 September
+ * restore, so nothing is stored or booked past it (#27, PR 3): an exception
+ * dated later is refused rather than given a departure on demand.
  */
 export const DEPARTURE_HORIZON_DAYS = 365;
 

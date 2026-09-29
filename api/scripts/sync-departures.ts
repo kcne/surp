@@ -10,12 +10,13 @@
  * One tenant:        pnpm departures:sync --tenant=<tenant id>
  *
  * Run the dry run and the apply against a restored production backup before
- * applying to production, and compare the counts of the two runs. Set
- * DEPARTURES_SYNC_ENABLED only after the first apply, then run the dry run
- * again: edits made between the apply and the switch did not sync, and a
- * second apply writes what they changed.
+ * applying to production, and compare the counts of the two runs.
  *
- * The script itself runs whether or not the switch is set.
+ * Since PR 3a the sync no longer reads ride exceptions, so a first fill from
+ * this build carries no cancellation and no extra bus over from them. A
+ * database that has no departures yet (older than PR 1a) must get its first
+ * fill from a PR 2 build before this one runs on it; `departure.matchesExceptions`
+ * reports every decision a first fill from here would have lost.
  */
 import { PrismaClient } from '@prisma/client';
 import { planDepartureSync, syncDepartures } from '../src/departures/departure-sync';

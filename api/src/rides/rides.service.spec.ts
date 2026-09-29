@@ -529,12 +529,18 @@ describe('RidesService', () => {
       }
     ]);
     prismaMock.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
-      callback({ $executeRaw: prismaMock.$executeRaw, rideException: prismaMock.rideException })
+      callback({
+        $executeRaw: prismaMock.$executeRaw,
+        rideException: prismaMock.rideException,
+        tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) }
+      })
     );
+    const nextWeek = new Date();
+    nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
 
     await expect(
       service.addException(auth, 'ride-1', {
-        date: '2026-03-25',
+        date: nextWeek.toISOString().slice(0, 10),
         type: RideExceptionType.ADDITIONAL,
         departureTime: '11:00',
         arrivalTime: '12:00'
@@ -996,20 +1002,6 @@ describe('RidesService', () => {
   // registry has a repair for, so the refusal can offer to fix it rather than
   // only to be overridden.
   describe('moving the departure time under a sold reservation', () => {
-    const syncSwitch = process.env.DEPARTURES_SYNC_ENABLED;
-
-    beforeAll(() => {
-      process.env.DEPARTURES_SYNC_ENABLED = 'true';
-    });
-
-    afterAll(() => {
-      if (syncSwitch === undefined) {
-        delete process.env.DEPARTURES_SYNC_ENABLED;
-      } else {
-        process.env.DEPARTURES_SYNC_ENABLED = syncSwitch;
-      }
-    });
-
     const travelDate = (() => {
       const date = new Date();
       date.setUTCDate(date.getUTCDate() + 60);
