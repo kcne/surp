@@ -3,7 +3,6 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { scheduleEditTransaction } from '../prisma/schedule-lock';
 import { DepartureSyncCounts, syncDepartures } from './departure-sync';
-import { departureSyncEnabled } from './departure-sync-enabled';
 import { SYSTEM_ACTOR_ID } from './system-actor';
 
 export interface NightlyTenantOutcome {
@@ -31,10 +30,6 @@ export class DepartureNightlyService {
   // Before the 03:00 audit retention job.
   @Cron('0 2 * * *', { name: 'departures-nightly', timeZone: 'Europe/Belgrade' })
   async runScheduled(): Promise<void> {
-    if (!departureSyncEnabled()) {
-      return;
-    }
-
     await this.run();
   }
 

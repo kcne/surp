@@ -30,7 +30,6 @@ describe('departures:backfill (real database)', () => {
   let prisma: PrismaService;
   let reservations: ReservationsService;
   let seeded: Seeded;
-  const syncSwitch = process.env.DEPARTURES_SYNC_ENABLED;
 
   beforeAll(async () => {
     prisma = new PrismaService();
@@ -39,16 +38,10 @@ describe('departures:backfill (real database)', () => {
   });
 
   afterAll(async () => {
-    if (syncSwitch === undefined) {
-      delete process.env.DEPARTURES_SYNC_ENABLED;
-    } else {
-      process.env.DEPARTURES_SYNC_ENABLED = syncSwitch;
-    }
     await prisma.$disconnect();
   });
 
   beforeEach(async () => {
-    process.env.DEPARTURES_SYNC_ENABLED = 'true';
     seeded = await seedTenant(prisma);
     await prisma.$transaction((tx) =>
       syncDepartures(tx, { tenantId: seeded.auth.tenantId, actorId: SYSTEM_ACTOR_ID })
@@ -358,16 +351,6 @@ describe('departures:backfill (real database)', () => {
     ).rejects.toBeInstanceOf(BackfillRefused);
 
     expect(await departuresOf(past)).toEqual([]);
-    expect((await linkOf(reservation.id)).departureId).toBeNull();
-  });
-
-  it('refuses while the sync is off', async () => {
-    delete process.env.DEPARTURES_SYNC_ENABLED;
-    const reservation = await sold({ travelDate: seeded.travelDate });
-
-    await expect(backfillDepartures(prisma, seeded.auth.tenantId)).rejects.toBeInstanceOf(
-      BackfillRefused
-    );
     expect((await linkOf(reservation.id)).departureId).toBeNull();
   });
 

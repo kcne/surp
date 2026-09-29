@@ -4,16 +4,30 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ScheduleLockRoot, scheduleEditTransaction } from '../prisma/schedule-lock';
 import { formatDateOnly, utcDateOf } from '../rides/ride-instance-materialization';
 import { addDays, agencyDate, resolveAgencyTimezone } from './agency-date';
-import { PlannedDeparture, extraKey, generateDepartures, scheduleKey } from './departure-generator';
+import {
+  GeneratorRide,
+  PlannedDeparture,
+  extraKey,
+  generateDepartures,
+  planExtra,
+  rideRuns,
+  scheduleKey
+} from './departure-generator';
 import { LINKABLE_SOURCES } from './departure-link';
-import { departureSyncEnabled } from './departure-sync-enabled';
 import {
   DepartureSyncScope,
   insertPlannedDepartures,
-  loadExceptions,
   loadRides,
   planDepartureSync
 } from './departure-sync';
+import {
+  ExceptionRecord,
+  busAdditionals,
+  loadExceptionRecords,
+  rideDateKey,
+  skipCancellation,
+  skipsByRideDate
+} from './exception-records';
 import { SYSTEM_ACTOR_ID } from './system-actor';
 
 /**
@@ -184,11 +198,62 @@ export interface DepartureBackfillCounts {
   invalidManualLinks: number;
 }
 
+/** Exception rows read as history; see `exception-records.ts`. */
+export type HistoryException = ExceptionRecord;
+
+/**
+ * What ran on past dates. The sync reads exceptions only for departures it
+ * has yet to store (#27, PR 3a), but for a date that is gone the exception
+ * rows are the record of what was cancelled and which extra buses ran, so the
+ * backfill reads them here: a SKIP cancels the timetable departure, and an
+ * ADDITIONAL with both times is an extra bus, keyed by its exception.
+ */
+export function generateHistory(
+  rides: readonly GeneratorRide[],
+  exceptions: readonly HistoryException[],
+  from: string,
+  to: string
+): PlannedDeparture[] {
+  const inWindow = exceptions.filter(
+    (exception) => exception.exceptionDate >= from && exception.exceptionDate <= to
+  );
+  const skips = skipsByRideDate(inWindow);
+  const scheduled = generateDepartures(rides, from, to).map((departure) => ({
+    ...departure,
+    cancellation: skipCancellation(skips.get(rideDateKey(departure.rideId, departure.serviceDate)))
+  }));
+  const ridesById = new Map(rides.map((ride) => [ride.id, ride]));
+  const extras: PlannedDeparture[] = [];
+
+  // A SKIP never removes an extra bus.
+  for (const exception of busAdditionals(inWindow)) {
+    const ride = ridesById.get(exception.rideId);
+
+    if (!ride || !rideRuns(ride)) {
+      continue;
+    }
+
+    extras.push({
+      ...planExtra(ride, {
+        keyId: exception.id,
+        serviceDate: exception.exceptionDate,
+        departureTime: exception.departureTime,
+        arrivalTime: exception.arrivalTime,
+        capacity: ride.capacity,
+        rideExceptionId: exception.id
+      }).departure,
+      cancellation: null
+    });
+  }
+
+  return [...scheduled, ...extras];
+}
+
 function linkKey(rideId: string, date: string, departureTime: string): string {
   return `${rideId}:${date}:${departureTime}`;
 }
 
-/** The key the generator's output for a stored row carries, as the sync matches them. */
+/** The key `generateHistory`'s output for a stored row carries: an extra by its exception. */
 function plannedKeyOf(departure: BackfillStoredDeparture): string | null {
   if (departure.source === DepartureSource.SCHEDULE) {
     return scheduleKey(departure.rideId, departure.serviceDate);
@@ -605,9 +670,9 @@ export async function planDepartureBackfill(
   ]);
   const history =
     from <= historyTo
-      ? generateDepartures(
+      ? generateHistory(
           rides,
-          await loadExceptions(db, tenantId, { from, to: historyTo }),
+          await loadExceptionRecords(db, tenantId, { from, to: historyTo }),
           from,
           historyTo
         )
@@ -636,21 +701,13 @@ export class BackfillRefused extends Error {}
 
 /**
  * The stored future window is what reservations are matched against, so it
- * has to be what the timetable says. With the sync off, an extra bus added
- * since the first fill has no row, and a booking on it would match the
- * timetable bus uniquely and be linked to the wrong one.
+ * has to be what the timetable says.
  */
 export async function assertReadyForBackfill(
   tx: Prisma.TransactionClient,
   tenantId: string,
   now: Date = new Date()
 ): Promise<void> {
-  if (!departureSyncEnabled()) {
-    throw new BackfillRefused(
-      'DEPARTURES_SYNC_ENABLED is not true, so stored departures may not match the timetable.'
-    );
-  }
-
   const sync = await planDepartureSync(tx, tenantId, now);
   const drift = sync.creates.length + sync.updates.length + sync.drops.length + sync.deletes.length;
 

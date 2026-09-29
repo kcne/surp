@@ -23,9 +23,6 @@ export const envValidationSchema = Joi.object({
   EMAIL_TIMEOUT_MS: Joi.number().integer().min(1000).max(60000).default(10000),
   INVARIANT_SCHEDULE_ENABLED: Joi.boolean().truthy('true').falsy('false').default(true),
   BACKUP_FRESHNESS_CHECK_ENABLED: Joi.boolean().truthy('true').falsy('false').default(true),
-  // Off until `departures:sync --apply` has written the first window (#27).
-  // Turns on both the sync inside schedule edits and the nightly job.
-  DEPARTURES_SYNC_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
   // The backup key travels on every signed GetObject, so production must not
   // reach the bucket over plain HTTP. Local stacks (MinIO, LocalStack) still can.
   BACKUP_S3_ENDPOINT: Joi.when('NODE_ENV', {

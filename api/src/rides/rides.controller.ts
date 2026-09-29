@@ -31,6 +31,7 @@ import {
 import { UpdateRideDto } from './dto/update-ride.dto';
 import { WouldBreakReservationsDto } from './dto/would-break-reservations.dto';
 import { RideExceptionConflictDto } from './dto/exception-conflict.dto';
+import { DepartureTimeTakenDto } from './dto/departure-time-taken.dto';
 import { ConfirmBreakingChangeDto, consentFrom } from '../invariants/dto/confirm-breaking-change.dto';
 import { RidesService } from './rides.service';
 
@@ -106,7 +107,7 @@ export class RidesController {
   @ApiConflictResponse({
     type: WouldBreakReservationsDto,
     description:
-      'The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.'
+      'The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.'
   })
   update(
     @Req() request: RequestWithAuth,
@@ -127,7 +128,7 @@ export class RidesController {
   @ApiConflictResponse({
     type: WouldBreakReservationsDto,
     description:
-      'The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.'
+      'The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.'
   })
   replace(
     @Req() request: RequestWithAuth,
@@ -147,7 +148,7 @@ export class RidesController {
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
   @ApiConflictResponse({
     type: WouldBreakReservationsDto,
-    description: 'The proposed schedule would break an existing reservation.'
+    description: 'The proposed schedule would break an existing reservation. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.'
   })
   replaceDayTimes(
     @Req() request: RequestWithAuth,
@@ -167,14 +168,15 @@ export class RidesController {
   @ApiOperation({ summary: 'Add a ride exception (skip/additional) in the current tenant.' })
   @ApiOkResponse({ type: RideExceptionResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failure or invalid exception combination.' })
-  @ApiExtraModels(WouldBreakReservationsDto, RideExceptionConflictDto)
+  @ApiExtraModels(WouldBreakReservationsDto, RideExceptionConflictDto, DepartureTimeTakenDto)
   @ApiConflictResponse({
     description:
-      'Either a SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable, or a duplicate or conflicting exception, which is not.',
+      'Either a SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable; a duplicate or conflicting exception; or an ADDITIONAL at the time of another departure of the ride that day, carrying DEPARTURE_TIME_TAKEN. Only the first is confirmable.',
     schema: {
       oneOf: [
         { $ref: getSchemaPath(WouldBreakReservationsDto) },
-        { $ref: getSchemaPath(RideExceptionConflictDto) }
+        { $ref: getSchemaPath(RideExceptionConflictDto) },
+        { $ref: getSchemaPath(DepartureTimeTakenDto) }
       ]
     }
   })

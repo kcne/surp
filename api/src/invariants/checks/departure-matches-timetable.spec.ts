@@ -16,7 +16,6 @@ function planned(serviceDate: string): PlannedDeparture {
     arrivalTime: '11:00',
     capacity: 48,
     rideExceptionId: null,
-    cancellation: null,
     stops: []
   };
 }
@@ -31,7 +30,8 @@ function plan(creates: PlannedDeparture[]): DepartureSyncPlan {
     creates,
     updates: [],
     drops: [],
-    deletes: []
+    deletes: [],
+    conflicts: []
   };
 }
 

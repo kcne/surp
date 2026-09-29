@@ -11,6 +11,13 @@ import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/re
 import { PrismaService } from '../prisma/prisma.service';
 import { scheduleEditTransaction } from '../prisma/schedule-lock';
 import {
+  assertDecisionDate,
+  cancelScheduledDeparture,
+  insertExtraDeparture,
+  restoreScheduledDeparture,
+  retireExtraDeparture
+} from '../departures/exception-departures';
+import {
   NO_CONSENT,
   PROSPECTIVE_INVARIANTS,
   ProspectiveWriteConsent,
@@ -735,6 +742,7 @@ export class RidesService {
     this.validateExceptionPayload(dto);
 
     const exceptionDate = this.parseDateOnly(dto.date);
+    const decision = { tenantId: auth.tenantId, rideId, actorId: auth.sub };
 
     const created = await guardProspectiveWrite(
       this.prisma,
@@ -750,7 +758,7 @@ export class RidesService {
         // for the first to commit, then this read finds the row it created.
         await this.ensureExceptionIsNew(tx, auth.tenantId, rideId, exceptionDate, dto);
 
-        return tx.rideException.create({
+        const exception = await tx.rideException.create({
           data: withCreateAudit(
             {
               tenantId: auth.tenantId,
@@ -776,7 +784,26 @@ export class RidesService {
             updatedAt: true
           }
         });
-      }
+
+        // The departure carries the decision (#27, PR 3a); the row above
+        // stays until PR 6 for the screens that still read it.
+        if (exception.type === RideExceptionType.SKIP) {
+          await cancelScheduledDeparture(tx, decision, exceptionDate, {
+            at: exception.createdAt,
+            by: exception.updatedById ?? exception.createdById ?? auth.sub
+          });
+        } else {
+          await insertExtraDeparture(tx, decision, {
+            rideExceptionId: exception.id,
+            serviceDate: exceptionDate,
+            departureTime: exception.departureTime!,
+            arrivalTime: exception.arrivalTime!
+          });
+        }
+
+        return exception;
+      },
+      (tx) => assertDecisionDate(tx, auth.tenantId, exceptionDate)
     );
 
     return this.toExceptionResponse(created);
@@ -837,7 +864,9 @@ export class RidesService {
         tenantId: auth.tenantId
       },
       select: {
-        id: true
+        id: true,
+        type: true,
+        exceptionDate: true
       }
     });
 
@@ -845,13 +874,22 @@ export class RidesService {
       throw new NotFoundException('Ride exception not found');
     }
 
+    const decision = { tenantId: auth.tenantId, rideId, actorId: auth.sub };
+
     const deleted = await guardProspectiveWrite(
       this.prisma,
       { tenantId: auth.tenantId, actorId: auth.sub },
       PROSPECTIVE_INVARIANTS.rideException,
       consent,
-      (tx) =>
-        tx.rideException.delete({
+      async (tx) => {
+        // Before the row goes: deleting it unlinks its extra bus.
+        if (existing.type === RideExceptionType.SKIP) {
+          await restoreScheduledDeparture(tx, decision, existing.exceptionDate);
+        } else {
+          await retireExtraDeparture(tx, decision, existing.id);
+        }
+
+        return tx.rideException.delete({
           where: {
             id: exceptionId
           },
@@ -866,7 +904,9 @@ export class RidesService {
             createdAt: true,
             updatedAt: true
           }
-        })
+        });
+      },
+      (tx) => assertDecisionDate(tx, auth.tenantId, existing.exceptionDate)
     );
 
     return this.toExceptionResponse(deleted);

@@ -1,4 +1,3 @@
-import { DepartureSource } from '@prisma/client';
 import {
   DepartureField,
   StoredDeparture,
@@ -19,16 +18,19 @@ import { CheckResult, Invariant, InvariantContext, Violation } from '../invarian
  * window, and reports each difference. Past departures keep what they ran with
  * and `LEGACY` rows belong to the backfill, so neither is compared.
  *
- * Reported, never repaired: once `DEPARTURES_SYNC_ENABLED` is set, every
- * timetable write runs the sync, so a difference means the switch is still off,
- * a write bypassed the sync, or a nightly run failed. Each deserves a look
- * before anything is rewritten.
+ * Operator decisions are not compared (#27, PR 3a): a cancellation belongs
+ * to whoever made it, and an extra bus is compared only on what its ride
+ * decides — line, stops, and whether it is dropped. `departure.matchesExceptions`
+ * compares the decisions with the exception rows that still mirror them.
+ *
+ * Reported, never repaired: every timetable write runs the sync, so a
+ * difference means a write bypassed it or a nightly run failed. Each deserves
+ * a look before anything is rewritten.
  */
 
 export type DepartureMismatchReason =
   | 'MISSING'
   | 'NOT_IN_TIMETABLE'
-  | 'EXCEPTION_GONE'
   | 'FIELDS_DIFFER'
   | 'TIMEZONE_INVALID';
 
@@ -38,7 +40,6 @@ const FIELD_LABELS: Record<DepartureField, string> = {
   arrivalTime: 'vreme dolaska',
   capacity: 'kapacitet',
   timetableDroppedAt: 'oznaka da je izbacen iz reda voznje',
-  cancellation: 'otkazivanje',
   stops: 'stanice'
 };
 
@@ -52,26 +53,19 @@ function missing(departure: PlannedDeparture): Violation {
       rideId: departure.rideId,
       serviceDate: departure.serviceDate,
       departureTime: departure.departureTime,
-      source: departure.source,
-      rideExceptionId: departure.rideExceptionId
+      source: departure.source
     },
     canRepair: false
   };
 }
 
 function leftOver(departure: StoredDeparture): Violation {
-  const exceptionGone = departure.source === DepartureSource.EXTRA && !departure.rideExceptionId;
-
   return {
     subjectType: 'departure',
     subjectId: departure.id,
-    summary: exceptionGone
-      ? `Dodatni polazak ${departure.serviceDate} u ${departure.departureTime} nema vise izuzetak iz kog je nastao.`
-      : `Polazak ${departure.serviceDate} u ${departure.departureTime} je sacuvan, ali ga red voznje vise ne sadrzi.`,
+    summary: `Polazak ${departure.serviceDate} u ${departure.departureTime} je sacuvan, ali ga red voznje vise ne sadrzi.`,
     detail: {
-      reason: (exceptionGone
-        ? 'EXCEPTION_GONE'
-        : 'NOT_IN_TIMETABLE') satisfies DepartureMismatchReason,
+      reason: 'NOT_IN_TIMETABLE' satisfies DepartureMismatchReason,
       rideId: departure.rideId,
       serviceDate: departure.serviceDate,
       departureTime: departure.departureTime,
@@ -107,7 +101,7 @@ export const departureMatchesTimetable: Invariant = {
   description:
     'Polasci se cuvaju uz red voznje i uskoro ce rezervacije pokazivati na njih. Polazak koji nedostaje, visak ili polazak sa starim vremenom znacio bi da putnik vidi drugaciji autobus od onog koji saobraca.',
   manualAdvice:
-    'Kada je automatsko uskladjivanje polazaka ukljuceno, svaka izmena reda voznje sama uskladjuje polaske. Razlika znaci da uskladjivanje jos nije ukljuceno ili da ga je nesto zaobislo. Prijavite je podrsci pre nego sto menjate red voznje.',
+    'Svaka izmena reda voznje sama uskladjuje polaske. Razlika znaci da ga je nesto zaobislo ili da nocno dodavanje polazaka nije uspelo. Prijavite je podrsci pre nego sto menjate red voznje.',
   severity: 'warning',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
@@ -116,9 +110,7 @@ export const departureMatchesTimetable: Invariant = {
       // The newest day enters the window at the agency's midnight and is
       // stored by the nightly job at 02:00. A run in between is not drift; if
       // the job fails, the day is reported from tomorrow's run.
-      ...plan.creates
-        .filter((departure) => departure.serviceDate < plan.window.to)
-        .map(missing),
+      ...plan.creates.filter((departure) => departure.serviceDate < plan.window.to).map(missing),
       ...[...plan.drops, ...plan.deletes].map(leftOver),
       ...plan.updates.map((update) => differs(update.stored, update.fields))
     ];

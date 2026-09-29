@@ -14,8 +14,8 @@
  *
  * The dry run takes no lock. The apply runs each tenant in one transaction
  * under its exclusive schedule lock, and refuses a tenant, writing nothing for
- * it, when DEPARTURES_SYNC_ENABLED is not true, when its stored departures are
- * out of step with the timetable, or when a manual link is invalid.
+ * it, when its stored departures are out of step with the timetable, or when a
+ * manual link is invalid.
  *
  * Rehearse the dry run and the apply against a restored production backup
  * first, and compare the counts. A second run after an apply proposes nothing.

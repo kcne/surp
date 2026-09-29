@@ -1,12 +1,12 @@
-import { RideExceptionType, RideStatus, RideType } from '@prisma/client';
+import { RideStatus, RideType } from '@prisma/client';
 import {
-  GeneratorException,
   GeneratorRide,
   extraKey,
   generateDepartures,
+  linePathStops,
+  planExtra,
   scheduleKey
 } from './departure-generator';
-import { SYSTEM_ACTOR_ID } from './system-actor';
 
 // 5 October 2026 is a Monday.
 const MONDAY = '2026-10-05';
@@ -28,7 +28,7 @@ function recurringRide(overrides: Partial<GeneratorRide> = {}): GeneratorRide {
       isActive: true,
       departureStationId: 'st-a',
       arrivalStationId: 'st-c',
-      intermediateStops: [{ stationId: 'st-b', isBoarding: false, isDropoff: true }]
+      intermediateStops: [{ stationId: 'st-b', orderIndex: 0, isBoarding: false, isDropoff: true }]
     },
     daySchedules: [
       {
@@ -44,24 +44,9 @@ function recurringRide(overrides: Partial<GeneratorRide> = {}): GeneratorRide {
   };
 }
 
-function exception(overrides: Partial<GeneratorException>): GeneratorException {
-  return {
-    id: 'exc-1',
-    rideId: 'ride-1',
-    exceptionDate: MONDAY,
-    type: RideExceptionType.SKIP,
-    departureTime: null,
-    arrivalTime: null,
-    createdAt: new Date('2026-09-20T08:00:00Z'),
-    createdById: 'user-1',
-    updatedById: 'user-1',
-    ...overrides
-  };
-}
-
 describe('generateDepartures', () => {
   it('produces one timetable departure per scheduled weekday, keyed by ride and date', () => {
-    const planned = generateDepartures([recurringRide()], [], MONDAY, TUESDAY);
+    const planned = generateDepartures([recurringRide()], MONDAY, TUESDAY);
 
     expect(planned).toHaveLength(1);
     expect(planned[0]).toMatchObject({
@@ -72,13 +57,13 @@ describe('generateDepartures', () => {
       departureTime: '09:00',
       arrivalTime: '11:00',
       capacity: 48,
-      cancellation: null,
       rideExceptionId: null
     });
+    expect(planned[0].cancellation).toBeUndefined();
   });
 
   it('copies stops in route order, with booking flags', () => {
-    const [departure] = generateDepartures([recurringRide()], [], MONDAY, MONDAY);
+    const [departure] = generateDepartures([recurringRide()], MONDAY, MONDAY);
 
     expect(departure.stops).toEqual([
       { stationId: 'st-a', orderIndex: 0, time: '09:00', isBoarding: true, isDropoff: false },
@@ -103,7 +88,7 @@ describe('generateDepartures', () => {
       ]
     });
 
-    const [departure] = generateDepartures([ride], [], MONDAY, MONDAY);
+    const [departure] = generateDepartures([ride], MONDAY, MONDAY);
 
     expect(departure.stops[1]).toEqual({
       stationId: 'st-b',
@@ -127,7 +112,7 @@ describe('generateDepartures', () => {
       ]
     });
 
-    expect(generateDepartures([ride], [], MONDAY, MONDAY)).toEqual([]);
+    expect(generateDepartures([ride], MONDAY, MONDAY)).toEqual([]);
   });
 
   it('produces nothing for a draft or inactive ride, or a ride on an inactive line', () => {
@@ -136,117 +121,17 @@ describe('generateDepartures', () => {
       recurringRide({ id: 'inactive', status: RideStatus.INACTIVE }),
       recurringRide({ id: 'line-off', line: { ...recurringRide().line, isActive: false } })
     ];
-    const extras = rides.map((ride) =>
-      exception({
-        id: `extra-${ride.id}`,
-        rideId: ride.id,
-        type: RideExceptionType.ADDITIONAL,
-        departureTime: '15:00',
-        arrivalTime: '17:00'
-      })
-    );
 
-    expect(generateDepartures(rides, extras, MONDAY, TUESDAY)).toEqual([]);
+    expect(generateDepartures(rides, MONDAY, TUESDAY)).toEqual([]);
   });
 
   it('respects the recurring date range', () => {
     const ride = recurringRide({ recurringEndDate: new Date('2026-10-04T00:00:00Z') });
 
-    expect(generateDepartures([ride], [], MONDAY, TUESDAY)).toEqual([]);
+    expect(generateDepartures([ride], MONDAY, TUESDAY)).toEqual([]);
   });
 
-  it('mirrors a SKIP as a cancellation credited to its author, and keeps the departure', () => {
-    const [departure] = generateDepartures(
-      [recurringRide()],
-      [exception({ createdById: 'creator', updatedById: 'editor' })],
-      MONDAY,
-      MONDAY
-    );
-
-    expect(departure.cancellation).toEqual({
-      at: new Date('2026-09-20T08:00:00Z'),
-      by: 'editor'
-    });
-  });
-
-  it('still cancels the date for a SKIP with no author, credited to the system actor', () => {
-    const [departure] = generateDepartures(
-      [recurringRide()],
-      [exception({ createdById: null, updatedById: null })],
-      MONDAY,
-      MONDAY
-    );
-
-    expect(departure.cancellation).toEqual({
-      at: new Date('2026-09-20T08:00:00Z'),
-      by: SYSTEM_ACTOR_ID
-    });
-  });
-
-  it('turns an ADDITIONAL into an extra bus with endpoint stops, unaffected by a SKIP', () => {
-    const planned = generateDepartures(
-      [recurringRide()],
-      [
-        exception({ id: 'skip' }),
-        exception({
-          id: 'extra',
-          type: RideExceptionType.ADDITIONAL,
-          departureTime: '09:00',
-          arrivalTime: '11:30'
-        })
-      ],
-      MONDAY,
-      MONDAY
-    );
-
-    const extra = planned.find((departure) => departure.source === 'EXTRA')!;
-    expect(extra).toMatchObject({
-      key: extraKey('extra'),
-      rideExceptionId: 'extra',
-      departureTime: '09:00',
-      arrivalTime: '11:30',
-      cancellation: null
-    });
-    expect(extra.stops).toEqual([
-      { stationId: 'st-a', orderIndex: 0, time: '09:00', isBoarding: true, isDropoff: false },
-      { stationId: 'st-c', orderIndex: 1, time: '11:30', isBoarding: false, isDropoff: true }
-    ]);
-    // An extra at the same time as the timetable bus is a second bus.
-    expect(planned.filter((departure) => departure.source === 'SCHEDULE')).toHaveLength(1);
-  });
-
-  it('ignores an ADDITIONAL without both times, as the materializer does', () => {
-    const planned = generateDepartures(
-      [recurringRide()],
-      [
-        exception({ type: RideExceptionType.ADDITIONAL, departureTime: '15:00', arrivalTime: null })
-      ],
-      MONDAY,
-      MONDAY
-    );
-
-    expect(planned.map((departure) => departure.source)).toEqual(['SCHEDULE']);
-  });
-
-  it('ignores exceptions outside the window', () => {
-    const planned = generateDepartures(
-      [recurringRide()],
-      [
-        exception({
-          exceptionDate: '2026-10-12',
-          type: RideExceptionType.ADDITIONAL,
-          departureTime: '15:00',
-          arrivalTime: '17:00'
-        })
-      ],
-      MONDAY,
-      TUESDAY
-    );
-
-    expect(planned.map((departure) => departure.source)).toEqual(['SCHEDULE']);
-  });
-
-  it('gives a one-time ride its first and last stop only', () => {
+  it('gives a one-time ride the whole line path, timed only at its ends', () => {
     const ride = recurringRide({
       type: RideType.ONE_TIME,
       recurringStartDate: null,
@@ -256,10 +141,83 @@ describe('generateDepartures', () => {
       daySchedules: []
     });
 
-    const planned = generateDepartures([ride], [], MONDAY, TUESDAY);
+    const planned = generateDepartures([ride], MONDAY, TUESDAY);
 
     expect(planned).toHaveLength(1);
     expect(planned[0]).toMatchObject({ serviceDate: TUESDAY, departureTime: '07:00' });
-    expect(planned[0].stops.map((stop) => stop.stationId)).toEqual(['st-a', 'st-c']);
+    expect(planned[0].stops).toEqual([
+      { stationId: 'st-a', orderIndex: 0, time: '07:00', isBoarding: true, isDropoff: false },
+      { stationId: 'st-b', orderIndex: 1, time: null, isBoarding: false, isDropoff: true },
+      { stationId: 'st-c', orderIndex: 2, time: '08:30', isBoarding: false, isDropoff: true }
+    ]);
+  });
+});
+
+describe('linePathStops', () => {
+  it('orders middle stops by their line order, whatever order they come in', () => {
+    const ride = recurringRide({
+      line: {
+        ...recurringRide().line,
+        intermediateStops: [
+          { stationId: 'st-y', orderIndex: 1, isBoarding: true, isDropoff: false },
+          { stationId: 'st-x', orderIndex: 0, isBoarding: true, isDropoff: true }
+        ]
+      }
+    });
+
+    expect(linePathStops(ride, '06:00', '09:00')).toEqual([
+      { stationId: 'st-a', orderIndex: 0, time: '06:00', isBoarding: true, isDropoff: false },
+      { stationId: 'st-x', orderIndex: 1, time: null, isBoarding: true, isDropoff: true },
+      { stationId: 'st-y', orderIndex: 2, time: null, isBoarding: true, isDropoff: false },
+      { stationId: 'st-c', orderIndex: 3, time: '09:00', isBoarding: false, isDropoff: true }
+    ]);
+  });
+
+  it('is the two ends alone on a line without middle stops', () => {
+    const ride = recurringRide({ line: { ...recurringRide().line, intermediateStops: [] } });
+
+    expect(linePathStops(ride, '06:00', '09:00').map((stop) => stop.stationId)).toEqual([
+      'st-a',
+      'st-c'
+    ]);
+  });
+});
+
+describe('planExtra', () => {
+  const extra = {
+    keyId: 'dep-9',
+    serviceDate: MONDAY,
+    departureTime: '15:00',
+    arrivalTime: '17:30',
+    capacity: 20,
+    rideExceptionId: 'exc-9'
+  };
+
+  it("keeps the operator's times and capacity, and takes line and stops from the ride", () => {
+    const { departure, dropped } = planExtra(recurringRide({ lineId: 'line-2' }), extra);
+
+    expect(dropped).toBe(false);
+    expect(departure).toMatchObject({
+      key: extraKey('dep-9'),
+      source: 'EXTRA',
+      lineId: 'line-2',
+      departureTime: '15:00',
+      arrivalTime: '17:30',
+      capacity: 20,
+      rideExceptionId: 'exc-9'
+    });
+    expect(departure.stops.map((stop) => [stop.stationId, stop.time])).toEqual([
+      ['st-a', '15:00'],
+      ['st-b', null],
+      ['st-c', '17:30']
+    ]);
+  });
+
+  it('is dropped while its ride or line does not run', () => {
+    expect(planExtra(recurringRide({ status: RideStatus.INACTIVE }), extra).dropped).toBe(true);
+    expect(
+      planExtra(recurringRide({ line: { ...recurringRide().line, isActive: false } }), extra)
+        .dropped
+    ).toBe(true);
   });
 });

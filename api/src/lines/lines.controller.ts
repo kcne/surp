@@ -81,7 +81,7 @@ export class LinesController {
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
   @ApiConflictResponse({
     type: WouldBreakReservationsDto,
-    description: 'The proposed line would break existing reservations.'
+    description: 'The proposed line would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.'
   })
   update(
     @Req() request: RequestWithAuth,
@@ -101,7 +101,7 @@ export class LinesController {
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
   @ApiConflictResponse({
     type: WouldBreakReservationsDto,
-    description: 'The proposed line would break existing reservations.'
+    description: 'The proposed line would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.'
   })
   replace(
     @Req() request: RequestWithAuth,
@@ -121,7 +121,7 @@ export class LinesController {
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
   @ApiConflictResponse({
     type: WouldBreakReservationsDto,
-    description: 'The proposed stop sequence would break existing reservations.'
+    description: 'The proposed stop sequence would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.'
   })
   replaceStops(
     @Req() request: RequestWithAuth,

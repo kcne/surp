@@ -1323,7 +1323,7 @@
             "description": "Line not found in current tenant."
           },
           "409": {
-            "description": "The proposed line would break existing reservations.",
+            "description": "The proposed line would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1398,7 +1398,7 @@
             "description": "Line not found in current tenant."
           },
           "409": {
-            "description": "The proposed line would break existing reservations.",
+            "description": "The proposed line would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1539,7 +1539,7 @@
             "description": "Line not found in current tenant."
           },
           "409": {
-            "description": "The proposed stop sequence would break existing reservations.",
+            "description": "The proposed stop sequence would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3658,7 +3658,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.",
+            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3733,7 +3733,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.",
+            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3874,7 +3874,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "The proposed schedule would break an existing reservation.",
+            "description": "The proposed schedule would break an existing reservation. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3951,7 +3951,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "Either a SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable, or a duplicate or conflicting exception, which is not.",
+            "description": "Either a SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable; a duplicate or conflicting exception; or an ADDITIONAL at the time of another departure of the ride that day, carrying DEPARTURE_TIME_TAKEN. Only the first is confirmable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3961,6 +3961,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/RideExceptionConflictDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DepartureTimeTakenDto"
                     }
                   ]
                 }
@@ -9169,6 +9172,26 @@
           "statusCode",
           "message",
           "error"
+        ]
+      },
+      "DepartureTimeTakenDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "DEPARTURE_TIME_TAKEN"
+            ],
+            "example": "DEPARTURE_TIME_TAKEN"
+          },
+          "message": {
+            "type": "string",
+            "example": "Voznja na liniji Beograd - Nis 2026-10-05 vec ima polazak u 09:00. Dva polaska iste voznje istog dana ne mogu da krecu u isto vreme."
+          }
+        },
+        "required": [
+          "code",
+          "message"
         ]
       },
       "CreateRideExceptionDto": {
