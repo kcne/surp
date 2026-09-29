@@ -11,10 +11,25 @@ either by hand.
 **Write everything in English.** Commit messages, PR titles and bodies, GitHub
 issues, code comments, documentation and READMEs.
 
-The single exception is user-facing UI copy — labels, toasts, validation
-messages, and anything else a bus-agency employee reads on screen. Those are
-Serbian, written in Latin script without diacritics, matching the existing
-components.
+The single exception is user-facing product text — labels, toasts, validation
+messages, emails, generated documents, and anything else a bus-agency employee
+or a visitor reads on screen. That text ships in both Serbian and English.
+
+Serbian is written in Latin script **with** diacritics: "Sačuvaj", "Četvrtak",
+"Obriši". This replaces the earlier no-diacritics rule. English uses `en-US`
+spelling, dates, and numbers; schedule times stay on a 24-hour clock in both.
+
+Product text lives in the message catalogs under `ui/i18n/messages/<locale>/`,
+never inline in a component. Serbian is the default locale and the emergency
+fallback for a missing message. `pnpm --dir ui test` rejects catalogs that have
+drifted apart, and it runs on every pull request.
+
+Text a user typed — passenger names, notes, station names, an agency's own
+storefront copy — is rendered as written and never translated. Tenant timezone
+and currency follow the agency, not the reader's language.
+
+See `ui/docs/localization-inventory.md` for which issue owns which surface and
+`ui/docs/adding-a-locale.md` for adding a language.
 
 The language the request arrives in says nothing about the language the artifact
 should be written in.
@@ -32,7 +47,8 @@ Before considering any change complete, run the applicable lint, type-check,
 test, build, and generated-contract checks. Do not report a change as complete
 when a relevant check has not been run or is failing. At minimum, API changes
 require `pnpm --dir api lint`, `pnpm --dir api test`, and
-`pnpm --dir api test:contract`; UI changes require `pnpm --dir ui build`.
+`pnpm --dir api test:contract`; UI changes require `pnpm --dir ui lint`,
+`pnpm --dir ui test`, and `pnpm --dir ui build`.
 
 New features and behavior changes must include focused automated tests for the
 new behavior, including failure cases when they affect validation, permissions,

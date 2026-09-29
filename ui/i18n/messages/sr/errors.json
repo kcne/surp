@@ -1,0 +1,12 @@
+{
+  "generic": "Došlo je do neočekivane greške. Pokušajte ponovo.",
+  "network": "Nije moguće povezati se sa serverom. Proverite internet vezu.",
+  "timeout": "Zahtev je predugo trajao. Pokušajte ponovo.",
+  "unauthorized": "Sesija je istekla. Prijavite se ponovo.",
+  "forbidden": "Nemate dozvolu za ovu radnju.",
+  "notFound": "Traženi podatak nije pronađen.",
+  "conflict": "Podatak je u međuvremenu izmenjen. Osvežite stranicu.",
+  "validation": "Proverite unesene podatke.",
+  "serverError": "Server trenutno nije dostupan. Pokušajte kasnije.",
+  "withCode": "{message} (kod: {code})"
+}
