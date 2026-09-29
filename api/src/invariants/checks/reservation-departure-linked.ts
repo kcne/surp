@@ -1,4 +1,4 @@
-import { Prisma, ReservationStatus } from '@prisma/client';
+import { DepartureSource, Prisma, ReservationStatus } from '@prisma/client';
 import { departureWindow, resolveAgencyTimezone } from '../../departures/agency-date';
 import {
   LINKABLE_SOURCES,
@@ -11,33 +11,31 @@ import { CheckResult, Invariant, InvariantContext, Violation } from '../invarian
 /**
  * Every future active reservation points at the departure it is on (#27).
  *
- * Bookings link themselves since PR 1b, by the rule in `departure-link.ts`.
- * Nothing reads the link yet, which is why this is a warning; PR 3 moves seats
- * and locking onto it and makes it critical. PR 3 also needs this check to
- * report no unlinked reservations at all.
+ * Bookings link themselves since PR 1b, by the rule in `departure-link.ts`,
+ * and `departures:backfill` (PR 2) linked the ones booked before. Nothing
+ * reads the link yet, which is why this is a warning; PR 3 moves seats and
+ * locking onto it and makes it critical. PR 3 also needs this check to report
+ * no unlinked reservations at all. It has no cutoff for bookings made before
+ * PR 1b, so the backfill is applied right after PR 2 is deployed.
  *
  * It looks at active reservations from the agency's date to the end of the
  * stored departure window, and reports:
+ * - a link to a `LEGACY` departure: those record sales the timetable no longer
+ *   produces, and only past or cancelled reservations belong on one;
  * - a link whose time copy uniquely matches a different departure: the link
  *   names the wrong bus. A copy that matches nothing is only stale, and
  *   `reservation.reachable` already reports and repairs it;
  * - a link to a departure that is not running: its passengers are still
  *   active and somebody has to call them;
- * - an unlinked reservation booked after linking went live, either with a
- *   unique match (a writer skipped the link) or without one (an extra at the
- *   same time, a stale time, or no stored departure).
- *
- * Reservations booked before linking went live are the backfill's (PR 2), and
- * would otherwise fill Settings with a few hundred warnings nobody can act on.
- * PR 2 removes the cutoff.
+ * - an unlinked reservation, either with a unique match (a writer skipped the
+ *   link, or the backfill has not run) or without one (an extra at the same
+ *   time, a stale time, or no stored departure).
  *
  * Reported, never repaired: repairs ship after the checks that justify them.
  */
 
-/** When #27 PR 1b is deployed. Bookings made before this carry no link. */
-export const DEPARTURE_LINK_REQUIRED_FROM = new Date('2026-09-28T22:00:00.000Z');
-
 export type DepartureLinkReason =
+  | 'ON_LEGACY'
   | 'WRONG_LINK'
   | 'NOT_RUNNING'
   | 'LINKABLE_UNLINKED'
@@ -49,10 +47,9 @@ const RESERVATION_SELECT = {
   travelDate: true,
   rideDepartureTime: true,
   departureId: true,
-  createdAt: true,
   passenger: { select: { firstName: true, lastName: true } },
   departure: {
-    select: { timetableDroppedAt: true, cancelledAt: true }
+    select: { source: true, timetableDroppedAt: true, cancelledAt: true }
   }
 } as const;
 
@@ -124,8 +121,7 @@ function violation(
 
 export function classifyDepartureLinks(
   reservations: readonly LinkedReservation[],
-  index: ReadonlyMap<string, string | null>,
-  requiredFrom: Date = DEPARTURE_LINK_REQUIRED_FROM
+  index: ReadonlyMap<string, string | null>
 ): Violation[] {
   const violations: Violation[] = [];
 
@@ -138,6 +134,20 @@ export function classifyDepartureLinks(
     );
 
     if (reservation.departureId && reservation.departure) {
+      // Before the time comparison: the index holds no LEGACY rows, so a
+      // LEGACY link whose time a timetable bus shares would read as the wrong
+      // bus, and the wrong advice.
+      if (reservation.departure.source === DepartureSource.LEGACY) {
+        violations.push(
+          violation(
+            reservation,
+            'ON_LEGACY',
+            'rezervacija je aktivna, a vezana je za polazak koji red voznje vise ne pravi.'
+          )
+        );
+        continue;
+      }
+
       if (match && match !== reservation.departureId) {
         violations.push(
           violation(
@@ -167,10 +177,6 @@ export function classifyDepartureLinks(
       continue;
     }
 
-    if (reservation.createdAt < requiredFrom) {
-      continue;
-    }
-
     violations.push(
       match
         ? violation(
@@ -196,7 +202,7 @@ export const reservationDepartureLinked: Invariant = {
   description:
     'Svaka rezervacija treba da pokazuje na tacno jedan sacuvan polazak. Uskoro ce se sedista brojati po tom polasku, pa bi rezervacija vezana za pogresan autobus ili bez polaska znacila pogresan broj slobodnih mesta.',
   manualAdvice:
-    'Ako je polazak otkazan ili izbacen iz reda voznje, pozovite putnika i ponudite drugi termin ili otkazite rezervaciju. Ostale razlike prijavite podrsci: rezervacija radi kao i do sada, ali je treba vezati za pravi polazak pre sledece izmene sistema.',
+    'Ako je polazak otkazan ili izbacen iz reda voznje, pozovite putnika i ponudite drugi termin ili otkazite rezervaciju. Ako vreme polaska rezervacije vise ne postoji u redu voznje, pokrenite popravku provere "Rezervacija se vidi na svom polasku" ili otkazite rezervaciju. Ako u isto vreme polaze dva autobusa, javite podrsci koji autobus putnik koristi. Ostale razlike prijavite podrsci: rezervacija radi kao i do sada, ali je treba vezati za pravi polazak pre sledece izmene sistema.',
   severity: 'warning',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

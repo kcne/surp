@@ -2,9 +2,6 @@ import { indexLinkableDepartures } from '../../departures/departure-link';
 import { classifyDepartureLinks } from './reservation-departure-linked';
 
 const travelDate = new Date('2026-10-05T00:00:00.000Z');
-const cutoff = new Date('2026-09-29T00:00:00.000Z');
-const afterCutoff = new Date('2026-09-30T08:00:00.000Z');
-const beforeCutoff = new Date('2026-09-20T08:00:00.000Z');
 
 const index = indexLinkableDepartures([
   { id: 'timetable', rideId: 'ride-1', serviceDate: travelDate, departureTime: '09:00' },
@@ -21,15 +18,14 @@ function row(overrides: Partial<Row> & { id: string }): Row {
     travelDate,
     rideDepartureTime: '09:00',
     departureId: 'timetable',
-    createdAt: afterCutoff,
     passenger: { firstName: 'Ana', lastName: 'Petrovic' },
-    departure: { timetableDroppedAt: null, cancelledAt: null },
+    departure: { source: 'SCHEDULE', timetableDroppedAt: null, cancelledAt: null },
     ...overrides
   };
 }
 
 function reasons(rows: Row[]): Array<[string, unknown]> {
-  return classifyDepartureLinks(rows, index, cutoff).map((violation) => [
+  return classifyDepartureLinks(rows, index).map((violation) => [
     violation.subjectId,
     violation.detail.reason
   ]);
@@ -51,20 +47,20 @@ describe('classifyDepartureLinks', () => {
       { id: 'timetable', rideId: 'ride-1', serviceDate: travelDate, departureTime: '09:30' }
     ]);
 
-    expect(classifyDepartureLinks([row({ id: 'r1' })], index, cutoff)).toEqual([]);
+    expect(classifyDepartureLinks([row({ id: 'r1' })], index)).toEqual([]);
   });
 
   it('reports passengers on a cancelled or dropped departure', () => {
     const cancelled = row({
       id: 'r1',
-      departure: { timetableDroppedAt: null, cancelledAt: new Date() }
+      departure: { source: 'SCHEDULE', timetableDroppedAt: null, cancelledAt: new Date() }
     });
     const dropped = row({
       id: 'r2',
-      departure: { timetableDroppedAt: new Date(), cancelledAt: null }
+      departure: { source: 'SCHEDULE', timetableDroppedAt: new Date(), cancelledAt: null }
     });
 
-    const violations = classifyDepartureLinks([cancelled, dropped], index, cutoff);
+    const violations = classifyDepartureLinks([cancelled, dropped], index);
 
     expect(violations.map((violation) => violation.detail)).toEqual([
       expect.objectContaining({ reason: 'NOT_RUNNING', cancelled: true, timetableDropped: false }),
@@ -75,7 +71,7 @@ describe('classifyDepartureLinks', () => {
     );
   });
 
-  it('reports unlinked bookings made after linking went live, by why they are unlinked', () => {
+  it('reports every unlinked booking, by why it is unlinked', () => {
     expect(
       reasons([
         row({ id: 'linkable', departureId: null, departure: null }),
@@ -95,9 +91,42 @@ describe('classifyDepartureLinks', () => {
     ]);
   });
 
-  it('leaves unlinked bookings from before linking went live to the backfill', () => {
+  it('reports an unlinked booking however long ago it was made', () => {
+    // The cutoff PR 1b had is gone: the backfill has linked the older ones.
+    expect(reasons([row({ id: 'r1', departureId: null, departure: null })])).toEqual([
+      ['r1', 'LINKABLE_UNLINKED']
+    ]);
+  });
+
+  it('reports an active booking on a LEGACY departure', () => {
     expect(
-      reasons([row({ id: 'r1', departureId: null, departure: null, createdAt: beforeCutoff })])
-    ).toEqual([]);
+      reasons([
+        row({
+          id: 'r1',
+          departureId: 'legacy',
+          departure: { source: 'LEGACY', timetableDroppedAt: null, cancelledAt: null }
+        })
+      ])
+    ).toEqual([['r1', 'ON_LEGACY']]);
+  });
+
+  it('reports ON_LEGACY rather than WRONG_LINK when a timetable bus shares the time', () => {
+    // 09:00 uniquely matches the timetable bus, which is not the LEGACY row
+    // the booking points at.
+    const violations = classifyDepartureLinks(
+      [
+        row({
+          id: 'r1',
+          departureId: 'legacy',
+          departure: { source: 'LEGACY', timetableDroppedAt: null, cancelledAt: null }
+        })
+      ],
+      index
+    );
+
+    expect(violations.map((violation) => violation.detail.reason)).toEqual(['ON_LEGACY']);
+    expect(violations[0].summary).toBe(
+      'Ana Petrovic, 2026-10-05, polazak 09:00: rezervacija je aktivna, a vezana je za polazak koji red voznje vise ne pravi.'
+    );
   });
 });

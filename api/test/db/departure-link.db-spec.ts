@@ -337,7 +337,7 @@ describe('departure links (real database)', () => {
       expect(result).toEqual({ violations: [], scannedCount: 2 });
     });
 
-    it('reports a link to the wrong bus, and unlinked bookings on either side of the cutoff', async () => {
+    it('reports a link to the wrong bus and an unlinked booking', async () => {
       await rides.addException(seeded.auth, seeded.rideId, {
         date: seeded.travelDate,
         type: RideExceptionType.ADDITIONAL,
@@ -360,10 +360,9 @@ describe('departure links (real database)', () => {
           travelDate: true,
           rideDepartureTime: true,
           departureId: true,
-          createdAt: true,
           passenger: { select: { firstName: true, lastName: true } },
           departure: {
-            select: { timetableDroppedAt: true, cancelledAt: true }
+            select: { source: true, timetableDroppedAt: true, cancelledAt: true }
           }
         }
       });
@@ -372,19 +371,16 @@ describe('departure links (real database)', () => {
         select: { id: true, rideId: true, serviceDate: true, departureTime: true }
       });
       const index = indexLinkableDepartures(departures);
-      const reasons = (requiredFrom: Date) =>
-        classifyDepartureLinks(rows, index, requiredFrom)
-          .map((violation) => [violation.subjectId, violation.detail.reason])
-          .sort();
+      const reasons = classifyDepartureLinks(rows, index)
+        .map((violation) => [violation.subjectId, violation.detail.reason])
+        .sort();
 
-      expect(reasons(new Date(0))).toEqual(
+      expect(reasons).toEqual(
         [
           [wrong.id, 'WRONG_LINK'],
           [unlinked.id, 'LINKABLE_UNLINKED']
         ].sort()
       );
-      // Booked before linking went live: the backfill's, not reported.
-      expect(reasons(new Date(Date.now() + 86_400_000))).toEqual([[wrong.id, 'WRONG_LINK']]);
     });
   });
 
@@ -415,9 +411,11 @@ describe('departure links (real database)', () => {
     } finally {
       // Resetting again clears it the way it clears itself, then the tenant goes.
       await prisma.$transaction((tx) =>
-        (sandbox as unknown as {
-          clearTenantData(tx: unknown, tenantId: string): Promise<unknown>;
-        }).clearTenantData(tx, tenant.id)
+        (
+          sandbox as unknown as {
+            clearTenantData(tx: unknown, tenantId: string): Promise<unknown>;
+          }
+        ).clearTenantData(tx, tenant.id)
       );
       await prisma.tenant.delete({ where: { id: tenant.id } });
     }

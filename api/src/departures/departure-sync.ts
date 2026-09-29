@@ -305,7 +305,26 @@ async function createDepartures(
     return;
   }
 
-  const rows = creates.map((departure) => ({ id: randomUUID(), departure }));
+  await insertPlannedDepartures(
+    tx,
+    creates.map((departure) => ({ id: randomUUID(), departure })),
+    scope
+  );
+}
+
+/**
+ * Writes planned departures, with their stops, under IDs the caller chose. The
+ * sync and `departures:backfill` both write through here, so a past departure
+ * the backfill adds is written the way the sync writes one.
+ */
+export async function insertPlannedDepartures(
+  tx: Prisma.TransactionClient,
+  rows: ReadonlyArray<{ id: string; departure: PlannedDeparture }>,
+  scope: DepartureSyncScope
+): Promise<void> {
+  if (rows.length === 0) {
+    return;
+  }
 
   // Plain inserts, not ON CONFLICT: the caller holds the exclusive schedule
   // lock and planned against what is stored, so a conflict is a bug and must
@@ -406,7 +425,7 @@ function stopRows(departureId: string, stops: readonly PlannedStop[], scope: Dep
   }));
 }
 
-async function loadRides(db: Db, tenantId: string): Promise<GeneratorRide[]> {
+export async function loadRides(db: Db, tenantId: string): Promise<GeneratorRide[]> {
   return db.ride.findMany({
     where: { tenantId },
     select: {
@@ -438,7 +457,7 @@ async function loadRides(db: Db, tenantId: string): Promise<GeneratorRide[]> {
   });
 }
 
-async function loadExceptions(
+export async function loadExceptions(
   db: Db,
   tenantId: string,
   window: DepartureWindow
