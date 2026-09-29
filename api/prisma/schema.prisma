@@ -510,7 +510,7 @@ model Reservation {
  * only by the generator in `src/departures`. An EXTRA is an extra bus with its
  * own identity; until PR 3 each one mirrors an ADDITIONAL `RideException`
  * through `rideExceptionId`. LEGACY rows are written only by the backfill, for
- * past reservations the timetable no longer produces.
+ * past or cancelled reservations sold at a time the timetable no longer produces.
  * Whether a departure runs is two facts with separate owners:
  * `timetableDroppedAt` belongs to the generator, `cancelledAt` and
  * `cancelledById` belong to people. It runs when neither is set.
