@@ -36,10 +36,27 @@ import {
   planDepartureBackfill
 } from '../src/departures/departure-backfill';
 
-const prisma = new PrismaClient();
-const args = process.argv.slice(2);
+// A flag this does not know, or `--tenant <id>` with a space, must not widen
+// an apply meant for one tenant to every tenant. A bare `--` is what pnpm may
+// pass through.
+const args = process.argv.slice(2).filter((arg) => arg !== '--');
+const unknownArgs = args.filter((arg) => arg !== '--apply' && !arg.startsWith('--tenant='));
+
+if (unknownArgs.length > 0) {
+  throw new Error(
+    `Unknown argument(s): ${unknownArgs.join(' ')}. Use --apply and --tenant=<tenant id>.`
+  );
+}
+
 const apply = args.includes('--apply');
-const tenantArg = args.find((arg) => arg.startsWith('--tenant='))?.slice('--tenant='.length);
+const tenantFlag = args.find((arg) => arg.startsWith('--tenant='));
+const tenantArg = tenantFlag?.slice('--tenant='.length).trim();
+
+if (tenantFlag !== undefined && !tenantArg) {
+  throw new Error('--tenant= needs a tenant id');
+}
+
+const prisma = new PrismaClient();
 const reportPath = process.env.REPORT_PATH?.trim();
 const linksPath = process.env.LINKS_PATH?.trim();
 
