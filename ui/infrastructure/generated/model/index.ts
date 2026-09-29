@@ -52,6 +52,8 @@ export * from './createUserDtoRole';
 export * from './dailyReservationPointResponseDto';
 export * from './dashboardSummaryResponseDto';
 export * from './dateRangeResponseDto';
+export * from './departureTimeTakenDto';
+export * from './departureTimeTakenDtoCode';
 export * from './domainAuditEventResponseDto';
 export * from './domainAuditEventResponseDtoAction';
 export * from './domainAuditEventResponseDtoChanges';

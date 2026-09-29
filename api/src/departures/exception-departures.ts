@@ -1,9 +1,9 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
-import { DepartureSource, Prisma } from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
+import { DepartureSource, Prisma, RideStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { formatDateOnly } from '../rides/ride-instance-materialization';
 import { DepartureWindow, departureWindow, resolveAgencyTimezone } from './agency-date';
-import { generateDepartures, planExtra } from './departure-generator';
+import { GeneratorRide, generateDepartures, planExtra } from './departure-generator';
 import { LINKABLE_SOURCES } from './departure-link';
 import { insertPlannedDepartures, loadRides, sameTimeRefusal } from './departure-sync';
 
@@ -66,6 +66,11 @@ export async function assertDecisionDate(
 /**
  * Cancels the date's timetable departure, credited the way the old sync
  * credited a SKIP: at the moment the exception was written, to its author.
+ *
+ * A date with no timetable departure stored is accepted, as before PR 3a: a
+ * draft or inactive ride, a weekday the ride does not run, or the newest day
+ * before the nightly job stores it. The SKIP row is then the only record, and
+ * the sync applies it when it creates the departure.
  */
 export async function cancelScheduledDeparture(
   tx: Tx,
@@ -73,7 +78,7 @@ export async function cancelScheduledDeparture(
   serviceDate: Date,
   cancellation: { at: Date; by: string }
 ): Promise<void> {
-  const { count } = await tx.departure.updateMany({
+  await tx.departure.updateMany({
     where: {
       tenantId: scope.tenantId,
       rideId: scope.rideId,
@@ -86,13 +91,6 @@ export async function cancelScheduledDeparture(
       updatedById: scope.actorId
     }
   });
-
-  if (count === 0) {
-    throw new ConflictException({
-      code: 'NO_DEPARTURE_ON_DATE',
-      message: `Voznja ${formatDateOnly(serviceDate)} ne saobraca po redu voznje, pa nema sta da se otkaze.`
-    });
-  }
 }
 
 export async function restoreScheduledDeparture(
@@ -148,18 +146,28 @@ export async function insertExtraDeparture(
         serviceDate: extra.serviceDate,
         source: { in: [...LINKABLE_SOURCES] }
       },
-      select: { source: true, departureTime: true }
+      select: { source: true, departureTime: true, cancelledAt: true }
     });
-    // Between the agency's midnight and the nightly job, the newest day has
-    // no stored timetable departure yet; the one the night will write counts.
+    // With no timetable departure stored, the one the timetable would write
+    // counts: the newest day between the agency's midnight and the nightly
+    // job, or any day of a ride that does not run yet. Read as if the ride
+    // ran, so activating it later cannot put its bus on this extra's time.
     const coming = stored.some((departure) => departure.source === DepartureSource.SCHEDULE)
       ? []
-      : generateDepartures([ride], serviceDate, serviceDate);
+      : generateDepartures([asRunning(ride)], serviceDate, serviceDate).map((departure) => ({
+          source: departure.source,
+          departureTime: departure.departureTime,
+          cancelledAt: null
+        }));
+    const clash = [...stored, ...coming].find(
+      (departure) => departure.departureTime === extra.departureTime
+    );
 
-    if (
-      [...stored, ...coming].some((departure) => departure.departureTime === extra.departureTime)
-    ) {
-      throw sameTimeRefusal({ serviceDate, departureTime: extra.departureTime });
+    if (clash) {
+      throw sameTimeRefusal(
+        { serviceDate, departureTime: extra.departureTime },
+        { cancelledExtra: clash.source === DepartureSource.EXTRA && clash.cancelledAt !== null }
+      );
     }
   }
 
@@ -179,6 +187,10 @@ export async function insertExtraDeparture(
   });
 
   return { id };
+}
+
+function asRunning(ride: GeneratorRide): GeneratorRide {
+  return { ...ride, status: RideStatus.ACTIVE, line: { ...ride.line, isActive: true } };
 }
 
 /**

@@ -14,9 +14,13 @@ import { CheckResult, Invariant, InvariantContext, Violation } from '../invarian
  * only one half shows the operator one thing and the departures another.
  *
  * From the agency's today to the end of the stored window, it reports:
- * - a SKIP whose timetable departure is missing or not cancelled;
+ * - a SKIP whose timetable departure is stored but not cancelled;
  * - a cancelled timetable departure with no SKIP;
  * - an ADDITIONAL with no extra bus, or whose extra has other times;
+ *
+ * A SKIP on a date with no timetable departure stored is not a mismatch: the
+ * sync applies it when it creates the departure. An ADDITIONAL with no extra
+ * is, until the next timetable write or nightly run inserts it.
  * - an extra bus with no ADDITIONAL that is not cancelled;
  * - a cancelled extra bus that still has its ADDITIONAL.
  *
@@ -140,20 +144,18 @@ export function findExceptionMismatches({ exceptions, departures }: Loaded): Vio
       const departure = scheduled.get(key);
       skipped.add(key);
 
-      if (!departure?.cancelledAt) {
+      if (departure && !departure.cancelledAt) {
         violations.push(
           violation(
             'ride-instance',
             scheduleKey(exception.rideId, date),
             'SKIP_NOT_APPLIED',
-            departure
-              ? `Voznja je otkazana za ${date}, ali polazak u ${departure.departureTime} nije oznacen kao otkazan.`
-              : `Voznja je otkazana za ${date}, ali za taj dan nema sacuvanog polaska po redu voznje.`,
+            `Voznja je otkazana za ${date}, ali polazak u ${departure.departureTime} nije oznacen kao otkazan.`,
             {
               rideId: exception.rideId,
               serviceDate: date,
               rideExceptionId: exception.id,
-              departureId: departure?.id ?? null
+              departureId: departure.id
             }
           )
         );

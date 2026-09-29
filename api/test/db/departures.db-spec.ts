@@ -3,6 +3,7 @@ import {
   AuditEventType,
   DepartureSource,
   Prisma,
+  ReservationStatus,
   RideExceptionType,
   RideStatus
 } from '@prisma/client';
@@ -728,22 +729,227 @@ describe('departures (real database)', () => {
       expect(await prisma.rideException.count({ where: { rideId: seeded.rideId } })).toBe(0);
     });
 
-    it('refuses a SKIP on a date the ride does not run', async () => {
+    function dayAfterTravel(): string {
       const dayAfter = new Date(seeded.travelDate);
       dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+      return dateOnly(dayAfter);
+    }
+
+    function legacyException(data: {
+      exceptionDate: string;
+      type: RideExceptionType;
+      departureTime?: string;
+      arrivalTime?: string;
+    }) {
+      return prisma.rideException.create({
+        data: {
+          tenantId: seeded.auth.tenantId,
+          rideId: seeded.rideId,
+          ...data,
+          exceptionDate: new Date(data.exceptionDate),
+          createdById: seeded.auth.sub,
+          updatedById: seeded.auth.sub
+        }
+      });
+    }
+
+    function bookOn(
+      departureId: string,
+      time: string,
+      status: ReservationStatus = ReservationStatus.ACTIVE
+    ) {
+      return prisma.reservation.create({
+        data: {
+          tenantId: seeded.auth.tenantId,
+          rideId: seeded.rideId,
+          passengerId: seeded.passengerId,
+          travelDate: new Date(seeded.travelDate),
+          rideDepartureTime: time,
+          rideArrivalTime: '17:00',
+          seatNumber: 1,
+          departureStationId: seeded.stations.first,
+          arrivalStationId: seeded.stations.last,
+          departureId,
+          status,
+          cancelledAt: status === ReservationStatus.CANCELLED ? new Date() : null,
+          createdById: seeded.auth.sub,
+          updatedById: seeded.auth.sub
+        }
+      });
+    }
+
+    it('accepts a SKIP on a date with no departure, and cancels the departure the timetable later produces', async () => {
+      const date = dayAfterTravel();
+
+      await rides.addException(seeded.auth, seeded.rideId, {
+        date,
+        type: RideExceptionType.SKIP
+      });
+      expect(await prisma.departure.count({ where: { serviceDate: new Date(date) } })).toBe(0);
+      await expectChecksClean();
+
+      const [times] = weekdayTimes();
+      await rides.replaceDayTimes(seeded.auth, seeded.rideId, [
+        times,
+        { ...times, dayOfWeek: new Date(date).getUTCDay() }
+      ]);
+
+      const created = await prisma.departure.findFirstOrThrow({
+        where: { rideId: seeded.rideId, serviceDate: new Date(date) },
+        select: decisionFields
+      });
+      expect(created).toMatchObject({
+        cancelledAt: expect.any(Date),
+        cancelledById: seeded.auth.sub,
+        timetableDroppedAt: null
+      });
+      await expectChecksClean();
+    });
+
+    it('applies a SKIP when the nightly job stores its day', async () => {
+      await prisma.departure.deleteMany({
+        where: { rideId: seeded.rideId, serviceDate: new Date(seeded.otherTravelDate) }
+      });
+      await legacyException({ exceptionDate: seeded.otherTravelDate, type: RideExceptionType.SKIP });
+
+      await new DepartureNightlyService(prisma).run();
+
+      const added = await prisma.departure.findFirstOrThrow({
+        where: { rideId: seeded.rideId, serviceDate: new Date(seeded.otherTravelDate) },
+        select: { ...decisionFields, createdById: true }
+      });
+      expect(added).toMatchObject({
+        cancelledAt: expect.any(Date),
+        cancelledById: seeded.auth.sub,
+        createdById: SYSTEM_ACTOR_ID
+      });
+    });
+
+    it('inserts the extra of an ADDITIONAL saved before PR 3a without one, dropped until its ride runs', async () => {
+      await rides.update(seeded.auth, seeded.rideId, { status: RideStatus.INACTIVE });
+      const exception = await legacyException({
+        exceptionDate: seeded.travelDate,
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '15:00',
+        arrivalTime: '17:00'
+      });
+
+      await rides.update(seeded.auth, seeded.rideId, { capacity: 40 });
+      expect(await extraOf(exception.id)).toMatchObject({ timetableDroppedAt: expect.any(Date) });
+
+      await rides.update(seeded.auth, seeded.rideId, { status: RideStatus.ACTIVE });
+      const extra = await prisma.departure.findFirstOrThrow({
+        where: { rideExceptionId: exception.id },
+        include: { stops: true }
+      });
+      expect(extra).toMatchObject({
+        source: DepartureSource.EXTRA,
+        departureTime: '15:00',
+        capacity: 40,
+        timetableDroppedAt: null,
+        cancelledAt: null
+      });
+      expect(extra.stops).toHaveLength(2);
+      await expectChecksClean();
+    });
+
+    it("keeps an ADDITIONAL's extra at its ride's capacity", async () => {
+      const exception = await rides.addException(seeded.auth, seeded.rideId, {
+        date: seeded.travelDate,
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '15:00',
+        arrivalTime: '17:00'
+      });
+
+      await rides.update(seeded.auth, seeded.rideId, { capacity: 30 });
+
+      const extra = await prisma.departure.findFirstOrThrow({
+        where: { rideExceptionId: exception.id }
+      });
+      expect(extra.capacity).toBe(30);
+      await expectChecksClean();
+    });
+
+    it('deletes the dropped, unbooked departure of a SKIP when the SKIP is removed', async () => {
+      const skip = await rides.addException(seeded.auth, seeded.rideId, {
+        date: seeded.travelDate,
+        type: RideExceptionType.SKIP
+      });
+      await rides.replaceDayTimes(seeded.auth, seeded.rideId, []);
+      expect(await onTravelDate(decisionFields)).toEqual([
+        expect.objectContaining({ cancelledAt: expect.any(Date), timetableDroppedAt: expect.any(Date) })
+      ]);
+
+      await rides.removeException(seeded.auth, seeded.rideId, skip.id);
+
+      expect(await onTravelDate()).toEqual([]);
+      await expectChecksClean();
+    });
+
+    it('cancels without asking an extra whose reservations are all cancelled', async () => {
+      const exception = await rides.addException(seeded.auth, seeded.rideId, {
+        date: seeded.travelDate,
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '15:00',
+        arrivalTime: '17:00'
+      });
+      const extra = await extraOf(exception.id);
+      await bookOn(extra.id, '15:00', ReservationStatus.CANCELLED);
+
+      await rides.removeException(seeded.auth, seeded.rideId, exception.id);
+
+      expect(
+        await prisma.departure.findUniqueOrThrow({
+          where: { id: extra.id },
+          select: { cancelledById: true, rideExceptionId: true }
+        })
+      ).toEqual({ cancelledById: seeded.auth.sub, rideExceptionId: null });
+      await expectChecksClean();
+    });
+
+    it('says so when a cancelled extra holds the time', async () => {
+      const exception = await rides.addException(seeded.auth, seeded.rideId, {
+        date: seeded.travelDate,
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '15:00',
+        arrivalTime: '17:00'
+      });
+      await bookOn((await extraOf(exception.id)).id, '15:00', ReservationStatus.CANCELLED);
+      await rides.removeException(seeded.auth, seeded.rideId, exception.id);
 
       const refusal = await refusalOf(
         rides.addException(seeded.auth, seeded.rideId, {
-          date: dayAfter.toISOString().slice(0, 10),
-          type: RideExceptionType.SKIP
+          date: seeded.travelDate,
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '15:00',
+          arrivalTime: '17:00'
         })
       );
 
-      expect(refusal).toBeInstanceOf(ConflictException);
       expect((refusal as ConflictException).getResponse()).toMatchObject({
-        code: 'NO_DEPARTURE_ON_DATE'
+        code: 'DEPARTURE_TIME_TAKEN',
+        message: expect.stringContaining('otkazan dodatni polazak u 15:00')
       });
-      expect(await prisma.rideException.count({ where: { rideId: seeded.rideId } })).toBe(0);
+    });
+
+    it('refuses an extra at the timetable time of a ride that does not run yet', async () => {
+      await rides.update(seeded.auth, seeded.rideId, { status: RideStatus.INACTIVE });
+      await prisma.departure.deleteMany({
+        where: { rideId: seeded.rideId, serviceDate: new Date(seeded.travelDate) }
+      });
+
+      const refusal = await refusalOf(
+        rides.addException(seeded.auth, seeded.rideId, {
+          date: seeded.travelDate,
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '09:00',
+          arrivalTime: '12:00'
+        })
+      );
+
+      expect((refusal as ConflictException).getResponse()).toMatchObject({
+        code: 'DEPARTURE_TIME_TAKEN'
+      });
     });
 
     it('refuses an extra bus at the time of another departure of the ride that day', async () => {
@@ -811,8 +1017,10 @@ describe('departures (real database)', () => {
       );
 
       expect(refusal).toBeInstanceOf(ConflictException);
+      const line = await prisma.line.findUniqueOrThrow({ where: { id: seeded.lineId } });
       expect((refusal as ConflictException).getResponse()).toMatchObject({
-        code: 'DEPARTURE_TIME_TAKEN'
+        code: 'DEPARTURE_TIME_TAKEN',
+        message: expect.stringContaining(`Voznja na liniji ${line.name}`)
       });
       const scheduled = await prisma.departure.findFirstOrThrow({
         where: {
@@ -884,6 +1092,61 @@ describe('departures (real database)', () => {
         where: { rideId: seeded.rideId, serviceDate: new Date(seeded.otherTravelDate) }
       });
       expect(added.createdById).toBe(SYSTEM_ACTOR_ID);
+    });
+
+    it('fails only the tenant whose missing departure would share an extra\'s time', async () => {
+      await prisma.departure.deleteMany({
+        where: { rideId: seeded.rideId, serviceDate: new Date(seeded.otherTravelDate) }
+      });
+      // A pair the endpoints refuse, written past them.
+      await prisma.$transaction(async (tx) => {
+        const exception = await tx.rideException.create({
+          data: {
+            tenantId: seeded.auth.tenantId,
+            rideId: seeded.rideId,
+            exceptionDate: new Date(seeded.otherTravelDate),
+            type: RideExceptionType.ADDITIONAL,
+            departureTime: '09:00',
+            arrivalTime: '11:00',
+            createdById: seeded.auth.sub,
+            updatedById: seeded.auth.sub
+          }
+        });
+        await insertExtraDeparture(
+          tx,
+          { tenantId: seeded.auth.tenantId, rideId: seeded.rideId, actorId: seeded.auth.sub },
+          {
+            rideExceptionId: exception.id,
+            serviceDate: new Date(seeded.otherTravelDate),
+            departureTime: '09:00',
+            arrivalTime: '11:00'
+          },
+          { allowSameTime: true }
+        );
+      });
+      const other = await seedTenant(prisma);
+
+      try {
+        const outcomes = await nightly().run();
+        const mine = outcomes.find((outcome) => outcome.tenantId === seeded.auth.tenantId)!;
+        const theirs = outcomes.find((outcome) => outcome.tenantId === other.auth.tenantId)!;
+
+        expect(mine.error).toContain('09:00');
+        expect(mine.counts).toBeUndefined();
+        expect(theirs.error).toBeUndefined();
+        expect(theirs.counts!.created).toBeGreaterThan(0);
+        expect(
+          await prisma.departure.count({
+            where: {
+              rideId: seeded.rideId,
+              serviceDate: new Date(seeded.otherTravelDate),
+              source: DepartureSource.SCHEDULE
+            }
+          })
+        ).toBe(0);
+      } finally {
+        await removeTenant(prisma, other.auth.tenantId);
+      }
     });
 
     it('waits for an edit that holds the schedule, and does not bring back what it removed', async () => {

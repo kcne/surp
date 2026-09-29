@@ -70,10 +70,16 @@ export interface PlannedDeparture {
   capacity: number;
   rideExceptionId: string | null;
   /**
-   * Set only by `departures:backfill` for a past date, where the SKIP rows are
-   * the record of what was cancelled. The sync never plans one.
+   * Never produced by the generator. Set from a SKIP row by
+   * `departures:backfill` for a past date, and by the sync only when it
+   * creates a departure on a date that already has a SKIP.
    */
   cancellation?: PlannedCancellation | null;
+  /**
+   * Set only on an extra bus the sync inserts for an ADDITIONAL whose ride
+   * does not run: it is stored dropped and comes back with the ride.
+   */
+  timetableDropped?: boolean;
   stops: PlannedStop[];
 }
 
@@ -218,8 +224,8 @@ export interface ExtraInput {
 }
 
 /**
- * An extra bus as its ride shapes it. Its times and capacity are the
- * operator's; its line and stops follow the ride, and it runs only while the
+ * An extra bus as its ride shapes it. Its times and capacity are the caller's
+ * to give; its line and stops follow the ride, and it runs only while the
  * ride does (`dropped`).
  */
 export function planExtra(

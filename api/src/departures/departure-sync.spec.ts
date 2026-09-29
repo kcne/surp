@@ -1,6 +1,7 @@
-import { DepartureSource, RideStatus, RideType } from '@prisma/client';
+import { DepartureSource, RideExceptionType, RideStatus, RideType } from '@prisma/client';
 import { GeneratorRide, generateDepartures, linePathStops } from './departure-generator';
 import { StoredDeparture, diffDepartures } from './departure-sync';
+import { ExceptionRecord } from './exception-records';
 
 // 5 October 2026 is a Monday.
 const MONDAY = '2026-10-05';
@@ -65,7 +66,6 @@ function extra(overrides: Partial<StoredDeparture> = {}): StoredDeparture {
     source: DepartureSource.EXTRA,
     departureTime: '15:00',
     arrivalTime: '17:00',
-    capacity: 20,
     rideExceptionId: 'exc-1',
     stops: linePathStops(ride(), '15:00', '17:00'),
     ...overrides
@@ -74,8 +74,32 @@ function extra(overrides: Partial<StoredDeparture> = {}): StoredDeparture {
 
 const cancelled = { cancelledAt: new Date('2026-09-20T08:00:00Z'), cancelledById: 'user-1' };
 
-function diff(rides: GeneratorRide[], rows: StoredDeparture[]) {
-  return diffDepartures(generateDepartures(rides, MONDAY, MONDAY), rows, rides);
+function exception(overrides: Partial<ExceptionRecord> = {}): ExceptionRecord {
+  return {
+    id: 'exc-1',
+    rideId: 'ride-1',
+    exceptionDate: MONDAY,
+    type: RideExceptionType.SKIP,
+    departureTime: null,
+    arrivalTime: null,
+    createdAt: new Date('2026-09-20T08:00:00Z'),
+    createdById: 'user-1',
+    updatedById: 'user-1',
+    ...overrides
+  };
+}
+
+function additional(overrides: Partial<ExceptionRecord> = {}): ExceptionRecord {
+  return exception({
+    type: RideExceptionType.ADDITIONAL,
+    departureTime: '15:00',
+    arrivalTime: '17:00',
+    ...overrides
+  });
+}
+
+function diff(rides: GeneratorRide[], rows: StoredDeparture[], exceptions: ExceptionRecord[] = []) {
+  return diffDepartures(generateDepartures(rides, MONDAY, MONDAY), rows, rides, exceptions);
 }
 
 describe('diffDepartures', () => {
@@ -149,7 +173,7 @@ describe('diffDepartures', () => {
     ]);
   });
 
-  it("keeps an extra on its ride's line and stops, but its own times and capacity", () => {
+  it("keeps an extra on its ride's line, stops and capacity, but its own times", () => {
     const moved = ride({
       lineId: 'line-2',
       capacity: 60,
@@ -159,13 +183,19 @@ describe('diffDepartures', () => {
     const { updates } = diff([moved], [extra()]);
 
     expect(updates).toHaveLength(1);
-    expect(updates[0].fields).toEqual(['lineId', 'stops']);
+    expect(updates[0].fields).toEqual(['lineId', 'capacity', 'stops']);
     expect(updates[0].planned).toMatchObject({
       lineId: 'line-2',
       departureTime: '15:00',
       arrivalTime: '17:00',
-      capacity: 20
+      capacity: 60
     });
+  });
+
+  it('keeps the capacity of an extra no ADDITIONAL shapes any more', () => {
+    const cancelledOrphan = extra({ ...cancelled, rideExceptionId: null, capacity: 20 });
+
+    expect(diff([ride({ capacity: 60 })], [cancelledOrphan]).updates).toEqual([]);
   });
 
   it('rewrites the stops of a one-time departure stored with its ends only', () => {
@@ -229,7 +259,66 @@ describe('diffDepartures', () => {
 
     const plan = diff([ride({ capacity: 30 })], [stored(), atNine]);
 
-    expect(plan.updates).toHaveLength(1);
+    expect(plan.updates.map((update) => update.fields)).toEqual([['capacity'], ['capacity']]);
     expect(plan.conflicts).toEqual([]);
+  });
+
+  describe('decisions stored only as an exception row', () => {
+    it('applies the SKIP of a date to the timetable departure it creates', () => {
+      const { creates } = diff([ride()], [], [exception()]);
+
+      expect(creates).toEqual([
+        expect.objectContaining({
+          source: 'SCHEDULE',
+          cancellation: { at: new Date('2026-09-20T08:00:00Z'), by: 'user-1' }
+        })
+      ]);
+    });
+
+    it('never reads a SKIP for a stored departure', () => {
+      const plan = diff([ride()], [stored()], [exception()]);
+
+      expect(plan.creates).toEqual([]);
+      expect(plan.updates).toEqual([]);
+    });
+
+    it('creates the extra bus of an ADDITIONAL that has none, dropped while its ride does not run', () => {
+      const running = diff([ride()], [stored()], [additional()]);
+
+      expect(running.creates).toEqual([
+        expect.objectContaining({
+          source: 'EXTRA',
+          rideExceptionId: 'exc-1',
+          departureTime: '15:00',
+          capacity: 48,
+          timetableDropped: false
+        })
+      ]);
+      expect(running.creates[0].stops.map((stop) => stop.stationId)).toEqual([
+        'st-a',
+        'st-b',
+        'st-c'
+      ]);
+
+      const inactive = diff([ride({ status: RideStatus.INACTIVE })], [], [additional()]);
+      expect(inactive.creates).toEqual([
+        expect.objectContaining({ source: 'EXTRA', timetableDropped: true })
+      ]);
+    });
+
+    it('leaves an ADDITIONAL alone when its extra is stored, or when it has no times', () => {
+      expect(diff([ride()], [stored(), extra()], [additional()]).creates).toEqual([]);
+      expect(
+        diff([ride()], [stored()], [additional({ departureTime: null, arrivalTime: null })])
+          .creates
+      ).toEqual([]);
+    });
+
+    it('does not count an extra it creates at the timetable time as a conflict', () => {
+      const plan = diff([ride()], [], [additional({ departureTime: '09:00' })]);
+
+      expect(plan.creates.map((created) => created.source)).toEqual(['SCHEDULE', 'EXTRA']);
+      expect(plan.conflicts).toEqual([]);
+    });
   });
 });

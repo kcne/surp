@@ -1,4 +1,4 @@
-import { DepartureSource, Prisma, ReservationStatus, RideExceptionType } from '@prisma/client';
+import { DepartureSource, Prisma, ReservationStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScheduleLockRoot, scheduleEditTransaction } from '../prisma/schedule-lock';
@@ -6,7 +6,6 @@ import { formatDateOnly, utcDateOf } from '../rides/ride-instance-materializatio
 import { addDays, agencyDate, resolveAgencyTimezone } from './agency-date';
 import {
   GeneratorRide,
-  PlannedCancellation,
   PlannedDeparture,
   extraKey,
   generateDepartures,
@@ -21,6 +20,14 @@ import {
   loadRides,
   planDepartureSync
 } from './departure-sync';
+import {
+  ExceptionRecord,
+  busAdditionals,
+  loadExceptionRecords,
+  rideDateKey,
+  skipCancellation,
+  skipsByRideDate
+} from './exception-records';
 import { SYSTEM_ACTOR_ID } from './system-actor';
 
 /**
@@ -191,38 +198,15 @@ export interface DepartureBackfillCounts {
   invalidManualLinks: number;
 }
 
-export interface HistoryException {
-  id: string;
-  rideId: string;
-  /** `YYYY-MM-DD`. */
-  exceptionDate: string;
-  type: RideExceptionType;
-  departureTime: string | null;
-  arrivalTime: string | null;
-  createdAt: Date;
-  createdById: string | null;
-  updatedById: string | null;
-}
+/** Exception rows read as history; see `exception-records.ts`. */
+export type HistoryException = ExceptionRecord;
 
 /**
- * A SKIP without an author still cancelled the date, as it hid the date from
- * the materializer. The audit trigger refuses such a row today, but the schema
- * allows it, so it is credited to the system actor rather than dropped.
- */
-function cancellationOf(skip: HistoryException | undefined): PlannedCancellation | null {
-  if (!skip) {
-    return null;
-  }
-
-  return { at: skip.createdAt, by: skip.updatedById ?? skip.createdById ?? SYSTEM_ACTOR_ID };
-}
-
-/**
- * What ran on past dates. The sync no longer reads exceptions (#27, PR 3a),
- * but for a date that is gone the exception rows are the record of what was
- * cancelled and which extra buses ran, so the backfill reads them here: a SKIP
- * cancels the timetable departure, and an ADDITIONAL with both times is an
- * extra bus, keyed by its exception.
+ * What ran on past dates. The sync reads exceptions only for departures it
+ * has yet to store (#27, PR 3a), but for a date that is gone the exception
+ * rows are the record of what was cancelled and which extra buses ran, so the
+ * backfill reads them here: a SKIP cancels the timetable departure, and an
+ * ADDITIONAL with both times is an extra bus, keyed by its exception.
  */
 export function generateHistory(
   rides: readonly GeneratorRide[],
@@ -233,36 +217,19 @@ export function generateHistory(
   const inWindow = exceptions.filter(
     (exception) => exception.exceptionDate >= from && exception.exceptionDate <= to
   );
-  const skips = new Map<string, HistoryException>();
-
-  for (const exception of inWindow) {
-    const key = `${exception.rideId}:${exception.exceptionDate}`;
-
-    // The first SKIP on a date, in the order they were loaded.
-    if (exception.type === RideExceptionType.SKIP && !skips.has(key)) {
-      skips.set(key, exception);
-    }
-  }
-
+  const skips = skipsByRideDate(inWindow);
   const scheduled = generateDepartures(rides, from, to).map((departure) => ({
     ...departure,
-    cancellation: cancellationOf(skips.get(`${departure.rideId}:${departure.serviceDate}`))
+    cancellation: skipCancellation(skips.get(rideDateKey(departure.rideId, departure.serviceDate)))
   }));
   const ridesById = new Map(rides.map((ride) => [ride.id, ride]));
   const extras: PlannedDeparture[] = [];
 
-  // The filter the materializer applies: an ADDITIONAL without both times
-  // produces no instance. A SKIP never removes an extra bus.
-  for (const exception of inWindow) {
+  // A SKIP never removes an extra bus.
+  for (const exception of busAdditionals(inWindow)) {
     const ride = ridesById.get(exception.rideId);
 
-    if (
-      !ride ||
-      !rideRuns(ride) ||
-      exception.type !== RideExceptionType.ADDITIONAL ||
-      !exception.departureTime ||
-      !exception.arrivalTime
-    ) {
+    if (!ride || !rideRuns(ride)) {
       continue;
     }
 
@@ -280,37 +247,6 @@ export function generateHistory(
   }
 
   return [...scheduled, ...extras];
-}
-
-export async function loadHistoryExceptions(
-  db: Db,
-  tenantId: string,
-  window: { from: string; to: string }
-): Promise<HistoryException[]> {
-  const exceptions = await db.rideException.findMany({
-    where: {
-      tenantId,
-      exceptionDate: { gte: utcDateOf(window.from), lte: utcDateOf(window.to) }
-    },
-    select: {
-      id: true,
-      rideId: true,
-      exceptionDate: true,
-      type: true,
-      departureTime: true,
-      arrivalTime: true,
-      createdAt: true,
-      createdById: true,
-      updatedById: true
-    },
-    // A deterministic SKIP when a date carries more than one.
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]
-  });
-
-  return exceptions.map((exception) => ({
-    ...exception,
-    exceptionDate: formatDateOnly(exception.exceptionDate)!
-  }));
 }
 
 function linkKey(rideId: string, date: string, departureTime: string): string {
@@ -736,7 +672,7 @@ export async function planDepartureBackfill(
     from <= historyTo
       ? generateHistory(
           rides,
-          await loadHistoryExceptions(db, tenantId, { from, to: historyTo }),
+          await loadExceptionRecords(db, tenantId, { from, to: historyTo }),
           from,
           historyTo
         )

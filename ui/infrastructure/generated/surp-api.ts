@@ -50,6 +50,7 @@ import type {
   CreateTicketCommentDto,
   CreateTicketDto,
   CreateUserDto,
+  DepartureTimeTakenDto,
   DomainAuditEventResponseDto,
   InvariantDetailDto,
   InvariantRepairResultDto,
@@ -7302,7 +7303,7 @@ export type ridesControllerAddExceptionResponse404 = {
 }
 
 export type ridesControllerAddExceptionResponse409 = {
-  data: WouldBreakReservationsDto | RideExceptionConflictDto
+  data: WouldBreakReservationsDto | RideExceptionConflictDto | DepartureTimeTakenDto
   status: 409
 }
 
@@ -7339,7 +7340,7 @@ export const ridesControllerAddException = async (id: string,
 
 
 
-export const getRidesControllerAddExceptionMutationOptions = <TError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto>,
+export const getRidesControllerAddExceptionMutationOptions = <TError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto | DepartureTimeTakenDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerAddException>>, TError,{id: string;data: CreateRideExceptionDto}, TContext>, request?: SecondParameter<typeof customInstance>}
 ): UseMutationOptions<Awaited<ReturnType<typeof ridesControllerAddException>>, TError,{id: string;data: CreateRideExceptionDto}, TContext> => {
 
@@ -7368,12 +7369,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type RidesControllerAddExceptionMutationResult = NonNullable<Awaited<ReturnType<typeof ridesControllerAddException>>>
     export type RidesControllerAddExceptionMutationBody = CreateRideExceptionDto
-    export type RidesControllerAddExceptionMutationError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto>
+    export type RidesControllerAddExceptionMutationError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto | DepartureTimeTakenDto>
 
     /**
  * @summary Add a ride exception (skip/additional) in the current tenant.
  */
-export const useRidesControllerAddException = <TError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto>,
+export const useRidesControllerAddException = <TError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto | DepartureTimeTakenDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerAddException>>, TError,{id: string;data: CreateRideExceptionDto}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof ridesControllerAddException>>,

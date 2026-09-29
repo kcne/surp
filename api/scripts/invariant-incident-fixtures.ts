@@ -388,8 +388,11 @@ const fixtures: IncidentFixture[] = [
     matches: reason('CANCELLED_WITHOUT_SKIP')
   },
   {
+    // The next timetable write or nightly run inserts the missing bus, so the
+    // gap shows only until then.
     name: 'ADDITIONAL is recorded without its extra bus',
     invariantKey: 'departure.matchesExceptions',
+    skipDepartureSync: true,
     mutate: async (tx, state) => {
       await tx.rideException.create({
         data: {
@@ -482,6 +485,31 @@ const fixtures: IncidentFixture[] = [
       await skipDate(tx, state, 'exception-undone-skip', nextWeek);
       await removeException(tx, state, 'exception-undone-extra');
       await removeException(tx, state, 'exception-undone-skip');
+    }
+  },
+  {
+    // Before PR 3a the sync deleted an unbooked departure its ride stopped
+    // producing, cancelled or not, and an extra with it; the SKIP and the
+    // ADDITIONAL stayed. When the departure is created again the sync applies
+    // them, rather than running a bus the screens show as cancelled.
+    name: 'SKIP and ADDITIONAL saved before PR 3a without departures are applied on creation',
+    invariantKey: 'departure.matchesExceptions',
+    expects: 'silence',
+    mutate: async (tx, state) => {
+      const nextWeek = new Date(state.travelDate);
+      nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
+      await tx.departure.deleteMany({ where: { rideId: state.rideId, serviceDate: nextWeek } });
+      await tx.rideException.createMany({
+        data: [
+          { ...exceptionRow(state, 'exception-legacy-skip', nextWeek), type: RideExceptionType.SKIP },
+          {
+            ...exceptionRow(state, 'exception-legacy-additional', nextWeek),
+            type: RideExceptionType.ADDITIONAL,
+            departureTime: '15:00',
+            arrivalTime: '17:00'
+          }
+        ]
+      });
     }
   },
   {
