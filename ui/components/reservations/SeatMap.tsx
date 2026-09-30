@@ -12,7 +12,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core"
-import { ArrowDown, ArrowUp, Search, X } from "lucide-react"
+import { Armchair, ArrowDown, ArrowUp, MapPin, Phone, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -99,6 +99,7 @@ function Seat({
     ? `${seat.reservation.passenger.firstName} ${seat.reservation.passenger.lastName}`
     : "Slobodno"
   const phone = seat.reservation?.passenger.phone ?? null
+  const departureStationName = seat.reservation?.departureStation?.name ?? null
 
   const title =
     seat.status === "reserved" && seat.reservation
@@ -116,9 +117,11 @@ function Seat({
       {...draggable.attributes}
       {...draggable.listeners}
       aria-pressed={displayStatus === "selected"}
-      aria-label={`Sedište ${seat.seatNumber}: ${title}`}
+      aria-label={`Sedište ${seat.seatNumber}: ${title}${
+        departureStationName ? `, polazna stanica ${departureStationName}` : ""
+      }`}
       className={cn(
-        "relative flex h-[4.5rem] w-28 cursor-pointer select-none flex-col rounded-lg border-2 p-1.5 text-left text-foreground transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+        "relative flex h-[5.5rem] w-32 cursor-pointer select-none flex-col rounded-lg border-2 p-1.5 text-left text-foreground transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
         getSeatClasses(displayStatus, true),
         highlight === "match" && "ring-2 ring-amber-400 ring-offset-1",
         highlight === "current" && "ring-4 ring-amber-500 ring-offset-2 shadow-lg",
@@ -138,6 +141,7 @@ function Seat({
           displayStatus === "selected" && "text-blue-900",
         )}
       >
+        <Armchair className="h-3 w-3 shrink-0" aria-hidden="true" />
         <span>#{seat.seatNumber}</span>
         {groupLabel && (
           <span
@@ -158,16 +162,30 @@ function Seat({
       >
         {fullName}
       </span>
-      {phone && (
+      {(departureStationName || phone) && (
         <span
           className={cn(
-            "mt-auto truncate text-[10px] leading-tight tabular-nums",
+            "mt-auto flex min-w-0 flex-col gap-0.5 text-[10px] font-bold leading-tight",
             displayStatus === "available" && "text-emerald-800",
             displayStatus === "reserved" && "text-red-800",
             displayStatus === "selected" && "text-blue-800",
           )}
         >
-          {phone}
+          {departureStationName && (
+            <span
+              className="flex min-w-0 items-center gap-1"
+              title={`Polazna stanica: ${departureStationName}`}
+            >
+              <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{departureStationName}</span>
+            </span>
+          )}
+          {phone && (
+            <span className="flex min-w-0 items-center gap-1 tabular-nums">
+              <Phone className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{phone}</span>
+            </span>
+          )}
         </span>
       )}
       {displayStatus === "selected" && (
@@ -300,7 +318,7 @@ export function SeatMap({
   }
 
   const renderSeat = (seat: SeatInfo | null) => {
-    if (!seat) return <div className="h-[4.5rem] w-28" />
+    if (!seat) return <div className="h-[5.5rem] w-32" />
     const isSelected = selectedSeats.includes(seat.seatNumber) || !!seat.isSelected
     const highlight: "match" | "current" | null =
       seat.seatNumber === currentMatchSeatNumber
@@ -477,18 +495,28 @@ export function SeatMap({
 
         <DragOverlay dropAnimation={null}>
           {activeSeat?.reservation ? (
-            <div className="flex h-[4.5rem] w-28 flex-col rounded-lg border-2 border-primary bg-primary/20 p-1.5 text-left text-foreground shadow-lg">
+            <div className="flex h-[5.5rem] w-32 flex-col rounded-lg border-2 border-primary bg-primary/20 p-1.5 text-left text-foreground shadow-lg">
               <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-blue-900">
+                <Armchair className="h-3 w-3 shrink-0" aria-hidden="true" />
                 #{activeSeat.seatNumber}
               </span>
               <span className="mt-0.5 line-clamp-2 text-[11px] font-semibold leading-tight text-blue-900">
                 {activeSeat.reservation.passenger.firstName} {activeSeat.reservation.passenger.lastName}
               </span>
-              {activeSeat.reservation.passenger.phone && (
-                <span className="mt-auto truncate text-[10px] leading-tight tabular-nums text-blue-800">
-                  {activeSeat.reservation.passenger.phone}
-                </span>
-              )}
+              <span className="mt-auto flex min-w-0 flex-col gap-0.5 text-[10px] font-bold leading-tight text-blue-800">
+                {activeSeat.reservation.departureStation?.name && (
+                  <span className="flex min-w-0 items-center gap-1">
+                    <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{activeSeat.reservation.departureStation.name}</span>
+                  </span>
+                )}
+                {activeSeat.reservation.passenger.phone && (
+                  <span className="flex min-w-0 items-center gap-1 tabular-nums">
+                    <Phone className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{activeSeat.reservation.passenger.phone}</span>
+                  </span>
+                )}
+              </span>
             </div>
           ) : null}
         </DragOverlay>
