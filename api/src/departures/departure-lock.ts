@@ -15,10 +15,14 @@ import { Prisma } from '@prisma/client';
  * so the two cannot deadlock. The ID order is what keeps two writers that
  * touch several departures, a round trip or a passenger merge, from each
  * holding one the other is waiting for.
+ *
+ * `tenantId` scopes the lock for an ID a request sent: an ID of another
+ * tenant's departure is then never locked, only refused by the read after.
  */
 export async function lockDepartures(
   tx: Prisma.TransactionClient,
-  departureIds: Iterable<string | null | undefined>
+  departureIds: Iterable<string | null | undefined>,
+  { tenantId }: { tenantId?: string } = {}
 ): Promise<void> {
   const ids = [...new Set([...departureIds].filter((id): id is string => Boolean(id)))].sort();
 
@@ -26,6 +30,8 @@ export async function lockDepartures(
     return;
   }
 
+  const scoped = tenantId ? Prisma.sql`AND "tenantId" = ${tenantId}` : Prisma.empty;
+
   // Postgres locks rows as the sort hands them over, so ORDER BY is the lock order.
-  await tx.$queryRaw`SELECT id FROM "Departure" WHERE id = ANY(${ids}::text[]) ORDER BY id FOR UPDATE`;
+  await tx.$queryRaw`SELECT id FROM "Departure" WHERE id = ANY(${ids}::text[]) ${scoped} ORDER BY id FOR UPDATE`;
 }

@@ -23,8 +23,8 @@ export class CreateReservationDto {
       'agree with it, or the request is refused with 409 DEPARTURE_CHANGED. Without it the ' +
       'departure is the only one of the ride leaving at rideDepartureTime on travelDate. Either ' +
       'way, 409 DEPARTURE_NOT_FOUND when there is no such departure. A departure that is cancelled or no longer ' +
-      'in the timetable is refused with 409 DEPARTURE_NOT_RUNNING, and a date past the stored ' +
-      'window with 400.'
+      'in the timetable, or a LEGACY departure, is refused with 409 DEPARTURE_NOT_RUNNING, and a ' +
+      'date past the stored window with 400 TRAVEL_DATE_OUT_OF_WINDOW.'
   })
   @IsOptional()
   @IsString()

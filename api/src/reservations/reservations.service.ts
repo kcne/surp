@@ -11,9 +11,11 @@ import {
   BookingDeparture,
   BookingDepartureRequest,
   assertBookable,
+  StopRoute,
   departureRoute,
   loadBookingDeparture,
-  resolveBookingDepartureId
+  resolveBookingDepartureId,
+  routeFromStops
 } from '../departures/booking-departure';
 import { lockDepartures } from '../departures/departure-lock';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
@@ -152,7 +154,7 @@ export class ReservationsService {
       for (const item of dto.items) {
         departureIds.push(await resolveBookingDepartureId(tx, this.bookingRequest(auth, item)));
       }
-      await lockDepartures(tx, departureIds);
+      await lockDepartures(tx, departureIds, { tenantId: auth.tenantId });
 
       const groupIdFor = (item: CreateReservationDto, departureId: string): string => {
         const key = dto.travelTogether ? departureId : `${departureId}:${item.passengerId}`;
@@ -380,7 +382,9 @@ export class ReservationsService {
       // Updating never moves a reservation to another departure, and a
       // passenger on a bus that no longer runs can still be edited: the
       // departure is read for its seats and route, not asked whether it runs.
-      const route = this.routeContextOf(
+      const route = await this.bookedRouteContextOf(
+        tx,
+        auth.tenantId,
         await loadBookingDeparture(tx, auth.tenantId, departureId)
       );
       const segment = this.validateAndResolveSegment(route, departureStationId, arrivalStationId);
@@ -498,7 +502,9 @@ export class ReservationsService {
 
       // Moving a seat keeps this reservation on the same departure, so one
       // that no longer runs must not prevent the change.
-      const route = this.routeContextOf(
+      const route = await this.bookedRouteContextOf(
+        tx,
+        auth.tenantId,
         await loadBookingDeparture(tx, auth.tenantId, departureId)
       );
       const sourceSegment = this.validateAndResolveSegment(
@@ -640,15 +646,51 @@ export class ReservationsService {
    * capacity, and its stored stops, which keep the route a past departure ran
    * with and carry every station of an extra bus.
    */
-  private routeContextOf(departure: BookingDeparture): DepartureRouteContext {
-    const route = departureRoute(departure.stops);
-
+  private routeContextOf(
+    departure: BookingDeparture,
+    route: StopRoute = departureRoute(departure.stops)
+  ): DepartureRouteContext {
     return {
       departureId: departure.id,
       capacity: departure.capacity,
       stationOrderById: routeStationOrder(route),
       ...routeBoardingDropoffSets(route)
     };
+  }
+
+  /**
+   * The same, for a reservation already on the departure. A `LEGACY`
+   * departure stores no stops, so its reservations are read against their
+   * ride's line, as they were before PR 3b and as the checks read them
+   * (`routeOf` in `reservation-window.ts`). A booking never falls back: it is
+   * refused onto a departure with no stored route.
+   */
+  private async bookedRouteContextOf(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    departure: BookingDeparture
+  ): Promise<DepartureRouteContext> {
+    if (routeFromStops(departure.stops)) {
+      return this.routeContextOf(departure);
+    }
+
+    const ride = await tx.ride.findFirst({
+      where: { id: departure.rideId, tenantId },
+      select: {
+        line: {
+          select: {
+            departureStationId: true,
+            arrivalStationId: true,
+            intermediateStops: {
+              select: { stationId: true, isBoarding: true, isDropoff: true },
+              orderBy: { orderIndex: 'asc' }
+            }
+          }
+        }
+      }
+    });
+
+    return this.routeContextOf(departure, ride?.line ?? departureRoute(departure.stops));
   }
 
   /**
@@ -837,7 +879,7 @@ export class ReservationsService {
 
     if (!departureId) {
       departureId = await resolveBookingDepartureId(tx, request);
-      await lockDepartures(tx, [departureId]);
+      await lockDepartures(tx, [departureId], { tenantId: auth.tenantId });
     }
 
     // Read under the row lock, like every read that decides this booking: a

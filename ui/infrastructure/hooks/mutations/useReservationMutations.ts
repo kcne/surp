@@ -21,7 +21,10 @@ import {
 } from "@/infrastructure/mappers/reservationMappers"
 import { reservationsByRideInstanceQueryKey } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
 import type { ReservationFormData, RideInstance } from "@/types"
-import { scheduleBeingUpdatedMessage } from "@/infrastructure/utils/breaking-change"
+import {
+  bookingRefusalMessage,
+  scheduleBeingUpdatedMessage,
+} from "@/infrastructure/utils/breaking-change"
 
 function isReservationMutationSuccess<TResponse extends { status: number }>(
   response: TResponse
@@ -62,11 +65,31 @@ function getErrorMessage(error: unknown, fallback: string): string {
     return scheduleBusy
   }
 
+  const refusal = bookingRefusalMessage(error)
+  if (refusal) {
+    return refusal
+  }
+
   if (error instanceof Error && error.message) {
     return error.message
   }
 
   return fallback
+}
+
+/**
+ * A booking refused because the bus on the page changed reloads the rides and
+ * their reservations, so the screen shows the departures as they are now
+ * instead of the operator having to reload the page.
+ */
+function refreshAfterBookingRefusal(
+  queryClient: ReturnType<typeof useQueryClient>,
+  error: unknown
+): void {
+  if (bookingRefusalMessage(error)) {
+    void queryClient.invalidateQueries({ queryKey: ["rides"] })
+    void queryClient.invalidateQueries({ queryKey: ["reservations"] })
+  }
 }
 
 function invalidateReservations(
@@ -117,6 +140,7 @@ export function useCreateReservationMutation() {
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, "Neuspesno kreiranje rezervacije"))
+      refreshAfterBookingRefusal(queryClient, error)
     },
   })
 }
@@ -160,6 +184,7 @@ export function useCreateReservationsBatchMutation() {
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, "Neuspesno kreiranje rezervacija"))
+      refreshAfterBookingRefusal(queryClient, error)
     },
   })
 }

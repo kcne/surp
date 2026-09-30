@@ -490,6 +490,11 @@ export async function applyDuplicatePassengerMerge(
       // The buses these reservations are on, locked like any other write to
       // their seats (#27, PR 3b). A merge can span many departures; the lock
       // takes them in ID order, as every other writer does.
+      //
+      // The set is read before the lock, so a booking for a retired passenger
+      // that commits in between is repointed below on a bus this did not
+      // lock. That is safe: repointing changes who sits in a seat, never which
+      // seats are taken, so no seat count can be read wrong.
       const affected = await tx.reservation.findMany({
         where: { tenantId: group.tenantId, passengerId: { in: group.retiredPassengerIds } },
         select: { departureId: true }

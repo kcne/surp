@@ -132,11 +132,15 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
 
     // The checks read stored departures (#27, PR 3b), so the after-scan must
     // see the departures this write produces: a dropped bus, a moved time or
-    // a smaller capacity is only on the departure once the sync has run. The
-    // sync at the end of the edit runs again and finds nothing left to do.
-    if (scope.changesTimetable !== false) {
+    // a smaller capacity is only on the departure once the sync has run. This
+    // is the edit's sync; the transaction does not run another after it.
+    const syncs = scope.changesTimetable !== false;
+
+    if (syncs) {
       await syncDepartures(tx, scope);
     }
+
+    let repaired = false;
 
     let afterContext = invariantContext(tx, scope);
     let after = await checkInvariants(tx, scope, invariants, afterContext);
@@ -170,8 +174,9 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
 
         // The departures were synced before the after-scan, so a repair that
         // links a reservation matches it against the buses this write
-        // produces. The sync at the end still runs, and deletes a departure
-        // the repair moved every reservation off.
+        // produces. The sync after the loop deletes a departure the repair
+        // moved every reservation off.
+        repaired = true;
         await invariant.repair(
           // Nothing has written since the post-write scan, so its cached
           // window is still the state the repair must plan against.
@@ -207,8 +212,18 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
       throw breakingChange(invariant, added, token);
     }
 
+    // Only a repair writes after the sync above. Without one, a second sync
+    // would read the whole tenant again, with every booking waiting, to find
+    // nothing to do.
+    if (syncs && repaired) {
+      await syncDepartures(tx, scope);
+    }
+
     return result;
-  }, { departureSync: scope.changesTimetable !== false });
+  },
+  // A write with nothing to measure is synced by the transaction, like any
+  // other schedule edit; one with checks syncs itself, above.
+  { departureSync: scope.changesTimetable !== false && invariants.length === 0 });
 }
 
 function breakingChange(

@@ -75,6 +75,7 @@ describe('ReservationsService', () => {
 
     return {
       id,
+      source: 'SCHEDULE' as string,
       rideId,
       serviceDate: new Date(`${date}T00:00:00.000Z`),
       departureTime: time,
@@ -578,6 +579,54 @@ describe('ReservationsService', () => {
       expect(prismaMock.reservation.create).not.toHaveBeenCalled();
     });
 
+    it('refuses a LEGACY departure a request names, whatever its date', async () => {
+      withDeparture({ source: 'LEGACY', stops: [] });
+
+      await expect(book({ departureId })).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'DEPARTURE_NOT_RUNNING', message: expect.stringContaining('nije u redu voznje') }
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
+    it('row-locks a departure a request names only inside the tenant', async () => {
+      await book({ departureId });
+
+      const [strings, ids, scope] = prismaMock.$queryRaw.mock.calls[0];
+      expect(strings.join('?')).toContain('FOR UPDATE');
+      expect(ids).toEqual([departureId]);
+      expect(scope).toMatchObject({ values: ['tenant-1'] });
+    });
+
+    it('edits and moves a reservation on a LEGACY departure against its ride\'s line', async () => {
+      // A LEGACY departure stores no stops; its passengers were read against
+      // the line before PR 3b, and the checks still read them that way.
+      prismaMock.reservation.findFirst.mockResolvedValue(baseReservation);
+      prismaMock.reservation.update.mockResolvedValue(baseReservation);
+      prismaMock.departure.findFirst.mockImplementation(async ({ where }: { where: { id: string } }) => {
+        const departure = await departureFromRide(where.id);
+        return departure && { ...departure, source: 'LEGACY', stops: [] };
+      });
+
+      await expect(
+        service.update(auth, 'reservation-1', { arrivalStationId: 'station-b' })
+      ).resolves.toMatchObject({ id: 'reservation-1' });
+      await expect(service.moveSeat(auth, 'reservation-1', 16)).resolves.toBeDefined();
+      expect(prismaMock.ride.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'ride-1', tenantId: 'tenant-1' } })
+      );
+    });
+
+    it('never books onto a departure with no stored route', async () => {
+      withDeparture({ stops: [] });
+
+      await expect(book()).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'DEPARTURE_ROUTE_MISSING' }
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
     it('refuses a departure the tenant does not have, as one an edit deleted', async () => {
       prismaMock.departure.findFirst.mockResolvedValueOnce(null);
 
@@ -589,6 +638,9 @@ describe('ReservationsService', () => {
 
     it('refuses a date past the stored window with 400', async () => {
       await expect(book({ travelDate: '2099-01-05' })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(book({ travelDate: '2099-01-05' })).rejects.toMatchObject({
+        response: { code: 'TRAVEL_DATE_OUT_OF_WINDOW', message: expect.stringContaining('predaleko') }
+      });
       expect(prismaMock.departure.findMany).not.toHaveBeenCalled();
     });
 

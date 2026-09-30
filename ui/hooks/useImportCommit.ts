@@ -11,7 +11,10 @@ import { toCreatePassengerDto, toPassenger } from "@/infrastructure/mappers/pass
 import { toCreateReservationDto } from "@/infrastructure/mappers/reservationMappers"
 import { reservationsByRideInstanceQueryKey } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
 import { normalizeKey } from "@/lib/csv-import"
-import { scheduleBeingUpdatedMessage } from "@/infrastructure/utils/breaking-change"
+import {
+  bookingRefusalMessage,
+  scheduleBeingUpdatedMessage,
+} from "@/infrastructure/utils/breaking-change"
 import type {
   BatchReservationsResponseDto,
   PassengerResponseDto,
@@ -74,6 +77,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 function getErrorMessage(error: unknown, fallback: string): string {
   return (
     scheduleBeingUpdatedMessage(error) ??
+    bookingRefusalMessage(error) ??
     (error instanceof Error && error.message ? error.message : fallback)
   )
 }

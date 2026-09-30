@@ -217,7 +217,8 @@ describe('booking by departure (real database)', () => {
     far.setUTCDate(far.getUTCDate() + 400);
 
     await expect(book(1, { travelDate: far.toISOString().slice(0, 10) })).rejects.toMatchObject({
-      status: 400
+      status: 400,
+      response: { code: 'TRAVEL_DATE_OUT_OF_WINDOW' }
     });
   });
 });

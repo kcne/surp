@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { DepartureSource, Prisma } from '@prisma/client';
 import { formatDateOnly } from '../rides/ride-instance-materialization';
 import { decisionWindow } from './exception-departures';
 import { resolveDepartureLink } from './departure-link';
@@ -29,6 +29,7 @@ export interface BookingDepartureRequest {
 
 const DEPARTURE_SELECT = {
   id: true,
+  source: true,
   rideId: true,
   serviceDate: true,
   departureTime: true,
@@ -62,9 +63,10 @@ export async function resolveBookingDepartureId(
   const day = formatDateOnly(request.travelDate)!;
 
   if (day > window.to) {
-    throw new BadRequestException(
-      `Datum ${day} je predaleko. Rezervacija se moze napraviti najkasnije za ${window.to}.`
-    );
+    throw new BadRequestException({
+      code: 'TRAVEL_DATE_OUT_OF_WINDOW',
+      message: `Datum ${day} je predaleko. Rezervacija se moze napraviti najkasnije za ${window.to}.`
+    });
   }
 
   if (request.departureId) {
@@ -117,6 +119,10 @@ export async function loadBookingDeparture(
  * Refuses a request whose copies disagree with the departure, or a departure
  * that does not run. Both are 409: the request was valid when the page was
  * loaded, and the operator needs to look again.
+ *
+ * A `LEGACY` departure never takes a booking, whatever its date. It records a
+ * sale the timetable no longer produces, and a request can name one by
+ * `departureId` once `GET /departures` lists them (PR 3c).
  */
 export function assertBookable(departure: BookingDeparture, request: BookingDepartureRequest): void {
   const serviceDate = formatDateOnly(departure.serviceDate)!;
@@ -137,16 +143,23 @@ export function assertBookable(departure: BookingDeparture, request: BookingDepa
 }
 
 export function assertRunning(
-  departure: Pick<BookingDeparture, 'serviceDate' | 'departureTime' | 'cancelledAt' | 'timetableDroppedAt'>
+  departure: Pick<
+    BookingDeparture,
+    'source' | 'serviceDate' | 'departureTime' | 'cancelledAt' | 'timetableDroppedAt'
+  >
 ): void {
-  if (departure.cancelledAt || departure.timetableDroppedAt) {
+  const legacy = departure.source === DepartureSource.LEGACY;
+
+  if (legacy || departure.cancelledAt || departure.timetableDroppedAt) {
     const serviceDate = formatDateOnly(departure.serviceDate)!;
 
     throw new ConflictException({
       code: 'DEPARTURE_NOT_RUNNING',
-      message: departure.cancelledAt
-        ? `Polazak ${serviceDate} u ${departure.departureTime} je otkazan i ne prima rezervacije.`
-        : `Polazak ${serviceDate} u ${departure.departureTime} vise nije u redu voznje i ne prima rezervacije.`
+      message: legacy
+        ? `Polazak ${serviceDate} u ${departure.departureTime} nije u redu voznje i ne prima rezervacije.`
+        : departure.cancelledAt
+          ? `Polazak ${serviceDate} u ${departure.departureTime} je otkazan i ne prima rezervacije.`
+          : `Polazak ${serviceDate} u ${departure.departureTime} vise nije u redu voznje i ne prima rezervacije.`
     });
   }
 }

@@ -4100,7 +4100,7 @@
             }
           },
           "400": {
-            "description": "Validation failure, route path violation, or a travel date past the stored departure window."
+            "description": "Validation failure, route path violation, or TRAVEL_DATE_OUT_OF_WINDOW for a travel date past the stored departure window."
           },
           "401": {
             "description": "Missing or invalid access token."
@@ -4109,7 +4109,7 @@
             "description": "Insufficient role for this resource."
           },
           "409": {
-            "description": "Seat is already booked for overlapping route segment. DEPARTURE_NOT_FOUND when departureId names no departure of the tenant, or, without it, no single departure leaves at rideDepartureTime; DEPARTURE_CHANGED when the sent ride, date or times disagree with the departure, and DEPARTURE_NOT_RUNNING when it is cancelled or no longer in the timetable. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
+            "description": "Seat is already booked for overlapping route segment. DEPARTURE_NOT_FOUND when departureId names no departure of the tenant, or, without it, no single departure leaves at rideDepartureTime; DEPARTURE_CHANGED when the sent ride, date or times disagree with the departure, and DEPARTURE_NOT_RUNNING when it is cancelled, no longer in the timetable, or a LEGACY record. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -4271,7 +4271,7 @@
             }
           },
           "400": {
-            "description": "Validation failure, route path violation, or a travel date past the stored departure window."
+            "description": "Validation failure, route path violation, or TRAVEL_DATE_OUT_OF_WINDOW for a travel date past the stored departure window."
           },
           "401": {
             "description": "Missing or invalid access token."
@@ -9298,7 +9298,7 @@
           "departureId": {
             "type": "string",
             "example": "departure-id-123",
-            "description": "The departure to book. rideId, travelDate, rideDepartureTime and rideArrivalTime must agree with it, or the request is refused with 409 DEPARTURE_CHANGED. Without it the departure is the only one of the ride leaving at rideDepartureTime on travelDate. Either way, 409 DEPARTURE_NOT_FOUND when there is no such departure. A departure that is cancelled or no longer in the timetable is refused with 409 DEPARTURE_NOT_RUNNING, and a date past the stored window with 400."
+            "description": "The departure to book. rideId, travelDate, rideDepartureTime and rideArrivalTime must agree with it, or the request is refused with 409 DEPARTURE_CHANGED. Without it the departure is the only one of the ride leaving at rideDepartureTime on travelDate. Either way, 409 DEPARTURE_NOT_FOUND when there is no such departure. A departure that is cancelled or no longer in the timetable, or a LEGACY departure, is refused with 409 DEPARTURE_NOT_RUNNING, and a date past the stored window with 400 TRAVEL_DATE_OUT_OF_WINDOW."
           },
           "rideId": {
             "type": "string",
@@ -9549,7 +9549,7 @@
           "departureId": {
             "type": "string",
             "example": "departure-id-123",
-            "description": "The departure to book. rideId, travelDate, rideDepartureTime and rideArrivalTime must agree with it, or the request is refused with 409 DEPARTURE_CHANGED. Without it the departure is the only one of the ride leaving at rideDepartureTime on travelDate. Either way, 409 DEPARTURE_NOT_FOUND when there is no such departure. A departure that is cancelled or no longer in the timetable is refused with 409 DEPARTURE_NOT_RUNNING, and a date past the stored window with 400."
+            "description": "The departure to book. rideId, travelDate, rideDepartureTime and rideArrivalTime must agree with it, or the request is refused with 409 DEPARTURE_CHANGED. Without it the departure is the only one of the ride leaving at rideDepartureTime on travelDate. Either way, 409 DEPARTURE_NOT_FOUND when there is no such departure. A departure that is cancelled or no longer in the timetable, or a LEGACY departure, is refused with 409 DEPARTURE_NOT_RUNNING, and a date past the stored window with 400 TRAVEL_DATE_OUT_OF_WINDOW."
           },
           "rideId": {
             "type": "string",

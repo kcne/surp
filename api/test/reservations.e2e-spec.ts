@@ -507,6 +507,67 @@ describe('ReservationsController (e2e)', () => {
     expect(prismaMock.reservation.create).not.toHaveBeenCalled();
   });
 
+  describe('refusing a booking the page no longer describes (#27, PR 3b)', () => {
+    const booking = {
+      departureId: 'dep:ride-1:2026-03-30:09:00',
+      rideId: 'ride-1',
+      passengerId: 'passenger-1',
+      travelDate: '2026-03-30',
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:30',
+      seatNumber: 5,
+      departureStationId: 'station-a',
+      arrivalStationId: 'station-c'
+    };
+    const post = (body: Record<string, unknown>) =>
+      request(app.getHttpServer())
+        .post('/reservations')
+        .set('X-Tenant-Slug', 'demo-tenant')
+        .set('Authorization', 'Bearer access-token-admin')
+        .send(body);
+
+    it('answers 409 DEPARTURE_CHANGED when the page shows another arrival time', async () => {
+      const response = await post({ ...booking, rideArrivalTime: '10:45' }).expect(409);
+
+      expect(response.body).toMatchObject({
+        code: 'DEPARTURE_CHANGED',
+        message: expect.stringContaining('Osvezite stranicu')
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['cancelled', { cancelledAt: new Date() }, 'je otkazan'],
+      ['a LEGACY record', { source: 'LEGACY' }, 'nije u redu voznje']
+    ])('answers 409 DEPARTURE_NOT_RUNNING for a departure that is %s', async (_state, overrides, sentence) => {
+      prismaMock.departure.findFirst.mockImplementationOnce(async ({ where }: { where: { id: string } }) => ({
+        ...(await departureFromRide(where.id)),
+        ...overrides
+      }));
+
+      const response = await post(booking).expect(409);
+
+      expect(response.body).toMatchObject({
+        code: 'DEPARTURE_NOT_RUNNING',
+        message: expect.stringContaining(sentence)
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
+    it('answers 400 TRAVEL_DATE_OUT_OF_WINDOW for a date past the stored window', async () => {
+      const response = await post({
+        ...booking,
+        departureId: undefined,
+        travelDate: '2099-01-05'
+      }).expect(400);
+
+      expect(response.body).toMatchObject({
+        code: 'TRAVEL_DATE_OUT_OF_WINDOW',
+        message: expect.stringContaining('predaleko')
+      });
+    });
+  });
+
   it('fails when departure or arrival path is invalid', async () => {
     const response = await request(app.getHttpServer())
       .post('/reservations')

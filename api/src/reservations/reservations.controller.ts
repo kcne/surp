@@ -58,11 +58,11 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Create a single reservation in the current tenant.' })
   @ApiOkResponse({ type: ReservationResponseDto })
   @ApiBadRequestResponse({
-    description: 'Validation failure, route path violation, or a travel date past the stored departure window.'
+    description: 'Validation failure, route path violation, or TRAVEL_DATE_OUT_OF_WINDOW for a travel date past the stored departure window.'
   })
   @ApiConflictResponse({
     description:
-      'Seat is already booked for overlapping route segment. DEPARTURE_NOT_FOUND when departureId names no departure of the tenant, or, without it, no single departure leaves at rideDepartureTime; DEPARTURE_CHANGED when the sent ride, date or times disagree with the departure, and DEPARTURE_NOT_RUNNING when it is cancelled or no longer in the timetable. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
+      'Seat is already booked for overlapping route segment. DEPARTURE_NOT_FOUND when departureId names no departure of the tenant, or, without it, no single departure leaves at rideDepartureTime; DEPARTURE_CHANGED when the sent ride, date or times disagree with the departure, and DEPARTURE_NOT_RUNNING when it is cancelled, no longer in the timetable, or a LEGACY record. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
   })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
@@ -79,7 +79,7 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Create multiple reservations in the current tenant.' })
   @ApiOkResponse({ type: BatchReservationsResponseDto })
   @ApiBadRequestResponse({
-    description: 'Validation failure, route path violation, or a travel date past the stored departure window.'
+    description: 'Validation failure, route path violation, or TRAVEL_DATE_OUT_OF_WINDOW for a travel date past the stored departure window.'
   })
   @ApiConflictResponse({
     description:
