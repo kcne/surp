@@ -96,6 +96,31 @@ describe('OpenAPI contract', () => {
     expect(tenantHeader).toBeUndefined();
   });
 
+  it('documents the departure reads with bearer auth, the tenant header and their errors', () => {
+    const list = document.paths['/departures']?.get;
+    const detail = document.paths['/departures/{id}']?.get;
+
+    for (const operation of [list, detail]) {
+      expect(operation?.security?.some((entry) => 'access-token' in entry)).toBe(true);
+      expect(
+        operation?.parameters?.some(
+          (parameter) =>
+            '$ref' in parameter === false &&
+            parameter.in === 'header' &&
+            parameter.name.toLowerCase() === 'x-tenant-slug' &&
+            parameter.required === true
+        )
+      ).toBe(true);
+    }
+
+    const query = (list?.parameters ?? []).flatMap((parameter) =>
+      '$ref' in parameter === false && parameter.in === 'query' ? [[parameter.name, parameter.required]] : []
+    );
+    expect(Object.fromEntries(query)).toEqual({ from: true, to: true, rideId: false, lineId: false });
+    expect(list?.responses['400']).toBeDefined();
+    expect(detail?.responses['404']).toBeDefined();
+  });
+
   it('keeps platform tenant login options endpoint public', () => {
     const publicTenantOptions = document.paths['/platform/tenants/public']?.get;
 
