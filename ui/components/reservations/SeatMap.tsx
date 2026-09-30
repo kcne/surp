@@ -12,7 +12,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core"
-import { ArrowDown, ArrowUp, MapPin, Phone, Search, X } from "lucide-react"
+import { Armchair, ArrowDown, ArrowUp, MapPin, Phone, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -141,6 +141,7 @@ function Seat({
           displayStatus === "selected" && "text-blue-900",
         )}
       >
+        <Armchair className="h-3 w-3 shrink-0" aria-hidden="true" />
         <span>#{seat.seatNumber}</span>
         {groupLabel && (
           <span
@@ -496,6 +497,7 @@ export function SeatMap({
           {activeSeat?.reservation ? (
             <div className="flex h-[5.5rem] w-32 flex-col rounded-lg border-2 border-primary bg-primary/20 p-1.5 text-left text-foreground shadow-lg">
               <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-blue-900">
+                <Armchair className="h-3 w-3 shrink-0" aria-hidden="true" />
                 #{activeSeat.seatNumber}
               </span>
               <span className="mt-0.5 line-clamp-2 text-[11px] font-semibold leading-tight text-blue-900">
