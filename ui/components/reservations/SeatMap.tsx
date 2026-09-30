@@ -121,7 +121,7 @@ function Seat({
         departureStationName ? `, polazna stanica ${departureStationName}` : ""
       }`}
       className={cn(
-        "relative flex h-[5.5rem] w-28 cursor-pointer select-none flex-col rounded-lg border-2 p-1.5 text-left text-foreground transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+        "relative flex h-[5.5rem] w-32 cursor-pointer select-none flex-col rounded-lg border-2 p-1.5 text-left text-foreground transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
         getSeatClasses(displayStatus, true),
         highlight === "match" && "ring-2 ring-amber-400 ring-offset-1",
         highlight === "current" && "ring-4 ring-amber-500 ring-offset-2 shadow-lg",
@@ -317,7 +317,7 @@ export function SeatMap({
   }
 
   const renderSeat = (seat: SeatInfo | null) => {
-    if (!seat) return <div className="h-[5.5rem] w-28" />
+    if (!seat) return <div className="h-[5.5rem] w-32" />
     const isSelected = selectedSeats.includes(seat.seatNumber) || !!seat.isSelected
     const highlight: "match" | "current" | null =
       seat.seatNumber === currentMatchSeatNumber
@@ -494,7 +494,7 @@ export function SeatMap({
 
         <DragOverlay dropAnimation={null}>
           {activeSeat?.reservation ? (
-            <div className="flex h-[5.5rem] w-28 flex-col rounded-lg border-2 border-primary bg-primary/20 p-1.5 text-left text-foreground shadow-lg">
+            <div className="flex h-[5.5rem] w-32 flex-col rounded-lg border-2 border-primary bg-primary/20 p-1.5 text-left text-foreground shadow-lg">
               <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-blue-900">
                 #{activeSeat.seatNumber}
               </span>
