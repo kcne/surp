@@ -89,3 +89,38 @@ export function scheduleBeingUpdatedMessage(error: unknown): string | null {
     ? data.message
     : null
 }
+
+/**
+ * Refusals of a booking or reservation edit that carry a code and a Serbian
+ * sentence for the operator: the bus on the page moved, stopped running or is
+ * gone, the date is too far ahead, or the reservation is not tied to its bus.
+ */
+const BOOKING_REFUSAL_CODES = new Set([
+  "DEPARTURE_NOT_FOUND",
+  "DEPARTURE_CHANGED",
+  "DEPARTURE_NOT_RUNNING",
+  "DEPARTURE_ROUTE_MISSING",
+  "RESERVATION_NOT_LINKED",
+  "TRAVEL_DATE_OUT_OF_WINDOW",
+])
+
+/**
+ * The server's own sentence for a booking refusal, or null for anything else.
+ * These say what to do next, so they are shown as sent rather than replaced
+ * by a generic failure.
+ */
+export function bookingRefusalMessage(error: unknown): string | null {
+  const response = (error as { response?: { status?: number; data?: unknown } })?.response
+
+  if (response?.status !== 409 && response?.status !== 400) {
+    return null
+  }
+
+  const data = response.data as { code?: unknown; message?: unknown } | undefined
+
+  return typeof data?.code === "string" &&
+    BOOKING_REFUSAL_CODES.has(data.code) &&
+    typeof data.message === "string"
+    ? data.message
+    : null
+}

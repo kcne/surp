@@ -7,7 +7,17 @@ import type {
 } from "@/types"
 import type { UseFormReturn } from "react-hook-form"
 import { buildReturnRequests } from "@/utils/reservationReturnHelpers"
+import axios from "axios"
 import { toast } from "sonner"
+
+/**
+ * A request the server refused has already been reported by its mutation, in
+ * the server's own words. Toasting it again here would show axios's English
+ * "Request failed with status code 409" beside it.
+ */
+function reportedByMutation(error: unknown): boolean {
+  return axios.isAxiosError(error)
+}
 
 interface UseReservationSubmissionParams {
   form: UseFormReturn<ReservationFormData>
@@ -181,7 +191,7 @@ export function useReservationSubmission({
 
       closeReservationModal()
     } catch (error) {
-      if (error instanceof Error) {
+      if (error instanceof Error && !reportedByMutation(error)) {
         toast.error(error.message)
       }
     }
@@ -216,7 +226,9 @@ export function useReservationSubmission({
       clearSelectedSeats()
       onComplete?.()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Greška pri kreiranju rezervacija")
+      if (!reportedByMutation(error)) {
+        toast.error(error instanceof Error ? error.message : "Greška pri kreiranju rezervacija")
+      }
     }
   }
 

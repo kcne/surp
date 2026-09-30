@@ -9,13 +9,16 @@ const reservationFindMany = jest.fn();
 const reservationUpdateMany = jest.fn();
 const passengerUpdateMany = jest.fn();
 const passengerUpdate = jest.fn();
+const txReservationFindMany = jest.fn().mockResolvedValue([]);
+const txQueryRaw = jest.fn().mockResolvedValue([]);
 const prismaMock = {
   passenger: { findMany },
   reservation: { findMany: reservationFindMany },
   $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
     callback({
       $executeRaw: jest.fn().mockResolvedValue(1),
-      reservation: { updateMany: reservationUpdateMany },
+      $queryRaw: txQueryRaw,
+      reservation: { findMany: txReservationFindMany, updateMany: reservationUpdateMany },
       passenger: { updateMany: passengerUpdateMany, update: passengerUpdate }
     })
   )
@@ -371,10 +374,20 @@ describe('duplicate passenger merge', () => {
       passenger({ id: 'dupe', reservations: 2, email: 'putnik@example.com' })
     ]);
     reservationUpdateMany.mockResolvedValue({ count: 2 });
+    txReservationFindMany.mockResolvedValueOnce([
+      { departureId: 'dep-b' },
+      { departureId: 'dep-a' },
+      { departureId: 'dep-b' }
+    ]);
 
     const result = await applyDuplicatePassengerMerge(prisma, 'admin-1');
 
     expect(result).toEqual({ mergedHumans: 1, retiredPassengers: 1, repointedReservations: 2 });
+    // The buses are row-locked in ID order before their reservations move.
+    expect(txQueryRaw.mock.calls[0][1]).toEqual(['dep-a', 'dep-b']);
+    expect(txQueryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      reservationUpdateMany.mock.invocationCallOrder[0]
+    );
     expect(reservationUpdateMany.mock.calls[0][0]).toMatchObject({
       where: { tenantId: 'tenant-1', passengerId: { in: ['dupe'] } },
       data: { passengerId: 'keep', updatedById: 'admin-1' }

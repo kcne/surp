@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { syncDepartures } from '../departures/departure-sync';
 import { PrismaService } from '../prisma/prisma.service';
 import { scheduleEditTransaction } from '../prisma/schedule-lock';
+import { reservationDepartureTimeKept } from './checks/departure-time-kept';
 import { instanceNotOverbooked } from './checks/instance-not-overbooked';
 import { reservationPassengerActive } from './checks/passenger-active';
 import { reservationReachable } from './checks/reservation-reachable';
@@ -32,6 +33,11 @@ const PROSPECTIVE_WINDOW_DAYS = 3650;
 
 export const PROSPECTIVE_INVARIANTS = {
   lineUpdate: [
+    // First, ahead of any repair: a reachable repair links a reservation that
+    // had no departure, and judged after it, that row would look like a
+    // passenger whose bus the edit moved. A stop added at the head of the
+    // line moves every departure's time.
+    reservationDepartureTimeKept,
     reservationReachable,
     reservationStationsOnRoute,
     reservationSegmentValid,
@@ -40,6 +46,8 @@ export const PROSPECTIVE_INVARIANTS = {
     rideLineActive
   ],
   rideUpdate: [
+    // First, for the same reason as on a line update.
+    reservationDepartureTimeKept,
     reservationReachable,
     reservationSeatWithinCapacity,
     instanceNotOverbooked,
@@ -121,6 +129,19 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
 
     const before = await checkInvariants(tx, scope, invariants);
     const result = await write(tx, prepared);
+
+    // The checks read stored departures (#27, PR 3b), so the after-scan must
+    // see the departures this write produces: a dropped bus, a moved time or
+    // a smaller capacity is only on the departure once the sync has run. This
+    // is the edit's sync; the transaction does not run another after it.
+    const syncs = scope.changesTimetable !== false;
+
+    if (syncs) {
+      await syncDepartures(tx, scope);
+    }
+
+    let repaired = false;
+
     let afterContext = invariantContext(tx, scope);
     let after = await checkInvariants(tx, scope, invariants, afterContext);
 
@@ -151,16 +172,11 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
 
         const shown = added;
 
-        // The edit syncs departures only once its work is done, and a repair
-        // that links a reservation to its departure must see the departures
-        // this write produces: matched against the old times, a reservation
-        // moved to its bus's new time would find no bus and lose its link.
-        // The sync at the end still runs, and deletes a departure the repair
+        // The departures were synced before the after-scan, so a repair that
+        // links a reservation matches it against the buses this write
+        // produces. The sync after the loop deletes a departure the repair
         // moved every reservation off.
-        if (scope.changesTimetable !== false) {
-          await syncDepartures(tx, scope);
-        }
-
+        repaired = true;
         await invariant.repair(
           // Nothing has written since the post-write scan, so its cached
           // window is still the state the repair must plan against.
@@ -196,8 +212,18 @@ export async function guardProspectiveWrite<TResult, TPrepared = void>(
       throw breakingChange(invariant, added, token);
     }
 
+    // Only a repair writes after the sync above. Without one, a second sync
+    // would read the whole tenant again, with every booking waiting, to find
+    // nothing to do.
+    if (syncs && repaired) {
+      await syncDepartures(tx, scope);
+    }
+
     return result;
-  }, { departureSync: scope.changesTimetable !== false });
+  },
+  // A write with nothing to measure is synced by the transaction, like any
+  // other schedule edit; one with checks syncs itself, above.
+  { departureSync: scope.changesTimetable !== false && invariants.length === 0 });
 }
 
 function breakingChange(

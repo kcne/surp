@@ -1,6 +1,7 @@
 import {
   ORPHAN_REASON_ADVICE,
   ORPHAN_REASON_LABELS,
+  classifyLinkedReservation,
   classifyReservation,
   findOffRouteStationIds,
   resolveSeatNumber,
@@ -157,6 +158,51 @@ describe('classifyReservation', () => {
   });
 });
 
+describe('classifyLinkedReservation (#27, PR 3b)', () => {
+  const running = { source: 'SCHEDULE' as const, cancelledAt: null, timetableDroppedAt: null };
+
+  it('is reachable while its departure runs, whatever the timetable says of its time', () => {
+    // The timetable moved the day to 08:00; the bus the passenger is on is
+    // the one the sync moved with it.
+    expect(
+      classifyLinkedReservation(running, day({ instances: [instance('08:00', '23:15')] }))
+    ).toBeNull();
+  });
+
+  it('names a cancelled departure, and offers no time to move to', () => {
+    expect(classifyLinkedReservation({ ...running, cancelledAt: new Date() }, day())).toEqual({
+      reason: 'DEPARTURE_CANCELLED',
+      targetDepartureTime: null,
+      targetArrivalTime: null
+    });
+  });
+
+  it('names why the timetable dropped the departure', () => {
+    const dropped = { ...running, timetableDroppedAt: new Date() };
+
+    expect(
+      classifyLinkedReservation(
+        dropped,
+        emptyDay({ baseInstance: { runs: false, gap: 'WEEKDAY_NOT_SCHEDULED' } })
+      )?.reason
+    ).toBe('WEEKDAY_NOT_SCHEDULED');
+    expect(classifyLinkedReservation(dropped, emptyDay({ rideIsActive: false }))?.reason).toBe(
+      'RIDE_NOT_ACTIVE'
+    );
+    // The ride runs that day, so what dropped it is not the schedule.
+    expect(classifyLinkedReservation(dropped, day())?.reason).toBe('DEPARTURE_DROPPED');
+  });
+
+  it('does not blame the weekly schedule for a dropped extra bus', () => {
+    expect(
+      classifyLinkedReservation(
+        { source: 'EXTRA', cancelledAt: null, timetableDroppedAt: new Date() },
+        emptyDay({ baseInstance: { runs: false, gap: 'WEEKDAY_NOT_SCHEDULED' } })
+      )?.reason
+    ).toBe('DEPARTURE_DROPPED');
+  });
+});
+
 describe('orphan reason texts', () => {
   const reasons: OrphanReason[] = [
     'DEPARTURE_TIME_MOVED',
@@ -166,7 +212,9 @@ describe('orphan reason texts', () => {
     'WEEKDAY_NOT_SCHEDULED',
     'SCHEDULE_TIME_MISSING',
     'SKIPPED_BY_EXCEPTION',
-    'EXTRA_DEPARTURE_REMOVED'
+    'EXTRA_DEPARTURE_REMOVED',
+    'DEPARTURE_CANCELLED',
+    'DEPARTURE_DROPPED'
   ];
 
   // A reason nobody wrote a sentence for is a row in the report that names a

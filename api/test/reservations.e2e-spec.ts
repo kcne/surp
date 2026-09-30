@@ -10,6 +10,7 @@ type ReservationStoreItem = {
   id: string;
   tenantId: string;
   rideId: string;
+  departureId: string | null;
   passengerId: string;
   createdById: string | null;
   updatedById: string | null;
@@ -55,6 +56,7 @@ describe('ReservationsController (e2e)', () => {
     id: 'reservation-1',
     tenantId: 'tenant-1',
     rideId: 'ride-1',
+    departureId: 'dep:ride-1:2026-03-30:09:00' as string | null,
     passengerId: 'passenger-1',
     createdById: 'admin-1',
     updatedById: 'admin-1',
@@ -97,8 +99,10 @@ describe('ReservationsController (e2e)', () => {
     onModuleDestroy: jest.fn(),
     enableShutdownHooks: jest.fn(),
     isHealthy: jest.fn(),
+    $queryRaw: jest.fn().mockResolvedValue([]),
     tenant: {
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: 'Europe/Belgrade' })
     },
     reservation: {
       create: jest.fn(),
@@ -113,10 +117,67 @@ describe('ReservationsController (e2e)', () => {
     passenger: {
       findFirst: jest.fn()
     },
-    // No stored departures: bookings go ahead unlinked, as they did before.
+    // One departure per ride, date and time, shaped by the ride mock and
+    // arriving 90 minutes after it leaves (#27, PR 3b).
     departure: {
-      findMany: jest.fn().mockResolvedValue([])
+      findMany: jest.fn(),
+      findFirst: jest.fn()
     }
+  };
+
+  const departureIdOf = (rideId: string, travelDate: Date, time: string): string =>
+    `dep:${rideId}:${travelDate.toISOString().slice(0, 10)}:${time}`;
+
+  const arrivalOf = (time: string): string => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const total = hours * 60 + minutes + 90;
+    return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  };
+
+  const departureFromRide = async (id: string) => {
+    const [, rideId, date, hours, minutes] = id.split(':');
+    const ride = await prismaMock.ride.findFirst({ where: { id: rideId, tenantId: 'tenant-1' } });
+
+    if (!ride) {
+      return null;
+    }
+
+    const { line, capacity } = ride as {
+      capacity: number;
+      line: {
+        isActive: boolean;
+        departureStationId: string;
+        arrivalStationId: string;
+        intermediateStops: Array<{ stationId: string; isBoarding: boolean; isDropoff: boolean }>;
+      };
+    };
+
+    return {
+      id,
+      rideId,
+      serviceDate: new Date(`${date}T00:00:00.000Z`),
+      departureTime: `${hours}:${minutes}`,
+      arrivalTime: arrivalOf(`${hours}:${minutes}`),
+      capacity,
+      cancelledAt: null,
+      timetableDroppedAt: null,
+      line: { isActive: line.isActive },
+      stops: [
+        { stationId: line.departureStationId, orderIndex: 0, isBoarding: true, isDropoff: false },
+        ...line.intermediateStops.map((stop, index) => ({
+          stationId: stop.stationId,
+          orderIndex: index + 1,
+          isBoarding: stop.isBoarding,
+          isDropoff: stop.isDropoff
+        })),
+        {
+          stationId: line.arrivalStationId,
+          orderIndex: line.intermediateStops.length + 1,
+          isBoarding: false,
+          isDropoff: true
+        }
+      ]
+    };
   };
 
   const jwtServiceMock = {
@@ -131,6 +192,16 @@ describe('ReservationsController (e2e)', () => {
     rideCapacity = 38;
 
     prismaMock.$executeRaw.mockResolvedValue(1);
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.tenant.findUniqueOrThrow.mockResolvedValue({ timezone: 'Europe/Belgrade' });
+    prismaMock.departure.findMany.mockImplementation(
+      async ({ where }: { where: { rideId: string; serviceDate: Date; departureTime: string } }) => [
+        { id: departureIdOf(where.rideId, where.serviceDate, where.departureTime) }
+      ]
+    );
+    prismaMock.departure.findFirst.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      departureFromRide(where.id)
+    );
 
     prismaMock.$transaction.mockImplementation(async (input: unknown) => {
       if (typeof input === 'function') {
@@ -229,6 +300,13 @@ describe('ReservationsController (e2e)', () => {
             return false;
           }
 
+          if (
+            where.departureId &&
+            departureIdOf(item.rideId, item.travelDate, item.rideDepartureTime) !== where.departureId
+          ) {
+            return false;
+          }
+
           if (where.rideDepartureTime && item.rideDepartureTime !== where.rideDepartureTime) {
             return false;
           }
@@ -269,6 +347,7 @@ describe('ReservationsController (e2e)', () => {
         seatNumber: data.seatNumber as number,
         departureStationId: data.departureStationId as string,
         arrivalStationId: data.arrivalStationId as string,
+        departureId: data.departureId as string,
         travelDate: data.travelDate as Date,
         rideDepartureTime: data.rideDepartureTime as string,
         rideArrivalTime: data.rideArrivalTime as string,
@@ -378,6 +457,115 @@ describe('ReservationsController (e2e)', () => {
       .expect(409);
 
     expect(response.body.message).toBe('Seat is already booked for this route segment');
+  });
+
+  it('books the departure a request names and returns its departureId', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/reservations')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        departureId: 'dep:ride-1:2026-03-30:09:00',
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 5,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-c'
+      })
+      .expect(201);
+
+    expect(response.body.departureId).toBe('dep:ride-1:2026-03-30:09:00');
+    expect(prismaMock.departure.findMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses an old tab whose time no departure leaves at, with a code and a Serbian message', async () => {
+    prismaMock.departure.findMany.mockResolvedValueOnce([]);
+
+    const response = await request(app.getHttpServer())
+      .post('/reservations')
+      .set('X-Tenant-Slug', 'demo-tenant')
+      .set('Authorization', 'Bearer access-token-admin')
+      .send({
+        rideId: 'ride-1',
+        passengerId: 'passenger-1',
+        travelDate: '2026-03-30',
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 5,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-c'
+      })
+      .expect(409);
+
+    expect(response.body).toEqual({
+      code: 'DEPARTURE_NOT_FOUND',
+      message: 'Voznja 2026-03-30 nema polazak u 09:00. Osvezite stranicu i izaberite polazak ponovo.'
+    });
+    expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+  });
+
+  describe('refusing a booking the page no longer describes (#27, PR 3b)', () => {
+    const booking = {
+      departureId: 'dep:ride-1:2026-03-30:09:00',
+      rideId: 'ride-1',
+      passengerId: 'passenger-1',
+      travelDate: '2026-03-30',
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:30',
+      seatNumber: 5,
+      departureStationId: 'station-a',
+      arrivalStationId: 'station-c'
+    };
+    const post = (body: Record<string, unknown>) =>
+      request(app.getHttpServer())
+        .post('/reservations')
+        .set('X-Tenant-Slug', 'demo-tenant')
+        .set('Authorization', 'Bearer access-token-admin')
+        .send(body);
+
+    it('answers 409 DEPARTURE_CHANGED when the page shows another arrival time', async () => {
+      const response = await post({ ...booking, rideArrivalTime: '10:45' }).expect(409);
+
+      expect(response.body).toMatchObject({
+        code: 'DEPARTURE_CHANGED',
+        message: expect.stringContaining('Osvezite stranicu')
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['cancelled', { cancelledAt: new Date() }, 'je otkazan'],
+      ['a LEGACY record', { source: 'LEGACY' }, 'nije u redu voznje']
+    ])('answers 409 DEPARTURE_NOT_RUNNING for a departure that is %s', async (_state, overrides, sentence) => {
+      prismaMock.departure.findFirst.mockImplementationOnce(async ({ where }: { where: { id: string } }) => ({
+        ...(await departureFromRide(where.id)),
+        ...overrides
+      }));
+
+      const response = await post(booking).expect(409);
+
+      expect(response.body).toMatchObject({
+        code: 'DEPARTURE_NOT_RUNNING',
+        message: expect.stringContaining(sentence)
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
+    it('answers 400 TRAVEL_DATE_OUT_OF_WINDOW for a date past the stored window', async () => {
+      const response = await post({
+        ...booking,
+        departureId: undefined,
+        travelDate: '2099-01-05'
+      }).expect(400);
+
+      expect(response.body).toMatchObject({
+        code: 'TRAVEL_DATE_OUT_OF_WINDOW',
+        message: expect.stringContaining('predaleko')
+      });
+    });
   });
 
   it('fails when departure or arrival path is invalid', async () => {

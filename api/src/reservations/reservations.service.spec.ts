@@ -15,6 +15,7 @@ describe('ReservationsService', () => {
     status: ReservationStatus;
     departureStationId: string;
     arrivalStationId: string;
+    departureId?: string | null;
   }>;
 
   let transactionQueue: Promise<void>;
@@ -22,6 +23,10 @@ describe('ReservationsService', () => {
   const prismaMock = {
     $transaction: jest.fn(),
     $executeRaw: jest.fn(),
+    $queryRaw: jest.fn(),
+    tenant: {
+      findUniqueOrThrow: jest.fn()
+    },
     reservation: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -38,8 +43,63 @@ describe('ReservationsService', () => {
       findFirst: jest.fn()
     },
     departure: {
-      findMany: jest.fn()
+      findMany: jest.fn(),
+      findFirst: jest.fn()
     }
+  };
+
+  /**
+   * Departures are derived from the ride mock, so a test that shapes the ride
+   * (its line, capacity, active flag) shapes the bus it books on. One per
+   * ride, date and time, arriving 90 minutes after it leaves.
+   */
+  const departureIdOf = (rideId: string, travelDate: Date | string, time: string): string =>
+    `dep:${rideId}:${typeof travelDate === 'string' ? travelDate : travelDate.toISOString().slice(0, 10)}:${time}`;
+
+  const arrivalOf = (time: string): string => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const total = hours * 60 + minutes + 90;
+    return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  };
+
+  const departureFromRide = async (id: string) => {
+    const [, rideId, date, hours, minutes] = id.split(':');
+    const time = `${hours}:${minutes}`;
+    const ride = await prismaMock.ride.findFirst({ where: { id: rideId, tenantId: 'tenant-1' } });
+
+    if (!ride) {
+      return null;
+    }
+
+    const { line } = ride as typeof routeRide & { capacity: number };
+
+    return {
+      id,
+      source: 'SCHEDULE' as string,
+      rideId,
+      serviceDate: new Date(`${date}T00:00:00.000Z`),
+      departureTime: time,
+      arrivalTime: arrivalOf(time),
+      capacity: (ride as { capacity: number }).capacity,
+      cancelledAt: null as Date | null,
+      timetableDroppedAt: null as Date | null,
+      line: { isActive: line.isActive },
+      stops: [
+        { stationId: line.departureStationId, orderIndex: 0, isBoarding: true, isDropoff: false },
+        ...line.intermediateStops.map((stop, index) => ({
+          stationId: stop.stationId,
+          orderIndex: index + 1,
+          isBoarding: stop.isBoarding,
+          isDropoff: stop.isDropoff
+        })),
+        {
+          stationId: line.arrivalStationId,
+          orderIndex: line.intermediateStops.length + 1,
+          isBoarding: false,
+          isDropoff: true
+        }
+      ]
+    };
   };
 
   const auth = {
@@ -66,6 +126,7 @@ describe('ReservationsService', () => {
     id: 'reservation-1',
     tenantId: 'tenant-1',
     rideId: 'ride-1',
+    departureId: 'dep:ride-1:2026-03-30:09:00',
     passengerId: 'passenger-1',
     createdById: 'admin-1',
     updatedById: 'admin-1',
@@ -114,7 +175,16 @@ describe('ReservationsService', () => {
     service = new ReservationsService(prismaMock as never);
 
     prismaMock.$executeRaw.mockResolvedValue(1);
-    prismaMock.departure.findMany.mockResolvedValue([]);
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.tenant.findUniqueOrThrow.mockResolvedValue({ timezone: 'Europe/Belgrade' });
+    prismaMock.departure.findMany.mockImplementation(
+      async ({ where }: { where: { rideId: string; serviceDate: Date; departureTime: string } }) => [
+        { id: departureIdOf(where.rideId, where.serviceDate, where.departureTime) }
+      ]
+    );
+    prismaMock.departure.findFirst.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      departureFromRide(where.id)
+    );
 
     prismaMock.$transaction.mockImplementation(async (input: unknown) => {
       if (typeof input === 'function') {
@@ -152,6 +222,15 @@ describe('ReservationsService', () => {
             }
 
             if (where.rideId && item.rideId !== where.rideId) {
+              return false;
+            }
+
+            if (
+              where.departureId &&
+              (item.departureId ??
+                departureIdOf(item.rideId, item.travelDate, item.rideDepartureTime)) !==
+                where.departureId
+            ) {
               return false;
             }
 
@@ -207,6 +286,8 @@ describe('ReservationsService', () => {
           seatNumber: data.seatNumber as number,
           departureStationId: data.departureStationId as string,
           arrivalStationId: data.arrivalStationId as string,
+          rideId: data.rideId as string,
+          departureId: data.departureId as string,
           travelDate: data.travelDate as Date,
           rideDepartureTime: data.rideDepartureTime as string,
           rideArrivalTime: data.rideArrivalTime as string,
@@ -230,7 +311,8 @@ describe('ReservationsService', () => {
           seatNumber: created.seatNumber,
           status: created.status,
           departureStationId: created.departureStationId,
-          arrivalStationId: created.arrivalStationId
+          arrivalStationId: created.arrivalStationId,
+          departureId: created.departureId
         });
 
         return created;
@@ -393,23 +475,28 @@ describe('ReservationsService', () => {
     expect(result.groupId).toEqual(expect.any(String));
   });
 
-  describe('departure link', () => {
-    const book = () =>
-      service.create(auth, {
-        rideId: 'ride-1',
-        passengerId: 'passenger-1',
-        travelDate: '2026-03-30',
-        rideDepartureTime: '09:00',
-        rideArrivalTime: '10:30',
-        seatNumber: 21,
-        departureStationId: 'station-a',
-        arrivalStationId: 'station-d'
+  describe('booking a departure (#27, PR 3b)', () => {
+    const request = {
+      rideId: 'ride-1',
+      passengerId: 'passenger-1',
+      travelDate: '2026-03-30',
+      rideDepartureTime: '09:00',
+      rideArrivalTime: '10:30',
+      seatNumber: 21,
+      departureStationId: 'station-a',
+      arrivalStationId: 'station-d'
+    };
+    const departureId = 'dep:ride-1:2026-03-30:09:00';
+    const book = (overrides: Record<string, unknown> = {}) =>
+      service.create(auth, { ...request, ...overrides });
+    const withDeparture = (overrides: Record<string, unknown>) =>
+      prismaMock.departure.findFirst.mockImplementationOnce(async ({ where }: { where: { id: string } }) => {
+        const departure = await departureFromRide(where.id);
+        return departure && { ...departure, ...overrides };
       });
 
-    it('stamps the only departure that matches the ride, date and time', async () => {
-      prismaMock.departure.findMany.mockResolvedValue([{ id: 'departure-1' }]);
-
-      await book();
+    it('books an old tab onto the only departure leaving at its time, and returns the link', async () => {
+      const result = await book();
 
       expect(prismaMock.departure.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -424,29 +511,221 @@ describe('ReservationsService', () => {
         })
       );
       expect(prismaMock.reservation.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ departureId: 'departure-1' }) })
+        expect.objectContaining({
+          data: expect.objectContaining({
+            departureId,
+            rideId: 'ride-1',
+            rideDepartureTime: '09:00',
+            rideArrivalTime: '10:30'
+          })
+        })
+      );
+      expect(result.departureId).toBe(departureId);
+    });
+
+    it('refuses an old tab when two departures leave at that time', async () => {
+      prismaMock.departure.findMany.mockResolvedValueOnce([{ id: 'departure-1' }, { id: 'departure-extra' }]);
+
+      await expect(book()).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'DEPARTURE_NOT_FOUND' }
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses an old tab when no departure is stored at that time', async () => {
+      prismaMock.departure.findMany.mockResolvedValueOnce([]);
+
+      await expect(book()).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'DEPARTURE_NOT_FOUND' }
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
+    it('books the departure a request names without matching on time', async () => {
+      await book({ departureId });
+
+      expect(prismaMock.departure.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.$queryRaw.mock.calls[0][1]).toEqual([departureId]);
+      expect(prismaMock.reservation.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ departureId }) })
       );
     });
 
-    it('books without a link when two departures leave at that time', async () => {
-      prismaMock.departure.findMany.mockResolvedValue([
-        { id: 'departure-1' },
-        { id: 'departure-extra' }
-      ]);
+    it.each([
+      ['ride', { rideId: 'ride-2' }],
+      ['date', { travelDate: '2026-03-31' }],
+      ['departure time', { rideDepartureTime: '09:15' }],
+      ['arrival time', { rideArrivalTime: '11:00' }]
+    ])('refuses a request whose %s disagrees with the departure it names', async (_field, change) => {
+      await expect(book({ departureId, ...change })).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'DEPARTURE_CHANGED' }
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
 
-      await expect(book()).resolves.toMatchObject({ seatNumber: 21 });
+    it.each([
+      ['cancelled', { cancelledAt: new Date() }, 'je otkazan'],
+      ['dropped from the timetable', { timetableDroppedAt: new Date() }, 'vise nije u redu voznje']
+    ])('refuses a departure that is %s', async (_state, overrides, sentence) => {
+      withDeparture(overrides);
 
-      expect(prismaMock.reservation.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ departureId: null }) })
+      await expect(book({ departureId })).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'DEPARTURE_NOT_RUNNING', message: expect.stringContaining(sentence) }
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a LEGACY departure a request names, whatever its date', async () => {
+      withDeparture({ source: 'LEGACY', stops: [] });
+
+      await expect(book({ departureId })).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'DEPARTURE_NOT_RUNNING', message: expect.stringContaining('nije u redu voznje') }
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
+    it('row-locks a departure a request names only inside the tenant', async () => {
+      await book({ departureId });
+
+      const [strings, ids, scope] = prismaMock.$queryRaw.mock.calls[0];
+      expect(strings.join('?')).toContain('FOR UPDATE');
+      expect(ids).toEqual([departureId]);
+      expect(scope).toMatchObject({ values: ['tenant-1'] });
+    });
+
+    it('edits and moves a reservation on a LEGACY departure against its ride\'s line', async () => {
+      // A LEGACY departure stores no stops; its passengers were read against
+      // the line before PR 3b, and the checks still read them that way.
+      prismaMock.reservation.findFirst.mockResolvedValue(baseReservation);
+      prismaMock.reservation.update.mockResolvedValue(baseReservation);
+      prismaMock.departure.findFirst.mockImplementation(async ({ where }: { where: { id: string } }) => {
+        const departure = await departureFromRide(where.id);
+        return departure && { ...departure, source: 'LEGACY', stops: [] };
+      });
+
+      await expect(
+        service.update(auth, 'reservation-1', { arrivalStationId: 'station-b' })
+      ).resolves.toMatchObject({ id: 'reservation-1' });
+      await expect(service.moveSeat(auth, 'reservation-1', 16)).resolves.toBeDefined();
+      expect(prismaMock.ride.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'ride-1', tenantId: 'tenant-1' } })
       );
     });
 
-    it('books without a link when no departure is stored', async () => {
-      await expect(book()).resolves.toMatchObject({ seatNumber: 21 });
+    it('never books onto a departure with no stored route', async () => {
+      withDeparture({ stops: [] });
 
-      expect(prismaMock.reservation.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ departureId: null }) })
+      await expect(book()).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'DEPARTURE_ROUTE_MISSING' }
+      });
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a departure the tenant does not have, as one an edit deleted', async () => {
+      prismaMock.departure.findFirst.mockResolvedValueOnce(null);
+
+      await expect(book({ departureId: 'elsewhere' })).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'DEPARTURE_NOT_FOUND' }
+      });
+    });
+
+    it('refuses a date past the stored window with 400', async () => {
+      await expect(book({ travelDate: '2099-01-05' })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(book({ travelDate: '2099-01-05' })).rejects.toMatchObject({
+        response: { code: 'TRAVEL_DATE_OUT_OF_WINDOW', message: expect.stringContaining('predaleko') }
+      });
+      expect(prismaMock.departure.findMany).not.toHaveBeenCalled();
+    });
+
+    it('counts seats on the departure, not on the time a reservation carries', async () => {
+      // Booked before a route edit moved the bus to 09:00: its copy says
+      // 08:45, and it still holds seat 21 on this departure (#14).
+      reservationStore.push({
+        id: 'reservation-drifted',
+        tenantId: 'tenant-1',
+        rideId: 'ride-1',
+        departureId,
+        passengerId: 'passenger-2',
+        travelDate: new Date('2026-03-30T00:00:00.000Z'),
+        rideDepartureTime: '08:45',
+        rideArrivalTime: '10:15',
+        seatNumber: 21,
+        status: ReservationStatus.ACTIVE,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-d'
+      });
+
+      await expect(book()).rejects.toThrow('Seat is already booked for this route segment');
+    });
+
+    it('lets two buses at one time sell the same seat', async () => {
+      reservationStore.push({
+        id: 'reservation-other-bus',
+        tenantId: 'tenant-1',
+        rideId: 'ride-1',
+        departureId: 'dep:extra',
+        passengerId: 'passenger-2',
+        travelDate: new Date('2026-03-30T00:00:00.000Z'),
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '10:30',
+        seatNumber: 21,
+        status: ReservationStatus.ACTIVE,
+        departureStationId: 'station-a',
+        arrivalStationId: 'station-d'
+      });
+
+      await expect(book({ departureId })).resolves.toMatchObject({ seatNumber: 21 });
+    });
+
+    it('checks capacity against the departure, not the ride', async () => {
+      withDeparture({ capacity: 20 });
+
+      await expect(book()).rejects.toThrow('Seat number exceeds ride capacity');
+    });
+
+    it('reads the route from the stops the departure stored', async () => {
+      // The line still calls at station-b, but this departure was written
+      // without it, as a past one keeps the route it ran.
+      withDeparture({
+        stops: [
+          { stationId: 'station-a', orderIndex: 0, isBoarding: true, isDropoff: false },
+          { stationId: 'station-d', orderIndex: 1, isBoarding: false, isDropoff: true }
+        ]
+      });
+
+      await expect(book({ departureStationId: 'station-b' })).rejects.toThrow(
+        'Departure and arrival stations must exist on the ride line path'
       );
+    });
+
+    it('refuses to edit a reservation that has no departure', async () => {
+      prismaMock.reservation.findFirst.mockResolvedValue({ ...baseReservation, departureId: null });
+
+      await expect(service.update(auth, 'reservation-1', { seatNumber: 3 })).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'RESERVATION_NOT_LINKED' }
+      });
+      await expect(service.moveSeat(auth, 'reservation-1', 3)).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'RESERVATION_NOT_LINKED' }
+      });
+      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+    });
+
+    it('still cancels a reservation that has no departure', async () => {
+      prismaMock.reservation.findFirst.mockResolvedValue({ ...baseReservation, departureId: null });
+
+      await expect(service.cancel(auth, 'reservation-1')).resolves.toMatchObject({
+        status: ReservationStatus.CANCELLED
+      });
+      expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
     });
   });
 
@@ -540,7 +819,9 @@ describe('ReservationsService', () => {
 
     it('links an existing reservation to its outbound leg on update', async () => {
       prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
+      // Read once to find the bus, and again under its lock.
       prismaMock.reservation.findFirst
+        .mockResolvedValueOnce({ ...baseReservation })
         .mockResolvedValueOnce({ ...baseReservation })
         .mockResolvedValueOnce({
           ...baseReservation,
@@ -573,7 +854,7 @@ describe('ReservationsService', () => {
 
     it('unlinks a return leg when update is given an explicit null', async () => {
       prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
-      prismaMock.reservation.findFirst.mockResolvedValueOnce({
+      prismaMock.reservation.findFirst.mockResolvedValue({
         ...baseReservation,
         returnOfReservationId: 'reservation-outbound',
         roundTripId: 'booking-1'
@@ -614,6 +895,7 @@ describe('ReservationsService', () => {
       prismaMock.passenger.findFirst.mockResolvedValue({ id: 'passenger-2' });
       prismaMock.reservation.findFirst
         .mockResolvedValueOnce({ ...linkedReservation })
+        .mockResolvedValueOnce({ ...linkedReservation })
         .mockResolvedValueOnce({ ...linkedOutbound });
 
       // The link asserts one passenger across both legs. Moving this leg to
@@ -629,6 +911,7 @@ describe('ReservationsService', () => {
       prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
       prismaMock.reservation.findFirst
         .mockResolvedValueOnce({ ...linkedReservation })
+        .mockResolvedValueOnce({ ...linkedReservation })
         .mockResolvedValueOnce({ ...linkedOutbound });
 
       await expect(
@@ -639,12 +922,14 @@ describe('ReservationsService', () => {
 
     it('leaves a retained link alone when no field it asserts on changes', async () => {
       prismaMock.ride.findFirst.mockResolvedValue({ ...routeRide, capacity: 40 });
-      prismaMock.reservation.findFirst.mockResolvedValueOnce({ ...linkedReservation });
+      prismaMock.reservation.findFirst.mockResolvedValue({ ...linkedReservation });
       prismaMock.reservation.update.mockResolvedValue({ ...linkedReservation });
 
       await service.update(auth, 'reservation-1', { notes: 'Putnik kasni' });
 
-      expect(prismaMock.reservation.findFirst).toHaveBeenCalledTimes(1);
+      // Both reads are of this reservation, before and under the bus lock;
+      // the outbound leg is never read.
+      expect(prismaMock.reservation.findFirst).toHaveBeenCalledTimes(2);
       expect(prismaMock.reservation.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.not.objectContaining({ returnOfReservationId: expect.anything() })
@@ -859,7 +1144,12 @@ describe('ReservationsService', () => {
   it('rejects group assignment across departures before making any update', async () => {
     prismaMock.reservation.findMany.mockResolvedValueOnce([
       baseReservation,
-      { ...baseReservation, id: 'reservation-2', rideDepartureTime: '15:00' }
+      {
+        ...baseReservation,
+        id: 'reservation-2',
+        departureId: 'dep:ride-1:2026-03-30:15:00',
+        rideDepartureTime: '15:00'
+      }
     ]);
 
     await expect(
@@ -872,7 +1162,7 @@ describe('ReservationsService', () => {
     expect(prismaMock.reservation.updateMany).not.toHaveBeenCalled();
   });
 
-  it('moves a reservation to a free seat under the ride-instance lock', async () => {
+  it('moves a reservation to a free seat under the departure lock', async () => {
     await service.moveSeat(auth, 'reservation-1', 16);
 
     expect(prismaMock.$executeRaw).toHaveBeenCalled();
@@ -925,7 +1215,7 @@ describe('ReservationsService', () => {
     );
   });
 
-  it('uses the source seat read after acquiring the ride-instance lock for a swap', async () => {
+  it('uses the source seat read after acquiring the departure lock for a swap', async () => {
     prismaMock.reservation.findFirst
       .mockResolvedValueOnce({ ...baseReservation, seatNumber: 12 })
       .mockResolvedValueOnce({ ...baseReservation, seatNumber: 15 });
@@ -1035,7 +1325,7 @@ describe('ReservationsService', () => {
   it.each([
     ['ride', { rideId: 'ride-2' }],
     ['date', { travelDate: '2026-03-31' }],
-    ['departure time', { rideDepartureTime: '11:00' }]
+    ['departure time', { rideDepartureTime: '11:00', rideArrivalTime: '12:30' }]
   ])('groups travelTogether items separately on different %s', async (_field, change) => {
     const first = {
       rideId: 'ride-1',
@@ -1319,13 +1609,15 @@ describe('ReservationsService', () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
-  it('takes the shared schedule lock, then distinct departure locks in sorted order, before creating any reservation', async () => {
+  it('takes the shared schedule lock, then distinct departure row locks in ID order, before creating any reservation', async () => {
     const events: string[] = [];
     prismaMock.$executeRaw.mockImplementation(async (strings: TemplateStringsArray, ...values: unknown[]) => {
-      const sql = strings.join('?');
-      if (sql.includes('pg_advisory_xact_lock_shared')) events.push(`schedule:${values[1]}`);
-      else if (sql.includes('pg_advisory_xact_lock(hashtext')) events.push(`lock:${values[0]}`);
+      if (strings.join('?').includes('pg_advisory_xact_lock_shared')) events.push(`schedule:${values[1]}`);
       return 1;
+    });
+    prismaMock.$queryRaw.mockImplementation(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      if (strings.join('?').includes('FOR UPDATE')) events.push(`lock:${(values[0] as string[]).join(',')}`);
+      return [];
     });
     const create = prismaMock.reservation.create.getMockImplementation()!;
     prismaMock.reservation.create.mockImplementation(async (input: unknown) => {
@@ -1342,8 +1634,7 @@ describe('ReservationsService', () => {
 
     expect(events).toEqual([
       'schedule:tenant-1',
-      'lock:tenant-1:ride-1:2026-03-30:09:00',
-      'lock:tenant-1:ride-1:2026-04-01:09:00',
+      'lock:dep:ride-1:2026-03-30:09:00,dep:ride-1:2026-04-01:09:00',
       'create', 'create', 'create'
     ]);
   });
@@ -1360,11 +1651,11 @@ describe('ReservationsService', () => {
       items: [item('2026-02-31', 1), item('2026-03-03', 2)]
     });
 
-    const departureLocks = prismaMock.$executeRaw.mock.calls.filter(([strings]: [TemplateStringsArray]) =>
-      strings.join('?').includes('pg_advisory_xact_lock(hashtext')
+    const departureLocks = prismaMock.$queryRaw.mock.calls.filter(([strings]: [TemplateStringsArray]) =>
+      strings.join('?').includes('FOR UPDATE')
     );
     expect(departureLocks).toHaveLength(1);
-    expect(departureLocks[0][1]).toBe('tenant-1:ride-1:2026-03-03:09:00');
+    expect(departureLocks[0][1]).toEqual(['dep:ride-1:2026-03-03:09:00']);
     expect(result.items[0].reservation?.travelDate).toBe('2026-03-03');
     expect(result.items[0].reservation?.groupId).toBe(result.items[1].reservation?.groupId);
   });

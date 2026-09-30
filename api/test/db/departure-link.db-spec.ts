@@ -12,7 +12,11 @@ import {
 } from '../../src/invariants/checks/reservation-departure-linked';
 import { reservationReachable } from '../../src/invariants/checks/reservation-reachable';
 import { InvariantContext } from '../../src/invariants/invariant.types';
-import { guardProspectiveWrite, NO_CONSENT } from '../../src/invariants/prospective-write';
+import {
+  guardProspectiveWrite,
+  NO_CONSENT,
+  PROSPECTIVE_INVARIANTS
+} from '../../src/invariants/prospective-write';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { scheduleEditTransaction } from '../../src/prisma/schedule-lock';
 import { ReservationsService } from '../../src/reservations/reservations.service';
@@ -20,9 +24,9 @@ import { RidesService } from '../../src/rides/rides.service';
 import { removeTenant, Seeded, seedTenant } from './db-fixtures';
 
 /**
- * Bookings linking to their stored departure (#27, PR 1b), against a real
- * Postgres: the link a booking writes, what the timetable does to a linked
- * departure, the repair that rewrites a reservation's time, and the check.
+ * Bookings linking to their stored departure (#27, PR 1b and 3b), against a
+ * real Postgres: the link a booking writes, what the timetable does to a
+ * linked departure and its passengers' time copies, the repair, and the check.
  */
 
 describe('departure links (real database)', () => {
@@ -53,16 +57,22 @@ describe('departure links (real database)', () => {
     await removeTenant(prisma, seeded.auth.tenantId);
   });
 
-  function book(seatNumber: number, rideDepartureTime = '09:00') {
+  function book(
+    seatNumber: number,
+    rideDepartureTime = '09:00',
+    rideArrivalTime = '11:00',
+    departureId?: string
+  ) {
     return reservations.create(seeded.auth, {
       rideId: seeded.rideId,
       passengerId: seeded.passengerId,
       travelDate: seeded.travelDate,
       rideDepartureTime,
-      rideArrivalTime: '11:00',
+      rideArrivalTime,
       seatNumber,
       departureStationId: seeded.stations.first,
-      arrivalStationId: seeded.stations.last
+      arrivalStationId: seeded.stations.last,
+      ...(departureId ? { departureId } : {})
     });
   }
 
@@ -88,8 +98,10 @@ describe('departure links (real database)', () => {
     };
   }
 
-  /** The token an operator sends back to ask for the repair they were offered. */
-  async function repairTokenOf(refused: Promise<unknown>): Promise<string> {
+  /** The refusal a guarded write answers with, for its token and what it offers. */
+  async function refusalOf(
+    refused: Promise<unknown>
+  ): Promise<{ invariant: string; confirmationToken: string; repairable: boolean }> {
     const error = await refused.then(
       () => {
         throw new Error('expected the write to be refused');
@@ -98,8 +110,11 @@ describe('departure links (real database)', () => {
     );
     expect(error).toBeInstanceOf(ConflictException);
 
-    return ((error as ConflictException).getResponse() as { confirmationToken: string })
-      .confirmationToken;
+    return (error as ConflictException).getResponse() as {
+      invariant: string;
+      confirmationToken: string;
+      repairable: boolean;
+    };
   }
 
   it('links a booking to its timetable departure', async () => {
@@ -108,11 +123,12 @@ describe('departure links (real database)', () => {
     const reservation = await book(1);
 
     expect(await linkOf(reservation.id)).toBe(departure.id);
+    expect(reservation.departureId).toBe(departure.id);
   });
 
-  it('leaves a booking unlinked when an extra bus stored before PR 3a leaves at the same time', async () => {
+  it('refuses an old tab when an extra bus stored before PR 3a leaves at the same time, and books either by departureId', async () => {
     // The endpoint refuses a new same-time extra, so this is one already stored.
-    await prisma.$transaction(async (tx) => {
+    const extraId = await prisma.$transaction(async (tx) => {
       const exception = await tx.rideException.create({
         data: {
           tenantId: seeded.auth.tenantId,
@@ -136,13 +152,20 @@ describe('departure links (real database)', () => {
         },
         { allowSameTime: true }
       );
+
+      return (await tx.departure.findFirstOrThrow({
+        where: { rideExceptionId: exception.id },
+        select: { id: true }
+      })).id;
     });
     expect(await departuresOnTravelDate()).toHaveLength(2);
 
-    const reservation = await book(1);
+    await expect(book(1)).rejects.toMatchObject({
+      response: { code: 'DEPARTURE_NOT_FOUND' }
+    });
 
-    expect(reservation.seatNumber).toBe(1);
-    expect(await linkOf(reservation.id)).toBeNull();
+    const onExtra = await book(1, '09:00', '11:00', extraId);
+    expect(await linkOf(onExtra.id)).toBe(extraId);
   });
 
   it('links a booking to an extra bus that leaves at its own time', async () => {
@@ -156,31 +179,23 @@ describe('departure links (real database)', () => {
       (departure) => departure.source === DepartureSource.EXTRA
     )!;
 
-    const reservation = await book(1, '15:00');
+    const reservation = await book(1, '15:00', '17:00');
 
     expect(await linkOf(reservation.id)).toBe(extra.id);
   });
 
-  it('still links a booking on a cancelled date, and the check lists the passenger', async () => {
+  it('refuses a booking on a cancelled date', async () => {
     await rides.addException(seeded.auth, seeded.rideId, {
       date: seeded.travelDate,
       type: RideExceptionType.SKIP
     });
-    const [departure] = await departuresOnTravelDate();
 
-    const reservation = await book(1);
-
-    expect(await linkOf(reservation.id)).toBe(departure.id);
-    const { violations } = await reservationDepartureLinked.check(context());
-    expect(violations).toEqual([
-      expect.objectContaining({
-        subjectId: reservation.id,
-        detail: expect.objectContaining({ reason: 'NOT_RUNNING', cancelled: true })
-      })
-    ]);
+    await expect(book(1)).rejects.toMatchObject({
+      response: { code: 'DEPARTURE_NOT_RUNNING' }
+    });
   });
 
-  it('keeps the link when the timetable drops a booked departure, and reports it', async () => {
+  it('keeps the link when the timetable drops a booked departure, and reservation.reachable lists it', async () => {
     const [departure] = await departuresOnTravelDate();
     const reservation = await book(1);
 
@@ -196,110 +211,91 @@ describe('departure links (real database)', () => {
     expect(dropped.timetableDroppedAt).toBeInstanceOf(Date);
     expect(await linkOf(reservation.id)).toBe(departure.id);
 
-    const { violations } = await reservationDepartureLinked.check(context());
-    expect(violations).toEqual([
+    expect((await reservationDepartureLinked.check(context())).violations).toEqual([]);
+    expect((await reservationReachable.check(context())).violations).toEqual([
       expect.objectContaining({
         subjectId: reservation.id,
-        detail: expect.objectContaining({ reason: 'NOT_RUNNING', timetableDropped: true })
+        canRepair: false,
+        detail: expect.objectContaining({ reason: 'WEEKDAY_NOT_SCHEDULED' })
       })
     ]);
   });
 
-  describe('the reservation.reachable repair', () => {
-    it('keeps the link when an operator repairs during the edit that moved the bus', async () => {
+  describe('a booked departure whose time changes (#27, PR 3b)', () => {
+    const scope = () => ({ tenantId: seeded.auth.tenantId, actorId: seeded.auth.sub });
+    const moveFirstStop = (tx: Parameters<Parameters<PrismaService['$transaction']>[0]>[0]) =>
+      tx.rideDayScheduleStationTime.updateMany({
+        where: { rideDayScheduleId: seeded.scheduleId, orderIndex: 0 },
+        data: { time: '08:30' }
+      });
+
+    it('moves the time copies with the bus, so reservation.reachable has nothing to repair', async () => {
       const [departure] = await departuresOnTravelDate();
       const reservation = await book(1);
-      const scope = { tenantId: seeded.auth.tenantId, actorId: seeded.auth.sub };
-      const moveFirstStop = (tx: Parameters<Parameters<PrismaService['$transaction']>[0]>[0]) =>
-        tx.rideDayScheduleStationTime.updateMany({
-          where: { rideDayScheduleId: seeded.scheduleId, orderIndex: 0 },
-          data: { time: '08:30' }
-        });
-      const token = await repairTokenOf(
-        guardProspectiveWrite(prisma, scope, [reservationReachable], NO_CONSENT, moveFirstStop)
+
+      await scheduleEditTransaction(prisma, scope(), moveFirstStop);
+
+      expect(
+        await prisma.reservation.findUniqueOrThrow({
+          where: { id: reservation.id },
+          select: { departureId: true, rideDepartureTime: true, rideArrivalTime: true, updatedById: true }
+        })
+      ).toEqual({
+        departureId: departure.id,
+        rideDepartureTime: '08:30',
+        rideArrivalTime: '11:00',
+        updatedById: seeded.auth.sub
+      });
+      expect((await reservationReachable.check(context())).violations).toEqual([]);
+    });
+
+    it('asks before the edit, and repairs nothing when confirmed', async () => {
+      const [departure] = await departuresOnTravelDate();
+      const reservation = await book(1);
+      const refusal = await refusalOf(
+        guardProspectiveWrite(prisma, scope(), PROSPECTIVE_INVARIANTS.rideUpdate, NO_CONSENT, moveFirstStop)
       );
+      expect(refusal).toMatchObject({ invariant: 'reservation.departureTimeKept', repairable: false });
+      expect((await departuresOnTravelDate())[0].departureTime).toBe('09:00');
 
       await guardProspectiveWrite(
         prisma,
-        scope,
-        [reservationReachable],
-        { confirmationTokens: [], repairTokens: [token] },
+        scope(),
+        PROSPECTIVE_INVARIANTS.rideUpdate,
+        { confirmationTokens: [refusal.confirmationToken], repairTokens: [] },
         moveFirstStop
       );
 
-      const repaired = await prisma.reservation.findUniqueOrThrow({
-        where: { id: reservation.id },
-        select: { departureId: true, rideDepartureTime: true }
-      });
-      expect(repaired).toEqual({ departureId: departure.id, rideDepartureTime: '08:30' });
-      expect(await departuresOnTravelDate()).toEqual([
-        expect.objectContaining({ id: departure.id, departureTime: '08:30' })
-      ]);
+      expect(
+        await prisma.reservation.findUniqueOrThrow({
+          where: { id: reservation.id },
+          select: { departureId: true, rideDepartureTime: true, seatNumber: true }
+        })
+      ).toEqual({ departureId: departure.id, rideDepartureTime: '08:30', seatNumber: 1 });
     });
 
-    it('moves the link to the timetable bus when an extra is removed with a repair, and keeps the extra cancelled', async () => {
-      const [timetableBus] = await departuresOnTravelDate();
-      const exception = await rides.addException(seeded.auth, seeded.rideId, {
-        date: seeded.travelDate,
-        type: RideExceptionType.ADDITIONAL,
-        departureTime: '15:00',
-        arrivalTime: '17:00'
-      });
-      const reservation = await book(1, '15:00');
-      expect(await linkOf(reservation.id)).not.toBe(timetableBus.id);
-      const token = await repairTokenOf(
-        rides.removeException(seeded.auth, seeded.rideId, exception.id)
-      );
-
-      await rides.removeException(seeded.auth, seeded.rideId, exception.id, {
-        confirmationTokens: [],
-        repairTokens: [token]
-      });
-
-      const repaired = await prisma.reservation.findUniqueOrThrow({
-        where: { id: reservation.id },
-        select: { departureId: true, rideDepartureTime: true }
-      });
-      expect(repaired).toEqual({ departureId: timetableBus.id, rideDepartureTime: '09:00' });
-      // Cancelled while it still had a passenger. The sync never deletes an
-      // extra bus, so it stays on record, cancelled, after the repair.
-      const extras = await prisma.departure.findMany({
-        where: { rideId: seeded.rideId, source: DepartureSource.EXTRA },
-        select: { cancelledAt: true, cancelledById: true, rideExceptionId: true }
-      });
-      expect(extras).toEqual([
-        { cancelledAt: expect.any(Date), cancelledById: seeded.auth.sub, rideExceptionId: null }
-      ]);
+    it('does not ask when the edit moves an unbooked departure', async () => {
+      await expect(
+        guardProspectiveWrite(prisma, scope(), PROSPECTIVE_INVARIANTS.rideUpdate, NO_CONSENT, moveFirstStop)
+      ).resolves.not.toThrow();
     });
 
-    it('keeps the link when it moves a reservation to the new time of the same bus', async () => {
+    it('refuses a tab that still shows the old time', async () => {
       const [departure] = await departuresOnTravelDate();
-      const reservation = await book(1);
+      await scheduleEditTransaction(prisma, scope(), moveFirstStop);
 
-      await scheduleEditTransaction(
-        prisma,
-        { tenantId: seeded.auth.tenantId, actorId: seeded.auth.sub },
-        (tx) =>
-          tx.rideDayScheduleStationTime.updateMany({
-            where: { rideDayScheduleId: seeded.scheduleId, orderIndex: 0 },
-            data: { time: '08:30' }
-          })
-      );
-      expect((await departuresOnTravelDate())[0]).toMatchObject({
-        id: departure.id,
-        departureTime: '08:30'
+      await expect(book(1)).rejects.toMatchObject({ response: { code: 'DEPARTURE_NOT_FOUND' } });
+      await expect(book(1, '09:00', '11:00', departure.id)).rejects.toMatchObject({
+        response: { code: 'DEPARTURE_CHANGED' }
       });
-
-      await reservationReachable.repair!(context());
-
-      const repaired = await prisma.reservation.findUniqueOrThrow({
-        where: { id: reservation.id },
-        select: { departureId: true, rideDepartureTime: true }
+      await expect(book(1, '08:30', '11:00', departure.id)).resolves.toMatchObject({
+        departureId: departure.id
       });
-      expect(repaired).toEqual({ departureId: departure.id, rideDepartureTime: '08:30' });
     });
+  });
 
-    it('moves the link to the extra bus when that is the departure it moves the reservation onto', async () => {
+  describe('the reservation.reachable repair', () => {
+    it('no longer moves a linked reservation onto another bus', async () => {
       const [timetableBus] = await departuresOnTravelDate();
       const reservation = await book(1);
       await rides.addException(seeded.auth, seeded.rideId, {
@@ -313,18 +309,50 @@ describe('departure links (real database)', () => {
         { tenantId: seeded.auth.tenantId, actorId: seeded.auth.sub },
         (tx) => tx.rideDaySchedule.deleteMany({ where: { rideId: seeded.rideId } })
       );
+
+      const outcome = await reservationReachable.repair!(context());
+
+      expect(outcome).toEqual({ repairedCount: 0, skippedCount: 1 });
+      expect(
+        await prisma.reservation.findUniqueOrThrow({
+          where: { id: reservation.id },
+          select: { departureId: true, rideDepartureTime: true }
+        })
+      ).toEqual({ departureId: timetableBus.id, rideDepartureTime: '09:00' });
+    });
+
+    it('asks before a booked extra is removed, and a confirmation cancels it with its passenger on it', async () => {
+      const exception = await rides.addException(seeded.auth, seeded.rideId, {
+        date: seeded.travelDate,
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '15:00',
+        arrivalTime: '17:00'
+      });
       const extra = (await departuresOnTravelDate()).find(
         (departure) => departure.source === DepartureSource.EXTRA
       )!;
-      expect(await linkOf(reservation.id)).toBe(timetableBus.id);
+      const reservation = await book(1, '15:00', '17:00');
+      const refusal = await refusalOf(rides.removeException(seeded.auth, seeded.rideId, exception.id));
+      expect(refusal).toMatchObject({ invariant: 'reservation.reachable', repairable: false });
 
-      await reservationReachable.repair!(context());
-
-      const repaired = await prisma.reservation.findUniqueOrThrow({
-        where: { id: reservation.id },
-        select: { departureId: true, rideDepartureTime: true }
+      await rides.removeException(seeded.auth, seeded.rideId, exception.id, {
+        confirmationTokens: [refusal.confirmationToken],
+        repairTokens: []
       });
-      expect(repaired).toEqual({ departureId: extra.id, rideDepartureTime: '15:00' });
+
+      expect(await linkOf(reservation.id)).toBe(extra.id);
+      expect(
+        await prisma.departure.findUniqueOrThrow({
+          where: { id: extra.id },
+          select: { cancelledAt: true, cancelledById: true }
+        })
+      ).toEqual({ cancelledAt: expect.any(Date), cancelledById: seeded.auth.sub });
+      expect((await reservationReachable.check(context())).violations).toEqual([
+        expect.objectContaining({
+          subjectId: reservation.id,
+          detail: expect.objectContaining({ reason: 'DEPARTURE_CANCELLED' })
+        })
+      ]);
     });
   });
 
@@ -362,9 +390,7 @@ describe('departure links (real database)', () => {
           rideDepartureTime: true,
           departureId: true,
           passenger: { select: { firstName: true, lastName: true } },
-          departure: {
-            select: { source: true, timetableDroppedAt: true, cancelledAt: true }
-          }
+          departure: { select: { source: true, departureTime: true } }
         }
       });
       const departures = await prisma.departure.findMany({

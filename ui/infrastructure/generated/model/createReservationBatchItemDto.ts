@@ -9,6 +9,8 @@
 export interface CreateReservationBatchItemDto {
   /** Set on a return leg, naming the outbound reservation it belongs to. The outbound leg must be active, belong to the same passenger, travel the reversed station pair, and have no other active return leg. */
   returnOfReservationId?: string;
+  /** The departure to book. rideId, travelDate, rideDepartureTime and rideArrivalTime must agree with it, or the request is refused with 409 DEPARTURE_CHANGED. Without it the departure is the only one of the ride leaving at rideDepartureTime on travelDate. Either way, 409 DEPARTURE_NOT_FOUND when there is no such departure. A departure that is cancelled or no longer in the timetable, or a LEGACY departure, is refused with 409 DEPARTURE_NOT_RUNNING, and a date past the stored window with 400 TRAVEL_DATE_OUT_OF_WINDOW. */
+  departureId?: string;
   rideId: string;
   passengerId: string;
   travelDate: string;

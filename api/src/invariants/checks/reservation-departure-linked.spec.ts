@@ -1,5 +1,5 @@
 import { indexLinkableDepartures } from '../../departures/departure-link';
-import { classifyDepartureLinks } from './reservation-departure-linked';
+import { classifyDepartureLinks, reservationDepartureLinked } from './reservation-departure-linked';
 
 const travelDate = new Date('2026-10-05T00:00:00.000Z');
 
@@ -19,7 +19,7 @@ function row(overrides: Partial<Row> & { id: string }): Row {
     rideDepartureTime: '09:00',
     departureId: 'timetable',
     passenger: { firstName: 'Ana', lastName: 'Petrovic' },
-    departure: { source: 'SCHEDULE', timetableDroppedAt: null, cancelledAt: null },
+    departure: { source: 'SCHEDULE', departureTime: '09:00' },
     ...overrides
   };
 }
@@ -31,6 +31,12 @@ function reasons(rows: Row[]): Array<[string, unknown]> {
   ]);
 }
 
+describe('reservation.departureLinked', () => {
+  it('is critical, since seats are counted on the link', () => {
+    expect(reservationDepartureLinked.severity).toBe('critical');
+  });
+});
+
 describe('classifyDepartureLinks', () => {
   it('is quiet for a link to the running departure its time names', () => {
     expect(reasons([row({ id: 'r1' })])).toEqual([]);
@@ -40,35 +46,21 @@ describe('classifyDepartureLinks', () => {
     expect(reasons([row({ id: 'r1', departureId: 'extra' })])).toEqual([['r1', 'WRONG_LINK']]);
   });
 
-  it('leaves a stale time copy to reservation.reachable', () => {
-    // The timetable moved the departure to 09:30; the copy still says 09:00
-    // and matches nothing, so the link is right and the copy is stale.
+  it('reports a time copy that matches neither its departure nor any other', () => {
+    // The departure moved to 09:30 and a write outside the sync left the
+    // copy at 09:00, which matches nothing: the screens cannot find it.
     const index = indexLinkableDepartures([
       { id: 'timetable', rideId: 'ride-1', serviceDate: travelDate, departureTime: '09:30' }
     ]);
 
-    expect(classifyDepartureLinks([row({ id: 'r1' })], index)).toEqual([]);
-  });
-
-  it('reports passengers on a cancelled or dropped departure', () => {
-    const cancelled = row({
-      id: 'r1',
-      departure: { source: 'SCHEDULE', timetableDroppedAt: null, cancelledAt: new Date() }
-    });
-    const dropped = row({
-      id: 'r2',
-      departure: { source: 'SCHEDULE', timetableDroppedAt: new Date(), cancelledAt: null }
-    });
-
-    const violations = classifyDepartureLinks([cancelled, dropped], index);
+    const violations = classifyDepartureLinks(
+      [row({ id: 'r1', departure: { source: 'SCHEDULE', departureTime: '09:30' } })],
+      index
+    );
 
     expect(violations.map((violation) => violation.detail)).toEqual([
-      expect.objectContaining({ reason: 'NOT_RUNNING', cancelled: true, timetableDropped: false }),
-      expect.objectContaining({ reason: 'NOT_RUNNING', cancelled: false, timetableDropped: true })
+      expect.objectContaining({ reason: 'STALE_TIME_COPY', departureTime: '09:30' })
     ]);
-    expect(violations[0].summary).toBe(
-      'Ana Petrovic, 2026-10-05, polazak 09:00: polazak je otkazan, a rezervacija je i dalje aktivna.'
-    );
   });
 
   it('reports every unlinked booking, by why it is unlinked', () => {
@@ -104,7 +96,7 @@ describe('classifyDepartureLinks', () => {
         row({
           id: 'r1',
           departureId: 'legacy',
-          departure: { source: 'LEGACY', timetableDroppedAt: null, cancelledAt: null }
+          departure: { source: 'LEGACY', departureTime: '09:00' }
         })
       ])
     ).toEqual([['r1', 'ON_LEGACY']]);
@@ -118,7 +110,7 @@ describe('classifyDepartureLinks', () => {
         row({
           id: 'r1',
           departureId: 'legacy',
-          departure: { source: 'LEGACY', timetableDroppedAt: null, cancelledAt: null }
+          departure: { source: 'LEGACY', departureTime: '09:00' }
         })
       ],
       index

@@ -18,6 +18,7 @@
  */
 import { PrismaClient, ReservationStatus } from '@prisma/client';
 import { withUpdateAudit } from '../src/prisma/audit-write.helper';
+import { lockDepartures } from '../src/departures/departure-lock';
 import { reservationWriteTransaction } from '../src/prisma/schedule-lock';
 
 const prisma = new PrismaClient();
@@ -55,6 +56,7 @@ async function main() {
       id: true,
       tenantId: true,
       rideId: true,
+      departureId: true,
       travelDate: true,
       rideDepartureTime: true,
       seatNumber: true,
@@ -151,17 +153,10 @@ async function main() {
     return;
   }
 
-  // One transaction, and the instance locks taken up front in sorted order:
+  // One transaction, and the departure row locks taken up front in ID order:
   // cancelling races with booking on the same departure, and taking the locks
   // in a fixed order is what stops two of these meeting head on. See #81.
-  const lockKeys = [
-    ...new Set(
-      cancellable.map(
-        (row) =>
-          `${row.tenantId}:${row.rideId}:${row.travelDate.toISOString().slice(0, 10)}:${row.rideDepartureTime}`
-      )
-    )
-  ].sort();
+  const departureIds = cancellable.map((row) => row.departureId);
 
   // Nothing above held a lock, so a return-leg backfill could have paired one
   // of these rows between the read and here. The linked-leg refusal is only
@@ -178,9 +173,7 @@ async function main() {
       };
 
   const cancelledCount = await reservationWriteTransaction(prisma, tenantId as string, async (tx) => {
-    for (const lockKey of lockKeys) {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
-    }
+    await lockDepartures(tx, departureIds);
 
     const fresh = await tx.reservation.findMany({
       where: { id: { in: cancellable.map((row) => row.id) }, tenantId },

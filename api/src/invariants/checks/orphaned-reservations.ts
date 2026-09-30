@@ -1,3 +1,4 @@
+import { DepartureSource } from '@prisma/client';
 import {
   BaseInstanceOutcome,
   MaterializedInstanceTimes
@@ -32,7 +33,11 @@ export type OrphanReason =
   /** Somebody marked the date as not running. */
   | 'SKIPPED_BY_EXCEPTION'
   /** The extra departure this reservation was booked on is gone. */
-  | 'EXTRA_DEPARTURE_REMOVED';
+  | 'EXTRA_DEPARTURE_REMOVED'
+  /** Somebody cancelled the departure the reservation is on. */
+  | 'DEPARTURE_CANCELLED'
+  /** The timetable no longer produces the departure, for no reason named above. */
+  | 'DEPARTURE_DROPPED';
 
 /**
  * What each reason asks the agency to do about it.
@@ -50,7 +55,9 @@ export const ORPHAN_REASON_LABELS: Record<OrphanReason, string> = {
   WEEKDAY_NOT_SCHEDULED: 'Taj dan u nedelji nije u rasporedu',
   SCHEDULE_TIME_MISSING: 'Prva ili poslednja stanica nema vreme',
   SKIPPED_BY_EXCEPTION: 'Upisano je da se tog dana ne vozi',
-  EXTRA_DEPARTURE_REMOVED: 'Dodatni polazak je obrisan'
+  EXTRA_DEPARTURE_REMOVED: 'Dodatni polazak je obrisan',
+  DEPARTURE_CANCELLED: 'Polazak je otkazan',
+  DEPARTURE_DROPPED: 'Polazak vise nije u redu voznje'
 };
 
 export const ORPHAN_REASON_ADVICE: Record<OrphanReason, string> = {
@@ -69,7 +76,11 @@ export const ORPHAN_REASON_ADVICE: Record<OrphanReason, string> = {
   SKIPPED_BY_EXCEPTION:
     'Za taj datum je upisan izuzetak da voznja ne saobraca. Ako ipak saobraca, obrisite izuzetak; ako ne saobraca, javite putniku i prebacite rezervaciju.',
   EXTRA_DEPARTURE_REMOVED:
-    'Vreme koje rezervacija nosi ne daje raspored voznje za taj datum, pa je putnik najverovatnije rezervisao na dodatni polazak koji je obrisan. Proverite da li tog dana voznja uopste treba da saobraca: ako treba, vratite taj polazak kao izuzetak; ako ne treba, javite putniku i prebacite rezervaciju.'
+    'Vreme koje rezervacija nosi ne daje raspored voznje za taj datum, pa je putnik najverovatnije rezervisao na dodatni polazak koji je obrisan. Proverite da li tog dana voznja uopste treba da saobraca: ako treba, vratite taj polazak kao izuzetak; ako ne treba, javite putniku i prebacite rezervaciju.',
+  DEPARTURE_CANCELLED:
+    'Polazak na kojem je putnik je otkazan, a rezervacija je i dalje aktivna. Ako polazak ipak saobraca, vratite ga; ako ne saobraca, javite putniku i otkazite ili prebacite rezervaciju.',
+  DEPARTURE_DROPPED:
+    'Red voznje vise ne pravi polazak na kojem je putnik, a rezervacija je i dalje aktivna. Proverite liniju i voznju: ako polazak treba da saobraca, vratite ga u red voznje; ako ne treba, javite putniku i otkazite ili prebacite rezervaciju.'
 };
 
 /**
@@ -164,6 +175,43 @@ export function classifyReservation(
     targetDepartureTime: target.departureTime,
     targetArrivalTime: target.arrivalTime
   };
+}
+
+/**
+ * Whether a reservation on a stored departure is reachable (#27, PR 3b).
+ *
+ * Its seat is held on the departure, and the sync keeps the time copies in
+ * step with it, so the times are no longer the question: the departure either
+ * runs or it does not. When it does not, the ride's own schedule names why, as
+ * for a reservation found by its time. Nothing here is repairable by moving a
+ * time: the passenger is on the right bus, and the bus is not going.
+ */
+export function classifyLinkedReservation(
+  departure: { source: DepartureSource; cancelledAt: Date | null; timetableDroppedAt: Date | null },
+  day: RideDayInstances
+): OrphanClassification | null {
+  const none = { targetDepartureTime: null, targetArrivalTime: null };
+
+  if (departure.cancelledAt) {
+    return { reason: 'DEPARTURE_CANCELLED', ...none };
+  }
+
+  if (!departure.timetableDroppedAt) {
+    return null;
+  }
+
+  if (!day.rideIsActive) {
+    return { reason: 'RIDE_NOT_ACTIVE', ...none };
+  }
+
+  // An extra bus runs on dates the schedule does not, so the schedule's gaps
+  // say nothing about why one was dropped.
+  if (departure.source !== DepartureSource.EXTRA && !day.baseInstance.runs) {
+    return { reason: day.baseInstance.gap, ...none };
+  }
+
+  // A deactivated line, most likely.
+  return { reason: 'DEPARTURE_DROPPED', ...none };
 }
 
 /**

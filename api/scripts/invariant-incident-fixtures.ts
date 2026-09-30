@@ -80,9 +80,25 @@ class FixtureRollback extends Error {
 
 const fixtures: IncidentFixture[] = [
   {
+    // Since #27 PR 3b the sync moves a booked departure's time copies with
+    // it, and the guard asks about the move (`reservation.departureTimeKept`)
+    // before it is saved; nothing is left stranded afterwards.
     name: 'first schedule station time changes after sale',
     invariantKey: 'reservation.reachable',
+    expects: 'silence',
     mutate: async (tx, state) => {
+      await tx.rideDayScheduleStationTime.update({
+        where: { id: state.stationTimeIds.first },
+        data: { time: '08:30' }
+      });
+    }
+  },
+  {
+    // A row with no departure is still found by its time, and repaired.
+    name: 'first schedule station time changes under an unlinked booking',
+    invariantKey: 'reservation.reachable',
+    mutate: async (tx, state) => {
+      await tx.reservation.update({ where: { id: state.reservationId }, data: { departureId: null } });
       await tx.rideDayScheduleStationTime.update({
         where: { id: state.stationTimeIds.first },
         data: { time: '08:30' }
@@ -93,10 +109,21 @@ const fixtures: IncidentFixture[] = [
   {
     name: 'last schedule station time changes after sale',
     invariantKey: 'reservation.arrivalTimeCurrent',
+    expects: 'silence',
     mutate: async (tx, state) => {
       await tx.rideDayScheduleStationTime.update({
         where: { id: state.stationTimeIds.last },
         data: { time: '11:30' }
+      });
+    }
+  },
+  {
+    name: 'arrival time copy is rewritten outside the timetable sync',
+    invariantKey: 'reservation.arrivalTimeCurrent',
+    mutate: async (tx, state) => {
+      await tx.reservation.update({
+        where: { id: state.reservationId },
+        data: { rideArrivalTime: '11:30' }
       });
     }
   },
@@ -135,20 +162,21 @@ const fixtures: IncidentFixture[] = [
     mutate: async (tx, state) => {
       await skipDate(tx, state, 'exception-skip');
     },
-    matches: reason('SKIPPED_BY_EXCEPTION')
+    matches: reason('DEPARTURE_CANCELLED')
   },
   {
     name: 'ADDITIONAL exception is deleted after sale',
     invariantKey: 'reservation.reachable',
     mutate: async (tx, state) => {
-      await addExtra(tx, state, { id: 'exception-additional', departureTime: '12:00' });
+      const extra = await addExtra(tx, state, { id: 'exception-additional', departureTime: '12:00' });
       await tx.reservation.update({
         where: { id: state.reservationId },
-        data: { rideDepartureTime: '12:00', rideArrivalTime: '14:00' }
+        data: { departureId: extra.id, rideDepartureTime: '12:00', rideArrivalTime: '14:00' }
       });
+      // Booked, so the extra is cancelled rather than deleted.
       await removeException(tx, state, 'exception-additional');
     },
-    matches: reason('DEPARTURE_TIME_MOVED')
+    matches: reason('DEPARTURE_CANCELLED')
   },
   {
     name: 'capacity is lowered below an occupied seat',
@@ -177,11 +205,26 @@ const fixtures: IncidentFixture[] = [
         }
       });
       await tx.ride.update({ where: { id: state.rideId }, data: { lineId: replacementLineId } });
+      // The ride edit writes the day schedule for the new line with it, and
+      // the departure takes its stops from that schedule (#27, PR 3b).
+      await tx.rideDayScheduleStationTime.delete({ where: { id: state.stationTimeIds.first } });
+      await tx.rideDayScheduleStationTime.update({
+        where: { id: state.stationTimeIds.middle },
+        data: { orderIndex: 0, time: '09:00' }
+      });
+      await tx.rideDayScheduleStationTime.update({
+        where: { id: state.stationTimeIds.last },
+        data: { stationId: state.stationIds.alternate, orderIndex: 1, time: '11:00' }
+      });
     }
   },
   {
+    // #14. The departure keeps its ID through the reorder, and the sync moves
+    // its passengers' time copies with it (#27, PR 3b): nobody is stranded,
+    // and the guard has asked about the new time before the edit was saved.
     name: 'route is reordered after sale',
     invariantKey: 'reservation.reachable',
+    expects: 'silence',
     mutate: async (tx, state) => {
       await tx.lineStop.update({
         where: { id: state.lineStopId },
@@ -203,8 +246,7 @@ const fixtures: IncidentFixture[] = [
         where: { id: state.stationTimeIds.first },
         data: { orderIndex: 1 }
       });
-    },
-    matches: reason('DEPARTURE_TIME_MOVED')
+    }
   },
   {
     name: 'boarding is disabled at a sold departure stop',
@@ -532,6 +574,17 @@ const fixtures: IncidentFixture[] = [
     matches: reason('NO_UNIQUE_MATCH')
   },
   {
+    name: 'departure time copy is rewritten outside the timetable sync',
+    invariantKey: 'reservation.departureLinked',
+    mutate: async (tx, state) => {
+      await tx.reservation.update({
+        where: { id: state.reservationId },
+        data: { rideDepartureTime: '08:45' }
+      });
+    },
+    matches: reason('STALE_TIME_COPY')
+  },
+  {
     name: 'booking is linked to an extra bus it was not sold on',
     invariantKey: 'reservation.departureLinked',
     mutate: async (tx, state) => {
@@ -547,13 +600,14 @@ const fixtures: IncidentFixture[] = [
     matches: reason('WRONG_LINK')
   },
   {
+    // Listed by `reservation.reachable` since #27 PR 3b; the link is right.
     name: 'booked date is cancelled',
-    invariantKey: 'reservation.departureLinked',
+    invariantKey: 'reservation.reachable',
     mutate: async (tx, state) => {
       await skipDate(tx, state, 'exception-booked-skip');
     },
     matches: (violation, state) =>
-      reason('NOT_RUNNING')(violation) && violation.subjectId === state.reservationId
+      reason('DEPARTURE_CANCELLED')(violation) && violation.subjectId === state.reservationId
   },
   {
     name: 'active booking is linked to a LEGACY departure',

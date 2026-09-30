@@ -490,6 +490,19 @@ describe('guardProspectiveWrite', () => {
       );
     });
 
+    it('syncs a checked write once, before its after-scan, when nothing is repaired', async () => {
+      const { prisma } = prismaDouble();
+      const reachable = invariantReporting(REACHABLE, [], []);
+
+      await expect(
+        guardProspectiveWrite(prisma as never, scope, [reachable], UNANSWERED, jest.fn().mockResolvedValue('written'))
+      ).resolves.toBe('written');
+
+      // The transaction's own closing sync would read the whole tenant again,
+      // with bookings waiting, and find nothing to do.
+      expect(syncDepartures).toHaveBeenCalledTimes(1);
+    });
+
     it('does not sync departures for a write that cannot change the timetable', async () => {
       const { prisma } = prismaDouble();
       const write = jest.fn().mockResolvedValue('written');

@@ -15,6 +15,22 @@ export class CreateReservationDto {
   @IsString()
   @IsNotEmpty()
   returnOfReservationId?: string;
+
+  @ApiPropertyOptional({
+    example: 'departure-id-123',
+    description:
+      'The departure to book. rideId, travelDate, rideDepartureTime and rideArrivalTime must ' +
+      'agree with it, or the request is refused with 409 DEPARTURE_CHANGED. Without it the ' +
+      'departure is the only one of the ride leaving at rideDepartureTime on travelDate. Either ' +
+      'way, 409 DEPARTURE_NOT_FOUND when there is no such departure. A departure that is cancelled or no longer ' +
+      'in the timetable, or a LEGACY departure, is refused with 409 DEPARTURE_NOT_RUNNING, and a ' +
+      'date past the stored window with 400 TRAVEL_DATE_OUT_OF_WINDOW.'
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  departureId?: string;
+
   @ApiProperty({ example: 'ride-id-123' })
   @IsString()
   @IsNotEmpty()

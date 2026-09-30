@@ -8,7 +8,11 @@ const updateMany = jest.fn();
 const prismaMock = {
   $queryRaw: jest.fn(),
   $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
-    callback({ $executeRaw: jest.fn().mockResolvedValue(1), reservation: { updateMany } })
+    callback({
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      reservation: { findMany: jest.fn().mockResolvedValue([]), updateMany }
+    })
   ),
   reservation: { count: jest.fn() }
 };

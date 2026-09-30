@@ -12,24 +12,27 @@ import { CheckResult, Invariant, InvariantContext, Violation } from '../invarian
  * Every future active reservation points at the departure it is on (#27).
  *
  * Bookings link themselves since PR 1b, by the rule in `departure-link.ts`,
- * and `departures:backfill` (PR 2) linked the ones booked before. Nothing
- * reads the link yet, which is why this is a warning; PR 3 moves seats and
- * locking onto it and makes it critical. PR 3 also needs this check to report
- * no unlinked reservations at all. It has no cutoff for bookings made before
- * PR 1b, so the backfill is applied right after PR 2 is deployed.
+ * and `departures:backfill` (PR 2) linked the ones booked before. Since PR 3b
+ * seats are counted and locked on the link, so a missing or wrong one is a
+ * wrong count of free seats, and this is critical.
  *
  * It looks at active reservations from the agency's date to the end of the
  * stored departure window, and reports:
  * - a link to a `LEGACY` departure: those record sales the timetable no longer
  *   produces, and only past or cancelled reservations belong on one;
  * - a link whose time copy uniquely matches a different departure: the link
- *   names the wrong bus. A copy that matches nothing is only stale, and
- *   `reservation.reachable` already reports and repairs it;
- * - a link to a departure that is not running: its passengers are still
- *   active and somebody has to call them;
+ *   names the wrong bus;
+ * - a link whose time copy matches neither its departure nor any other: the
+ *   sync keeps a linked row's copies in step with its departure, so only a
+ *   write that bypassed it leaves one, and until PR 4 the screens find a
+ *   passenger by that copy;
  * - an unlinked reservation, either with a unique match (a writer skipped the
  *   link, or the backfill has not run) or without one (an extra at the same
  *   time, a stale time, or no stored departure).
+ *
+ * A link to a departure that does not run is not wrong, and is listed by
+ * `reservation.reachable` since PR 3b: its passengers still need a call, and
+ * that check is the one a timetable edit is asked about.
  *
  * Reported, never repaired: repairs ship after the checks that justify them.
  */
@@ -37,7 +40,7 @@ import { CheckResult, Invariant, InvariantContext, Violation } from '../invarian
 export type DepartureLinkReason =
   | 'ON_LEGACY'
   | 'WRONG_LINK'
-  | 'NOT_RUNNING'
+  | 'STALE_TIME_COPY'
   | 'LINKABLE_UNLINKED'
   | 'NO_UNIQUE_MATCH';
 
@@ -48,9 +51,7 @@ const RESERVATION_SELECT = {
   rideDepartureTime: true,
   departureId: true,
   passenger: { select: { firstName: true, lastName: true } },
-  departure: {
-    select: { source: true, timetableDroppedAt: true, cancelledAt: true }
-  }
+  departure: { select: { source: true, departureTime: true } }
 } as const;
 
 type LinkedReservation = Prisma.ReservationGetPayload<{ select: typeof RESERVATION_SELECT }>;
@@ -157,20 +158,13 @@ export function classifyDepartureLinks(
             { matchingDepartureId: match }
           )
         );
-        continue;
-      }
-
-      const { cancelledAt, timetableDroppedAt } = reservation.departure;
-
-      if (cancelledAt || timetableDroppedAt) {
+      } else if (reservation.departure.departureTime !== reservation.rideDepartureTime) {
         violations.push(
           violation(
             reservation,
-            'NOT_RUNNING',
-            cancelledAt
-              ? 'polazak je otkazan, a rezervacija je i dalje aktivna.'
-              : 'polazak je izbacen iz reda voznje, a rezervacija je i dalje aktivna.',
-            { cancelled: Boolean(cancelledAt), timetableDropped: Boolean(timetableDroppedAt) }
+            'STALE_TIME_COPY',
+            `rezervacija nosi drugo vreme polaska od svog polaska (${reservation.departure.departureTime}), pa se ne vidi na spisku putnika.`,
+            { departureTime: reservation.departure.departureTime }
           )
         );
       }
@@ -200,10 +194,10 @@ export const reservationDepartureLinked: Invariant = {
   key: 'reservation.departureLinked',
   title: 'Rezervacija je vezana za svoj polazak',
   description:
-    'Svaka rezervacija treba da pokazuje na tacno jedan sacuvan polazak. Uskoro ce se sedista brojati po tom polasku, pa bi rezervacija vezana za pogresan autobus ili bez polaska znacila pogresan broj slobodnih mesta.',
+    'Svaka rezervacija treba da pokazuje na tacno jedan sacuvan polazak. Sedista se broje po tom polasku, pa rezervacija vezana za pogresan autobus ili bez polaska znaci pogresan broj slobodnih mesta.',
   manualAdvice:
-    'Ako je polazak otkazan ili izbacen iz reda voznje, pozovite putnika i ponudite drugi termin ili otkazite rezervaciju. Ako vreme polaska rezervacije vise ne postoji u redu voznje, pokrenite popravku provere "Rezervacija se vidi na svom polasku" ili otkazite rezervaciju. Ako u isto vreme polaze dva autobusa, javite podrsci koji autobus putnik koristi. Ostale razlike prijavite podrsci: rezervacija radi kao i do sada, ali je treba vezati za pravi polazak pre sledece izmene sistema.',
-  severity: 'warning',
+    'Ako vreme polaska rezervacije vise ne postoji u redu voznje, pokrenite popravku provere "Rezervacija se vidi na svom polasku" ili otkazite rezervaciju. Ako u isto vreme polaze dva autobusa, javite podrsci koji autobus putnik koristi. Ako rezervacija nosi drugo vreme od svog polaska, javite podrsci. Ostale razlike prijavite podrsci: dok rezervacija nije vezana za pravi polazak, njeno sediste se ne broji na tom autobusu i ne moze da se menja.',
+  severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {
     const { reservations, departures } = await load(ctx.prisma, ctx.tenantId);

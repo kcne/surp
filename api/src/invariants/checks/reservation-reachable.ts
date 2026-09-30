@@ -5,6 +5,7 @@ import {
   ORPHAN_NO_FREE_SEAT_ADVICE,
   ORPHAN_REASON_ADVICE,
   ORPHAN_REASON_LABELS,
+  classifyLinkedReservation,
   classifyReservation,
   findOffRouteStationIds,
   resolveSeatNumber,
@@ -27,6 +28,12 @@ import { inScheduleEdit } from '../in-schedule-edit';
  * Editing a route is enough to cause it: the instance departure time is the
  * first station's time, so putting a new station at the head of a line renames
  * every instance on it and strands every reservation booked before the change.
+ *
+ * Since #27 PR 3b a reservation on a stored departure is judged by that
+ * departure instead: the sync keeps its time copies in step, so it is
+ * reachable while the bus runs, and listed, never repaired, once the bus is
+ * cancelled or dropped from the timetable. The time repair is left for a row
+ * with no departure, which it links.
  */
 
 export interface OrphanedReservationItem {
@@ -213,17 +220,18 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
       continue;
     }
 
-    const classification = classifyReservation(
-      { ...reservation, travelDate },
-      window.dayOf(ride, travelDate)
-    );
+    const departure = window.departureOf(reservation);
+    const day = window.dayOf(ride, travelDate);
+    const classification = departure
+      ? classifyLinkedReservation(departure, day)
+      : classifyReservation({ ...reservation, travelDate }, day);
 
     if (!classification) {
       // Reachable today, so its seat is genuinely taken.
       claimSeat(
         reservation.rideId,
         travelDate,
-        reservation.rideDepartureTime,
+        departure?.departureTime ?? reservation.rideDepartureTime,
         reservation.seatNumber
       );
       continue;
@@ -293,10 +301,11 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
 
   const items: OrphanedReservationItem[] = orphanCandidates.map((candidate) => {
     const { reservation, ride, travelDate, targetDepartureTime } = candidate;
+    const route = window.routeOf(reservation, ride);
     const routeStationIds = new Set<string>([
-      ride.line.departureStationId,
-      ride.line.arrivalStationId,
-      ...ride.line.intermediateStops.map((stop) => stop.stationId)
+      route.departureStationId,
+      route.arrivalStationId,
+      ...route.intermediateStops.map((stop) => stop.stationId)
     ]);
 
     const targetSeatNumber = seatByReservationId.get(reservation.id) ?? null;

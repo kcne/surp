@@ -7,11 +7,12 @@ import { loadStationNames, stationNamer } from './tenant-lookups';
  * Two passengers cannot sit in the same seat at the same time.
  *
  * Nothing in the database says so. Seat uniqueness is enforced only in
- * `ensureSeatAndCapacityAreAvailable`, under an advisory lock keyed on the
- * departure time — and when that time drifts, the lock and the check move to a
- * different key while the passengers stay on the same bus. A stale browser tab
- * holding a departure list loaded before a route edit is enough: it sends the
- * old time, takes a different lock, and the booking goes through.
+ * `ensureSeatAndCapacityAreAvailable`. Until #27 PR 3b it ran under an
+ * advisory lock keyed on the departure time, and when that time drifted the
+ * lock and the check moved to a different key while the passengers stayed on
+ * the same bus: a stale tab sent the old time, took a different lock, and the
+ * booking went through. It now runs under the departure's row lock and counts
+ * by `departureId`, and this check is what finds the clashes sold before.
  *
  * A `UNIQUE` constraint would be the wrong fix and must not be added. The same
  * seat is legitimately sold twice on one run when the two passengers travel

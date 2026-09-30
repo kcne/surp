@@ -8,6 +8,7 @@
 import type { ReservationPassengerSummaryDto } from './reservationPassengerSummaryDto';
 import type { ReservationResponseDtoCancelledAt } from './reservationResponseDtoCancelledAt';
 import type { ReservationResponseDtoCreatedById } from './reservationResponseDtoCreatedById';
+import type { ReservationResponseDtoDepartureId } from './reservationResponseDtoDepartureId';
 import type { ReservationResponseDtoStatus } from './reservationResponseDtoStatus';
 import type { ReservationResponseDtoUpdatedById } from './reservationResponseDtoUpdatedById';
 import type { ReservationRideSummaryDto } from './reservationRideSummaryDto';
@@ -17,6 +18,11 @@ export interface ReservationResponseDto {
   id: string;
   tenantId: string;
   rideId: string;
+  /**
+   * The departure (one bus on one date) the seat is on. Null only for a row the departure backfill could not link, which reservation.departureLinked reports.
+   * @nullable
+   */
+  departureId: ReservationResponseDtoDepartureId;
   passengerId: string;
   /** @nullable */
   createdById: ReservationResponseDtoCreatedById;

@@ -51,10 +51,14 @@ export async function findReservationsOffRoute(ctx: InvariantContext): Promise<{
     }
 
     const travelDate = formatDateOnly(reservation.travelDate)!;
+    // The departure's stored stops for a linked reservation (#27, PR 3b):
+    // the guard syncs before it scans, so a stop removed from the line is
+    // gone from every future departure by then.
+    const route = window.routeOf(reservation, ride);
     const routeStationIds = new Set<string>([
-      ride.line.departureStationId,
-      ride.line.arrivalStationId,
-      ...ride.line.intermediateStops.map((stop) => stop.stationId)
+      route.departureStationId,
+      route.arrivalStationId,
+      ...route.intermediateStops.map((stop) => stop.stationId)
     ]);
 
     const offRouteStationIds = findOffRouteStationIds(
