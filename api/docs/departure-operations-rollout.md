@@ -28,6 +28,14 @@ Retain that build as the rollback target. The patch changes only the extra-capac
 ownership rule; it does not add departure-operation endpoints or require a schema
 change. It is also required on any older replica overlapping the 3d rollout.
 
+Verified on 1 October 2026 against an isolated copy of `85028222`: the patch
+applies with the commands above, all 19 sync tests pass, and the compatible API
+build succeeds. A seeded disposable-database rehearsal exercised 3d cancellation,
+restoration and confirmed retiming, then the patched 3c ride service and two full
+syncs, then 3d again. Capacity 60, active seat 55, cancelled seat 56, reservation
+links, times and exception mirrors were preserved. This supplements the
+production-restore gate below; that gate has not been repeated during this fix.
+
 ## Rehearsal gate on an isolated restored database
 
 1. With 3d, create an extra at capacity 60 on a 48-seat ride. Book seat 55 and

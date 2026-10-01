@@ -270,6 +270,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/DepartureTimeTakenDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DepartureOperationRefusalDto"
                     }
                   ]
                 }
@@ -332,7 +335,14 @@
             "description": "Departure not found in current tenant."
           },
           "409": {
-            "description": "DEPARTURE_HAS_RESERVATIONS: a reservation references the bus, a cancelled one included; cancel it instead. Also a departure that is not an extra bus."
+            "description": "DEPARTURE_HAS_RESERVATIONS: a reservation references the bus, a cancelled one included; cancel it instead. Also a departure that is not an extra bus.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureOperationRefusalDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -406,7 +416,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WouldBreakReservationsDto"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/WouldBreakReservationsDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DepartureOperationRefusalDto"
+                    }
+                  ]
                 }
               }
             }
@@ -473,7 +490,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DepartureTimeTakenDto"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DepartureTimeTakenDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DepartureOperationRefusalDto"
+                    }
+                  ]
                 }
               }
             }
@@ -6818,6 +6842,29 @@
           "message",
           "confirmationToken",
           "repairable"
+        ]
+      },
+      "DepartureOperationRefusalDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "DEPARTURE_LEGACY",
+              "DEPARTURE_ALREADY_CANCELLED",
+              "DEPARTURE_NOT_CANCELLED",
+              "DEPARTURE_NOT_EXTRA",
+              "DEPARTURE_HAS_RESERVATIONS"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "example": "Polazak je vec otkazan."
+          }
+        },
+        "required": [
+          "code",
+          "message"
         ]
       },
       "CancelDepartureDto": {

@@ -204,6 +204,13 @@ describe('diffDepartures', () => {
     expect(diff([ride({ capacity: 60 })], [resized, cancelledOrphan]).updates).toEqual([]);
   });
 
+  it('preserves a booked extra above the ride capacity across repeated full syncs', () => {
+    const bookedExtra = extra({ capacity: 60, referenceCount: 1 });
+    for (let pass = 0; pass < 2; pass += 1) {
+      expect(diff([ride({ capacity: 48 })], [bookedExtra]).updates).toEqual([]);
+    }
+  });
+
   it('rewrites the stops of a one-time departure stored with its ends only', () => {
     const oneTime = ride({
       type: RideType.ONE_TIME,

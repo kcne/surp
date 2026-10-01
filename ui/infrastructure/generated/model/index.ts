@@ -55,6 +55,8 @@ export * from './dailyReservationPointResponseDto';
 export * from './dashboardSummaryResponseDto';
 export * from './dateRangeResponseDto';
 export * from './departureListResponseDto';
+export * from './departureOperationRefusalDto';
+export * from './departureOperationRefusalDtoCode';
 export * from './departureResponseDto';
 export * from './departureResponseDtoSource';
 export * from './departuresControllerListParams';
