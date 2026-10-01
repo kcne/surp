@@ -5,10 +5,7 @@
  * Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.
  * OpenAPI spec version: 0.1.0
  */
-import type { DepartureResponseDtoCancelledAt } from './departureResponseDtoCancelledAt';
-import type { DepartureResponseDtoCancelledById } from './departureResponseDtoCancelledById';
 import type { DepartureResponseDtoSource } from './departureResponseDtoSource';
-import type { DepartureResponseDtoTimetableDroppedAt } from './departureResponseDtoTimetableDroppedAt';
 import type { DepartureStopResponseDto } from './departureStopResponseDto';
 
 export interface DepartureResponseDto {
@@ -27,14 +24,14 @@ export interface DepartureResponseDto {
    * Set when the timetable no longer has this departure but passengers are still booked on it.
    * @nullable
    */
-  timetableDroppedAt: DepartureResponseDtoTimetableDroppedAt;
+  timetableDroppedAt: string | null;
   /**
    * Set when an operator cancelled this departure.
    * @nullable
    */
-  cancelledAt: DepartureResponseDtoCancelledAt;
+  cancelledAt: string | null;
   /** @nullable */
-  cancelledById: DepartureResponseDtoCancelledById;
+  cancelledById: string | null;
   /** Ordered by orderIndex. Empty on a LEGACY departure, which stores no route. */
   stops: DepartureStopResponseDto[];
   createdAt: string;

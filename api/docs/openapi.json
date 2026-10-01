@@ -28,7 +28,7 @@
             "name": "to",
             "required": true,
             "in": "query",
-            "description": "Last service date, included. At most 62 days from `from`, both ends counted.",
+            "description": "Last service date, included. The range covers at most 62 days, both ends included.",
             "schema": {
               "example": "2026-10-31",
               "type": "string"
@@ -6223,7 +6223,7 @@
             "example": 0
           },
           "time": {
-            "type": "object",
+            "type": "string",
             "nullable": true,
             "example": "09:00",
             "description": "Null on a middle stop of an extra bus or a one-time ride, which has no time of its own."
@@ -6288,17 +6288,19 @@
             "example": 48
           },
           "timetableDroppedAt": {
-            "type": "object",
+            "type": "string",
+            "format": "date-time",
             "nullable": true,
             "description": "Set when the timetable no longer has this departure but passengers are still booked on it."
           },
           "cancelledAt": {
-            "type": "object",
+            "type": "string",
+            "format": "date-time",
             "nullable": true,
             "description": "Set when an operator cancelled this departure."
           },
           "cancelledById": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "stops": {

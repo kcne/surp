@@ -121,6 +121,22 @@ describe('OpenAPI contract', () => {
     expect(detail?.responses['404']).toBeDefined();
   });
 
+  it('types the nullable departure fields as strings, not objects', () => {
+    const schemas = document.components?.schemas ?? {};
+    const property = (schema: string, name: string) =>
+      (schemas[schema] as { properties?: Record<string, unknown> } | undefined)?.properties?.[name];
+
+    expect(property('DepartureStopResponseDto', 'time')).toMatchObject({ type: 'string', nullable: true });
+    expect(property('DepartureResponseDto', 'cancelledById')).toMatchObject({ type: 'string', nullable: true });
+    for (const name of ['timetableDroppedAt', 'cancelledAt']) {
+      expect(property('DepartureResponseDto', name)).toMatchObject({
+        type: 'string',
+        format: 'date-time',
+        nullable: true
+      });
+    }
+  });
+
   it('keeps platform tenant login options endpoint public', () => {
     const publicTenantOptions = document.paths['/platform/tenants/public']?.get;
 

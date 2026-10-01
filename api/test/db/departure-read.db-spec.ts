@@ -67,11 +67,16 @@ describe('departure reads (real database)', () => {
         capacity: 48,
         createdById: SYSTEM_ACTOR_ID,
         updatedById: SYSTEM_ACTOR_ID,
+        // A LEGACY departure stores no route. The stops of any other go in last
+        // first, so the read has to order them.
         stops: {
-          create: [
-            { stationId: seeded.stations.first, orderIndex: 0, time: data.departureTime, isBoarding: true, isDropoff: false },
-            { stationId: seeded.stations.last, orderIndex: 1, time: data.arrivalTime, isBoarding: false, isDropoff: true }
-          ].map((stop) => ({
+          create: (data.source === DepartureSource.LEGACY
+            ? []
+            : [
+                { stationId: seeded.stations.last, orderIndex: 1, time: data.arrivalTime, isBoarding: false, isDropoff: true },
+                { stationId: seeded.stations.first, orderIndex: 0, time: data.departureTime, isBoarding: true, isDropoff: false }
+              ]
+          ).map((stop) => ({
             ...stop,
             tenantId: seeded.auth.tenantId,
             createdById: SYSTEM_ACTOR_ID,
@@ -127,6 +132,11 @@ describe('departure reads (real database)', () => {
       expect.objectContaining({ stationId: seeded.stations.last, orderIndex: 1, time: '11:00', isDropoff: true })
     ]);
     expect(result.items[3].stops[0].stationName).toMatch(/^First /);
+    expect(result.items[0].stops).toEqual([]);
+    expect(result.items[2].stops.map((stop) => [stop.stationId, stop.orderIndex])).toEqual([
+      [seeded.stations.first, 0],
+      [seeded.stations.last, 1]
+    ]);
   });
 
   it('includes both ends of the range and nothing outside it', async () => {
@@ -158,6 +168,15 @@ describe('departure reads (real database)', () => {
     const foreign = await prisma.departure.findFirstOrThrow({ where: { tenantId: other.auth.tenantId } });
     await expect(departures.getById(seeded.auth, foreign.id)).rejects.toBeInstanceOf(NotFoundException);
     await expect(departures.getById(other.auth, foreign.id)).resolves.toMatchObject({ id: foreign.id });
+  });
+
+  it('filters by ride', async () => {
+    const byRide = await departures.list(seeded.auth, {
+      from: seeded.travelDate,
+      to: seeded.travelDate,
+      rideId: seeded.rideId
+    });
+    expect(byRide.items.map((item) => item.rideId)).toEqual([seeded.rideId]);
   });
 
   it('filters by line', async () => {

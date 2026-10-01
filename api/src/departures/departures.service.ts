@@ -44,11 +44,18 @@ const DEPARTURE_SELECT = {
 
 type DepartureRow = Prisma.DepartureGetPayload<{ select: typeof DEPARTURE_SELECT }>;
 
-/** A `YYYY-MM-DD` string as a UTC midnight, or null when it is no real date. */
+/**
+ * A `YYYY-MM-DD` string as a UTC midnight, or null when it is no real date.
+ * Year 0000 is refused too: JavaScript accepts it, Postgres has no year 0.
+ */
 function parseDate(value: string): Date | null {
   const parsed = new Date(`${value}T00:00:00.000Z`);
 
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getUTCFullYear() < 1 ||
+    parsed.toISOString().slice(0, 10) !== value
+  ) {
     return null;
   }
 

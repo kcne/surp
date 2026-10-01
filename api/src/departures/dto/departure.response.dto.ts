@@ -12,6 +12,7 @@ export class DepartureStopResponseDto {
   orderIndex!: number;
 
   @ApiProperty({
+    type: String,
     nullable: true,
     example: '09:00',
     description: 'Null on a middle stop of an extra bus or a one-time ride, which has no time of its own.'
@@ -62,15 +63,22 @@ export class DepartureResponseDto {
   capacity!: number;
 
   @ApiProperty({
+    type: String,
+    format: 'date-time',
     nullable: true,
     description: 'Set when the timetable no longer has this departure but passengers are still booked on it.'
   })
   timetableDroppedAt!: Date | null;
 
-  @ApiProperty({ nullable: true, description: 'Set when an operator cancelled this departure.' })
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'Set when an operator cancelled this departure.'
+  })
   cancelledAt!: Date | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   cancelledById!: string | null;
 
   @ApiProperty({

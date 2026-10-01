@@ -9,7 +9,7 @@ export class ListDeparturesQueryDto {
 
   @ApiProperty({
     example: '2026-10-31',
-    description: 'Last service date, included. At most 62 days from `from`, both ends counted.'
+    description: 'Last service date, included. The range covers at most 62 days, both ends included.'
   })
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
@@ -18,12 +18,14 @@ export class ListDeparturesQueryDto {
   @ApiPropertyOptional({ description: 'Only departures of this ride.' })
   @IsOptional()
   @IsString()
+  @Matches(/^\S+$/, { message: '$property must not be empty or contain whitespace' })
   @MaxLength(64)
   rideId?: string;
 
   @ApiPropertyOptional({ description: 'Only departures on this line.' })
   @IsOptional()
   @IsString()
+  @Matches(/^\S+$/, { message: '$property must not be empty or contain whitespace' })
   @MaxLength(64)
   lineId?: string;
 }

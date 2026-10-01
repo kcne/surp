@@ -5,7 +5,6 @@
  * Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.
  * OpenAPI spec version: 0.1.0
  */
-import type { DepartureStopResponseDtoTime } from './departureStopResponseDtoTime';
 
 export interface DepartureStopResponseDto {
   stationId: string;
@@ -15,7 +14,7 @@ export interface DepartureStopResponseDto {
    * Null on a middle stop of an extra bus or a one-time ride, which has no time of its own.
    * @nullable
    */
-  time: DepartureStopResponseDtoTime;
+  time: string | null;
   isBoarding: boolean;
   isDropoff: boolean;
 }

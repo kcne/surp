@@ -12,7 +12,7 @@ export type DeparturesControllerListParams = {
  */
 from: string;
 /**
- * Last service date, included. At most 62 days from `from`, both ends counted.
+ * Last service date, included. The range covers at most 62 days, both ends included.
  */
 to: string;
 /**

@@ -64,8 +64,15 @@ describe('DeparturesController (e2e)', () => {
 
   const tokens: Record<string, { sub: string; tenantId: string; role: UserRole; username: string }> = {
     'access-token-admin': { sub: 'admin-1', tenantId: 'tenant-1', role: UserRole.ADMIN, username: 'admin' },
+    'access-token-manager': { sub: 'manager-1', tenantId: 'tenant-1', role: UserRole.MANAGER, username: 'manager' },
     'access-token-staff': { sub: 'staff-1', tenantId: 'tenant-1', role: UserRole.STAFF, username: 'staff' },
-    'access-token-driver': { sub: 'driver-1', tenantId: 'tenant-1', role: UserRole.DRIVER, username: 'driver' }
+    'access-token-driver': { sub: 'driver-1', tenantId: 'tenant-1', role: UserRole.DRIVER, username: 'driver' },
+    'access-token-superadmin': {
+      sub: 'superadmin-1',
+      tenantId: 'tenant-1',
+      role: UserRole.SUPERADMIN,
+      username: 'superadmin'
+    }
   };
 
   const jwtServiceMock = {
@@ -179,7 +186,8 @@ describe('DeparturesController (e2e)', () => {
     it.each([
       ['a range of 63 days', 'from=2026-10-01&to=2026-12-02', 'A range covers at most 62 days'],
       ['to before from', 'from=2026-10-02&to=2026-10-01', 'to must not be before from'],
-      ['a date that does not exist', 'from=2026-02-30&to=2026-03-02', 'from and to must be real dates']
+      ['a date that does not exist', 'from=2026-02-30&to=2026-03-02', 'from and to must be real dates'],
+      ['year 0000, which Postgres cannot store', 'from=0000-01-01&to=0000-01-02', 'from and to must be real dates']
     ])('refuses %s with 400', async (_case, queryString, message) => {
       const response = await get(`/departures?${queryString}`).expect(400);
 
@@ -190,15 +198,27 @@ describe('DeparturesController (e2e)', () => {
     it.each([
       ['a missing to', 'from=2026-10-01'],
       ['a malformed date', 'from=01.10.2026&to=2026-10-31'],
-      ['an unknown filter', 'from=2026-10-01&to=2026-10-31&status=ACTIVE']
+      ['an unknown filter', 'from=2026-10-01&to=2026-10-31&status=ACTIVE'],
+      ['a source filter, which the list does not take', 'from=2026-10-01&to=2026-10-31&source=LEGACY'],
+      ['an empty ride filter', 'from=2026-10-01&to=2026-10-31&rideId='],
+      ['a whitespace line filter', 'from=2026-10-01&to=2026-10-31&lineId=%20']
     ])('refuses %s with 400', async (_case, queryString) => {
       await get(`/departures?${queryString}`).expect(400);
 
       expect(prismaMock.departure.findMany).not.toHaveBeenCalled();
     });
 
-    it.each(['access-token-staff', 'access-token-driver'])('is readable with %s', async (token) => {
-      await get('/departures?from=2026-10-01&to=2026-10-31', token).expect(200);
+    it.each(['access-token-manager', 'access-token-staff', 'access-token-driver'])(
+      'is readable with %s',
+      async (token) => {
+        await get('/departures?from=2026-10-01&to=2026-10-31', token).expect(200);
+      }
+    );
+
+    it('refuses a role outside the agency', async () => {
+      await get('/departures?from=2026-10-01&to=2026-10-31', 'access-token-superadmin').expect(403);
+
+      expect(prismaMock.departure.findMany).not.toHaveBeenCalled();
     });
 
     it('refuses a token of another tenant', async () => {
@@ -232,6 +252,12 @@ describe('DeparturesController (e2e)', () => {
       const response = await get('/departures/departure-x').expect(404);
 
       expect(response.body.message).toBe('Departure not found');
+    });
+
+    it('refuses a role outside the agency', async () => {
+      await get('/departures/departure-1', 'access-token-superadmin').expect(403);
+
+      expect(prismaMock.departure.findFirst).not.toHaveBeenCalled();
     });
   });
 });
