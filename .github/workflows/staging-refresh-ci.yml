@@ -33,7 +33,7 @@ jobs:
           docker run --detach --rm --name refresh-test-db --network surp-refresh-test \
             -e POSTGRES_PASSWORD=refresh-test-only postgres:18-alpine
           for attempt in {1..30}; do
-            if docker exec refresh-test-db pg_isready -U postgres; then
+            if docker exec refresh-test-db pg_isready -h 127.0.0.1 -U postgres; then
               exit 0
             fi
             sleep 1
