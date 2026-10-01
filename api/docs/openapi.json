@@ -1,6 +1,144 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/departures": {
+      "get": {
+        "operationId": "DeparturesController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "description": "First service date, included.",
+            "schema": {
+              "example": "2026-10-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "description": "Last service date, included. The range covers at most 62 days, both ends included.",
+            "schema": {
+              "example": "2026-10-31",
+              "type": "string"
+            }
+          },
+          {
+            "name": "rideId",
+            "required": false,
+            "in": "query",
+            "description": "Only departures of this ride.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lineId",
+            "required": false,
+            "in": "query",
+            "description": "Only departures on this line.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureListResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure, a date that does not exist, to before from, or a range over 62 days."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List stored departures (one bus on one date) in the current tenant between two service dates. Past, cancelled, dropped and LEGACY departures are included.",
+        "tags": [
+          "Departures"
+        ]
+      }
+    },
+    "/departures/{id}": {
+      "get": {
+        "operationId": "DeparturesController_getById",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Departure not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get one stored departure by id in the current tenant.",
+        "tags": [
+          "Departures"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "HealthController_health",
@@ -6071,6 +6209,160 @@
       }
     },
     "schemas": {
+      "DepartureStopResponseDto": {
+        "type": "object",
+        "properties": {
+          "stationId": {
+            "type": "string"
+          },
+          "stationName": {
+            "type": "string"
+          },
+          "orderIndex": {
+            "type": "number",
+            "example": 0
+          },
+          "time": {
+            "type": "string",
+            "nullable": true,
+            "example": "09:00",
+            "description": "Null on a middle stop of an extra bus or a one-time ride, which has no time of its own."
+          },
+          "isBoarding": {
+            "type": "boolean"
+          },
+          "isDropoff": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "stationId",
+          "stationName",
+          "orderIndex",
+          "time",
+          "isBoarding",
+          "isDropoff"
+        ]
+      },
+      "DepartureResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "rideId": {
+            "type": "string"
+          },
+          "rideName": {
+            "type": "string"
+          },
+          "lineId": {
+            "type": "string"
+          },
+          "lineName": {
+            "type": "string"
+          },
+          "serviceDate": {
+            "type": "string",
+            "example": "2026-10-01"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "SCHEDULE",
+              "EXTRA",
+              "LEGACY"
+            ],
+            "description": "SCHEDULE comes from the timetable, EXTRA is an extra bus or a one-time ride, and LEGACY holds past reservations that match no timetable departure. LEGACY departures never run."
+          },
+          "departureTime": {
+            "type": "string",
+            "example": "09:00"
+          },
+          "arrivalTime": {
+            "type": "string",
+            "example": "11:00"
+          },
+          "capacity": {
+            "type": "number",
+            "example": 48
+          },
+          "timetableDroppedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Set when the timetable no longer has this departure but passengers are still booked on it."
+          },
+          "cancelledAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Set when an operator cancelled this departure."
+          },
+          "cancelledById": {
+            "type": "string",
+            "nullable": true
+          },
+          "stops": {
+            "description": "Ordered by orderIndex. Empty on a LEGACY departure, which stores no route.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepartureStopResponseDto"
+            }
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "rideId",
+          "rideName",
+          "lineId",
+          "lineName",
+          "serviceDate",
+          "source",
+          "departureTime",
+          "arrivalTime",
+          "capacity",
+          "timetableDroppedAt",
+          "cancelledAt",
+          "cancelledById",
+          "stops",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "DepartureListResponseDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "example": "2026-10-01"
+          },
+          "to": {
+            "type": "string",
+            "example": "2026-10-31"
+          },
+          "items": {
+            "description": "Ordered by service date, then departure time.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepartureResponseDto"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "items"
+        ]
+      },
       "LoginDto": {
         "type": "object",
         "properties": {

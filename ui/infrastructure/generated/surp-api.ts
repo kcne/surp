@@ -50,7 +50,10 @@ import type {
   CreateTicketCommentDto,
   CreateTicketDto,
   CreateUserDto,
+  DepartureListResponseDto,
+  DepartureResponseDto,
   DepartureTimeTakenDto,
+  DeparturesControllerListParams,
   DomainAuditEventResponseDto,
   InvariantDetailDto,
   InvariantRepairResultDto,
@@ -136,6 +139,269 @@ import type {
 import { customInstance } from '../orval/orval-mutator';
 import type { ErrorType } from '../orval/orval-mutator';
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+
+
+/**
+ * @summary List stored departures (one bus on one date) in the current tenant between two service dates. Past, cancelled, dropped and LEGACY departures are included.
+ */
+export type departuresControllerListResponse200 = {
+  data: DepartureListResponseDto
+  status: 200
+}
+
+export type departuresControllerListResponse400 = {
+  data: void
+  status: 400
+}
+
+export type departuresControllerListResponse401 = {
+  data: void
+  status: 401
+}
+
+export type departuresControllerListResponse403 = {
+  data: void
+  status: 403
+}
+
+export type departuresControllerListResponseSuccess = (departuresControllerListResponse200) & {
+  headers: Headers;
+};
+export type departuresControllerListResponseError = (departuresControllerListResponse400 | departuresControllerListResponse401 | departuresControllerListResponse403) & {
+  headers: Headers;
+};
+
+export type departuresControllerListResponse = (departuresControllerListResponseSuccess | departuresControllerListResponseError)
+
+export const getDeparturesControllerListUrl = (params: DeparturesControllerListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/departures?${stringifiedParams}` : `/departures`
+}
+
+export const departuresControllerList = async (params: DeparturesControllerListParams, options?: RequestInit): Promise<departuresControllerListResponse> => {
+  
+  return customInstance<departuresControllerListResponse>(getDeparturesControllerListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getDeparturesControllerListQueryKey = (params?: DeparturesControllerListParams,) => {
+    return [
+    `/departures`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+    
+export const getDeparturesControllerListQueryOptions = <TData = Awaited<ReturnType<typeof departuresControllerList>>, TError = ErrorType<void>>(params: DeparturesControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof departuresControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDeparturesControllerListQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof departuresControllerList>>> = ({ signal }) => departuresControllerList(params, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof departuresControllerList>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DeparturesControllerListQueryResult = NonNullable<Awaited<ReturnType<typeof departuresControllerList>>>
+export type DeparturesControllerListQueryError = ErrorType<void>
+
+
+export function useDeparturesControllerList<TData = Awaited<ReturnType<typeof departuresControllerList>>, TError = ErrorType<void>>(
+ params: DeparturesControllerListParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof departuresControllerList>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof departuresControllerList>>,
+          TError,
+          Awaited<ReturnType<typeof departuresControllerList>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDeparturesControllerList<TData = Awaited<ReturnType<typeof departuresControllerList>>, TError = ErrorType<void>>(
+ params: DeparturesControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof departuresControllerList>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof departuresControllerList>>,
+          TError,
+          Awaited<ReturnType<typeof departuresControllerList>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDeparturesControllerList<TData = Awaited<ReturnType<typeof departuresControllerList>>, TError = ErrorType<void>>(
+ params: DeparturesControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof departuresControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List stored departures (one bus on one date) in the current tenant between two service dates. Past, cancelled, dropped and LEGACY departures are included.
+ */
+
+export function useDeparturesControllerList<TData = Awaited<ReturnType<typeof departuresControllerList>>, TError = ErrorType<void>>(
+ params: DeparturesControllerListParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof departuresControllerList>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getDeparturesControllerListQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Get one stored departure by id in the current tenant.
+ */
+export type departuresControllerGetByIdResponse200 = {
+  data: DepartureResponseDto
+  status: 200
+}
+
+export type departuresControllerGetByIdResponse401 = {
+  data: void
+  status: 401
+}
+
+export type departuresControllerGetByIdResponse403 = {
+  data: void
+  status: 403
+}
+
+export type departuresControllerGetByIdResponse404 = {
+  data: void
+  status: 404
+}
+
+export type departuresControllerGetByIdResponseSuccess = (departuresControllerGetByIdResponse200) & {
+  headers: Headers;
+};
+export type departuresControllerGetByIdResponseError = (departuresControllerGetByIdResponse401 | departuresControllerGetByIdResponse403 | departuresControllerGetByIdResponse404) & {
+  headers: Headers;
+};
+
+export type departuresControllerGetByIdResponse = (departuresControllerGetByIdResponseSuccess | departuresControllerGetByIdResponseError)
+
+export const getDeparturesControllerGetByIdUrl = (id: string,) => {
+
+
+  
+
+  return `/departures/${id}`
+}
+
+export const departuresControllerGetById = async (id: string, options?: RequestInit): Promise<departuresControllerGetByIdResponse> => {
+  
+  return customInstance<departuresControllerGetByIdResponse>(getDeparturesControllerGetByIdUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getDeparturesControllerGetByIdQueryKey = (id: string,) => {
+    return [
+    `/departures/${id}`
+    ] as const;
+    }
+
+    
+export const getDeparturesControllerGetByIdQueryOptions = <TData = Awaited<ReturnType<typeof departuresControllerGetById>>, TError = ErrorType<void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof departuresControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDeparturesControllerGetByIdQueryKey(id);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof departuresControllerGetById>>> = ({ signal }) => departuresControllerGetById(id, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof departuresControllerGetById>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DeparturesControllerGetByIdQueryResult = NonNullable<Awaited<ReturnType<typeof departuresControllerGetById>>>
+export type DeparturesControllerGetByIdQueryError = ErrorType<void>
+
+
+export function useDeparturesControllerGetById<TData = Awaited<ReturnType<typeof departuresControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof departuresControllerGetById>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof departuresControllerGetById>>,
+          TError,
+          Awaited<ReturnType<typeof departuresControllerGetById>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDeparturesControllerGetById<TData = Awaited<ReturnType<typeof departuresControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof departuresControllerGetById>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof departuresControllerGetById>>,
+          TError,
+          Awaited<ReturnType<typeof departuresControllerGetById>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDeparturesControllerGetById<TData = Awaited<ReturnType<typeof departuresControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof departuresControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get one stored departure by id in the current tenant.
+ */
+
+export function useDeparturesControllerGetById<TData = Awaited<ReturnType<typeof departuresControllerGetById>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof departuresControllerGetById>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getDeparturesControllerGetByIdQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
 
 
 
