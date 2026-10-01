@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+reviews:
+  auto_review:
+    enabled: true
+    # The default branch (master) is always included; rolling is staging,
+    # where every new PR is opened.
+    base_branches:
+      - rolling
