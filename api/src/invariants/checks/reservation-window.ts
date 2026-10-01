@@ -7,6 +7,7 @@ import {
   utcDateOf
 } from '../../rides/ride-instance-materialization';
 import { StopRoute, routeFromStops } from '../../departures/booking-departure';
+import { agencyDate, resolveAgencyTimezone } from '../../departures/agency-date';
 import { InvariantContext } from '../invariant.types';
 import { RideDayInstances } from './orphaned-reservations';
 
@@ -150,7 +151,11 @@ export function loadReservationWindow(ctx: InvariantContext): Promise<Reservatio
 }
 
 async function buildReservationWindow(ctx: InvariantContext): Promise<ReservationWindow> {
-  const today = formatDateOnly(new Date())!;
+  const tenant = await ctx.prisma.tenant.findUniqueOrThrow({
+    where: { id: ctx.tenantId },
+    select: { timezone: true }
+  });
+  const today = agencyDate(new Date(), resolveAgencyTimezone(tenant.timezone).timezone);
   const windowStart = utcDateOf(today);
   const windowEnd = new Date(windowStart);
   windowEnd.setUTCDate(windowEnd.getUTCDate() + ctx.windowDays);

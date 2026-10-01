@@ -140,6 +140,7 @@ export type RideFormData = {
 // Ride Instance Types
 export interface RideInstance {
   id: string
+  source?: "BASE" | "ADDITIONAL"
   rideId: string
   ride: Ride
   date: string // YYYY-MM-DD

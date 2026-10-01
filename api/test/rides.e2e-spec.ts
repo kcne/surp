@@ -72,6 +72,7 @@ describe('RidesController (e2e)', () => {
       // The agency's zone, which dates an exception can be added for.
       findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null })
     },
+    departure: { findMany: jest.fn().mockResolvedValue([]) },
     line: {
       findFirst: jest.fn()
     },
@@ -319,13 +320,15 @@ describe('RidesController (e2e)', () => {
     return date.toISOString().slice(0, 10);
   })();
 
-  it('rejects invalid exception combinations', async () => {
+  it('rejects a duplicate additional exception', async () => {
+    // Only exceptions of the same type are compared: a SKIP on the date no
+    // longer refuses an ADDITIONAL (#27, PR 3d).
     prismaMock.rideException.findMany.mockResolvedValueOnce([
       {
-        id: 'exception-existing-skip',
-        type: RideExceptionType.SKIP,
-        departureTime: null,
-        arrivalTime: null
+        id: 'exception-existing-additional',
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '11:00',
+        arrivalTime: '12:00'
       }
     ]);
 
@@ -341,7 +344,7 @@ describe('RidesController (e2e)', () => {
       })
       .expect(409);
 
-    expect(response.body.message).toBe('Cannot mix SKIP and ADDITIONAL exceptions on the same date');
+    expect(response.body.message).toBe('Additional exception with the same date and times already exists');
   });
 
   it('refuses an exception dated before the agency\'s today, and writes nothing', async () => {

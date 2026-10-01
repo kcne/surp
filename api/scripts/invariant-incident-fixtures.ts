@@ -20,9 +20,9 @@ import { syncDepartures } from '../src/departures/departure-sync';
 import {
   cancelScheduledDeparture,
   insertExtraDeparture,
-  restoreScheduledDeparture,
-  retireExtraDeparture
-} from '../src/departures/exception-departures';
+  removeAdditional,
+  unskipDate
+} from '../src/departures/departure-operations';
 import { dayOfWeekOf, formatDateOnly } from '../src/rides/ride-instance-materialization';
 
 interface FixtureState {
@@ -853,12 +853,10 @@ async function removeException(tx: Prisma.TransactionClient, state: FixtureState
   const exception = await tx.rideException.findUniqueOrThrow({ where: { id: fixtureId(id) } });
 
   if (exception.type === RideExceptionType.SKIP) {
-    await restoreScheduledDeparture(tx, decisionOf(state), exception.exceptionDate);
+    await unskipDate(tx, decisionOf(state), exception.exceptionDate);
   } else {
-    await retireExtraDeparture(tx, decisionOf(state), exception.id);
+    await removeAdditional(tx, decisionOf(state), exception.id);
   }
-
-  await tx.rideException.delete({ where: { id: exception.id } });
 }
 
 export async function runIncidentFixtures(prisma: PrismaClient): Promise<IncidentFixtureResult[]> {

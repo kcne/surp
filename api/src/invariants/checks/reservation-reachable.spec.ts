@@ -10,6 +10,7 @@ import { InvariantContext } from '../invariant.types';
  */
 
 const prismaMock = {
+  tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
   ride: { findMany: jest.fn() },
   reservation: { findMany: jest.fn(), findUniqueOrThrow: jest.fn(), update: jest.fn() },
   station: { findMany: jest.fn() },

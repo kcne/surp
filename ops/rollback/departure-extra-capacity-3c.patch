@@ -1,0 +1,15 @@
+--- a/api/src/departures/departure-sync.ts
++++ b/api/src/departures/departure-sync.ts
+@@ -343,9 +343,9 @@
+       serviceDate: extra.serviceDate,
+       departureTime: extra.departureTime,
+       arrivalTime: extra.arrivalTime,
+-      // An extra an ADDITIONAL added has no capacity of its own until PR 3d
+-      // lets an operator set one, so it follows its ride's, as it did before.
+-      capacity: extra.rideExceptionId !== null ? ride.capacity : extra.capacity,
++      // Preserve the operator-owned capacity written by PR 3d, including
++      // while this compatible PR 3c build is used for rollback.
++      capacity: extra.capacity,
+       rideExceptionId: extra.rideExceptionId
+     });
+     // Before PR 3a, deleting a booked ADDITIONAL left its extra dropped rather

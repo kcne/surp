@@ -1,5 +1,5 @@
 import { formatDateToISO, generateRideInstanceDates } from "@/utils/dateHelpers"
-import type { Ride, RideException, RideInstance } from "@/types"
+import type { Ride, RideInstance } from "@/types"
 
 /** How far ahead a recurring ride is materialized when no end date caps it. */
 const DEFAULT_HORIZON_MONTHS = 3
@@ -14,74 +14,69 @@ interface GenerateRideInstancesOptions {
  *
  * The API serves instances one date at a time, which is fine for a seat map but
  * far too many round trips for a list spanning months, so the schedule views
- * expand the ride template themselves. Instances are built the same way the API
- * builds them: skip exceptions drop a date, additional exceptions override the
- * times, and otherwise the day's station times give the first departure and the
- * last arrival.
+ * expand the ride template themselves. A SKIP removes only the timetable
+ * bus; every ADDITIONAL remains a separate bus, including on unscheduled dates.
  */
 export function generateRideInstances(
   ride: Ride,
   options: GenerateRideInstancesOptions = {}
 ): RideInstance[] {
-  const instances: RideInstance[] = []
+  const horizon = options.until ?? defaultHorizon()
+  const baseDates = new Set<string>()
 
   if (ride.type === "one-time") {
-    if (ride.date && ride.oneTimeDepartureTime && ride.oneTimeArrivalTime) {
-      instances.push({
-        id: `${ride.id}-${ride.date}`,
-        rideId: ride.id,
-        ride,
-        date: ride.date,
-        departureTime: ride.oneTimeDepartureTime,
-        arrivalTime: ride.oneTimeArrivalTime,
-        status: ride.status,
-        reservationCount: 0,
-        availableSeats: ride.busCapacity,
-      })
+    if (ride.date) baseDates.add(ride.date)
+  } else if (ride.startDate && ride.daysOfWeek?.length) {
+    const startDate = new Date(`${ride.startDate}T00:00:00`)
+    const endDate = ride.endDate ? new Date(`${ride.endDate}T00:00:00`) : null
+    const effectiveEndDate = endDate && endDate < horizon ? endDate : horizon
+    for (const date of generateRideInstanceDates(startDate, effectiveEndDate, ride.daysOfWeek)) {
+      baseDates.add(formatDateToISO(date))
     }
-
-    return instances
   }
 
-  if (!ride.startDate || !ride.daysOfWeek || ride.daysOfWeek.length === 0) {
-    return instances
+  const dates = new Set(baseDates)
+  for (const exception of ride.exceptions ?? []) {
+    if (exception.type === "additional" && exception.date <= formatDateToISO(horizon)) {
+      dates.add(exception.date)
+    }
   }
 
-  const horizon = options.until ?? defaultHorizon()
-  const startDate = new Date(`${ride.startDate}T00:00:00`)
-  const endDate = ride.endDate ? new Date(`${ride.endDate}T00:00:00`) : null
-  const effectiveEndDate = endDate && endDate < horizon ? endDate : horizon
-
-  const dates = generateRideInstanceDates(startDate, effectiveEndDate, ride.daysOfWeek)
-
-  dates.forEach((date) => {
-    const dateString = formatDateToISO(date)
-    const exception = ride.exceptions?.find((entry) => entry.date === dateString)
-
-    if (exception?.type === "skip") {
-      return
-    }
-
-    const { departureTime, arrivalTime } = resolveInstanceTimes(ride, date, exception)
-
-    if (!departureTime || !arrivalTime) {
-      return
-    }
-
+  const instances: RideInstance[] = []
+  const append = (date: string, source: "BASE" | "ADDITIONAL", departureTime?: string, arrivalTime?: string) => {
+    if (!departureTime || !arrivalTime) return
     instances.push({
-      id: `${ride.id}-${dateString}`,
+      // Match /rides/instances IDs so selectors and seat-map links name the
+      // same bus, and several buses on one date have distinct identities.
+      id: `${ride.id}:${date}:${departureTime}:${source}`,
+      source,
       rideId: ride.id,
       ride,
-      date: dateString,
+      date,
       departureTime,
       arrivalTime,
       status: ride.status,
       reservationCount: 0,
       availableSeats: ride.busCapacity,
     })
-  })
+  }
 
-  return instances
+  for (const date of [...dates].sort()) {
+    const exceptions = (ride.exceptions ?? []).filter((entry) => entry.date === date)
+    if (baseDates.has(date) && !exceptions.some((entry) => entry.type === "skip")) {
+      const times = ride.type === "one-time"
+        ? { departureTime: ride.oneTimeDepartureTime, arrivalTime: ride.oneTimeArrivalTime }
+        : resolveInstanceTimes(ride, new Date(`${date}T00:00:00`))
+      append(date, "BASE", times.departureTime, times.arrivalTime)
+    }
+    for (const extra of exceptions.filter((entry) => entry.type === "additional")) {
+      append(date, "ADDITIONAL", extra.departureTime, extra.arrivalTime)
+    }
+  }
+
+  return instances.sort((left, right) =>
+    left.date.localeCompare(right.date) || left.departureTime.localeCompare(right.departureTime)
+  )
 }
 
 interface UpcomingRideInstancesOptions extends GenerateRideInstancesOptions {
@@ -119,13 +114,8 @@ function defaultHorizon(): Date {
 
 function resolveInstanceTimes(
   ride: Ride,
-  date: Date,
-  exception: RideException | undefined
+  date: Date
 ): { departureTime?: string; arrivalTime?: string } {
-  if (exception?.type === "additional") {
-    return { departureTime: exception.departureTime, arrivalTime: exception.arrivalTime }
-  }
-
   const daySchedule = ride.daySchedules?.[date.getDay()]
   if (daySchedule && daySchedule.length > 0) {
     const stationTimes = [...daySchedule].sort(

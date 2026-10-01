@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DepartureSource, RideExceptionType } from '@prisma/client';
 import { indexLinkableDepartures } from '../../src/departures/departure-link';
 import { syncDepartures } from '../../src/departures/departure-sync';
-import { insertExtraDeparture } from '../../src/departures/exception-departures';
+import { insertExtraDeparture } from '../../src/departures/departure-operations';
 import { SYSTEM_ACTOR_ID } from '../../src/departures/system-actor';
 import { InternalSandboxService } from '../../src/internal-sandbox/internal-sandbox.service';
 import {

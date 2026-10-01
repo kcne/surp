@@ -298,8 +298,9 @@ export function toRideInstance(dto: RideInstanceResponseDto, ride?: Ride): RideI
 
   return {
     id: dto.id,
+    source: dto.source,
     rideId: dto.rideId,
-    ride: fallbackRide,
+    ride: { ...fallbackRide, busCapacity: dto.availability.capacity },
     date: normalizeDate(dto.date) ?? "",
     departureTime: normalizeTime(dto.departureTime) ?? "",
     arrivalTime: normalizeTime(dto.arrivalTime) ?? "",

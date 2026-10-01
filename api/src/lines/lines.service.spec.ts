@@ -31,6 +31,7 @@ function withCleanInvariantReads<T extends object>(tx: T, readRouteStations: Fin
   const rideFindMany = existing.ride?.findMany;
 
   Object.assign(tx, {
+    tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
     reservation: {
       ...existing.reservation,
       findMany: existing.reservation?.findMany ?? jest.fn().mockResolvedValue([])
@@ -56,6 +57,7 @@ function withCleanInvariantReads<T extends object>(tx: T, readRouteStations: Fin
 
 describe('LinesService', () => {
   const prismaMock = {
+    tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
     $transaction: jest.fn(),
     $executeRaw: jest.fn().mockResolvedValue(1),
     line: {

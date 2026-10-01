@@ -272,8 +272,8 @@ export function sameTimeRefusal(
  *   capacity and stops follow the timetable, and a dropped one comes back.
  * - An `EXTRA` is never produced by the timetable. Its line and stops follow
  *   its ride, and it is dropped while the ride does not run. Its times are the
- *   operator's. So is its capacity once PR 3d lets one be set; until then an
- *   extra an ADDITIONAL added follows its ride's capacity.
+ *   operator's, and so is its capacity (PR 3d); one inserted for an ADDITIONAL
+ *   starts at its ride's.
  * - A departure the timetable no longer produces is deleted only when nothing
  *   references it and nobody cancelled it. Otherwise it is marked dropped.
  * - A created `SCHEDULE` departure carries its date's SKIP, if there is one.
@@ -343,9 +343,9 @@ export function diffDepartures(
       serviceDate: extra.serviceDate,
       departureTime: extra.departureTime,
       arrivalTime: extra.arrivalTime,
-      // An extra an ADDITIONAL added has no capacity of its own until PR 3d
-      // lets an operator set one, so it follows its ride's, as it did before.
-      capacity: extra.rideExceptionId !== null ? ride.capacity : extra.capacity,
+      // The operator's since PR 3d, which lets one be set: a ride's capacity
+      // edit leaves its extras as they are.
+      capacity: extra.capacity,
       rideExceptionId: extra.rideExceptionId
     });
     // Before PR 3a, deleting a booked ADDITIONAL left its extra dropped rather
@@ -631,7 +631,7 @@ async function rewriteReservationTimes(
   }
 }
 
-function stopRows(departureId: string, stops: readonly PlannedStop[], scope: DepartureSyncScope) {
+export function stopRows(departureId: string, stops: readonly PlannedStop[], scope: DepartureSyncScope) {
   return stops.map((stop) => ({
     id: randomUUID(),
     tenantId: scope.tenantId,
