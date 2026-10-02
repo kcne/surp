@@ -711,24 +711,43 @@ describe('RidesService', () => {
     expect(result.items[0].reservationCount).toBe(0);
     expect(result.items[0].availability.availableSeats).toBe(38);
 
+    // A stored departure gives the capacity and the count, by departureId:
+    // the time copies' 30 are not read.
     prismaMock.departure.findMany.mockResolvedValue([
-      { rideId: 'ride-1', departureTime: '13:00', capacity: 60 }
+      { rideId: 'ride-1', departureTime: '13:00', capacity: 60, _count: { reservations: 48 } }
     ]);
+    prismaMock.reservation.groupBy.mockClear();
     prismaMock.reservation.groupBy.mockResolvedValue([
-      { rideId: 'ride-1', rideDepartureTime: '13:00', _count: { _all: 48 } }
+      { rideId: 'ride-1', rideDepartureTime: '13:00', _count: { _all: 30 } }
     ]);
     const largerExtra = await service.listInstancesByDate(auth, { date: '2026-03-30' });
     expect(largerExtra.items[0].availability).toEqual({
       capacity: 60, reservedSeats: 48, availableSeats: 12, hasAvailability: true
     });
+    expect(largerExtra.items[0].reservationCount).toBe(48);
+    expect(prismaMock.reservation.groupBy).not.toHaveBeenCalled();
     expect(prismaMock.departure.findMany).toHaveBeenLastCalledWith({
       where: {
         tenantId: auth.tenantId,
         rideId: { in: ['ride-1'] },
         serviceDate: new Date('2026-03-30'),
-        source: 'EXTRA', cancelledAt: null, timetableDroppedAt: null
+        source: { in: ['SCHEDULE', 'EXTRA'] },
+        cancelledAt: null,
+        timetableDroppedAt: null
       },
-      select: { rideId: true, departureTime: true, capacity: true }
+      select: {
+        rideId: true,
+        departureTime: true,
+        capacity: true,
+        _count: { select: { reservations: { where: { status: 'ACTIVE' } } } }
+      }
+    });
+
+    // With no stored departure, the ride's capacity and the time copies.
+    prismaMock.departure.findMany.mockResolvedValue([]);
+    const unstored = await service.listInstancesByDate(auth, { date: '2026-03-30' });
+    expect(unstored.items[0].availability).toEqual({
+      capacity: 38, reservedSeats: 30, availableSeats: 8, hasAvailability: true
     });
 
   });

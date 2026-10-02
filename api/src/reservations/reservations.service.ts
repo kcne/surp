@@ -210,6 +210,7 @@ export class ReservationsService {
     const where = {
       tenantId: auth.tenantId,
       ...(query.rideId ? { rideId: query.rideId } : {}),
+      ...(query.departureId ? { departureId: query.departureId } : {}),
       ...(query.passengerId ? { passengerId: query.passengerId } : {}),
       ...(query.travelDate ? { travelDate: this.toUtcDate(query.travelDate) } : {}),
       ...(query.rideDepartureTime ? { rideDepartureTime: query.rideDepartureTime } : {}),

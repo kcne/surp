@@ -492,13 +492,47 @@ export class RidesService {
       });
 
     const rideIds = [...new Set(materialized.map((instance) => instance.rideId))];
-    const reservationCounts =
+
+    // Capacity and booked seats come from the stored departure an instance
+    // names, as booking counts them (#27, PR 4a): seats by `departureId`, and
+    // an extra's own capacity. Until PR 4c no two running departures of a ride
+    // share a date and time, so `rideId:departureTime` names one. This endpoint
+    // stays for old tabs until PR 6; the screens read GET /departures.
+    const departures =
       rideIds.length > 0
+        ? await this.prisma.departure.findMany({
+            where: {
+              tenantId: auth.tenantId,
+              rideId: { in: rideIds },
+              serviceDate: utcDate,
+              source: { in: [DepartureSource.SCHEDULE, DepartureSource.EXTRA] },
+              cancelledAt: null,
+              timetableDroppedAt: null
+            },
+            select: {
+              rideId: true,
+              departureTime: true,
+              capacity: true,
+              _count: { select: { reservations: { where: { status: ReservationStatus.ACTIVE } } } }
+            }
+          })
+        : [];
+    const departureByInstance = new Map(
+      departures.map((departure) => [`${departure.rideId}:${departure.departureTime}`, departure])
+    );
+
+    // A date the departure window does not reach yet has no stored departure:
+    // its instances keep the ride's capacity and count the time copies.
+    const unstored = materialized.filter(
+      (instance) => !departureByInstance.has(`${instance.rideId}:${instance.departureTime}`)
+    );
+    const reservationCounts =
+      unstored.length > 0
         ? await this.prisma.reservation.groupBy({
             by: ['rideId', 'rideDepartureTime'],
             where: {
               tenantId: auth.tenantId,
-              rideId: { in: rideIds },
+              rideId: { in: [...new Set(unstored.map((instance) => instance.rideId))] },
               travelDate: utcDate,
               status: ReservationStatus.ACTIVE
             },
@@ -507,7 +541,6 @@ export class RidesService {
             }
           })
         : [];
-
     const reservationCountByInstance = new Map<string, number>(
       reservationCounts.map((item) => [
         `${item.rideId}:${item.rideDepartureTime}`,
@@ -515,38 +548,13 @@ export class RidesService {
       ])
     );
 
-    // Exceptions mirror an extra's times, but have no capacity column. Read
-    // the operator-owned seats from the bus the booking endpoint uses.
-    //
-    // Deferred to PR 4 (review of #117): this matches extras by
-    // `rideId:departureTime` and counts reservations by their time copies,
-    // while booking counts seats on `departureId`. An extra whose time and
-    // ADDITIONAL disagree falls back to the ride's capacity here. PR 4 moves
-    // the screens onto stored departures; read capacity and counts from the
-    // departure there and retire this lookup.
-    const extras = materialized.some((instance) => instance.source === 'ADDITIONAL')
-      ? await this.prisma.departure.findMany({
-          where: {
-            tenantId: auth.tenantId,
-            rideId: { in: rideIds },
-            serviceDate: utcDate,
-            source: 'EXTRA',
-            cancelledAt: null,
-            timetableDroppedAt: null
-          },
-          select: { rideId: true, departureTime: true, capacity: true }
-        })
-      : [];
-    const extraCapacity = new Map(
-      extras.map((extra) => [`${extra.rideId}:${extra.departureTime}`, extra.capacity])
-    );
-
     const items = materialized.map((instance) => {
-      const capacity = instance.source === 'ADDITIONAL'
-        ? extraCapacity.get(`${instance.rideId}:${instance.departureTime}`) ?? instance.capacity
-        : instance.capacity;
-      const reservationCount =
-        reservationCountByInstance.get(`${instance.rideId}:${instance.departureTime}`) ?? 0;
+      const key = `${instance.rideId}:${instance.departureTime}`;
+      const departure = departureByInstance.get(key);
+      const capacity = departure?.capacity ?? instance.capacity;
+      const reservationCount = departure
+        ? departure._count.reservations
+        : reservationCountByInstance.get(key) ?? 0;
       const availableSeats = Math.max(capacity - reservationCount, 0);
 
       return {

@@ -433,6 +433,21 @@ function sameTimeConflicts(
   ];
 }
 
+/**
+ * The update that brings a stored departure to its planned state, or null when
+ * nothing differs. Operator edits of an extra build theirs here, so they are
+ * written by the same rules as the sync's.
+ */
+export function departureUpdate(
+  stored: StoredDeparture,
+  planned: PlannedDeparture,
+  dropped: boolean
+): DepartureUpdate | null {
+  const fields = changedFields(stored, planned, dropped);
+
+  return fields.length > 0 ? { stored, planned, dropped, fields } : null;
+}
+
 function changedFields(
   stored: StoredDeparture,
   planned: PlannedDeparture,
@@ -536,7 +551,7 @@ export async function insertPlannedDepartures(
  * are replaced in one delete and one insert across every departure whose stops
  * changed, and a departure whose only change is its stops keeps its row as is.
  */
-async function updateDepartures(
+export async function updateDepartures(
   tx: Prisma.TransactionClient,
   updates: readonly DepartureUpdate[],
   scope: DepartureSyncScope,
@@ -686,6 +701,43 @@ export async function loadRides(
   });
 }
 
+const STORED_SELECT = {
+  id: true,
+  source: true,
+  rideId: true,
+  serviceDate: true,
+  lineId: true,
+  departureTime: true,
+  arrivalTime: true,
+  capacity: true,
+  timetableDroppedAt: true,
+  cancelledAt: true,
+  cancelledById: true,
+  rideExceptionId: true,
+  stops: {
+    select: {
+      stationId: true,
+      orderIndex: true,
+      time: true,
+      isBoarding: true,
+      isDropoff: true
+    }
+  },
+  _count: { select: { reservations: true } }
+} as const satisfies Prisma.DepartureSelect;
+
+function toStored({
+  _count,
+  serviceDate,
+  ...departure
+}: Prisma.DepartureGetPayload<{ select: typeof STORED_SELECT }>): StoredDeparture {
+  return {
+    ...departure,
+    serviceDate: formatDateOnly(serviceDate)!,
+    referenceCount: _count.reservations
+  };
+}
+
 async function loadStored(
   db: Db,
   tenantId: string,
@@ -697,36 +749,14 @@ async function loadStored(
       source: { in: [DepartureSource.SCHEDULE, DepartureSource.EXTRA] },
       serviceDate: { gte: utcDateOf(window.from), lte: utcDateOf(window.to) }
     },
-    select: {
-      id: true,
-      source: true,
-      rideId: true,
-      serviceDate: true,
-      lineId: true,
-      departureTime: true,
-      arrivalTime: true,
-      capacity: true,
-      timetableDroppedAt: true,
-      cancelledAt: true,
-      cancelledById: true,
-      rideExceptionId: true,
-      stops: {
-        select: {
-          stationId: true,
-          orderIndex: true,
-          time: true,
-          isBoarding: true,
-          isDropoff: true
-        }
-      },
-      _count: { select: { reservations: true } }
-    },
+    select: STORED_SELECT,
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]
   });
 
-  return departures.map(({ _count, serviceDate, ...departure }) => ({
-    ...departure,
-    serviceDate: formatDateOnly(serviceDate)!,
-    referenceCount: _count.reservations
-  }));
+  return departures.map(toStored);
+}
+
+/** One stored departure as the sync sees it, for an operator edit to diff against. */
+export async function loadStoredDeparture(db: Db, id: string): Promise<StoredDeparture> {
+  return toStored(await db.departure.findUniqueOrThrow({ where: { id }, select: STORED_SELECT }));
 }
