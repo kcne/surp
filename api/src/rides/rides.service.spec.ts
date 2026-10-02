@@ -35,7 +35,7 @@ describe('RidesService', () => {
     // The schedule lock every guarded write takes first.
     $executeRaw: jest.fn().mockResolvedValue(1),
     tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
-    departure: { findMany: jest.fn() },
+    departure: { findMany: jest.fn(), updateMany: jest.fn() },
     line: {
       findFirst: jest.fn()
     },

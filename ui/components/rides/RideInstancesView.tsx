@@ -223,7 +223,7 @@ export function RideInstancesView({
                       <TableCell>{formatTimeDisplay(instance.arrivalTime)}</TableCell>
                       <TableCell>{getStatusBadge(instance.status)}</TableCell>
                       <TableCell>
-                        {instance.availableSeats ?? activeRide.busCapacity}/{activeRide.busCapacity}
+                        {instance.availableSeats ?? instance.ride.busCapacity}/{instance.ride.busCapacity}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">

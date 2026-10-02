@@ -273,7 +273,8 @@ export function sameTimeRefusal(
  * - An `EXTRA` is never produced by the timetable. Its line and stops follow
  *   its ride, and it is dropped while the ride does not run. Its times are the
  *   operator's, and so is its capacity (PR 3d); one inserted for an ADDITIONAL
- *   starts at its ride's.
+ *   starts at its ride's, and a ride capacity edit moves the extras still at
+ *   the old one (`followRideCapacity`), not this diff.
  * - A departure the timetable no longer produces is deleted only when nothing
  *   references it and nobody cancelled it. Otherwise it is marked dropped.
  * - A created `SCHEDULE` departure carries its date's SKIP, if there is one.

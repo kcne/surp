@@ -20,7 +20,7 @@ function load(relativePath) {
   return module.exports
 }
 
-const { generateRideInstances } = load('utils/rideInstanceHelpers.ts')
+const { cancellingDeletesRide, generateRideInstances } = load('utils/rideInstanceHelpers.ts')
 const { generateRideInstancesForRide } = load('utils/rideInstanceGenerators.ts')
 const { toRideInstance } = load('infrastructure/mappers/rideMappers.ts')
 const date = new Date()
@@ -58,7 +58,27 @@ for (const [name, generate] of Object.entries({ generateRideInstances, generateR
     assert.deepEqual(generate({ ...oneTime, exceptions: [skip] }), [])
     assert.deepEqual(generate({ ...oneTime, exceptions: [skip, extra] }).map((x) => x.departureTime), ['15:00'])
   })
+  test(`${name}: an extra shows its own capacity, and one without it the ride's`, () => {
+    const instances = generate({
+      ...ride,
+      exceptions: [{ ...extra, capacity: 60 }, { ...extra, departureTime: '18:00', arrivalTime: '20:00' }],
+    })
+    const byTime = Object.fromEntries(instances.map((x) => [x.departureTime, x]))
+    assert.equal(byTime['15:00'].ride.busCapacity, 60)
+    assert.equal(byTime['15:00'].availableSeats, 60)
+    assert.equal(byTime['18:00'].ride.busCapacity, 48)
+    assert.equal(byTime['09:00'].availableSeats, 48)
+    assert.equal(ride.busCapacity, 48)
+  })
 }
+
+test('cancelling a one-time ride deletes it only when it has no extra bus', () => {
+  const oneTime = { ...ride, type: 'one-time', date: dateString, oneTimeDepartureTime: '09:00', oneTimeArrivalTime: '11:00' }
+  assert.equal(cancellingDeletesRide(oneTime), true)
+  assert.equal(cancellingDeletesRide({ ...oneTime, exceptions: [skip] }), true)
+  assert.equal(cancellingDeletesRide({ ...oneTime, exceptions: [extra] }), false)
+  assert.equal(cancellingDeletesRide({ ...ride, exceptions: [] }), false)
+})
 
 test('instance mapper uses operator capacity without modifying the ride template', () => {
   const instance = toRideInstance({

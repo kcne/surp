@@ -2,7 +2,12 @@
 
 No schema migration is included. Departures own cancellation, extra times and
 extra capacity. SKIP and ADDITIONAL rows mirror cancellations and times for the
-existing ride readers. Capacity has no equivalent column on RideException.
+existing ride readers. Capacity has no equivalent column on RideException; the
+ride response reads it from the extra.
+
+A ride capacity edit moves the extras still at the ride's old capacity, which
+covers every extra the ride screen adds until PR 4. An extra resized through
+`PATCH /departures/:id` keeps its own capacity.
 
 ## Prepare the rollback build before deploying 3d
 

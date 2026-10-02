@@ -170,6 +170,7 @@ function toUiExceptions(exceptions: RideResponseDto["exceptions"]): RideExceptio
     type: toUiExceptionType(exception.type),
     departureTime: normalizeTime(exception.departureTime),
     arrivalTime: normalizeTime(exception.arrivalTime),
+    capacity: exception.capacity ?? undefined,
   }))
 }
 

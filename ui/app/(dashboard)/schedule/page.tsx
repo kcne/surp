@@ -19,6 +19,7 @@ import {
 import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import type { Ride, RideFormData } from "@/types"
+import { cancellingDeletesRide } from "@/utils/rideInstanceHelpers"
 
 const EMPTY_RIDES: Ride[] = []
 
@@ -95,7 +96,7 @@ export default function SchedulePage() {
   }
 
   const handleCancelInstance = async (ride: Ride, instanceDate: string): Promise<Ride | void> => {
-    if (ride.type === "one-time") {
+    if (cancellingDeletesRide(ride)) {
       await deleteRideMutation.mutateAsync(ride.id)
       return
     }

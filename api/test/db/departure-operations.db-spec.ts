@@ -6,6 +6,7 @@ import { DeparturesService } from '../../src/departures/departures.service';
 import { SYSTEM_ACTOR_ID } from '../../src/departures/system-actor';
 import { departureMatchesExceptions } from '../../src/invariants/checks/departure-matches-exceptions';
 import { departureMatchesTimetable } from '../../src/invariants/checks/departure-matches-timetable';
+import { buildOrphanReport } from '../../src/invariants/checks/reservation-reachable';
 import { InvariantContext } from '../../src/invariants/invariant.types';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { RidesService } from '../../src/rides/rides.service';
@@ -554,6 +555,193 @@ describe('departure operations (real database)', () => {
       expect((await scheduled()).cancelledAt).toBeNull();
       expect(await prisma.departure.findUnique({ where: { id: extra.id } })).toBeNull();
       await expectChecksClean();
+    });
+  });
+
+  describe('an extra and its ride capacity', () => {
+    it("moves an extra still at its ride's capacity with the ride, and keeps a resized one", async () => {
+      const copied = await addExtra();
+      const viaRideScreen = await rides.addException(seeded.auth, seeded.rideId, {
+        date: seeded.travelDate,
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '18:00',
+        arrivalTime: '20:00'
+      });
+      const resized = await addExtra({
+        departureTime: '21:00',
+        arrivalTime: '23:00',
+        capacity: 20
+      });
+
+      expect(viaRideScreen.capacity).toBe(48);
+
+      await rides.update(seeded.auth, seeded.rideId, { capacity: 60 });
+
+      const extras = await prisma.departure.findMany({
+        where: { rideId: seeded.rideId, source: DepartureSource.EXTRA },
+        select: { departureTime: true, capacity: true },
+        orderBy: { departureTime: 'asc' }
+      });
+      expect(extras).toEqual([
+        { departureTime: '15:00', capacity: 60 },
+        { departureTime: '18:00', capacity: 60 },
+        { departureTime: '21:00', capacity: 20 }
+      ]);
+      expect((await departures.getById(seeded.auth, copied.id)).capacity).toBe(60);
+      expect((await departures.getById(seeded.auth, resized.id)).capacity).toBe(20);
+      await expectChecksClean();
+    });
+
+    it("asks before a ride's capacity cut strands a seat on an extra that follows it", async () => {
+      const extra = await addExtra();
+      await book(extra.id, { time: '15:00', seatNumber: 45 });
+
+      const response = responseOf(
+        await refusalOf(rides.update(seeded.auth, seeded.rideId, { capacity: 40 }))
+      );
+
+      expect(response).toMatchObject({
+        code: 'WOULD_BREAK_RESERVATIONS',
+        invariant: 'reservation.seatWithinCapacity'
+      });
+      expect((await departures.getById(seeded.auth, extra.id)).capacity).toBe(48);
+    });
+
+    it("reports an extra's own capacity on the ride's exceptions", async () => {
+      await addExtra({ capacity: 20 });
+
+      const ride = await rides.getById(seeded.auth, seeded.rideId);
+
+      expect(ride.exceptions).toEqual([
+        expect.objectContaining({ type: RideExceptionType.ADDITIONAL, capacity: 20 })
+      ]);
+    });
+
+    it("re-seats an orphan moving onto an extra within the extra's capacity, not the ride's", async () => {
+      await departures.cancel(seeded.auth, (await scheduled()).id, {});
+      await addExtra({ capacity: 20 });
+      // A row with no departure at a time the date no longer has, so the
+      // repair would move it onto the extra, the date's only bus.
+      const orphan = await prisma.reservation.create({
+        data: {
+          tenantId: seeded.auth.tenantId,
+          rideId: seeded.rideId,
+          passengerId: seeded.passengerId,
+          travelDate: new Date(seeded.travelDate),
+          rideDepartureTime: '07:00',
+          rideArrivalTime: '09:00',
+          seatNumber: 35,
+          departureStationId: seeded.stations.first,
+          arrivalStationId: seeded.stations.last,
+          status: ReservationStatus.ACTIVE,
+          createdById: seeded.auth.sub,
+          updatedById: seeded.auth.sub
+        }
+      });
+
+      const report = await buildOrphanReport(context());
+      const item = report.items.find((candidate) => candidate.reservationId === orphan.id);
+
+      expect(item).toMatchObject({ targetDepartureTime: '15:00', canRepair: true });
+      expect(item!.targetSeatNumber).toBeLessThanOrEqual(20);
+    });
+  });
+
+  describe('an ADDITIONAL two extras share, stored before PR 3a', () => {
+    async function sharedPair() {
+      return prisma.$transaction(async (tx) => {
+        const exception = await tx.rideException.create({
+          data: {
+            tenantId: seeded.auth.tenantId,
+            rideId: seeded.rideId,
+            exceptionDate: new Date(seeded.travelDate),
+            type: RideExceptionType.ADDITIONAL,
+            departureTime: '15:00',
+            arrivalTime: '17:00',
+            createdById: seeded.auth.sub,
+            updatedById: seeded.auth.sub
+          }
+        });
+        const scope = {
+          tenantId: seeded.auth.tenantId,
+          rideId: seeded.rideId,
+          actorId: seeded.auth.sub
+        };
+        const extra = {
+          rideExceptionId: exception.id,
+          serviceDate: new Date(seeded.travelDate),
+          departureTime: '15:00',
+          arrivalTime: '17:00'
+        };
+        const first = await insertExtraDeparture(tx, scope, extra, { allowSameTime: true });
+        const second = await insertExtraDeparture(tx, scope, extra, { allowSameTime: true });
+
+        return { exceptionId: exception.id, first: first.id, second: second.id };
+      });
+    }
+
+    it('stays while the other extra runs, when one is cancelled or deleted', async () => {
+      const pair = await sharedPair();
+
+      await departures.cancel(seeded.auth, pair.first, {});
+
+      expect(
+        await prisma.rideException.findUnique({ where: { id: pair.exceptionId } })
+      ).not.toBeNull();
+      expect(
+        (await prisma.departure.findUniqueOrThrow({ where: { id: pair.second } })).rideExceptionId
+      ).toBe(pair.exceptionId);
+
+      await departures.deleteExtra(seeded.auth, pair.first);
+
+      expect(
+        await prisma.rideException.findUnique({ where: { id: pair.exceptionId } })
+      ).not.toBeNull();
+
+      await departures.deleteExtra(seeded.auth, pair.second);
+
+      expect(await prisma.rideException.findUnique({ where: { id: pair.exceptionId } })).toBeNull();
+    });
+  });
+
+  describe('an ADDITIONAL with no stored extra', () => {
+    async function strayAdditional() {
+      return prisma.rideException.create({
+        data: {
+          tenantId: seeded.auth.tenantId,
+          rideId: seeded.rideId,
+          exceptionDate: new Date(seeded.travelDate),
+          type: RideExceptionType.ADDITIONAL,
+          departureTime: '15:00',
+          arrivalTime: '17:00',
+          createdById: seeded.auth.sub,
+          updatedById: seeded.auth.sub
+        }
+      });
+    }
+
+    it('holds its time against a restored, created or moved extra', async () => {
+      const extra = await addExtra();
+      await departures.cancel(seeded.auth, extra.id, {});
+      await strayAdditional();
+
+      expect(responseOf(await refusalOf(departures.restore(seeded.auth, extra.id)))).toMatchObject({
+        code: 'DEPARTURE_TIME_TAKEN'
+      });
+      expect(responseOf(await refusalOf(addExtra()))).toMatchObject({
+        code: 'DEPARTURE_TIME_TAKEN'
+      });
+
+      const other = await addExtra({ departureTime: '18:00', arrivalTime: '20:00' });
+
+      expect(
+        responseOf(
+          await refusalOf(departures.updateExtra(seeded.auth, other.id, { departureTime: '15:00' }))
+        )
+      ).toMatchObject({ code: 'DEPARTURE_TIME_TAKEN' });
+      expect(
+        (await exceptionsOnTravelDate()).filter((row) => row.departureTime === '15:00')
+      ).toHaveLength(1);
     });
   });
 

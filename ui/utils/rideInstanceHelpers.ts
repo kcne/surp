@@ -43,7 +43,13 @@ export function generateRideInstances(
   }
 
   const instances: RideInstance[] = []
-  const append = (date: string, source: "BASE" | "ADDITIONAL", departureTime?: string, arrivalTime?: string) => {
+  const append = (
+    date: string,
+    source: "BASE" | "ADDITIONAL",
+    departureTime?: string,
+    arrivalTime?: string,
+    capacity = ride.busCapacity
+  ) => {
     if (!departureTime || !arrivalTime) return
     instances.push({
       // Match /rides/instances IDs so selectors and seat-map links name the
@@ -51,13 +57,15 @@ export function generateRideInstances(
       id: `${ride.id}:${date}:${departureTime}:${source}`,
       source,
       rideId: ride.id,
-      ride,
+      // An extra bus can have its own capacity; the screens read seats from
+      // the instance's ride, as with instances from /rides/instances.
+      ride: capacity === ride.busCapacity ? ride : { ...ride, busCapacity: capacity },
       date,
       departureTime,
       arrivalTime,
       status: ride.status,
       reservationCount: 0,
-      availableSeats: ride.busCapacity,
+      availableSeats: capacity,
     })
   }
 
@@ -70,12 +78,24 @@ export function generateRideInstances(
       append(date, "BASE", times.departureTime, times.arrivalTime)
     }
     for (const extra of exceptions.filter((entry) => entry.type === "additional")) {
-      append(date, "ADDITIONAL", extra.departureTime, extra.arrivalTime)
+      append(date, "ADDITIONAL", extra.departureTime, extra.arrivalTime, extra.capacity)
     }
   }
 
   return instances.sort((left, right) =>
     left.date.localeCompare(right.date) || left.departureTime.localeCompare(right.departureTime)
+  )
+}
+
+/**
+ * Whether cancelling a ride's timetable bus deletes the whole ride. Only a
+ * one-time ride with no extra bus: deleting one that has extras would cancel
+ * the extras and their passengers too, so its date is skipped instead.
+ */
+export function cancellingDeletesRide(ride: Ride): boolean {
+  return (
+    ride.type === "one-time" &&
+    !(ride.exceptions ?? []).some((exception) => exception.type === "additional")
   )
 }
 

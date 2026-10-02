@@ -853,7 +853,7 @@ describe('departures (real database)', () => {
       await expectChecksClean();
     });
 
-    it("starts an ADDITIONAL's extra at its ride's capacity, and keeps it through a ride capacity edit", async () => {
+    it("starts an ADDITIONAL's extra at its ride's capacity, and moves it with a ride capacity edit", async () => {
       const exception = await rides.addException(seeded.auth, seeded.rideId, {
         date: seeded.travelDate,
         type: RideExceptionType.ADDITIONAL,
@@ -866,13 +866,14 @@ describe('departures (real database)', () => {
       });
       expect(inserted.capacity).toBe(48);
 
-      // An extra's capacity is the operator's since PR 3d.
+      // Still at the ride's capacity, so it follows the ride (#27, PR 3d);
+      // one an operator resized keeps its own.
       await rides.update(seeded.auth, seeded.rideId, { capacity: 30 });
 
       const extra = await prisma.departure.findFirstOrThrow({
         where: { rideExceptionId: exception.id }
       });
-      expect(extra.capacity).toBe(48);
+      expect(extra.capacity).toBe(30);
       await expectChecksClean();
     });
 

@@ -9522,6 +9522,11 @@
           "updatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "capacity": {
+            "type": "number",
+            "nullable": true,
+            "description": "For an ADDITIONAL, its extra bus's own capacity, which can differ from the ride's. Null for a SKIP, or an ADDITIONAL whose bus is not stored."
           }
         },
         "required": [
@@ -9533,7 +9538,8 @@
           "createdById",
           "updatedById",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "capacity"
         ]
       },
       "RideLineSummaryDto": {

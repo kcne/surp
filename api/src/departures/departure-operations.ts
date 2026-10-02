@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { DepartureSource, Prisma, RideExceptionType, RideStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
-import { formatDateOnly } from '../rides/ride-instance-materialization';
+import { formatDateOnly, utcDateOf } from '../rides/ride-instance-materialization';
 import { DepartureWindow, departureWindow, resolveAgencyTimezone } from './agency-date';
 import { GeneratorRide, generateDepartures, planExtra } from './departure-generator';
 import { LINKABLE_SOURCES } from './departure-link';
@@ -173,7 +173,9 @@ export function assertOperable(
 /**
  * Refuses a departure time another departure of the ride already has that day
  * (until PR 4, a booking from the UI names its bus by that time). Cancelled
- * departures count: their passengers stay on them.
+ * departures count: their passengers stay on them. So does an ADDITIONAL
+ * other than the extra's own, stored extra or not: the ride screen and
+ * `/rides/instances` would show it as a second bus at that time.
  *
  * With no timetable departure stored, the one the timetable would write
  * counts: the newest day between the agency's midnight and the nightly job,
@@ -186,7 +188,10 @@ async function assertDepartureTimeFree(
   ride: GeneratorRide,
   serviceDate: Date,
   departureTime: string,
-  exceptDepartureId?: string
+  {
+    exceptDepartureId,
+    exceptExceptionId
+  }: { exceptDepartureId?: string; exceptExceptionId?: string | null } = {}
 ): Promise<void> {
   const day = formatDateOnly(serviceDate)!;
   const stored = await tx.departure.findMany({
@@ -209,11 +214,25 @@ async function assertDepartureTimeFree(
   const clash = [...stored, ...coming].find(
     (departure) => departure.departureTime === departureTime
   );
+  const additional = await tx.rideException.findFirst({
+    where: {
+      tenantId: scope.tenantId,
+      rideId: scope.rideId,
+      exceptionDate: serviceDate,
+      type: RideExceptionType.ADDITIONAL,
+      departureTime,
+      ...(exceptExceptionId ? { id: { not: exceptExceptionId } } : {})
+    },
+    select: { id: true }
+  });
 
-  if (clash) {
+  if (clash || additional) {
     throw sameTimeRefusal(
       { serviceDate: day, departureTime },
-      { cancelledExtra: clash.source === DepartureSource.EXTRA && clash.cancelledAt !== null }
+      {
+        cancelledExtra:
+          clash?.source === DepartureSource.EXTRA && clash.cancelledAt !== null
+      }
     );
   }
 }
@@ -378,8 +397,29 @@ export async function cancelDeparture(
       updatedById: actorId
     }
   });
+  await releaseAdditional(tx, departure);
+}
 
-  if (departure.rideExceptionId) {
+/**
+ * Deletes the ADDITIONAL an extra that is going away was linked to, unless
+ * another extra still links to it. Only rows stored before PR 3a share one,
+ * and deleting it would unlink that bus too (`SetNull`) while it still runs.
+ */
+async function releaseAdditional(tx: Tx, departure: OperatedDeparture): Promise<void> {
+  if (!departure.rideExceptionId) {
+    return;
+  }
+
+  const sharedWith = await tx.departure.count({
+    where: {
+      tenantId: departure.tenantId,
+      rideExceptionId: departure.rideExceptionId,
+      source: DepartureSource.EXTRA,
+      id: { not: departure.id }
+    }
+  });
+
+  if (sharedWith === 0) {
     await tx.rideException.delete({ where: { id: departure.rideExceptionId } });
   }
 }
@@ -409,7 +449,7 @@ export async function restoreDeparture(
     await loadRide(tx, scope),
     departure.serviceDate,
     departure.departureTime,
-    departure.id
+    { exceptDepartureId: departure.id }
   );
 
   const exception = await tx.rideException.create({
@@ -464,7 +504,9 @@ export async function insertExtraDeparture(
   const ride = await loadRide(tx, scope);
 
   if (!allowSameTime) {
-    await assertDepartureTimeFree(tx, scope, ride, extra.serviceDate, extra.departureTime);
+    await assertDepartureTimeFree(tx, scope, ride, extra.serviceDate, extra.departureTime, {
+      exceptExceptionId: extra.rideExceptionId
+    });
   }
 
   const { departure, dropped } = planExtra(ride, {
@@ -483,6 +525,40 @@ export async function insertExtraDeparture(
   });
 
   return { id };
+}
+
+/**
+ * Carries a ride's capacity edit to its extras that are still at the old
+ * capacity. Until PR 4 the ride screen adds an extra through an ADDITIONAL,
+ * which copies the ride's capacity, and gives nobody a way to change it, so
+ * such an extra follows its ride as it did before PR 3d. An extra an operator
+ * resized keeps its own. One set to exactly its ride's capacity cannot be
+ * told apart and follows too.
+ *
+ * Past dates are the record of what ran and stay as they are. The caller's
+ * guard asks before the new capacity strands a sold seat.
+ */
+export async function followRideCapacity(
+  tx: Tx,
+  scope: DecisionScope,
+  { from, to }: { from: number; to: number }
+): Promise<void> {
+  if (from === to) {
+    return;
+  }
+
+  const window = await decisionWindow(tx, scope.tenantId);
+
+  await tx.departure.updateMany({
+    where: {
+      tenantId: scope.tenantId,
+      rideId: scope.rideId,
+      source: DepartureSource.EXTRA,
+      capacity: from,
+      serviceDate: { gte: utcDateOf(window.from) }
+    },
+    data: { capacity: to, updatedById: scope.actorId }
+  });
 }
 
 function asRunning(ride: GeneratorRide): GeneratorRide {
@@ -557,21 +633,26 @@ export async function updateExtra(
 
   assertTimesDiffer(departureTime, arrivalTime);
 
-  if (!retimed && capacity === departure.capacity) {
+  if (!retimed) {
+    if (capacity !== departure.capacity) {
+      await tx.departure.update({
+        where: { id: departure.id },
+        data: { capacity, updatedById: actorId }
+      });
+    }
+
     return;
   }
 
+  // Read only for a move: the stops and the same-time refusal need the ride,
+  // and a capacity edit needs neither while bookings wait on the lock.
   const ride = await loadRide(tx, scope);
 
   if (departureTime !== departure.departureTime) {
-    await assertDepartureTimeFree(
-      tx,
-      scope,
-      ride,
-      departure.serviceDate,
-      departureTime,
-      departure.id
-    );
+    await assertDepartureTimeFree(tx, scope, ride, departure.serviceDate, departureTime, {
+      exceptDepartureId: departure.id,
+      exceptExceptionId: departure.rideExceptionId
+    });
   }
 
   await tx.departure.update({
@@ -579,10 +660,11 @@ export async function updateExtra(
     data: { departureTime, arrivalTime, capacity, updatedById: actorId }
   });
 
-  if (!retimed) {
-    return;
-  }
-
+  // Deferred to PR 4 (review of #117): the restop and the time-copy rewrite
+  // below repeat what `updateDepartures` and `rewriteReservationTimes` in
+  // departure-sync do for a timetable departure. When PR 4 moves the ride
+  // screen onto departures, route this through the sync's update writer so a
+  // change to either rule reaches operator edits too.
   const { departure: planned } = planExtra(ride, {
     keyId: departure.id,
     serviceDate: formatDateOnly(departure.serviceDate)!,
@@ -616,10 +698,7 @@ export async function updateExtra(
 export async function deleteExtra(tx: Tx, departure: OperatedDeparture): Promise<void> {
   assertOperable(departure, 'deleteExtra');
   await tx.departure.delete({ where: { id: departure.id } });
-
-  if (departure.rideExceptionId) {
-    await tx.rideException.delete({ where: { id: departure.rideExceptionId } });
-  }
+  await releaseAdditional(tx, departure);
 }
 
 /**
