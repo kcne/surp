@@ -1,5 +1,5 @@
-import { useMemo } from "react"
-import { useQueries } from "@tanstack/react-query"
+import { useCallback, useMemo } from "react"
+import { useQueries, useQueryClient } from "@tanstack/react-query"
 import {
   departureWindowQueryKey,
   fetchDepartureWindow,
@@ -14,6 +14,7 @@ import type { Ride, RideInstance } from "@/types"
  * flattened into lookups by ISO date and by departure ID.
  */
 export function useRideInstancesByDatesQuery(dates: string[], rides: Ride[]) {
+  const queryClient = useQueryClient()
   const windows = useMemo(() => windowsCoveringDates(dates), [dates])
 
   const query = useQueries({
@@ -27,8 +28,21 @@ export function useRideInstancesByDatesQuery(dates: string[], rides: Ride[]) {
       departures: results.flatMap((result) => result.data ?? []),
       isLoading: results.some((result) => result.isLoading),
       isFetching: results.some((result) => result.isFetching),
+      isError: results.some((result) => result.isError),
     }),
   })
+
+  // A failed window leaves its dates without buses, which must not read as
+  // "no departure": the page reports it and retries every window.
+  const refetch = useCallback(
+    () =>
+      Promise.all(
+        windows.map((window) =>
+          queryClient.refetchQueries({ queryKey: departureWindowQueryKey(window), exact: true })
+        )
+      ).then(() => undefined),
+    [queryClient, windows]
+  )
 
   const lookups = useMemo(() => {
     const rideInstancesByDate: Record<string, RideInstance[]> = {}
@@ -46,5 +60,11 @@ export function useRideInstancesByDatesQuery(dates: string[], rides: Ride[]) {
     return { rideInstancesByDate, rideInstancesById }
   }, [dates, query.departures, rides])
 
-  return { ...lookups, isLoading: query.isLoading, isFetching: query.isFetching }
+  return {
+    ...lookups,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch,
+  }
 }
