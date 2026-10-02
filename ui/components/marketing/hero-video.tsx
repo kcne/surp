@@ -29,6 +29,9 @@ export function HeroVideo() {
   return (
     <button
       type="button"
+      ref={(button) => {
+        if (hasError) button?.focus()
+      }}
       className="group relative block aspect-video w-full overflow-hidden rounded-2xl bg-[color:var(--mk-navy-900)] text-left shadow-mk-glow focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[color:var(--mk-indigo-600)] focus-visible:ring-offset-4 sm:rounded-3xl"
       onClick={() => {
         setHasError(false)
