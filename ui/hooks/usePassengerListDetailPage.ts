@@ -2,7 +2,10 @@ import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { useSearchParams } from "next/navigation"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
-import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/useRidesInstancesByDateQuery"
+import { useDepartureQuery } from "@/infrastructure/hooks/queries/useDeparturesQuery"
+import { toDepartureInstance } from "@/infrastructure/mappers/departureMappers"
+import { useLegacyDepartureRedirect } from "@/hooks/useLegacyDepartureRedirect"
+import { parseLegacyPassengerListLink } from "@/utils/legacyDepartureLinks"
 import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
 import {
   buildPassengerListHeading,
@@ -13,47 +16,47 @@ import {
 import type { PassengerListRow } from "@/utils/passengerListHelpers"
 
 interface UsePassengerListDetailPageParams {
-  rideId: string
+  /** The departure's ID, or the ride's in a link made before PR 4a. */
+  departureId: string
 }
 
 const EMPTY_ROWS: PassengerListRow[] = []
 
 /**
- * Loads one ride instance and the passenger list a driver reads on the bus.
- *
- * The overview links here with the ride id plus the date and departure time
- * rather than a materialized instance id, because that overview expands the
- * schedule on the client and never sees the ids the API assigns; resolving the
- * instance is one request for the linked date.
+ * Loads one departure and the passenger list a driver reads on the bus. The
+ * page is keyed by departureId (#27, PR 4a); an old link that named the ride
+ * with a date and departure time is replaced with the departure it meant.
  */
-export function usePassengerListDetailPage({ rideId }: UsePassengerListDetailPageParams) {
+export function usePassengerListDetailPage({ departureId }: UsePassengerListDetailPageParams) {
   const searchParams = useSearchParams()
-  const dateParam = searchParams?.get("date") ?? ""
-  const departureParam = searchParams?.get("departure") ?? ""
-
-  const selectedDate = useMemo(() => {
-    if (!dateParam) {
-      return undefined
-    }
-
-    const parsed = new Date(`${dateParam}T00:00:00`)
-    return Number.isNaN(parsed.getTime()) ? undefined : parsed
-  }, [dateParam])
+  const legacyLink = useMemo(
+    () =>
+      parseLegacyPassengerListLink(
+        departureId,
+        searchParams?.get("date"),
+        searchParams?.get("departure")
+      ),
+    [departureId, searchParams]
+  )
+  const legacyRedirect = useLegacyDepartureRedirect(
+    legacyLink,
+    (resolvedId) => `/passenger-lists/${encodeURIComponent(resolvedId)}`
+  )
 
   const ridesQuery = useRidesListQuery()
   const rides = useMemo(() => ridesQuery.data ?? [], [ridesQuery.data])
-  const rideInstancesQuery = useRidesInstancesByDateQuery(selectedDate, rides)
+  const departureQuery = useDepartureQuery(legacyLink ? null : departureId)
 
   const rideInstance = useMemo(() => {
-    const instances = rideInstancesQuery.data ?? []
-    const forRide = instances.filter((instance) => instance.rideId === rideId)
-
-    if (!departureParam) {
-      return forRide[0] ?? null
+    if (!departureQuery.data) {
+      return null
     }
 
-    return forRide.find((instance) => instance.departureTime === departureParam) ?? null
-  }, [rideInstancesQuery.data, rideId, departureParam])
+    return toDepartureInstance(
+      departureQuery.data,
+      rides.find((ride) => ride.id === departureQuery.data?.rideId)
+    )
+  }, [departureQuery.data, rides])
 
   const reservationsQuery = useReservationsByRideInstanceQuery(rideInstance)
   const reservations = useMemo(() => reservationsQuery.data ?? [], [reservationsQuery.data])
@@ -100,15 +103,16 @@ export function usePassengerListDetailPage({ rideId }: UsePassengerListDetailPag
       ? Math.max(rideInstance.ride.busCapacity - passengers.length, 0)
       : 0,
     isLoading:
-      ridesQuery.isLoading || rideInstancesQuery.isLoading || reservationsQuery.isLoading,
+      ridesQuery.isLoading ||
+      departureQuery.isLoading ||
+      legacyRedirect.resolving ||
+      reservationsQuery.isLoading,
     isRowsLoading: !reservationsQuery.isSuccess || rowsQuery.isLoading || rowsQuery.isFetching,
-    // A missing or unparsable date leaves nothing to resolve the instance from,
-    // so it is reported the same way as a date that no longer has this ride.
     isNotFound:
-      !selectedDate ||
-      (!rideInstance &&
-        !ridesQuery.isLoading &&
-        !rideInstancesQuery.isLoading &&
-        rideInstancesQuery.isFetched),
+      legacyRedirect.notFound ||
+      (!legacyLink && departureQuery.isSuccess && departureQuery.data === null),
+    // A failed read is not a missing bus: the page offers a retry instead.
+    isError: legacyRedirect.isError || departureQuery.isError,
+    retry: legacyLink ? legacyRedirect.retry : departureQuery.refetch,
   }
 }

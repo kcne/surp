@@ -29,9 +29,10 @@ function formatInstanceDate(dateString: string): string {
   })
 }
 
+/** The instance's ID is its departure's (#27, PR 4a). */
 function passengerListHref(item: UpcomingRideListItem): string {
   const { rideInstance } = item
-  return `/passenger-lists/${encodeURIComponent(rideInstance.rideId)}?date=${rideInstance.date}&departure=${encodeURIComponent(rideInstance.departureTime)}`
+  return `/passenger-lists/${encodeURIComponent(rideInstance.id)}`
 }
 
 function OccupancyLabel({

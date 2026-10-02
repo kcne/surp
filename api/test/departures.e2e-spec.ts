@@ -25,6 +25,7 @@ describe('DeparturesController (e2e)', () => {
     updatedAt: new Date('2026-10-01T08:00:00.000Z'),
     ride: { name: 'Morning Central Route' },
     line: { name: 'Central - North' },
+    _count: { reservations: 50 },
     stops: [
       {
         stationId: 'station-a',
@@ -144,6 +145,8 @@ describe('DeparturesController (e2e)', () => {
             departureTime: '09:00',
             arrivalTime: '11:00',
             capacity: 48,
+            activeReservationCount: 50,
+            availableSeats: 0,
             timetableDroppedAt: null,
             cancelledAt: '2026-10-01T08:00:00.000Z',
             cancelledById: 'admin-1',
@@ -158,7 +161,9 @@ describe('DeparturesController (e2e)', () => {
         ]
       });
 
-      const { where, orderBy } = prismaMock.departure.findMany.mock.calls[0][0];
+      const { where, orderBy, select } = prismaMock.departure.findMany.mock.calls[0][0];
+      // Seats left count only ACTIVE reservations, by departureId (#27, PR 4a).
+      expect(select._count).toEqual({ select: { reservations: { where: { status: 'ACTIVE' } } } });
       expect(where).toEqual({
         tenantId: 'tenant-1',
         serviceDate: {

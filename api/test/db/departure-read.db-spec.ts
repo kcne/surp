@@ -1,9 +1,10 @@
 import { NotFoundException } from '@nestjs/common';
-import { DepartureSource } from '@prisma/client';
+import { DepartureSource, ReservationStatus } from '@prisma/client';
 import { DeparturesService } from '../../src/departures/departures.service';
 import { syncDepartures } from '../../src/departures/departure-sync';
 import { SYSTEM_ACTOR_ID } from '../../src/departures/system-actor';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { ReservationsService } from '../../src/reservations/reservations.service';
 import { dateOnly, removeTenant, Seeded, seedTenant } from './db-fixtures';
 
 /**
@@ -20,6 +21,7 @@ function shiftDate(date: string, days: number): string {
 describe('departure reads (real database)', () => {
   let prisma: PrismaService;
   let departures: DeparturesService;
+  let reservations: ReservationsService;
   let seeded: Seeded;
   let other: Seeded;
 
@@ -27,6 +29,7 @@ describe('departure reads (real database)', () => {
     prisma = new PrismaService();
     await prisma.$connect();
     departures = new DeparturesService(prisma);
+    reservations = new ReservationsService(prisma);
   });
 
   afterAll(async () => {
@@ -193,5 +196,103 @@ describe('departure reads (real database)', () => {
       lineId: other.lineId
     });
     expect(otherLine.items).toEqual([]);
+  });
+
+  function book(
+    departureId: string,
+    { seatNumber, status = ReservationStatus.ACTIVE }: { seatNumber: number; status?: ReservationStatus }
+  ) {
+    return prisma.reservation.create({
+      data: {
+        tenantId: seeded.auth.tenantId,
+        rideId: seeded.rideId,
+        passengerId: seeded.passengerId,
+        travelDate: new Date(seeded.travelDate),
+        rideDepartureTime: '09:00',
+        rideArrivalTime: '11:00',
+        seatNumber,
+        departureStationId: seeded.stations.first,
+        arrivalStationId: seeded.stations.last,
+        departureId,
+        status,
+        cancelledAt: status === ReservationStatus.CANCELLED ? new Date() : null,
+        createdById: seeded.auth.sub,
+        updatedById: seeded.auth.sub
+      }
+    });
+  }
+
+  it('counts ACTIVE reservations and seats left by departureId, in the list and by id (#27, PR 4a)', async () => {
+    const scheduled = await prisma.departure.findFirstOrThrow({
+      where: { rideId: seeded.rideId, serviceDate: new Date(seeded.travelDate), source: DepartureSource.SCHEDULE }
+    });
+    // An extra at the same date carries a reservation whose time copy says
+    // 09:00: it is counted on the extra it references, not by its time.
+    const extraId = await storeDeparture({
+      source: DepartureSource.EXTRA,
+      serviceDate: seeded.travelDate,
+      departureTime: '07:00',
+      arrivalTime: '09:00'
+    });
+    await book(scheduled.id, { seatNumber: 1 });
+    await book(scheduled.id, { seatNumber: 2 });
+    await book(scheduled.id, { seatNumber: 3, status: ReservationStatus.CANCELLED });
+    await book(extraId, { seatNumber: 1 });
+
+    const result = await departures.list(seeded.auth, { from: seeded.travelDate, to: seeded.travelDate });
+
+    expect(
+      result.items.map((item) => [item.id, item.capacity, item.activeReservationCount, item.availableSeats])
+    ).toEqual([
+      [extraId, 48, 1, 47],
+      [scheduled.id, 48, 2, 46]
+    ]);
+    await expect(departures.getById(seeded.auth, scheduled.id)).resolves.toMatchObject({
+      activeReservationCount: 2,
+      availableSeats: 46
+    });
+  });
+
+  it('never reports fewer than 0 seats left on a departure booked over its capacity', async () => {
+    const scheduled = await prisma.departure.findFirstOrThrow({
+      where: { rideId: seeded.rideId, serviceDate: new Date(seeded.travelDate), source: DepartureSource.SCHEDULE }
+    });
+    await prisma.departure.update({ where: { id: scheduled.id }, data: { capacity: 1 } });
+    await book(scheduled.id, { seatNumber: 1 });
+    await book(scheduled.id, { seatNumber: 2 });
+
+    await expect(departures.getById(seeded.auth, scheduled.id)).resolves.toMatchObject({
+      capacity: 1,
+      activeReservationCount: 2,
+      availableSeats: 0
+    });
+  });
+
+  it('lists the reservations of one departure by departureId, whatever their time copies say', async () => {
+    const scheduled = await prisma.departure.findFirstOrThrow({
+      where: { rideId: seeded.rideId, serviceDate: new Date(seeded.travelDate), source: DepartureSource.SCHEDULE }
+    });
+    const extraId = await storeDeparture({
+      source: DepartureSource.EXTRA,
+      serviceDate: seeded.travelDate,
+      departureTime: '07:00',
+      arrivalTime: '09:00'
+    });
+    const onScheduled = await book(scheduled.id, { seatNumber: 1 });
+    const cancelled = await book(scheduled.id, { seatNumber: 2, status: ReservationStatus.CANCELLED });
+    const onExtra = await book(extraId, { seatNumber: 1 });
+
+    const byDeparture = await reservations.list(seeded.auth, { departureId: scheduled.id });
+    expect(byDeparture.items.map((item) => item.id).sort()).toEqual([onScheduled.id, cancelled.id].sort());
+    expect(byDeparture.total).toBe(2);
+
+    const activeOnExtra = await reservations.list(seeded.auth, {
+      departureId: extraId,
+      status: ReservationStatus.ACTIVE
+    });
+    expect(activeOnExtra.items.map((item) => item.id)).toEqual([onExtra.id]);
+
+    const foreign = await reservations.list(other.auth, { departureId: scheduled.id });
+    expect(foreign.items).toEqual([]);
   });
 });

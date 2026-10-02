@@ -6,7 +6,15 @@ import { formatDateOnly, utcDateOf } from '../rides/ride-instance-materializatio
 import { DepartureWindow, departureWindow, resolveAgencyTimezone } from './agency-date';
 import { GeneratorRide, generateDepartures, planExtra } from './departure-generator';
 import { LINKABLE_SOURCES } from './departure-link';
-import { insertPlannedDepartures, loadRides, sameTimeRefusal, stopRows } from './departure-sync';
+import {
+  departureUpdate,
+  extraDropped,
+  insertPlannedDepartures,
+  loadRides,
+  loadStoredDeparture,
+  sameTimeRefusal,
+  updateDepartures
+} from './departure-sync';
 
 /**
  * Operator decisions on departures (#27, PRs 3a and 3d): cancelling and
@@ -655,17 +663,11 @@ export async function updateExtra(
     });
   }
 
-  await tx.departure.update({
-    where: { id: departure.id },
-    data: { departureTime, arrivalTime, capacity, updatedById: actorId }
-  });
-
-  // Deferred to PR 4 (review of #117): the restop and the time-copy rewrite
-  // below repeat what `updateDepartures` and `rewriteReservationTimes` in
-  // departure-sync do for a timetable departure. When PR 4 moves the ride
-  // screen onto departures, route this through the sync's update writer so a
-  // change to either rule reaches operator edits too.
-  const { departure: planned } = planExtra(ride, {
+  // Written by the sync's own update writer, so the stops and the time copies
+  // its reservations carry follow an operator's move by the same rules as a
+  // timetable edit's. The extra follows its ride's line and dropped state, as
+  // the next sync would make it: a dropped orphan stays dropped.
+  const { departure: planned, dropped: rideDropped } = planExtra(ride, {
     keyId: departure.id,
     serviceDate: formatDateOnly(departure.serviceDate)!,
     departureTime,
@@ -673,14 +675,12 @@ export async function updateExtra(
     capacity,
     rideExceptionId: departure.rideExceptionId
   });
-  const sync = { tenantId: scope.tenantId, actorId };
+  const stored = await loadStoredDeparture(tx, departure.id);
+  const update = departureUpdate(stored, planned, extraDropped(stored, rideDropped));
 
-  await tx.departureStop.deleteMany({ where: { departureId: departure.id } });
-  await tx.departureStop.createMany({ data: stopRows(departure.id, planned.stops, sync) });
-  await tx.reservation.updateMany({
-    where: { tenantId: scope.tenantId, departureId: departure.id },
-    data: { rideDepartureTime: departureTime, rideArrivalTime: arrivalTime, updatedById: actorId }
-  });
+  if (update) {
+    await updateDepartures(tx, [update], { tenantId: scope.tenantId, actorId }, new Date());
+  }
 
   if (departure.rideExceptionId) {
     await tx.rideException.update({

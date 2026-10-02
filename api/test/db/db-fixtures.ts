@@ -9,6 +9,7 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { AccessTokenPayload } from '../../src/auth/auth.types';
+import { addDays, agencyDate, DEFAULT_AGENCY_TIMEZONE } from '../../src/departures/agency-date';
 import { PrismaService } from '../../src/prisma/prisma.service';
 
 /**
@@ -36,9 +37,12 @@ export async function seedTenant(prisma: PrismaService): Promise<Seeded> {
   const tenantId = randomUUID();
   const actorId = randomUUID();
   const suffix = tenantId.slice(0, 8);
-  const travel = new Date();
-  travel.setUTCHours(0, 0, 0, 0);
-  travel.setUTCDate(travel.getUTCDate() + 7);
+  // A week from the agency's today, which is where the sync's window starts,
+  // not the UTC date: they differ for an hour or two after the agency's
+  // midnight, and a bus on the UTC date would then be outside the window.
+  const travel = new Date(
+    `${addDays(agencyDate(new Date(), DEFAULT_AGENCY_TIMEZONE), 7)}T00:00:00.000Z`
+  );
   const otherTravel = new Date(travel);
   otherTravel.setUTCDate(otherTravel.getUTCDate() + 7);
   const recurringStartDate = new Date(travel);

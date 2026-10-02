@@ -29,6 +29,7 @@ import {
   answerTokens,
   type BreakingChangeAnswers,
 } from "@/infrastructure/hooks/useConfirmableUpdate"
+import { departuresQueryKey } from "@/infrastructure/hooks/queries/useDeparturesQuery"
 
 /** The confirmation key for the ride request itself; exceptions key by id. */
 const RIDE_STEP = "ride"
@@ -54,6 +55,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 function invalidateRidesList(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ridesListQueryKey })
+  // A timetable edit syncs the stored departures.
+  queryClient.invalidateQueries({ queryKey: departuresQueryKey })
 }
 
 function hasPatchableFields(data: Partial<RideFormData>): boolean {

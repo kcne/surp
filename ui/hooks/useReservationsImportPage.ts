@@ -45,8 +45,14 @@ export function useReservationsImportPage() {
   const aliases = useMemo(() => getStationAliases(getTenantSlug()), [])
 
   const travelDates = useMemo(() => rows.map((row) => row.travelDate), [rows])
-  const { rideInstancesByDate, rideInstancesById, isLoading: isLoadingRideInstances } =
-    useRideInstancesByDatesQuery(travelDates, rides)
+  const {
+    rideInstancesByDate,
+    rideInstancesById,
+    isLoading: isLoadingRideInstances,
+    isFetching: isFetchingRideInstances,
+    isError: isRideInstancesError,
+    refetch: retryRideInstances,
+  } = useRideInstancesByDatesQuery(travelDates, rides)
 
   // Ride instances actually referenced by a row, so seat availability is only
   // fetched for rides this import will touch.
@@ -392,6 +398,9 @@ export function useReservationsImportPage() {
     commitResult,
     isLoadingReference: stationsQuery.isLoading || ridesQuery.isLoading,
     isResolving: isLoadingRideInstances || isLoadingReservations || passengersQuery.isLoading,
+    isRideInstancesError,
+    isRetryingRideInstances: isFetchingRideInstances,
+    retryRideInstances,
     isCommitting,
     parseFile,
     updateRow,

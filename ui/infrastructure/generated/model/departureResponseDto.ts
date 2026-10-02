@@ -20,6 +20,10 @@ export interface DepartureResponseDto {
   departureTime: string;
   arrivalTime: string;
   capacity: number;
+  /** ACTIVE reservations on this departure. */
+  activeReservationCount: number;
+  /** Capacity less the ACTIVE reservations, never below 0. Counts whole-bus seats, not stretches. */
+  availableSeats: number;
   /**
    * Set when the timetable no longer has this departure but passengers are still booked on it.
    * @nullable

@@ -44,6 +44,9 @@ function ReservationsImportContent() {
     commitResult,
     isLoadingReference,
     isResolving,
+    isRideInstancesError,
+    isRetryingRideInstances,
+    retryRideInstances,
     isCommitting,
     parseFile,
     updateRow,
@@ -102,6 +105,28 @@ function ReservationsImportContent() {
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>CSV nije mogao biti obradjen</AlertTitle>
                   <AlertDescription>{parseError}</AlertDescription>
+                </Alert>
+              ) : null}
+
+              {isRideInstancesError ? (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Polasci nisu ucitani</AlertTitle>
+                  <AlertDescription className="space-y-3">
+                    <p>
+                      Za neke datume polasci nisu mogli biti ucitani, pa redovi za te datume nemaju
+                      voznju. To ne znaci da polazak ne postoji.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void retryRideInstances()}
+                      disabled={isRetryingRideInstances}
+                    >
+                      Pokusaj ponovo
+                    </Button>
+                  </AlertDescription>
                 </Alert>
               ) : null}
 

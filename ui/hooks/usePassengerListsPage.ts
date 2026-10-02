@@ -1,11 +1,7 @@
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
-import {
-  rideInstanceCountKey,
-  useReservationCountsQuery,
-} from "@/infrastructure/hooks/queries/useReservationCountsQuery"
+import { useRunningDeparturesQuery } from "@/infrastructure/hooks/queries/useDeparturesQuery"
 import { formatDateToISO } from "@/utils/dateHelpers"
-import { generateUpcomingRideInstances } from "@/utils/rideInstanceHelpers"
 import type { Ride, RideInstance } from "@/types"
 
 export const ALL_RIDES_OPTION = "all"
@@ -28,9 +24,8 @@ export interface RideFilterOption {
  * Drives the driver-facing passenger list overview: every upcoming ride in the
  * schedule on a selected day and how full each departure is.
  *
- * Instances are expanded from the ride templates on the client — the API serves
- * them one date at a time. Passenger counts come from a single grouped count
- * for the selected date.
+ * The day's running departures are read as stored (#27, PR 4a), each with the
+ * active reservations booked on it.
  */
 export function usePassengerListsPage() {
   const today = useMemo(() => formatDateToISO(new Date()), [])
@@ -39,7 +34,10 @@ export function usePassengerListsPage() {
 
   const ridesQuery = useRidesListQuery()
   const rides = ridesQuery.data ?? EMPTY_RIDES
-  const countsQuery = useReservationCountsQuery(selectedDate, selectedDate)
+  const departuresQuery = useRunningDeparturesQuery(
+    { from: selectedDate, to: selectedDate },
+    rides
+  )
 
   const scheduledRides = useMemo(
     () => rides.filter((ride) => ride.status === "scheduled"),
@@ -54,37 +52,28 @@ export function usePassengerListsPage() {
     [scheduledRides]
   )
 
-  const allInstances = useMemo(
+  const items = useMemo<UpcomingRideListItem[]>(
     () =>
-      generateUpcomingRideInstances(scheduledRides, {
-        from: selectedDate,
-        until: new Date(`${selectedDate}T00:00:00`),
-      }),
-    [scheduledRides, selectedDate]
+      departuresQuery.instances
+        .filter(
+          (instance) =>
+            selectedRideId === ALL_RIDES_OPTION || instance.rideId === selectedRideId
+        )
+        .map((rideInstance) => ({
+          rideInstance,
+          passengerCount: rideInstance.reservationCount ?? 0,
+          capacity: rideInstance.ride.busCapacity,
+        })),
+    [departuresQuery.instances, selectedRideId]
   )
 
-  const items = useMemo<UpcomingRideListItem[]>(() => {
-    const counts = countsQuery.data
-
-    return allInstances
-      .filter(
-        (instance) =>
-          instance.date === selectedDate &&
-          (selectedRideId === ALL_RIDES_OPTION || instance.rideId === selectedRideId)
-      )
-      .map((rideInstance) => ({
-        rideInstance,
-        passengerCount:
-          counts?.get(
-            rideInstanceCountKey(
-              rideInstance.rideId,
-              rideInstance.date,
-              rideInstance.departureTime
-            )
-          ) ?? 0,
-        capacity: rideInstance.ride.busCapacity,
-      }))
-  }, [allInstances, countsQuery.data, selectedDate, selectedRideId])
+  const { refetch: refetchRides } = ridesQuery
+  const { refetch: refetchDepartures } = departuresQuery
+  // A failure in either is retried: rides for the filter, departures for the list.
+  const refetch = useCallback(
+    () => Promise.all([refetchRides(), refetchDepartures()]).then(() => undefined),
+    [refetchRides, refetchDepartures]
+  )
 
   return {
     items,
@@ -93,10 +82,13 @@ export function usePassengerListsPage() {
     setSelectedRideId,
     selectedDate,
     setSelectedDate,
-    isLoading: ridesQuery.isLoading,
-    isCountsLoading: countsQuery.isLoading,
-    isError: ridesQuery.isError,
-    error: ridesQuery.error,
-    refetch: ridesQuery.refetch,
+    isLoading: ridesQuery.isLoading || departuresQuery.isLoading,
+    // Counts arrive with the departures themselves.
+    isCountsLoading: departuresQuery.isLoading,
+    isError: ridesQuery.isError || departuresQuery.isError,
+    error:
+      ridesQuery.error ??
+      (departuresQuery.isError ? new Error("Neuspesno ucitavanje polazaka") : null),
+    refetch,
   }
 }

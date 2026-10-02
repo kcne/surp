@@ -25,7 +25,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Ban, ChevronDown, Ticket } from "lucide-react"
-import { generateRideInstances } from "@/utils/rideInstanceHelpers"
+import { useRunningDeparturesQuery } from "@/infrastructure/hooks/queries/useDeparturesQuery"
+import { addDaysToIsoDate, DEPARTURE_WINDOW_DAYS } from "@/utils/departureWindows"
+import { formatDateToISO } from "@/utils/dateHelpers"
+
+/** Bookings and operator decisions reach no further than 365 days ahead. */
+const HORIZON_DAYS = 365
 
 interface RideInstancesViewProps {
   open: boolean
@@ -49,7 +54,6 @@ export function RideInstancesView({
     setActiveRide(ride)
   }, [ride])
 
-  const instances = useMemo(() => generateRideInstances(activeRide), [activeRide])
     const handleReserve = async (instanceId: string, instanceDate: string) => {
       onOpenChange(false)
       router.push(`/reservations/${instanceId}?date=${instanceDate}`)
@@ -74,6 +78,26 @@ export function RideInstancesView({
   const [visibleCount, setVisibleCount] = useState(10)
   const [fromDate, setFromDate] = useState("")
   const [toDate, setToDate] = useState("")
+  const [loadedWindows, setLoadedWindows] = useState(1)
+
+  // The ride's stored departures (#27, PR 4a), read 62 days at a time from
+  // the "from" date; "show more" reads the next 62 days once the loaded ones
+  // are all shown.
+  const today = useMemo(() => formatDateToISO(new Date()), [])
+  const rangeFrom = fromDate || today
+  const rangeEnd = toDate || addDaysToIsoDate(today, HORIZON_DAYS)
+  const loadedEnd = addDaysToIsoDate(rangeFrom, loadedWindows * DEPARTURE_WINDOW_DAYS - 1)
+  const range = useMemo(
+    () => ({ from: rangeFrom, to: loadedEnd < rangeEnd ? loadedEnd : rangeEnd }),
+    [rangeFrom, loadedEnd, rangeEnd]
+  )
+  const hasUnloadedDates = range.to < rangeEnd
+  const rides = useMemo(() => [activeRide], [activeRide])
+  const departuresQuery = useRunningDeparturesQuery(range, rides, {
+    rideId: activeRide.id,
+    enabled: open,
+  })
+  const instances = departuresQuery.instances
 
   const formatInstanceDate = (dateString: string) => {
     return new Date(`${dateString}T00:00:00`).toLocaleDateString("sr-Latn-RS", {
@@ -117,12 +141,25 @@ export function RideInstancesView({
   useEffect(() => {
     if (open) {
       setVisibleCount(10)
-      const today = new Date()
-      const todayISO = today.toISOString().slice(0, 10)
-      setFromDate(todayISO)
+      setLoadedWindows(1)
+      setFromDate(formatDateToISO(new Date()))
       setToDate("")
     }
   }, [open, ride.id])
+
+  useEffect(() => {
+    setLoadedWindows(1)
+  }, [fromDate, toDate])
+
+  const showMore = () => {
+    if (filteredInstances.length > visibleCount) {
+      setVisibleCount((prev) => prev + 10)
+      return
+    }
+
+    setLoadedWindows((prev) => prev + 1)
+    setVisibleCount((prev) => prev + 10)
+  }
 
   const getStatusBadge = (status: string) => {
     const variants = {
@@ -153,7 +190,7 @@ export function RideInstancesView({
         <DialogHeader>
           <DialogTitle>Raspored vožnje: {ride.line.name}</DialogTitle>
           <DialogDescription>
-            Generisane instance vožnje za naredna 3 meseca
+            Polasci ove voznje od izabranog datuma
           </DialogDescription>
         </DialogHeader>
 
@@ -179,29 +216,66 @@ export function RideInstancesView({
             </div>
           </div>
 
-          {allInstances.length === 0 ? (
+          {/* Always shown: the range is what is read, so an empty one must stay changeable. */}
+          <div className="grid gap-3 rounded-md border p-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <label htmlFor="ride-instances-from" className="text-xs font-semibold uppercase text-muted-foreground">
+                Od
+              </label>
+              <Input
+                id="ride-instances-from"
+                type="date"
+                value={fromDate}
+                onChange={(event) => setFromDate(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="ride-instances-to" className="text-xs font-semibold uppercase text-muted-foreground">
+                Do
+              </label>
+              <Input
+                id="ride-instances-to"
+                type="date"
+                value={toDate}
+                onChange={(event) => setToDate(event.target.value)}
+              />
+            </div>
+          </div>
+
+          {departuresQuery.isError ? (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-3 rounded-lg border border-destructive/50 p-4 text-sm text-destructive"
+            >
+              <span>Polasci nisu mogli biti ucitani.</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void departuresQuery.refetch()}
+                disabled={departuresQuery.isFetching}
+              >
+                Pokusaj ponovo
+              </Button>
+            </div>
+          ) : departuresQuery.isLoading && allInstances.length === 0 ? (
+            <div className="space-y-2" role="status" aria-busy="true" aria-label="Ucitavanje polazaka">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : allInstances.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12">
               <p className="text-lg font-medium text-muted-foreground">
-                Nema generisanih instanci
+                {hasUnloadedDates ? "Nema polazaka u ucitanom periodu" : "Nema polazaka u izabranom periodu"}
               </p>
               <p className="text-sm text-muted-foreground">
-                {ride.type === "recurring"
-                  ? "Proverite da li su svi podaci za ponavljajuću vožnju popunjeni."
-                  : "Jednokratna vožnja ima samo jednu instancu."}
+                {hasUnloadedDates
+                  ? "Ucitajte naredni period dugmetom ispod."
+                  : "Promenite period ili proverite raspored voznje."}
               </p>
             </div>
           ) : (
             <div className="rounded-md border max-h-[420px] overflow-y-auto">
-              <div className="grid gap-3 border-b p-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">Od</p>
-                  <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">Do</p>
-                  <Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
-                </div>
-              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -255,12 +329,13 @@ export function RideInstancesView({
             </div>
           )}
 
-          {filteredInstances.length > visibleCount && (
+          {(filteredInstances.length > visibleCount || hasUnloadedDates) && (
             <div className="flex justify-center">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setVisibleCount((prev) => prev + 10)}
+                onClick={showMore}
+                disabled={departuresQuery.isFetching}
               >
                 <ChevronDown className="mr-2 h-4 w-4" />
                 Prikaži još
@@ -269,7 +344,7 @@ export function RideInstancesView({
           )}
 
           <div className="text-sm text-muted-foreground">
-            Ukupno instanci: {filteredInstances.length}
+            Ucitano polazaka: {filteredInstances.length}
           </div>
         </div>
       </DialogContent>

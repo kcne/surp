@@ -711,26 +711,107 @@ describe('RidesService', () => {
     expect(result.items[0].reservationCount).toBe(0);
     expect(result.items[0].availability.availableSeats).toBe(38);
 
+    // A stored departure gives the capacity and the count, by departureId:
+    // the time copies' 30 are not read.
     prismaMock.departure.findMany.mockResolvedValue([
-      { rideId: 'ride-1', departureTime: '13:00', capacity: 60 }
+      { rideId: 'ride-1', departureTime: '13:00', source: 'EXTRA', capacity: 60, _count: { reservations: 48 } }
     ]);
+    prismaMock.reservation.groupBy.mockClear();
     prismaMock.reservation.groupBy.mockResolvedValue([
-      { rideId: 'ride-1', rideDepartureTime: '13:00', _count: { _all: 48 } }
+      { rideId: 'ride-1', rideDepartureTime: '13:00', _count: { _all: 30 } }
     ]);
     const largerExtra = await service.listInstancesByDate(auth, { date: '2026-03-30' });
     expect(largerExtra.items[0].availability).toEqual({
       capacity: 60, reservedSeats: 48, availableSeats: 12, hasAvailability: true
     });
+    expect(largerExtra.items[0].reservationCount).toBe(48);
+    expect(prismaMock.reservation.groupBy).not.toHaveBeenCalled();
     expect(prismaMock.departure.findMany).toHaveBeenLastCalledWith({
       where: {
         tenantId: auth.tenantId,
         rideId: { in: ['ride-1'] },
         serviceDate: new Date('2026-03-30'),
-        source: 'EXTRA', cancelledAt: null, timetableDroppedAt: null
+        source: { in: ['SCHEDULE', 'EXTRA'] },
+        cancelledAt: null,
+        timetableDroppedAt: null
       },
-      select: { rideId: true, departureTime: true, capacity: true }
+      select: {
+        rideId: true,
+        departureTime: true,
+        source: true,
+        capacity: true,
+        _count: { select: { reservations: { where: { status: 'ACTIVE' } } } }
+      }
     });
 
+    // With no stored departure, the ride's capacity and the time copies.
+    prismaMock.departure.findMany.mockResolvedValue([]);
+    const unstored = await service.listInstancesByDate(auth, { date: '2026-03-30' });
+    expect(unstored.items[0].availability).toEqual({
+      capacity: 38, reservedSeats: 30, availableSeats: 8, hasAvailability: true
+    });
+
+  });
+
+  it('counts a same-time timetable bus and extra on their own departures (#27, PR 4a)', async () => {
+    // A pair stored before PR 3c refused one: Tuesday's 09:00 bus and an extra
+    // at 09:00 the same day.
+    prismaMock.ride.findMany.mockResolvedValue([
+      {
+        id: 'ride-1',
+        tenantId: 'tenant-1',
+        lineId: 'line-1',
+        name: 'Paired Ride',
+        capacity: 38,
+        type: RideType.RECURRING,
+        status: RideStatus.ACTIVE,
+        recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+        recurringEndDate: null,
+        oneTimeDate: null,
+        oneTimeDepartureTime: null,
+        oneTimeArrivalTime: null,
+        line: {
+          id: 'line-1',
+          name: 'Line 1',
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-b',
+          intermediateStops: []
+        },
+        daySchedules: [
+          {
+            dayOfWeek: 2,
+            stationTimes: [
+              { stationId: 'station-a', orderIndex: 0, time: '09:00' },
+              { stationId: 'station-b', orderIndex: 1, time: '10:30' }
+            ]
+          }
+        ],
+        exceptions: [
+          {
+            exceptionDate: new Date('2026-03-31T00:00:00.000Z'),
+            type: RideExceptionType.ADDITIONAL,
+            departureTime: '09:00',
+            arrivalTime: '10:30'
+          }
+        ]
+      }
+    ]);
+    prismaMock.departure.findMany.mockResolvedValue([
+      { rideId: 'ride-1', departureTime: '09:00', source: 'SCHEDULE', capacity: 38, _count: { reservations: 10 } },
+      { rideId: 'ride-1', departureTime: '09:00', source: 'EXTRA', capacity: 20, _count: { reservations: 3 } }
+    ]);
+
+    const result = await service.listInstancesByDate(auth, { date: '2026-03-31' });
+
+    expect(
+      result.items.map((item) => [item.source, item.availability.capacity, item.reservationCount])
+    ).toEqual(
+      expect.arrayContaining([
+        ['BASE', 38, 10],
+        ['ADDITIONAL', 20, 3]
+      ])
+    );
+    expect(result.items).toHaveLength(2);
   });
 
   it('computes availability from active reservations for matching ride instance', async () => {

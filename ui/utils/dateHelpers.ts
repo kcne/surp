@@ -1,4 +1,4 @@
-import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns"
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns"
 
 // Get Serbian day names
 export const getDayName = (dayIndex: number): string => {
@@ -52,28 +52,6 @@ export const isDateInRange = (date: Date, startDate: Date, endDate?: Date): bool
     return date >= startDate && date <= endDate
   }
   return date >= startDate
-}
-
-// Generate dates for recurring ride (3 months ahead)
-export const generateRideInstanceDates = (
-  startDate: Date,
-  endDate: Date | undefined,
-  daysOfWeek: number[]
-): Date[] => {
-  const dates: Date[] = []
-  const threeMonthsFromNow = addDays(new Date(), 90)
-  const effectiveEndDate = endDate && endDate < threeMonthsFromNow ? endDate : threeMonthsFromNow
-
-  let currentDate = new Date(startDate)
-  while (currentDate <= effectiveEndDate) {
-    const dayOfWeek = currentDate.getDay()
-    if (daysOfWeek.includes(dayOfWeek)) {
-      dates.push(new Date(currentDate))
-    }
-    currentDate = addDays(currentDate, 1)
-  }
-
-  return dates
 }
 
 // Check if date matches exception

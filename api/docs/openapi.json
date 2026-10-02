@@ -4677,6 +4677,16 @@
             }
           },
           {
+            "name": "departureId",
+            "required": false,
+            "in": "query",
+            "description": "Only reservations on this stored departure (one bus on one date).",
+            "schema": {
+              "example": "departure-id-123",
+              "type": "string"
+            }
+          },
+          {
             "name": "passengerId",
             "required": false,
             "in": "query",
@@ -6662,6 +6672,16 @@
             "type": "number",
             "example": 48
           },
+          "activeReservationCount": {
+            "type": "number",
+            "example": 12,
+            "description": "ACTIVE reservations on this departure."
+          },
+          "availableSeats": {
+            "type": "number",
+            "example": 36,
+            "description": "Capacity less the ACTIVE reservations, never below 0. Counts whole-bus seats, not stretches."
+          },
           "timetableDroppedAt": {
             "type": "string",
             "format": "date-time",
@@ -6705,6 +6725,8 @@
           "departureTime",
           "arrivalTime",
           "capacity",
+          "activeReservationCount",
+          "availableSeats",
           "timetableDroppedAt",
           "cancelledAt",
           "cancelledById",

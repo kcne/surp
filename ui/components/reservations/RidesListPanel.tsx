@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { format } from "date-fns"
+import { endOfMonth, format, startOfMonth } from "date-fns"
 import { srLatn } from "date-fns/locale"
 import {
   getCoreRowModel,
@@ -45,7 +45,7 @@ import { RideInstanceInfoDialog } from "@/components/reservations/RideInstanceIn
 import { cn } from "@/lib/utils"
 import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
 import { formatDateToISO, formatDuration } from "@/utils/dateHelpers"
-import { generateRideInstancesForRide } from "@/utils/rideInstanceGenerators"
+import { useRunningDeparturesQuery } from "@/infrastructure/hooks/queries/useDeparturesQuery"
 import {
   ArrowLeftRight,
   ArrowUpDown,
@@ -282,32 +282,48 @@ export function RidesListPanel({
     (station) => station.id === selectedArrivalStationId
   )
 
+  // The calendar marks the days of its visible month that have a running
+  // departure matching the station and status filters (#27, PR 4a).
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => selectedDate ?? new Date())
+  const calendarRange = useMemo(
+    () => ({
+      from: formatDateToISO(startOfMonth(calendarMonth)),
+      to: formatDateToISO(endOfMonth(calendarMonth)),
+    }),
+    [calendarMonth]
+  )
+  const calendarDepartures = useRunningDeparturesQuery(calendarRange, rides)
+  const selectedTime = selectedDate?.getTime()
+
+  useEffect(() => {
+    if (selectedTime !== undefined) {
+      setCalendarMonth(new Date(selectedTime))
+    }
+  }, [selectedTime])
+
   /**
    * Set of YYYY-MM-DD strings for dates that have at least one ride matching
    * the current station + status filters. Drives calendar dot markers.
    */
   const availableDateKeys = useMemo(() => {
     const keys = new Set<string>()
-    rides.forEach((ride) => {
+    calendarDepartures.instances.forEach((instance) => {
       if (
         !matchesStationPair(
-          ride.line,
+          instance.ride.line,
           selectedDepartureStationId,
           selectedArrivalStationId,
         )
       ) {
         return
       }
-      const instances = generateRideInstancesForRide(ride)
-      instances.forEach((instance) => {
-        if (selectedStatuses.length > 0 && !selectedStatuses.includes(instance.status)) {
-          return
-        }
-        keys.add(instance.date)
-      })
+      if (selectedStatuses.length > 0 && !selectedStatuses.includes(instance.status)) {
+        return
+      }
+      keys.add(instance.date)
     })
     return keys
-  }, [rides, selectedDepartureStationId, selectedArrivalStationId, selectedStatuses])
+  }, [calendarDepartures.instances, selectedDepartureStationId, selectedArrivalStationId, selectedStatuses])
 
   const isDayWithRides = (date: Date) => availableDateKeys.has(formatDateToISO(date))
 
@@ -540,6 +556,8 @@ export function RidesListPanel({
                 mode="single"
                 selected={selectedDate}
                 onSelect={handleDateSelect}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
                 locale={srLatn}
                 disabled={(date) => isDateInPast(date)}
                 modifiers={{ hasRides: isDayWithRides }}

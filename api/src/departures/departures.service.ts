@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, ReservationStatus } from '@prisma/client';
 import { AccessTokenPayload } from '../auth/auth.types';
 import { consentFrom } from '../invariants/dto/confirm-breaking-change.dto';
 import {
@@ -56,6 +56,7 @@ const DEPARTURE_SELECT = {
   updatedAt: true,
   ride: { select: { name: true } },
   line: { select: { name: true } },
+  _count: { select: { reservations: { where: { status: ReservationStatus.ACTIVE } } } },
   stops: {
     select: {
       stationId: true,
@@ -302,6 +303,8 @@ function toResponse(row: DepartureRow): DepartureResponseDto {
     departureTime: row.departureTime,
     arrivalTime: row.arrivalTime,
     capacity: row.capacity,
+    activeReservationCount: row._count.reservations,
+    availableSeats: Math.max(row.capacity - row._count.reservations, 0),
     timetableDroppedAt: row.timetableDroppedAt,
     cancelledAt: row.cancelledAt,
     cancelledById: row.cancelledById,

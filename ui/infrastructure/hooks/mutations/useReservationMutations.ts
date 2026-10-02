@@ -20,6 +20,7 @@ import {
   toUpdateReservationDto,
 } from "@/infrastructure/mappers/reservationMappers"
 import { reservationsByRideInstanceQueryKey } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
+import { departuresQueryKey } from "@/infrastructure/hooks/queries/useDeparturesQuery"
 import type { ReservationFormData, RideInstance } from "@/types"
 import {
   bookingRefusalMessage,
@@ -88,6 +89,7 @@ function refreshAfterBookingRefusal(
 ): void {
   if (bookingRefusalMessage(error)) {
     void queryClient.invalidateQueries({ queryKey: ["rides"] })
+    void queryClient.invalidateQueries({ queryKey: departuresQueryKey })
     void queryClient.invalidateQueries({ queryKey: ["reservations"] })
   }
 }
@@ -103,6 +105,8 @@ function invalidateReservations(
       })
     ),
     queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+    // Departures carry their booked and free seats.
+    queryClient.invalidateQueries({ queryKey: departuresQueryKey }),
     queryClient.invalidateQueries({ queryKey: ["passenger-list", "rows"] }),
   ]).then(() => undefined)
 }
