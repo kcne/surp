@@ -110,7 +110,9 @@ export function usePassengerListDetailPage({ departureId }: UsePassengerListDeta
     isRowsLoading: !reservationsQuery.isSuccess || rowsQuery.isLoading || rowsQuery.isFetching,
     isNotFound:
       legacyRedirect.notFound ||
-      departureQuery.isError ||
       (!legacyLink && departureQuery.isSuccess && departureQuery.data === null),
+    // A failed read is not a missing bus: the page offers a retry instead.
+    isError: legacyRedirect.isError || departureQuery.isError,
+    retry: legacyLink ? legacyRedirect.retry : departureQuery.refetch,
   }
 }

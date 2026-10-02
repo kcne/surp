@@ -7,7 +7,8 @@ import { resolveLegacyDeparture, type LegacyDepartureLink } from "@/utils/legacy
 /**
  * Replaces an old ride-date-time link with the departure it meant, once the
  * ride's departures that day are read. `notFound` is set when the link meant
- * no bus, or more than one. Removed in PR 6.
+ * no bus, or more than one; `isError` when the departures could not be read,
+ * which says nothing about the link. Removed in PR 6.
  */
 export function useLegacyDepartureRedirect(
   link: LegacyDepartureLink | null,
@@ -32,6 +33,8 @@ export function useLegacyDepartureRedirect(
 
   return {
     resolving: Boolean(link) && (query.isLoading || Boolean(target)),
-    notFound: Boolean(link) && (query.isError || (query.isSuccess && !departureId)),
+    notFound: Boolean(link) && query.isSuccess && !departureId,
+    isError: Boolean(link) && query.isError,
+    retry: query.refetch,
   }
 }

@@ -1,5 +1,5 @@
-import { useMemo } from "react"
-import { useQueries, useQuery } from "@tanstack/react-query"
+import { useCallback, useMemo } from "react"
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   departuresControllerGetById,
   departuresControllerList,
@@ -57,9 +57,10 @@ interface DepartureRangeOptions extends DepartureFilter {
 export function useDepartureRangeQuery(range: DateWindow, options: DepartureRangeOptions = {}) {
   const { rideId, lineId, enabled = true } = options
   const { from, to } = range
+  const queryClient = useQueryClient()
   const windows = useMemo(() => splitIntoDepartureWindows({ from, to }), [from, to])
 
-  return useQueries({
+  const combined = useQueries({
     queries: windows.map((window) => ({
       queryKey: departureWindowQueryKey(window, { rideId, lineId }),
       queryFn: () => fetchDepartureWindow(window, { rideId, lineId }),
@@ -73,6 +74,22 @@ export function useDepartureRangeQuery(range: DateWindow, options: DepartureRang
       isError: results.some((result) => result.isError),
     }),
   })
+
+  // Every window of the range again, for a retry after a failed one.
+  const refetch = useCallback(
+    () =>
+      Promise.all(
+        windows.map((window) =>
+          queryClient.refetchQueries({
+            queryKey: departureWindowQueryKey(window, { rideId, lineId }),
+            exact: true,
+          })
+        )
+      ).then(() => undefined),
+    [queryClient, windows, rideId, lineId]
+  )
+
+  return { ...combined, refetch }
 }
 
 /**

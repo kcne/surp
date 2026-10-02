@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import { useRunningDeparturesQuery } from "@/infrastructure/hooks/queries/useDeparturesQuery"
 import { formatDateToISO } from "@/utils/dateHelpers"
@@ -67,6 +67,14 @@ export function usePassengerListsPage() {
     [departuresQuery.instances, selectedRideId]
   )
 
+  const { refetch: refetchRides } = ridesQuery
+  const { refetch: refetchDepartures } = departuresQuery
+  // A failure in either is retried: rides for the filter, departures for the list.
+  const refetch = useCallback(
+    () => Promise.all([refetchRides(), refetchDepartures()]).then(() => undefined),
+    [refetchRides, refetchDepartures]
+  )
+
   return {
     items,
     rideOptions,
@@ -78,7 +86,9 @@ export function usePassengerListsPage() {
     // Counts arrive with the departures themselves.
     isCountsLoading: departuresQuery.isLoading,
     isError: ridesQuery.isError || departuresQuery.isError,
-    error: ridesQuery.error,
-    refetch: ridesQuery.refetch,
+    error:
+      ridesQuery.error ??
+      (departuresQuery.isError ? new Error("Neuspesno ucitavanje polazaka") : null),
+    refetch,
   }
 }

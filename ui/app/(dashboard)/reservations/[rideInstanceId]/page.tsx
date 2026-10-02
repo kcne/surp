@@ -22,6 +22,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRideInstanceSeatMapPage } from "@/hooks/useRideInstanceSeatMapPage"
 import { formatDateDisplay } from "@/utils/dateHelpers"
@@ -59,6 +60,8 @@ export default function SeatMapPage() {
     setIsBulkCancelOpen,
     openSelectedReservationForEdit,
     departureNotFound,
+    departureError,
+    retryDeparture,
   } = useRideInstanceSeatMapPage({ rideInstanceId })
 
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
@@ -77,6 +80,20 @@ export default function SeatMapPage() {
           <Link href="/reservations" className="text-primary underline underline-offset-4">
             Nazad na rezervacije
           </Link>
+        </div>
+      </Layout>
+    )
+  }
+
+  if (departureError) {
+    return (
+      <Layout>
+        <div className="space-y-4" role="alert">
+          <h1 className="text-2xl font-bold">Polazak nije ucitan</h1>
+          <p className="text-muted-foreground">Podaci o polasku trenutno nisu dostupni.</p>
+          <Button type="button" variant="outline" onClick={() => void retryDeparture()}>
+            Pokusaj ponovo
+          </Button>
         </div>
       </Layout>
     )

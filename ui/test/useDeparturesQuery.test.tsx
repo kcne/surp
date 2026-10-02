@@ -85,6 +85,28 @@ describe("useRunningDeparturesQuery", () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.instances).toEqual([])
   })
+
+  it("reads every window again on a retry, and clears the error once they arrive", async () => {
+    api.departuresControllerList.mockResolvedValue({ status: 500, data: {} })
+
+    const { result } = renderHook(
+      () => useRunningDeparturesQuery({ from: "2026-10-01", to: "2026-12-31" }, [ride()]),
+      { wrapper: createQueryWrapper() }
+    )
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(api.departuresControllerList).toHaveBeenCalledTimes(2)
+
+    api.departuresControllerList.mockResolvedValue({
+      status: 200,
+      data: { items: [departure({ id: "back" })] },
+    })
+    await result.current.refetch()
+
+    await waitFor(() => expect(result.current.isError).toBe(false))
+    expect(api.departuresControllerList).toHaveBeenCalledTimes(4)
+    expect(result.current.instances.map((instance) => instance.id)).toEqual(["back", "back"])
+  })
 })
 
 describe("useDepartureQuery", () => {

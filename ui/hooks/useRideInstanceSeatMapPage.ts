@@ -61,6 +61,9 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   }, [departureQuery.data, rides])
   const departureNotFound =
     legacyRedirect.notFound || (!legacyLink && departureQuery.isSuccess && departureQuery.data === null)
+  // A failed read is not a missing bus: the page offers a retry instead.
+  const departureError = legacyRedirect.isError || departureQuery.isError
+  const retryDeparture = legacyLink ? legacyRedirect.retry : departureQuery.refetch
   const reservationsQuery = useReservationsByRideInstanceQuery(selectedRideInstance)
   const moveSeatMutation = useMoveReservationSeatMutation()
   const reservations = useMemo(
@@ -306,6 +309,8 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       departureQuery.isLoading ||
       legacyRedirect.resolving,
     departureNotFound,
+    departureError,
+    retryDeparture,
     selectedSeat,
     selectedSeats,
     selectedReservations,

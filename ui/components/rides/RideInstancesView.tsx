@@ -216,38 +216,66 @@ export function RideInstancesView({
             </div>
           </div>
 
+          {/* Always shown: the range is what is read, so an empty one must stay changeable. */}
+          <div className="grid gap-3 rounded-md border p-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <label htmlFor="ride-instances-from" className="text-xs font-semibold uppercase text-muted-foreground">
+                Od
+              </label>
+              <Input
+                id="ride-instances-from"
+                type="date"
+                value={fromDate}
+                onChange={(event) => setFromDate(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="ride-instances-to" className="text-xs font-semibold uppercase text-muted-foreground">
+                Do
+              </label>
+              <Input
+                id="ride-instances-to"
+                type="date"
+                value={toDate}
+                onChange={(event) => setToDate(event.target.value)}
+              />
+            </div>
+          </div>
+
           {departuresQuery.isError ? (
-            <div role="alert" className="rounded-lg border border-destructive/50 p-4 text-sm text-destructive">
-              Polasci nisu mogli biti ucitani. Pokusajte ponovo.
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-3 rounded-lg border border-destructive/50 p-4 text-sm text-destructive"
+            >
+              <span>Polasci nisu mogli biti ucitani.</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void departuresQuery.refetch()}
+                disabled={departuresQuery.isFetching}
+              >
+                Pokusaj ponovo
+              </Button>
             </div>
           ) : departuresQuery.isLoading && allInstances.length === 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-2" role="status" aria-busy="true" aria-label="Ucitavanje polazaka">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : allInstances.length === 0 && !hasUnloadedDates ? (
+          ) : allInstances.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12">
               <p className="text-lg font-medium text-muted-foreground">
-                Nema polazaka u izabranom periodu
+                {hasUnloadedDates ? "Nema polazaka u ucitanom periodu" : "Nema polazaka u izabranom periodu"}
               </p>
               <p className="text-sm text-muted-foreground">
-                {ride.type === "recurring"
-                  ? "Proverite da li su svi podaci za ponavljajuću vožnju popunjeni."
-                  : "Jednokratna vožnja ima samo jednu instancu."}
+                {hasUnloadedDates
+                  ? "Ucitajte naredni period dugmetom ispod."
+                  : "Promenite period ili proverite raspored voznje."}
               </p>
             </div>
           ) : (
             <div className="rounded-md border max-h-[420px] overflow-y-auto">
-              <div className="grid gap-3 border-b p-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">Od</p>
-                  <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">Do</p>
-                  <Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
-                </div>
-              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
