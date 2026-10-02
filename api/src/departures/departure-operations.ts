@@ -8,6 +8,7 @@ import { GeneratorRide, generateDepartures, planExtra } from './departure-genera
 import { LINKABLE_SOURCES } from './departure-link';
 import {
   departureUpdate,
+  extraDropped,
   insertPlannedDepartures,
   loadRides,
   loadStoredDeparture,
@@ -665,8 +666,8 @@ export async function updateExtra(
   // Written by the sync's own update writer, so the stops and the time copies
   // its reservations carry follow an operator's move by the same rules as a
   // timetable edit's. The extra follows its ride's line and dropped state, as
-  // the next sync would make it.
-  const { departure: planned, dropped } = planExtra(ride, {
+  // the next sync would make it: a dropped orphan stays dropped.
+  const { departure: planned, dropped: rideDropped } = planExtra(ride, {
     keyId: departure.id,
     serviceDate: formatDateOnly(departure.serviceDate)!,
     departureTime,
@@ -674,7 +675,8 @@ export async function updateExtra(
     capacity,
     rideExceptionId: departure.rideExceptionId
   });
-  const update = departureUpdate(await loadStoredDeparture(tx, departure.id), planned, dropped);
+  const stored = await loadStoredDeparture(tx, departure.id);
+  const update = departureUpdate(stored, planned, extraDropped(stored, rideDropped));
 
   if (update) {
     await updateDepartures(tx, [update], { tenantId: scope.tenantId, actorId }, new Date());

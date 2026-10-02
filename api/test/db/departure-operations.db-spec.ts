@@ -456,6 +456,38 @@ describe('departure operations (real database)', () => {
       await expectChecksClean();
     });
 
+    it('keeps a dropped orphan dropped when it is moved, as the sync does (#27, PR 4a)', async () => {
+      // Before PR 3a, deleting a booked ADDITIONAL left its extra dropped, with
+      // no exception behind it.
+      const extra = await addExtra();
+      await book(extra.id, { time: '15:00' });
+      await prisma.departure.update({
+        where: { id: extra.id },
+        data: { rideExceptionId: null, timetableDroppedAt: new Date('2026-01-01T00:00:00.000Z') }
+      });
+      await prisma.rideException.deleteMany({ where: { rideId: seeded.rideId, type: RideExceptionType.ADDITIONAL } });
+
+      const response = responseOf(
+        await refusalOf(departures.updateExtra(seeded.auth, extra.id, { departureTime: '16:00' }))
+      );
+      const moved = await departures.updateExtra(seeded.auth, extra.id, {
+        departureTime: '16:00',
+        ...confirmed(response.confirmationToken)
+      });
+
+      expect(moved).toMatchObject({
+        departureTime: '16:00',
+        timetableDroppedAt: new Date('2026-01-01T00:00:00.000Z')
+      });
+
+      await prisma.$transaction((tx) =>
+        syncDepartures(tx, { tenantId: seeded.auth.tenantId, actorId: SYSTEM_ACTOR_ID })
+      );
+      expect((await departures.getById(seeded.auth, extra.id)).timetableDroppedAt).toEqual(
+        new Date('2026-01-01T00:00:00.000Z')
+      );
+    });
+
     it('asks before cutting an extra under a booked seat', async () => {
       const extra = await addExtra();
       await book(extra.id, { time: '15:00', seatNumber: 40 });

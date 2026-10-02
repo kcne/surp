@@ -714,7 +714,7 @@ describe('RidesService', () => {
     // A stored departure gives the capacity and the count, by departureId:
     // the time copies' 30 are not read.
     prismaMock.departure.findMany.mockResolvedValue([
-      { rideId: 'ride-1', departureTime: '13:00', capacity: 60, _count: { reservations: 48 } }
+      { rideId: 'ride-1', departureTime: '13:00', source: 'EXTRA', capacity: 60, _count: { reservations: 48 } }
     ]);
     prismaMock.reservation.groupBy.mockClear();
     prismaMock.reservation.groupBy.mockResolvedValue([
@@ -738,6 +738,7 @@ describe('RidesService', () => {
       select: {
         rideId: true,
         departureTime: true,
+        source: true,
         capacity: true,
         _count: { select: { reservations: { where: { status: 'ACTIVE' } } } }
       }
@@ -750,6 +751,67 @@ describe('RidesService', () => {
       capacity: 38, reservedSeats: 30, availableSeats: 8, hasAvailability: true
     });
 
+  });
+
+  it('counts a same-time timetable bus and extra on their own departures (#27, PR 4a)', async () => {
+    // A pair stored before PR 3c refused one: Tuesday's 09:00 bus and an extra
+    // at 09:00 the same day.
+    prismaMock.ride.findMany.mockResolvedValue([
+      {
+        id: 'ride-1',
+        tenantId: 'tenant-1',
+        lineId: 'line-1',
+        name: 'Paired Ride',
+        capacity: 38,
+        type: RideType.RECURRING,
+        status: RideStatus.ACTIVE,
+        recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+        recurringEndDate: null,
+        oneTimeDate: null,
+        oneTimeDepartureTime: null,
+        oneTimeArrivalTime: null,
+        line: {
+          id: 'line-1',
+          name: 'Line 1',
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-b',
+          intermediateStops: []
+        },
+        daySchedules: [
+          {
+            dayOfWeek: 2,
+            stationTimes: [
+              { stationId: 'station-a', orderIndex: 0, time: '09:00' },
+              { stationId: 'station-b', orderIndex: 1, time: '10:30' }
+            ]
+          }
+        ],
+        exceptions: [
+          {
+            exceptionDate: new Date('2026-03-31T00:00:00.000Z'),
+            type: RideExceptionType.ADDITIONAL,
+            departureTime: '09:00',
+            arrivalTime: '10:30'
+          }
+        ]
+      }
+    ]);
+    prismaMock.departure.findMany.mockResolvedValue([
+      { rideId: 'ride-1', departureTime: '09:00', source: 'SCHEDULE', capacity: 38, _count: { reservations: 10 } },
+      { rideId: 'ride-1', departureTime: '09:00', source: 'EXTRA', capacity: 20, _count: { reservations: 3 } }
+    ]);
+
+    const result = await service.listInstancesByDate(auth, { date: '2026-03-31' });
+
+    expect(
+      result.items.map((item) => [item.source, item.availability.capacity, item.reservationCount])
+    ).toEqual(
+      expect.arrayContaining([
+        ['BASE', 38, 10],
+        ['ADDITIONAL', 20, 3]
+      ])
+    );
+    expect(result.items).toHaveLength(2);
   });
 
   it('computes availability from active reservations for matching ride instance', async () => {

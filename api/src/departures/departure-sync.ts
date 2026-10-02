@@ -349,11 +349,7 @@ export function diffDepartures(
       capacity: extra.capacity,
       rideExceptionId: extra.rideExceptionId
     });
-    // Before PR 3a, deleting a booked ADDITIONAL left its extra dropped rather
-    // than cancelled. Nobody has decided anything about such an orphan since,
-    // so it is not brought back; `departure.matchesExceptions` lists it.
-    const orphan = extra.rideExceptionId === null && extra.cancelledAt === null;
-    const dropped = rideDropped || (orphan && extra.timetableDroppedAt !== null);
+    const dropped = extraDropped(extra, rideDropped);
     const fields = changedFields(extra, departure, dropped);
 
     if (fields.length > 0) {
@@ -431,6 +427,20 @@ function sameTimeConflicts(
       )
       .flatMap(({ planned }) => conflictOf(planned, false))
   ];
+}
+
+/**
+ * Whether a stored extra should carry `timetableDroppedAt`: while its ride does
+ * not run, and for good once it is an orphan the timetable dropped. Before PR
+ * 3a, deleting a booked ADDITIONAL left its extra dropped rather than
+ * cancelled. Nobody has decided anything about such an orphan since, so neither
+ * the sync nor an operator's move brings it back;
+ * `departure.matchesExceptions` lists it.
+ */
+export function extraDropped(extra: StoredDeparture, rideDropped: boolean): boolean {
+  const orphan = extra.rideExceptionId === null && extra.cancelledAt === null;
+
+  return rideDropped || (orphan && extra.timetableDroppedAt !== null);
 }
 
 /**

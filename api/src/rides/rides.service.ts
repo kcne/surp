@@ -495,9 +495,10 @@ export class RidesService {
 
     // Capacity and booked seats come from the stored departure an instance
     // names, as booking counts them (#27, PR 4a): seats by `departureId`, and
-    // an extra's own capacity. Until PR 4c no two running departures of a ride
-    // share a date and time, so `rideId:departureTime` names one. This endpoint
-    // stays for old tabs until PR 6; the screens read GET /departures.
+    // an extra's own capacity. A timetable instance reads the SCHEDULE
+    // departure at its time and an extra the EXTRA one, so a same-time pair
+    // stored before PR 3c keeps two counts. This endpoint stays for old tabs
+    // until PR 6; the screens read GET /departures.
     const departures =
       rideIds.length > 0
         ? await this.prisma.departure.findMany({
@@ -512,20 +513,32 @@ export class RidesService {
             select: {
               rideId: true,
               departureTime: true,
+              source: true,
               capacity: true,
               _count: { select: { reservations: { where: { status: ReservationStatus.ACTIVE } } } }
             }
           })
         : [];
-    const departureByInstance = new Map(
-      departures.map((departure) => [`${departure.rideId}:${departure.departureTime}`, departure])
+    const departureKey = (rideId: string, departureTime: string, extra: boolean) =>
+      `${rideId}:${departureTime}:${extra ? DepartureSource.EXTRA : DepartureSource.SCHEDULE}`;
+    const departureByKey = new Map(
+      departures.map((departure) => [
+        departureKey(
+          departure.rideId,
+          departure.departureTime,
+          departure.source === DepartureSource.EXTRA
+        ),
+        departure
+      ])
     );
+    const departureOf = (instance: (typeof materialized)[number]) =>
+      departureByKey.get(
+        departureKey(instance.rideId, instance.departureTime, instance.source === 'ADDITIONAL')
+      );
 
     // A date the departure window does not reach yet has no stored departure:
     // its instances keep the ride's capacity and count the time copies.
-    const unstored = materialized.filter(
-      (instance) => !departureByInstance.has(`${instance.rideId}:${instance.departureTime}`)
-    );
+    const unstored = materialized.filter((instance) => !departureOf(instance));
     const reservationCounts =
       unstored.length > 0
         ? await this.prisma.reservation.groupBy({
@@ -549,12 +562,11 @@ export class RidesService {
     );
 
     const items = materialized.map((instance) => {
-      const key = `${instance.rideId}:${instance.departureTime}`;
-      const departure = departureByInstance.get(key);
+      const departure = departureOf(instance);
       const capacity = departure?.capacity ?? instance.capacity;
       const reservationCount = departure
         ? departure._count.reservations
-        : reservationCountByInstance.get(key) ?? 0;
+        : reservationCountByInstance.get(`${instance.rideId}:${instance.departureTime}`) ?? 0;
       const availableSeats = Math.max(capacity - reservationCount, 0);
 
       return {
