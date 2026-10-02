@@ -1,5 +1,28 @@
-import { BadRequestException } from '@nestjs/common';
-import { assertDecisionDate } from './exception-departures';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { assertDecisionDate, assertOperable, OperatedDeparture } from './departure-operations';
+
+describe('departure state refusals', () => {
+  it.each([
+    ['cancel', { source: 'LEGACY' }, 'DEPARTURE_LEGACY'],
+    ['cancel', { cancelledAt: new Date() }, 'DEPARTURE_ALREADY_CANCELLED'],
+    ['restore', {}, 'DEPARTURE_NOT_CANCELLED'],
+    ['editExtra', {}, 'DEPARTURE_NOT_EXTRA'],
+    ['deleteExtra', { source: 'EXTRA', _count: { reservations: 1 } }, 'DEPARTURE_HAS_RESERVATIONS']
+  ] as const)('returns a nonconfirmable code for %s (%s)', (operation, changes, code) => {
+    const departure = {
+      id: 'departure-1', tenantId: 'tenant-1', rideId: 'ride-1', source: 'SCHEDULE',
+      serviceDate: new Date('2026-10-05'), departureTime: '09:00', arrivalTime: '11:00',
+      capacity: 48, cancelledAt: null, rideExceptionId: null, _count: { reservations: 0 }, ...changes
+    } as OperatedDeparture;
+    try {
+      assertOperable(departure, operation);
+      throw new Error('Expected refusal');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toEqual({ code, message: expect.any(String) });
+    }
+  });
+});
 
 describe('assertDecisionDate', () => {
   // 23:30 UTC on 29 September is already 30 September in Belgrade.

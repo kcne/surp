@@ -34,6 +34,8 @@ describe('RidesService', () => {
     $transaction: jest.fn(),
     // The schedule lock every guarded write takes first.
     $executeRaw: jest.fn().mockResolvedValue(1),
+    tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
+    departure: { findMany: jest.fn(), updateMany: jest.fn() },
     line: {
       findFirst: jest.fn()
     },
@@ -79,6 +81,7 @@ describe('RidesService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prismaMock.reservation.groupBy.mockResolvedValue([]);
+    prismaMock.departure.findMany.mockResolvedValue([]);
     // Nothing sold and nothing to name: the prospective checks find an empty
     // window and report no violations, which is what every test that is not
     // about them wants.
@@ -404,6 +407,7 @@ describe('RidesService', () => {
       let written = false;
 
       return {
+        tenant: prismaMock.tenant,
         $executeRaw: jest.fn().mockResolvedValue(1),
         reservation: { findMany: jest.fn().mockResolvedValue(reservations) },
         station: { findMany: jest.fn().mockResolvedValue([]) },
@@ -483,7 +487,7 @@ describe('RidesService', () => {
     });
   });
 
-  it('rejects mixed skip and additional exceptions for same date', async () => {
+  it('rejects a duplicate additional, comparing only exceptions of its type', async () => {
     prismaMock.ride.findFirst.mockResolvedValue({
       id: 'ride-1',
       tenantId: 'tenant-1',
@@ -523,9 +527,9 @@ describe('RidesService', () => {
     prismaMock.rideException.findMany.mockResolvedValue([
       {
         id: 'ex-1',
-        type: RideExceptionType.SKIP,
-        departureTime: null,
-        arrivalTime: null
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '11:00',
+        arrivalTime: '12:00'
       }
     ]);
     prismaMock.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
@@ -546,6 +550,12 @@ describe('RidesService', () => {
         arrivalTime: '12:00'
       })
     ).rejects.toBeInstanceOf(ConflictException);
+    // A SKIP on the date is no reason to refuse an ADDITIONAL (#27, PR 3d).
+    expect(prismaMock.rideException.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ type: RideExceptionType.ADDITIONAL })
+      })
+    );
   });
 
   it('throws not found when ride is out of tenant scope', async () => {
@@ -700,6 +710,27 @@ describe('RidesService', () => {
     expect(result.items[0].departureTime).toBe('13:00');
     expect(result.items[0].reservationCount).toBe(0);
     expect(result.items[0].availability.availableSeats).toBe(38);
+
+    prismaMock.departure.findMany.mockResolvedValue([
+      { rideId: 'ride-1', departureTime: '13:00', capacity: 60 }
+    ]);
+    prismaMock.reservation.groupBy.mockResolvedValue([
+      { rideId: 'ride-1', rideDepartureTime: '13:00', _count: { _all: 48 } }
+    ]);
+    const largerExtra = await service.listInstancesByDate(auth, { date: '2026-03-30' });
+    expect(largerExtra.items[0].availability).toEqual({
+      capacity: 60, reservedSeats: 48, availableSeats: 12, hasAvailability: true
+    });
+    expect(prismaMock.departure.findMany).toHaveBeenLastCalledWith({
+      where: {
+        tenantId: auth.tenantId,
+        rideId: { in: ['ride-1'] },
+        serviceDate: new Date('2026-03-30'),
+        source: 'EXTRA', cancelledAt: null, timetableDroppedAt: null
+      },
+      select: { rideId: true, departureTime: true, capacity: true }
+    });
+
   });
 
   it('computes availability from active reservations for matching ride instance', async () => {
@@ -1107,7 +1138,8 @@ describe('RidesService', () => {
       return {
         updates,
         tx: {
-          $executeRaw: jest.fn().mockResolvedValue(1),
+          tenant: prismaMock.tenant,
+        $executeRaw: jest.fn().mockResolvedValue(1),
           reservation: {
             findMany: jest.fn(async () => reservations.map((item) => ({ ...item }))),
             findUniqueOrThrow: jest.fn(async ({ where }: never) =>

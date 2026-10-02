@@ -22,6 +22,7 @@ describe('PassengersController (e2e)', () => {
     enableShutdownHooks: jest.fn(),
     isHealthy: jest.fn(),
     tenant: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }),
       findUnique: jest.fn()
     },
     passenger: {

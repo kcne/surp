@@ -61,6 +61,14 @@ export class RideExceptionResponseDto {
 
   @ApiProperty()
   updatedAt!: Date;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description:
+      "For an ADDITIONAL, its extra bus's own capacity, which can differ from the ride's. Null for a SKIP, or an ADDITIONAL whose bus is not stored."
+  })
+  capacity!: number | null;
 }
 
 export class RideResponseDto {

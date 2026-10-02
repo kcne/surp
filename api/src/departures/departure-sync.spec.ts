@@ -173,7 +173,7 @@ describe('diffDepartures', () => {
     ]);
   });
 
-  it("keeps an extra on its ride's line, stops and capacity, but its own times", () => {
+  it("keeps an extra on its ride's line and stops, but its own times and capacity", () => {
     const moved = ride({
       lineId: 'line-2',
       capacity: 60,
@@ -183,19 +183,32 @@ describe('diffDepartures', () => {
     const { updates } = diff([moved], [extra()]);
 
     expect(updates).toHaveLength(1);
-    expect(updates[0].fields).toEqual(['lineId', 'capacity', 'stops']);
+    expect(updates[0].fields).toEqual(['lineId', 'stops']);
     expect(updates[0].planned).toMatchObject({
       lineId: 'line-2',
       departureTime: '15:00',
       arrivalTime: '17:00',
-      capacity: 60
+      capacity: 48
     });
   });
 
-  it('keeps the capacity of an extra no ADDITIONAL shapes any more', () => {
-    const cancelledOrphan = extra({ ...cancelled, rideExceptionId: null, capacity: 20 });
+  it('keeps the capacity an operator gave an extra, with or without its ADDITIONAL', () => {
+    const resized = extra({ capacity: 20 });
+    const cancelledOrphan = extra({
+      ...cancelled,
+      id: 'extra-2',
+      rideExceptionId: null,
+      capacity: 20
+    });
 
-    expect(diff([ride({ capacity: 60 })], [cancelledOrphan]).updates).toEqual([]);
+    expect(diff([ride({ capacity: 60 })], [resized, cancelledOrphan]).updates).toEqual([]);
+  });
+
+  it('preserves a booked extra above the ride capacity across repeated full syncs', () => {
+    const bookedExtra = extra({ capacity: 60, referenceCount: 1 });
+    for (let pass = 0; pass < 2; pass += 1) {
+      expect(diff([ride({ capacity: 48 })], [bookedExtra]).updates).toEqual([]);
+    }
   });
 
   it('rewrites the stops of a one-time departure stored with its ends only', () => {
@@ -259,7 +272,8 @@ describe('diffDepartures', () => {
 
     const plan = diff([ride({ capacity: 30 })], [stored(), atNine]);
 
-    expect(plan.updates.map((update) => update.fields)).toEqual([['capacity'], ['capacity']]);
+    // The extra keeps its own capacity.
+    expect(plan.updates.map((update) => update.fields)).toEqual([['capacity']]);
     expect(plan.conflicts).toEqual([]);
   });
 

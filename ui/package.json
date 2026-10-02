@@ -7,6 +7,7 @@
     "build": "NEXT_PRIVATE_BUILD_WORKER=0 next build",
     "start": "next start",
     "lint": "next lint",
+    "test:ride-instances": "node --test test/ride-instances.test.cjs",
     "openapi:generate": "pnpm --dir ../api openapi:generate",
     "orval:generate": "orval --config orval.config.js",
     "api:generate": "pnpm openapi:generate && pnpm orval:generate"

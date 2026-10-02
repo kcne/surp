@@ -170,6 +170,7 @@ function toUiExceptions(exceptions: RideResponseDto["exceptions"]): RideExceptio
     type: toUiExceptionType(exception.type),
     departureTime: normalizeTime(exception.departureTime),
     arrivalTime: normalizeTime(exception.arrivalTime),
+    capacity: exception.capacity ?? undefined,
   }))
 }
 
@@ -298,8 +299,9 @@ export function toRideInstance(dto: RideInstanceResponseDto, ride?: Ride): RideI
 
   return {
     id: dto.id,
+    source: dto.source,
     rideId: dto.rideId,
-    ride: fallbackRide,
+    ride: { ...fallbackRide, busCapacity: dto.availability.capacity },
     date: normalizeDate(dto.date) ?? "",
     departureTime: normalizeTime(dto.departureTime) ?? "",
     arrivalTime: normalizeTime(dto.arrivalTime) ?? "",

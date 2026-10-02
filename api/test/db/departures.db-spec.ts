@@ -10,7 +10,7 @@ import {
 import { randomUUID } from 'crypto';
 import { DepartureNightlyService } from '../../src/departures/departure-nightly.service';
 import { syncDepartures } from '../../src/departures/departure-sync';
-import { insertExtraDeparture } from '../../src/departures/exception-departures';
+import { insertExtraDeparture } from '../../src/departures/departure-operations';
 import { SYSTEM_ACTOR_ID } from '../../src/departures/system-actor';
 import { departureMatchesExceptions } from '../../src/invariants/checks/departure-matches-exceptions';
 import { departureMatchesTimetable } from '../../src/invariants/checks/departure-matches-timetable';
@@ -853,7 +853,7 @@ describe('departures (real database)', () => {
       await expectChecksClean();
     });
 
-    it("keeps an ADDITIONAL's extra at its ride's capacity", async () => {
+    it("starts an ADDITIONAL's extra at its ride's capacity, and moves it with a ride capacity edit", async () => {
       const exception = await rides.addException(seeded.auth, seeded.rideId, {
         date: seeded.travelDate,
         type: RideExceptionType.ADDITIONAL,
@@ -861,6 +861,13 @@ describe('departures (real database)', () => {
         arrivalTime: '17:00'
       });
 
+      const inserted = await prisma.departure.findFirstOrThrow({
+        where: { rideExceptionId: exception.id }
+      });
+      expect(inserted.capacity).toBe(48);
+
+      // Still at the ride's capacity, so it follows the ride (#27, PR 3d);
+      // one an operator resized keeps its own.
       await rides.update(seeded.auth, seeded.rideId, { capacity: 30 });
 
       const extra = await prisma.departure.findFirstOrThrow({

@@ -1,6 +1,10 @@
-import { resolveDepartureLink } from '../../departures/departure-link';
+import {
+  LINKABLE_SOURCES,
+  departureLinkKey,
+  resolveDepartureLink
+} from '../../departures/departure-link';
 import { withUpdateAudit } from '../../prisma/audit-write.helper';
-import { formatDateOnly } from '../../rides/ride-instance-materialization';
+import { formatDateOnly, utcDateOf } from '../../rides/ride-instance-materialization';
 import {
   ORPHAN_NO_FREE_SEAT_ADVICE,
   ORPHAN_REASON_ADVICE,
@@ -247,6 +251,10 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
     });
   }
 
+  // An orphan moves onto the bus its new time names, and an extra has its own
+  // capacity (#27, PR 3d), so seats are checked against that bus.
+  const capacityOf = await loadTargetCapacities(ctx, orphanCandidates);
+
   // Seats are resolved only after every visible reservation has claimed its
   // own, so an orphan never wins a seat that a visible passenger holds.
   //
@@ -274,7 +282,10 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
     const key = `${reservation.rideId}:${travelDate}:${targetDepartureTime}`;
     const taken = occupiedSeats.get(key) ?? new Set<number>();
 
-    if (reservation.seatNumber <= ride.capacity && !taken.has(reservation.seatNumber)) {
+    if (
+      reservation.seatNumber <= capacityOf(ride, travelDate, targetDepartureTime) &&
+      !taken.has(reservation.seatNumber)
+    ) {
       seatByReservationId.set(reservation.id, reservation.seatNumber);
       claimSeat(reservation.rideId, travelDate, targetDepartureTime, reservation.seatNumber);
       continue;
@@ -289,7 +300,7 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
     const seat = resolveSeatNumber(
       reservation.seatNumber,
       occupiedSeats.get(key) ?? new Set<number>(),
-      ride.capacity
+      capacityOf(ride, travelDate, targetDepartureTime!)
     );
 
     seatByReservationId.set(reservation.id, seat);
@@ -401,4 +412,51 @@ function toCheckResult(report: OrphanReport): CheckResult {
       canRepair: item.canRepair
     }))
   };
+}
+
+/**
+ * The capacity of the bus each orphan would move onto: the departure the
+ * repair links it to (`resolveDepartureLink`), or the ride's when none is
+ * stored. Several departures at one time cannot be linked to, and the
+ * smallest of them is assumed, so a seat is never placed past any of them.
+ */
+async function loadTargetCapacities(
+  ctx: InvariantContext,
+  candidates: ReadonlyArray<{
+    reservation: { rideId: string };
+    travelDate: string;
+    targetDepartureTime: string | null;
+  }>
+): Promise<
+  (ride: { id: string; capacity: number }, travelDate: string, departureTime: string) => number
+> {
+  const targeted = candidates.filter((candidate) => candidate.targetDepartureTime !== null);
+  const rideIds = [...new Set(targeted.map((candidate) => candidate.reservation.rideId))];
+  const dates = [...new Set(targeted.map((candidate) => candidate.travelDate))];
+  const departures =
+    targeted.length === 0
+      ? []
+      : await ctx.prisma.departure.findMany({
+          where: {
+            tenantId: ctx.tenantId,
+            rideId: { in: rideIds },
+            serviceDate: { in: dates.map(utcDateOf) },
+            source: { in: [...LINKABLE_SOURCES] }
+          },
+          select: { rideId: true, serviceDate: true, departureTime: true, capacity: true }
+        });
+  const capacityByKey = new Map<string, number>();
+
+  for (const departure of departures) {
+    const key = departureLinkKey(departure.rideId, departure.serviceDate, departure.departureTime);
+    const known = capacityByKey.get(key);
+
+    capacityByKey.set(
+      key,
+      known === undefined ? departure.capacity : Math.min(known, departure.capacity)
+    );
+  }
+
+  return (ride, travelDate, departureTime) =>
+    capacityByKey.get(`${ride.id}:${travelDate}:${departureTime}`) ?? ride.capacity;
 }

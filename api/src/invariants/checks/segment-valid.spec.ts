@@ -2,6 +2,7 @@ import { findInvalidSegments, reservationSegmentValid } from './segment-valid';
 import { InvariantContext } from '../invariant.types';
 
 const prismaMock = {
+  tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
   reservation: { findMany: jest.fn() },
   ride: { findMany: jest.fn() },
   station: { findMany: jest.fn() }

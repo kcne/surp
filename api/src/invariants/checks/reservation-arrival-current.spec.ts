@@ -2,6 +2,7 @@ import { reservationArrivalCurrent, scanForStaleArrivalTimes } from './reservati
 import { InvariantContext } from '../invariant.types';
 
 const prismaMock = {
+  tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
   reservation: { findMany: jest.fn(), update: jest.fn() },
   ride: { findMany: jest.fn() }
 };

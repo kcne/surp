@@ -121,6 +121,50 @@ describe('OpenAPI contract', () => {
     expect(detail?.responses['404']).toBeDefined();
   });
 
+  it('documents the departure operations for ADMIN and MANAGER with their refusals', () => {
+    const create = document.paths['/departures']?.post;
+    const cancel = document.paths['/departures/{id}/cancel']?.post;
+    const restore = document.paths['/departures/{id}/restore']?.post;
+    const update = document.paths['/departures/{id}']?.patch;
+    const remove = document.paths['/departures/{id}']?.delete;
+
+    for (const operation of [create, cancel, restore, update, remove]) {
+      expect(operation?.security?.some((entry) => 'access-token' in entry)).toBe(true);
+      expect(operation?.responses['400']).toBeDefined();
+      expect(operation?.responses['409']).toBeDefined();
+      expect(operation?.responses['403']).toBeDefined();
+    }
+
+    expect(create?.responses['201']).toBeDefined();
+    expect(create?.responses['404']).toBeDefined();
+    for (const operation of [cancel, restore, update, remove]) {
+      expect(operation?.responses['200']).toBeDefined();
+      expect(operation?.responses['404']).toBeDefined();
+    }
+
+    const bodyRef = (operation: typeof create) =>
+      (operation?.requestBody as { content?: Record<string, { schema?: { $ref?: string } }> } | undefined)
+        ?.content?.['application/json']?.schema?.$ref;
+    expect(bodyRef(create)).toBe('#/components/schemas/CreateExtraDepartureDto');
+    expect(bodyRef(cancel)).toBe('#/components/schemas/CancelDepartureDto');
+    expect(bodyRef(update)).toBe('#/components/schemas/UpdateExtraDepartureDto');
+
+    const stateRef = '#/components/schemas/DepartureOperationRefusalDto';
+    for (const operation of [cancel, restore, update]) {
+      const response = operation!.responses['409']!;
+      if ('$ref' in response) throw new Error('Expected inline response');
+      const schema = response.content!['application/json'].schema!;
+      if ('$ref' in schema) throw new Error('Expected all refusal variants');
+      expect(schema.oneOf).toContainEqual({ $ref: stateRef });
+    }
+    const states = document.components!.schemas!.DepartureOperationRefusalDto;
+    if ('$ref' in states) throw new Error('Expected inline schema');
+    expect(states.required).toEqual(expect.arrayContaining(['code', 'message']));
+    expect(states.properties!.code).toMatchObject({
+      enum: expect.arrayContaining(['DEPARTURE_ALREADY_CANCELLED', 'DEPARTURE_NOT_CANCELLED', 'DEPARTURE_HAS_RESERVATIONS'])
+    });
+  });
+
   it('types the nullable departure fields as strings, not objects', () => {
     const schemas = document.components?.schemas ?? {};
     const property = (schema: string, name: string) =>

@@ -1,13 +1,40 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AccessTokenPayload } from '../auth/auth.types';
+import { consentFrom } from '../invariants/dto/confirm-breaking-change.dto';
+import {
+  NO_CONSENT,
+  PROSPECTIVE_INVARIANTS,
+  guardProspectiveWrite
+} from '../invariants/prospective-write';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  OperatedDeparture,
+  assertDecisionDate,
+  assertOperable,
+  cancelDeparture,
+  createExtra,
+  deleteExtra,
+  loadOperatedDeparture,
+  restoreDeparture,
+  updateExtra
+} from './departure-operations';
 import { DepartureListResponseDto, DepartureResponseDto } from './dto/departure.response.dto';
+import {
+  CancelDepartureDto,
+  CreateExtraDepartureDto,
+  UpdateExtraDepartureDto
+} from './dto/departure-operations.dto';
 import { ListDeparturesQueryDto } from './dto/list-departures.query.dto';
 
 /**
- * Stored departures, read as they are (#27, PR 3c). Past, cancelled, dropped
- * and `LEGACY` departures are all returned: the reader decides what to show.
+ * Stored departures, read as they are (#27, PR 3c), and the operator's
+ * decisions on them (PR 3d). Past, cancelled, dropped and `LEGACY` departures
+ * are all returned: the reader decides what to show.
+ *
+ * Every operation is a schedule edit: it runs under the tenant's exclusive
+ * schedule lock, so no booking is in flight while it decides. None of them
+ * changes the timetable, so none runs the departure sync.
  */
 
 /** The longest range one list request covers, both ends counted. */
@@ -110,6 +137,157 @@ export class DeparturesService {
 
     return toResponse(row);
   }
+
+  /**
+   * Cancels a departure. Its passengers stay `ACTIVE`; when it has any, the
+   * write is refused until the operator confirms the list they were shown.
+   */
+  async cancel(
+    auth: AccessTokenPayload,
+    id: string,
+    dto: CancelDepartureDto
+  ): Promise<DepartureResponseDto> {
+    await guardProspectiveWrite<void, OperatedDeparture>(
+      this.prisma,
+      scopeOf(auth),
+      PROSPECTIVE_INVARIANTS.departureCancel,
+      consentFrom(dto),
+      (tx, departure) => cancelDeparture(tx, departure, auth.sub),
+      (tx) => this.prepare(tx, auth, id, 'cancel')
+    );
+
+    return this.getById(auth, id);
+  }
+
+  async restore(auth: AccessTokenPayload, id: string): Promise<DepartureResponseDto> {
+    await guardProspectiveWrite<void, OperatedDeparture>(
+      this.prisma,
+      scopeOf(auth),
+      [],
+      NO_CONSENT,
+      (tx, departure) => restoreDeparture(tx, departure, auth.sub),
+      (tx) => this.prepare(tx, auth, id, 'restore')
+    );
+
+    return this.getById(auth, id);
+  }
+
+  async createExtra(
+    auth: AccessTokenPayload,
+    dto: CreateExtraDepartureDto
+  ): Promise<DepartureResponseDto> {
+    const serviceDate = parseDate(dto.serviceDate);
+
+    if (!serviceDate) {
+      throw new BadRequestException('serviceDate must be a real date');
+    }
+
+    const { departureId } = await guardProspectiveWrite(
+      this.prisma,
+      scopeOf(auth),
+      [],
+      NO_CONSENT,
+      (tx) =>
+        createExtra(
+          tx,
+          { tenantId: auth.tenantId, rideId: dto.rideId, actorId: auth.sub },
+          {
+            serviceDate,
+            departureTime: dto.departureTime,
+            arrivalTime: dto.arrivalTime,
+            capacity: dto.capacity
+          }
+        ),
+      async (tx) => {
+        const ride = await tx.ride.findFirst({
+          where: { id: dto.rideId, tenantId: auth.tenantId },
+          select: { id: true }
+        });
+
+        if (!ride) {
+          throw new NotFoundException('Ride not found');
+        }
+
+        await assertDecisionDate(tx, auth.tenantId, serviceDate);
+      }
+    );
+
+    return this.getById(auth, departureId);
+  }
+
+  /**
+   * Moves an extra bus or changes its seats. Asks before a booked bus moves,
+   * or shrinks under a booked seat or a full stretch of the route.
+   */
+  async updateExtra(
+    auth: AccessTokenPayload,
+    id: string,
+    dto: UpdateExtraDepartureDto
+  ): Promise<DepartureResponseDto> {
+    if (dto.departureTime === undefined && dto.arrivalTime === undefined && dto.capacity === undefined) {
+      throw new BadRequestException('Send departureTime, arrivalTime or capacity');
+    }
+
+    await guardProspectiveWrite<void, OperatedDeparture>(
+      this.prisma,
+      scopeOf(auth),
+      PROSPECTIVE_INVARIANTS.extraUpdate,
+      consentFrom(dto),
+      (tx, departure) =>
+        updateExtra(tx, departure, auth.sub, {
+          departureTime: dto.departureTime,
+          arrivalTime: dto.arrivalTime,
+          capacity: dto.capacity
+        }),
+      (tx) => this.prepare(tx, auth, id, 'editExtra')
+    );
+
+    return this.getById(auth, id);
+  }
+
+  /** Deletes an extra bus nobody was booked on, and answers with it as it was. */
+  async deleteExtra(auth: AccessTokenPayload, id: string): Promise<DepartureResponseDto> {
+    return guardProspectiveWrite<DepartureResponseDto, OperatedDeparture>(
+      this.prisma,
+      scopeOf(auth),
+      [],
+      NO_CONSENT,
+      async (tx, departure) => {
+        const row = await tx.departure.findUniqueOrThrow({
+          where: { id: departure.id },
+          select: DEPARTURE_SELECT
+        });
+
+        await deleteExtra(tx, departure);
+
+        return toResponse(row);
+      },
+      (tx) => this.prepare(tx, auth, id, 'deleteExtra')
+    );
+  }
+
+  /**
+   * Reads the departure under the lock and refuses, before the tenant-wide
+   * scan, an operation that does not apply to it or a date outside today to
+   * the horizon.
+   */
+  private async prepare(
+    tx: Prisma.TransactionClient,
+    auth: AccessTokenPayload,
+    id: string,
+    operation: Parameters<typeof assertOperable>[1]
+  ): Promise<OperatedDeparture> {
+    const departure = await loadOperatedDeparture(tx, auth.tenantId, id);
+
+    assertOperable(departure, operation);
+    await assertDecisionDate(tx, auth.tenantId, departure.serviceDate);
+
+    return departure;
+  }
+}
+
+function scopeOf(auth: AccessTokenPayload) {
+  return { tenantId: auth.tenantId, actorId: auth.sub, changesTimetable: false };
 }
 
 function toResponse(row: DepartureRow): DepartureResponseDto {

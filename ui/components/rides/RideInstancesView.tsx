@@ -223,7 +223,7 @@ export function RideInstancesView({
                       <TableCell>{formatTimeDisplay(instance.arrivalTime)}</TableCell>
                       <TableCell>{getStatusBadge(instance.status)}</TableCell>
                       <TableCell>
-                        {instance.availableSeats ?? activeRide.busCapacity}/{activeRide.busCapacity}
+                        {instance.availableSeats ?? instance.ride.busCapacity}/{instance.ride.busCapacity}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -236,7 +236,7 @@ export function RideInstancesView({
                             <Ticket className="mr-2 h-4 w-4" />
                             Rezerviši
                           </Button>
-                          <Button
+                          {instance.source !== "ADDITIONAL" ? <Button
                             type="button"
                             size="sm"
                             variant="outline"
@@ -245,7 +245,7 @@ export function RideInstancesView({
                           >
                             <Ban className="mr-2 h-4 w-4" />
                             Otkaži
-                          </Button>
+                          </Button> : null}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -276,7 +276,6 @@ export function RideInstancesView({
     </Dialog>
   )
 }
-
 
 
 

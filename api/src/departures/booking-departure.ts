@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DepartureSource, Prisma } from '@prisma/client';
 import { formatDateOnly } from '../rides/ride-instance-materialization';
-import { decisionWindow } from './exception-departures';
+import { decisionWindow } from './departure-operations';
 import { resolveDepartureLink } from './departure-link';
 
 /**

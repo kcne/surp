@@ -83,6 +83,8 @@ export interface RideException {
   type: 'skip' | 'additional'
   departureTime?: string // HH:MM
   arrivalTime?: string // HH:MM
+  /** An extra bus's own capacity; read-only, set by the API. */
+  capacity?: number
 }
 
 export interface DayScheduleStationTime {
@@ -140,6 +142,7 @@ export type RideFormData = {
 // Ride Instance Types
 export interface RideInstance {
   id: string
+  source?: "BASE" | "ADDITIONAL"
   rideId: string
   ride: Ride
   date: string // YYYY-MM-DD

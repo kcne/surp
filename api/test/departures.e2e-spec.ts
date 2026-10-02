@@ -260,4 +260,81 @@ describe('DeparturesController (e2e)', () => {
       expect(prismaMock.departure.findFirst).not.toHaveBeenCalled();
     });
   });
+
+  describe('departure operations', () => {
+    function send(
+      method: 'post' | 'patch' | 'delete',
+      path: string,
+      body: object = {},
+      token = 'access-token-admin'
+    ) {
+      return request(app.getHttpServer())
+        [method](path)
+        .set('X-Tenant-Slug', 'demo-tenant')
+        .set('Authorization', `Bearer ${token}`)
+        .send(body);
+    }
+
+    const extra = {
+      rideId: 'ride-1',
+      serviceDate: '2026-10-05',
+      departureTime: '15:00',
+      arrivalTime: '17:00'
+    };
+
+    it('refuses STAFF and DRIVER on every operation, before reading anything', async () => {
+      for (const token of ['access-token-staff', 'access-token-driver']) {
+        await send('post', '/departures', extra, token).expect(403);
+        await send('post', '/departures/departure-1/cancel', {}, token).expect(403);
+        await send('post', '/departures/departure-1/restore', {}, token).expect(403);
+        await send('patch', '/departures/departure-1', { capacity: 30 }, token).expect(403);
+        await send('delete', '/departures/departure-1', {}, token).expect(403);
+      }
+
+      expect(prismaMock.departure.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('refuses a request without a token', async () => {
+      await request(app.getHttpServer())
+        .post('/departures/departure-1/cancel')
+        .set('X-Tenant-Slug', 'demo-tenant')
+        .send({})
+        .expect(401);
+    });
+
+    it('validates a new extra bus', async () => {
+      const invalid = [
+        { ...extra, rideId: '' },
+        { ...extra, rideId: ' ride-1' },
+        { ...extra, serviceDate: '5.10.2026' },
+        { ...extra, departureTime: '25:00' },
+        { ...extra, arrivalTime: '9:00' },
+        { ...extra, capacity: 0 },
+        { ...extra, capacity: 101 },
+        { ...extra, capacity: 12.5 },
+        { ...extra, source: 'SCHEDULE' },
+        { serviceDate: '2026-10-05', departureTime: '15:00', arrivalTime: '17:00' }
+      ];
+
+      for (const body of invalid) {
+        await send('post', '/departures', body).expect(400);
+      }
+    });
+
+    it('validates an extra bus edit', async () => {
+      for (const body of [
+        { departureTime: '24:00' },
+        { capacity: -1 },
+        { serviceDate: '2026-10-06' },
+        { rideId: 'ride-2' },
+        { confirmationTokens: 'token' }
+      ]) {
+        await send('patch', '/departures/departure-1', body).expect(400);
+      }
+    });
+
+    it('refuses an unknown field on a cancellation', async () => {
+      await send('post', '/departures/departure-1/cancel', { force: true }).expect(400);
+    });
+  });
 });
