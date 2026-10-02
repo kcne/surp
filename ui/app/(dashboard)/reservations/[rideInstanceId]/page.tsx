@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useParams } from "next/navigation"
 import { Layout } from "@/components/layout/Layout"
 import { SeatMap } from "@/components/reservations/SeatMap"
@@ -57,12 +58,29 @@ export default function SeatMapPage() {
     isBulkCancelOpen,
     setIsBulkCancelOpen,
     openSelectedReservationForEdit,
+    departureNotFound,
   } = useRideInstanceSeatMapPage({ rideInstanceId })
 
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const assignGroupMutation = useAssignReservationGroupMutation()
   const cancelReservationsMutation = useCancelReservationsMutation()
   const selectionType = selectedReservations.length > 0 ? "reserved" : "available"
+
+  if (departureNotFound) {
+    return (
+      <Layout>
+        <div className="space-y-4" role="alert">
+          <h1 className="text-2xl font-bold">Polazak nije pronadjen</h1>
+          <p className="text-muted-foreground">
+            Link vodi do polaska koji ne postoji ili se ne moze jednoznacno odrediti.
+          </p>
+          <Link href="/reservations" className="text-primary underline underline-offset-4">
+            Nazad na rezervacije
+          </Link>
+        </div>
+      </Layout>
+    )
+  }
 
   if (!selectedRideInstance) {
     return (

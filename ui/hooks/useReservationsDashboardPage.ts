@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
-import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/useRidesInstancesByDateQuery"
+import { useRunningDeparturesQuery } from "@/infrastructure/hooks/queries/useDeparturesQuery"
+import { formatDateToISO } from "@/utils/dateHelpers"
 import { useStorefrontRideIconQuery } from "@/infrastructure/hooks/queries/useStorefrontRideIconQuery"
 import { getTenantSlug } from "@/infrastructure/utils/storage"
 import { useAuthStore } from "@/stores/authStore"
@@ -15,12 +16,17 @@ export function useReservationsDashboardPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
   const ridesQuery = useRidesListQuery()
   const rides = useMemo(() => ridesQuery.data || [], [ridesQuery.data])
-  const rideInstancesQuery = useRidesInstancesByDateQuery(selectedDate, rides)
+  const selectedDateIso = isValidDate(selectedDate) ? formatDateToISO(selectedDate) : ""
+  const departuresQuery = useRunningDeparturesQuery(
+    { from: selectedDateIso, to: selectedDateIso },
+    rides,
+    { enabled: Boolean(selectedDateIso) }
+  )
   const storefrontIconQuery = useStorefrontRideIconQuery(tenantSlug, {
     enabled: hasHydrated && isAuthenticated,
   })
-  const rideInstances = rideInstancesQuery.data || []
-  const loading = ridesQuery.isLoading || rideInstancesQuery.isLoading
+  const rideInstances = departuresQuery.instances
+  const loading = ridesQuery.isLoading || departuresQuery.isLoading
 
   return {
     rides,

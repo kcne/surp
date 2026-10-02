@@ -16,6 +16,7 @@ import {
   ChangeNeedsConfirmationError,
   throwBreakingChangeConflict,
 } from "@/infrastructure/utils/breaking-change"
+import { departuresQueryKey } from "@/infrastructure/hooks/queries/useDeparturesQuery"
 
 function isLineMutationSuccess<TResponse extends { status: number }>(
   response: TResponse,
@@ -52,6 +53,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 function invalidateLinesList(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: linesListQueryKey })
   queryClient.invalidateQueries({ queryKey: ridesListQueryKey })
+  queryClient.invalidateQueries({ queryKey: departuresQueryKey })
 }
 
 export function useCreateLineMutation() {

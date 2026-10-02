@@ -10,6 +10,7 @@ import type {
   InvariantRepairResultDto,
   InvariantSummaryDto,
 } from "@/infrastructure/generated/model"
+import { departuresQueryKey } from "@/infrastructure/hooks/queries/useDeparturesQuery"
 
 /** Runs every check and stores the run, so history and the last-run time move. */
 export function useCheckInvariantsMutation() {
@@ -91,6 +92,7 @@ export function useRepairInvariantMutation() {
       // them is stale.
       queryClient.invalidateQueries({ queryKey: ["reservations"] })
       queryClient.invalidateQueries({ queryKey: ["rides"] })
+      queryClient.invalidateQueries({ queryKey: departuresQueryKey })
       queryClient.invalidateQueries({ queryKey: ["lines"] })
     },
     onError: (error) => {

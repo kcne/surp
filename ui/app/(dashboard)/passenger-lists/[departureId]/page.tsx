@@ -12,8 +12,8 @@ import { PASSENGER_LIST_HEADERS, toPassengerListCells } from "@/utils/passengerL
 import { createPassengerListPdf } from "@/utils/passengerListPdf"
 
 export default function PassengerListDetailPage() {
-  const params = useParams<{ rideId: string }>()
-  const rideId = decodeURIComponent(params?.rideId ?? "")
+  const params = useParams<{ departureId: string }>()
+  const departureId = decodeURIComponent(params?.departureId ?? "")
   const {
     rideInstance,
     rows,
@@ -21,7 +21,7 @@ export default function PassengerListDetailPage() {
     isLoading,
     isRowsLoading,
     isNotFound,
-  } = usePassengerListDetailPage({ rideId })
+  } = usePassengerListDetailPage({ departureId })
   const hasOpenedPdf = useRef(false)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [exportAttempt, setExportAttempt] = useState(0)
@@ -71,7 +71,7 @@ export default function PassengerListDetailPage() {
           <FileText className="mb-3 h-10 w-10 text-muted-foreground" />
           <p className="text-lg font-medium text-muted-foreground">Vožnja nije pronađena</p>
           <p className="mb-4 text-sm text-muted-foreground">
-            Vožnja za traženi datum više ne postoji u rasporedu.
+            Polazak ne postoji ili link ne vodi do jednog polaska.
           </p>
         </div>
       </Layout>

@@ -7,7 +7,7 @@
     "build": "NEXT_PRIVATE_BUILD_WORKER=0 next build",
     "start": "next start",
     "lint": "next lint",
-    "test:ride-instances": "node --test test/ride-instances.test.cjs",
+    "test": "vitest run",
     "openapi:generate": "pnpm --dir ../api openapi:generate",
     "orval:generate": "orval --config orval.config.js",
     "api:generate": "pnpm openapi:generate && pnpm orval:generate"
@@ -60,15 +60,19 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.3.0",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.0",
+    "jsdom": "^26.1.0",
     "orval": "^8.5.3",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^3.2.4"
   }
 }
