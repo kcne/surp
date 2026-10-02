@@ -157,6 +157,8 @@ Optional SEO and analytics environment variables:
 2. `NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX`
 3. `NEXT_PUBLIC_MARKETING_CONTACT_EMAIL=<public-contact-email>`
 
+The homepage renders only a lightweight poster until Play is clicked, then streams `https://media.surp.rs/presentation-site.mp4` from Cloudflare R2. No video environment variable is required. Keep the small poster in the repository; the CDN must serve `Content-Type: video/mp4` and support byte-range requests (`206 Partial Content`) for seeking.
+
 ### Railway-native CI/CD model
 
 Use GitHub Actions for verification and Railway for deployment orchestration:
