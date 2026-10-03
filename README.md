@@ -130,6 +130,8 @@ Required environment variables:
 18. `BACKUP_S3_ACCESS_KEY_ID=<read-only-backup-key-id>`
 19. `BACKUP_S3_SECRET_ACCESS_KEY=<read-only-backup-secret>`
 
+Variables 14–19 are production-only. Where there is no backup storage (staging, local), set `BACKUP_FRESHNESS_CHECK_ENABLED=false`; the `BACKUP_S3_*` variables can then be absent or empty. An empty value counts as unset, so a reference to a removed Railway service does not stop the API from booting.
+
 The API backup credentials only need `GetObject` for `latest.json`. Keep them separate from both the backup writer credentials and the ticket-image bucket credentials.
 The invariant job runs daily at 02:00 UTC for every active tenant. Each tenant's run is claimed under a unique `(tenantId, runDate)` row before the checks start, so running the API on more than one replica does not duplicate the run, the BUG ticket or the email.
 
