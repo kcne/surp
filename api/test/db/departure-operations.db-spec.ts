@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { DepartureSource, ReservationStatus, RideExceptionType } from '@prisma/client';
+import { DepartureSource, ReservationStatus, RideExceptionType, RideStatus } from '@prisma/client';
 import { insertExtraDeparture } from '../../src/departures/departure-operations';
 import { syncDepartures } from '../../src/departures/departure-sync';
 import { DeparturesService } from '../../src/departures/departures.service';
@@ -214,6 +214,33 @@ describe('departure operations (real database)', () => {
       expect(
         await refusalOf(departures.cancel(seeded.auth, departure.id, {}))
       ).toBeInstanceOf(ConflictException);
+    });
+
+    // Restored while its ride does not run, a bus would still not run, and
+    // "Vrati" would say it is back. It stays cancelled until the ride runs.
+    it('refuses to restore a departure the timetable does not make now, and restores it once it does', async () => {
+      const departure = await scheduled();
+      const extra = await addExtra();
+      await departures.cancel(seeded.auth, departure.id, {});
+      await departures.cancel(seeded.auth, extra.id, {});
+
+      await rides.update(seeded.auth, seeded.rideId, { status: RideStatus.INACTIVE });
+
+      for (const id of [departure.id, extra.id]) {
+        expect(responseOf(await refusalOf(departures.restore(seeded.auth, id)))).toMatchObject({
+          code: 'DEPARTURE_DROPPED'
+        });
+        expect(await prisma.departure.findUniqueOrThrow({ where: { id } })).toMatchObject({
+          cancelledById: seeded.auth.sub,
+          timetableDroppedAt: expect.any(Date)
+        });
+      }
+
+      await rides.update(seeded.auth, seeded.rideId, { status: RideStatus.ACTIVE });
+
+      expect((await departures.restore(seeded.auth, departure.id)).cancelledAt).toBeNull();
+      expect((await departures.restore(seeded.auth, extra.id)).cancelledAt).toBeNull();
+      await expectChecksClean();
     });
 
     it('keeps the cancellation through a timetable edit', async () => {

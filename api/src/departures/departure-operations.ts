@@ -101,6 +101,7 @@ export const OPERATED_DEPARTURE_SELECT = {
   arrivalTime: true,
   capacity: true,
   cancelledAt: true,
+  timetableDroppedAt: true,
   rideExceptionId: true,
   _count: { select: { reservations: true } }
 } as const satisfies Prisma.DepartureSelect;
@@ -155,6 +156,17 @@ export function assertOperable(
 
   if (operation === 'restore' && !departure.cancelledAt) {
     throw new ConflictException({ code: 'DEPARTURE_NOT_CANCELLED', message: 'Polazak nije otkazan.' });
+  }
+
+  // Restored, it would still not run: its ride or line is inactive, or the
+  // timetable no longer has that day. It stays cancelled, so it comes back
+  // to this list once the timetable makes it again (the sync clears the mark).
+  if (operation === 'restore' && departure.timetableDroppedAt) {
+    throw new ConflictException({
+      code: 'DEPARTURE_DROPPED',
+      message:
+        'Polazak se ne moze vratiti jer ga red voznje trenutno ne pravi: voznja ili linija ne saobraca, ili taj dan vise nije u rasporedu. Kada voznja ponovo saobraca tog dana, vratite polazak ovde.'
+    });
   }
 
   if (

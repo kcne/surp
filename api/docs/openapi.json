@@ -28,7 +28,7 @@
             "name": "to",
             "required": true,
             "in": "query",
-            "description": "Last service date, included. The range covers at most 62 days, both ends included.",
+            "description": "Last service date, included. The range covers at most 62 days, both ends included, or 366 with cancelled=true.",
             "schema": {
               "example": "2026-10-31",
               "type": "string"
@@ -51,6 +51,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "cancelled",
+            "required": false,
+            "in": "query",
+            "description": "Only departures an operator cancelled, LEGACY ones left out: the few the cancelled-departures page restores from. The range may then cover up to 366 days.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         ],
         "responses": {
@@ -65,7 +77,7 @@
             }
           },
           "400": {
-            "description": "Validation failure, a date that does not exist, to before from, or a range over 62 days."
+            "description": "Validation failure, a date that does not exist, to before from, or a range over 62 days (366 with cancelled=true)."
           },
           "401": {
             "description": "Missing or invalid access token."
@@ -79,7 +91,7 @@
             "access-token": []
           }
         ],
-        "summary": "List stored departures (one bus on one date) in the current tenant between two service dates. Past, cancelled, dropped and LEGACY departures are included.",
+        "summary": "List stored departures (one bus on one date) in the current tenant between two service dates. Past, cancelled, dropped and LEGACY departures are included, unless cancelled=true asks for operator-cancelled ones only.",
         "tags": [
           "Departures"
         ]
@@ -473,7 +485,7 @@
             "description": "Departure not found in current tenant."
           },
           "409": {
-            "description": "A departure that is not cancelled, or is LEGACY.",
+            "description": "A departure that is not cancelled, is LEGACY, or is DEPARTURE_DROPPED: the timetable does not make it now, so restored it would still not run.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6832,6 +6844,7 @@
               "DEPARTURE_LEGACY",
               "DEPARTURE_ALREADY_CANCELLED",
               "DEPARTURE_NOT_CANCELLED",
+              "DEPARTURE_DROPPED",
               "DEPARTURE_NOT_EXTRA",
               "DEPARTURE_HAS_RESERVATIONS"
             ]

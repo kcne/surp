@@ -146,7 +146,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 /**
- * @summary List stored departures (one bus on one date) in the current tenant between two service dates. Past, cancelled, dropped and LEGACY departures are included.
+ * @summary List stored departures (one bus on one date) in the current tenant between two service dates. Past, cancelled, dropped and LEGACY departures are included, unless cancelled=true asks for operator-cancelled ones only.
  */
 export type departuresControllerListResponse200 = {
   data: DepartureListResponseDto
@@ -261,7 +261,7 @@ export function useDeparturesControllerList<TData = Awaited<ReturnType<typeof de
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary List stored departures (one bus on one date) in the current tenant between two service dates. Past, cancelled, dropped and LEGACY departures are included.
+ * @summary List stored departures (one bus on one date) in the current tenant between two service dates. Past, cancelled, dropped and LEGACY departures are included, unless cancelled=true asks for operator-cancelled ones only.
  */
 
 export function useDeparturesControllerList<TData = Awaited<ReturnType<typeof departuresControllerList>>, TError = ErrorType<void>>(

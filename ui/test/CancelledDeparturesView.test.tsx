@@ -14,16 +14,24 @@ vi.mock("sonner", () => ({ toast }))
 
 import { CancelledDeparturesView } from "@/components/rides/CancelledDeparturesView"
 
-/** Answers each window with the departures dated inside it. */
+/**
+ * Answers with the departures dated inside the range, filtered as the API
+ * filters cancelled=true: operator-cancelled, LEGACY left out.
+ */
 function serve(departures: ReturnType<typeof departure>[]) {
-  api.departuresControllerList.mockImplementation(async (params: { from: string; to: string }) => ({
-    status: 200,
-    data: {
-      items: departures.filter(
-        (item) => item.serviceDate >= params.from && item.serviceDate <= params.to
-      ),
-    },
-  }))
+  api.departuresControllerList.mockImplementation(
+    async (params: { from: string; to: string; cancelled?: string }) => ({
+      status: 200,
+      data: {
+        items: departures.filter(
+          (item) =>
+            item.serviceDate >= params.from &&
+            item.serviceDate <= params.to &&
+            (params.cancelled !== "true" || (item.cancelledAt !== null && item.source !== "LEGACY"))
+        ),
+      },
+    })
+  )
 }
 
 const cancelledAt = "2026-10-02T08:00:00.000Z"
@@ -63,9 +71,11 @@ describe("CancelledDeparturesView (#27, PR 4c)", () => {
 
     await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(3))
 
-    const windows = api.departuresControllerList.mock.calls.map(([params]) => params)
-    expect(windows[0]).toEqual({ from: "2026-10-03", to: "2026-12-03" })
-    expect(windows[windows.length - 1].to).toBe("2027-10-03")
+    // One request for the year, filtered by the API, not six 62-day windows
+    // of every departure.
+    expect(api.departuresControllerList.mock.calls.map(([params]) => params)).toEqual([
+      { from: "2026-10-03", to: "2027-10-03", cancelled: "true" },
+    ])
 
     const [, first, second] = screen.getAllByRole("row")
     expect(within(first).getByText("Rana")).toBeTruthy()
@@ -89,6 +99,22 @@ describe("CancelledDeparturesView (#27, PR 4c)", () => {
     await waitFor(() => expect(api.departuresControllerRestore).toHaveBeenCalledWith("dep-9"))
     expect(await screen.findByText("Nema otkazanih polazaka")).toBeTruthy()
     expect(toast.success).toHaveBeenCalledWith("Polazak je vracen u saobracaj")
+  })
+
+  it("does not offer 'Vrati' for a cancelled bus the timetable does not make now, and says why", async () => {
+    serve([
+      departure({ id: "dep-9", serviceDate: "2026-10-05", cancelledAt, timetableDroppedAt: cancelledAt }),
+      departure({ id: "dep-10", serviceDate: "2026-10-06", cancelledAt }),
+    ])
+    render(<CancelledDeparturesView />, { wrapper: createQueryWrapper() })
+
+    const notRunning = await screen.findByRole("button", { name: /Vrati polazak 2026-10-05 u 09:00/ })
+    expect((notRunning as HTMLButtonElement).disabled).toBe(true)
+    expect(within(notRunning.closest("tr")!).getByText("Ne saobraca")).toBeTruthy()
+    expect(screen.getByText(/moze se vratiti tek kada voznja ili linija ponovo saobraca/)).toBeTruthy()
+
+    const running = screen.getByRole("button", { name: /Vrati polazak 2026-10-06 u 09:00/ })
+    expect((running as HTMLButtonElement).disabled).toBe(false)
   })
 
   it("shows the server's sentence when a restore is refused", async () => {

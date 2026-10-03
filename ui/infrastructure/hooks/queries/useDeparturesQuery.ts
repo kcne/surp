@@ -27,6 +27,9 @@ export const departureWindowQueryKey = (window: DateWindow, filter: DepartureFil
 
 export const departureQueryKey = (id: string) => ["departures", "one", id] as const
 
+export const cancelledDeparturesQueryKey = (window: DateWindow) =>
+  ["departures", "cancelled", window.from, window.to] as const
+
 export async function fetchDepartureWindow(
   window: DateWindow,
   filter: DepartureFilter = {}
@@ -108,6 +111,31 @@ export function useRunningDeparturesQuery(
   )
 
   return { ...query, instances }
+}
+
+/**
+ * The departures an operator cancelled in a range of up to 366 days, in one
+ * request (#27, PR 4c). The API filters them, so the size follows how many
+ * buses were cancelled, not the timetable.
+ */
+export function useCancelledDeparturesQuery(window: DateWindow) {
+  return useQuery({
+    queryKey: cancelledDeparturesQueryKey(window),
+    staleTime: 60_000,
+    queryFn: async (): Promise<DepartureResponseDto[]> => {
+      const response = await departuresControllerList({
+        from: window.from,
+        to: window.to,
+        cancelled: "true",
+      })
+
+      if (response.status !== 200) {
+        throw new Error("Neuspesno ucitavanje otkazanih polazaka")
+      }
+
+      return response.data.items
+    },
+  })
 }
 
 /** One stored departure, or null when the tenant has none with this ID. */

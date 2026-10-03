@@ -188,8 +188,27 @@ describe('DeparturesController (e2e)', () => {
       await get('/departures?from=2026-10-01&to=2026-12-01').expect(200);
     });
 
+    it('reads only operator-cancelled departures with cancelled=true, over up to 366 days', async () => {
+      await get('/departures?from=2026-10-01&to=2027-10-01&cancelled=true').expect(200);
+
+      expect(prismaMock.departure.findMany.mock.calls[0][0].where).toEqual({
+        tenantId: 'tenant-1',
+        serviceDate: {
+          gte: new Date('2026-10-01T00:00:00.000Z'),
+          lte: new Date('2027-10-01T00:00:00.000Z')
+        },
+        cancelledAt: { not: null },
+        source: { not: 'LEGACY' }
+      });
+    });
+
     it.each([
       ['a range of 63 days', 'from=2026-10-01&to=2026-12-02', 'A range covers at most 62 days'],
+      [
+        'a range of 367 days of cancelled departures',
+        'from=2026-10-01&to=2027-10-02&cancelled=true',
+        'A range covers at most 366 days'
+      ],
       ['to before from', 'from=2026-10-02&to=2026-10-01', 'to must not be before from'],
       ['a date that does not exist', 'from=2026-02-30&to=2026-03-02', 'from and to must be real dates'],
       ['year 0000, which Postgres cannot store', 'from=0000-01-01&to=0000-01-02', 'from and to must be real dates']
@@ -204,6 +223,7 @@ describe('DeparturesController (e2e)', () => {
       ['a missing to', 'from=2026-10-01'],
       ['a malformed date', 'from=01.10.2026&to=2026-10-31'],
       ['an unknown filter', 'from=2026-10-01&to=2026-10-31&status=ACTIVE'],
+      ['cancelled=false, which the list does not take', 'from=2026-10-01&to=2026-10-31&cancelled=false'],
       ['a source filter, which the list does not take', 'from=2026-10-01&to=2026-10-31&source=LEGACY'],
       ['an empty ride filter', 'from=2026-10-01&to=2026-10-31&rideId='],
       ['a whitespace line filter', 'from=2026-10-01&to=2026-10-31&lineId=%20']

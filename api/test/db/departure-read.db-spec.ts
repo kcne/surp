@@ -142,6 +142,46 @@ describe('departure reads (real database)', () => {
     ]);
   });
 
+  // The cancelled-departures page reads today to +365 at once (#27, PR 4c):
+  // only what an operator cancelled, so the size follows their decisions.
+  it('lists only operator-cancelled, non-LEGACY departures with cancelled=true, over up to 366 days', async () => {
+    const cancelledLegacyId = await storeDeparture({
+      source: DepartureSource.LEGACY,
+      serviceDate: seeded.travelDate,
+      departureTime: '08:15',
+      arrivalTime: '10:15'
+    });
+    await prisma.departure.update({
+      where: { id: cancelledLegacyId },
+      data: { cancelledAt: new Date(), cancelledById: seeded.auth.sub }
+    });
+    await storeDeparture({
+      source: DepartureSource.EXTRA,
+      serviceDate: seeded.travelDate,
+      departureTime: '07:00',
+      arrivalTime: '09:00'
+    });
+    const scheduled = await prisma.departure.findFirstOrThrow({
+      where: { rideId: seeded.rideId, serviceDate: new Date(seeded.travelDate), source: DepartureSource.SCHEDULE }
+    });
+    await prisma.departure.update({
+      where: { id: scheduled.id },
+      data: { cancelledAt: new Date(), cancelledById: seeded.auth.sub }
+    });
+    const from = shiftDate(seeded.travelDate, -7);
+    const to = shiftDate(from, 365);
+
+    const result = await departures.list(seeded.auth, { from, to, cancelled: 'true' });
+
+    expect(result.items.map((item) => item.id)).toEqual([scheduled.id]);
+    await expect(
+      departures.list(seeded.auth, { from, to: shiftDate(from, 366), cancelled: 'true' })
+    ).rejects.toThrow('A range covers at most 366 days');
+    await expect(departures.list(seeded.auth, { from, to })).rejects.toThrow(
+      'A range covers at most 62 days'
+    );
+  });
+
   it('includes both ends of the range and nothing outside it', async () => {
     const result = await departures.list(seeded.auth, {
       from: seeded.travelDate,

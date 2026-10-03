@@ -44,11 +44,12 @@ export class DeparturesController {
   @ApiOperation({
     summary:
       'List stored departures (one bus on one date) in the current tenant between two service dates. ' +
-      'Past, cancelled, dropped and LEGACY departures are included.'
+      'Past, cancelled, dropped and LEGACY departures are included, unless cancelled=true asks for operator-cancelled ones only.'
   })
   @ApiOkResponse({ type: DepartureListResponseDto })
   @ApiBadRequestResponse({
-    description: 'Validation failure, a date that does not exist, to before from, or a range over 62 days.'
+    description:
+      'Validation failure, a date that does not exist, to before from, or a range over 62 days (366 with cancelled=true).'
   })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })
@@ -138,7 +139,8 @@ export class DeparturesController {
   @ApiNotFoundResponse({ description: 'Departure not found in current tenant.' })
   @ApiConflictResponse({
     type: DepartureOperationRefusalDto,
-    description: 'A departure that is not cancelled, or is LEGACY.'
+    description:
+      'A departure that is not cancelled, is LEGACY, or is DEPARTURE_DROPPED: the timetable does not make it now, so restored it would still not run.'
   })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
   @ApiForbiddenResponse({ description: 'Insufficient role for this resource.' })

@@ -59,6 +59,7 @@ export * from './departureOperationRefusalDto';
 export * from './departureOperationRefusalDtoCode';
 export * from './departureResponseDto';
 export * from './departureResponseDtoSource';
+export * from './departuresControllerListCancelled';
 export * from './departuresControllerListParams';
 export * from './departureStopResponseDto';
 export * from './domainAuditEventResponseDto';

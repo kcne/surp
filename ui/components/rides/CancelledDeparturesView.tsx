@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import type { DepartureResponseDto } from "@/infrastructure/generated/model"
-import { useDepartureRangeQuery } from "@/infrastructure/hooks/queries/useDeparturesQuery"
+import { useCancelledDeparturesQuery } from "@/infrastructure/hooks/queries/useDeparturesQuery"
 import { useRestoreDepartureMutation } from "@/infrastructure/hooks/mutations/useDepartureMutations"
 import { addDaysToIsoDate } from "@/utils/departureWindows"
 import { formatDateToISO, formatTimeDisplay } from "@/utils/dateHelpers"
@@ -24,12 +24,22 @@ import { formatDateToISO, formatTimeDisplay } from "@/utils/dateHelpers"
 const HORIZON_DAYS = 365
 
 /**
- * A departure an operator cancelled and can bring back. Dropped departures
- * are the timetable's doing and stay on the `reservation.reachable` check;
- * LEGACY rows never ran as a bus anyone can restore.
+ * A departure an operator cancelled. Dropped departures are the timetable's
+ * doing and stay on the `reservation.reachable` check; LEGACY rows never ran
+ * as a bus anyone can restore. The API sends only these; the check stays so
+ * a row that is not one is never offered.
  */
-export function isRestorableCancellation(departure: DepartureResponseDto): boolean {
+export function isListedCancellation(departure: DepartureResponseDto): boolean {
   return departure.cancelledAt !== null && departure.source !== "LEGACY"
+}
+
+/**
+ * Whether "Vrati" would put the bus back in service. One the timetable does
+ * not make now (its ride or line is inactive, or the day left the schedule)
+ * would still not run, and the API refuses it.
+ */
+export function canRestore(departure: DepartureResponseDto): boolean {
+  return departure.timetableDroppedAt === null
 }
 
 function formatServiceDate(date: string): string {
@@ -59,22 +69,23 @@ function formatCancelledAt(value: string): string {
 export function CancelledDeparturesView() {
   const today = useMemo(() => formatDateToISO(new Date()), [])
   const range = useMemo(() => ({ from: today, to: addDaysToIsoDate(today, HORIZON_DAYS) }), [today])
-  const departuresQuery = useDepartureRangeQuery(range)
+  const departuresQuery = useCancelledDeparturesQuery(range)
   const restore = useRestoreDepartureMutation()
   const [restoringId, setRestoringId] = useState<string | null>(null)
 
   const cancelled = useMemo(
     () =>
-      departuresQuery.departures
-        .filter(isRestorableCancellation)
+      (departuresQuery.data ?? [])
+        .filter(isListedCancellation)
         .sort(
           (left, right) =>
             left.serviceDate.localeCompare(right.serviceDate) ||
             left.departureTime.localeCompare(right.departureTime) ||
             left.lineName.localeCompare(right.lineName)
         ),
-    [departuresQuery.departures]
+    [departuresQuery.data]
   )
+  const anyNotRunning = cancelled.some((departure) => !canRestore(departure))
 
   const handleRestore = async (departure: DepartureResponseDto) => {
     setRestoringId(departure.id)
@@ -100,6 +111,12 @@ export function CancelledDeparturesView() {
             Polasci koje je osoblje otkazalo, od danas do {range.to}. Putnici ostaju na otkazanom
             polasku dok ih ne premestite ili otkazete.
           </p>
+          {anyNotRunning && (
+            <p className="text-sm text-muted-foreground">
+              Polazak oznacen sa &quot;Ne saobraca&quot; moze se vratiti tek kada voznja ili linija
+              ponovo saobraca tog dana.
+            </p>
+          )}
         </div>
         <Button asChild variant="outline">
           <Link href="/schedule">
@@ -162,9 +179,12 @@ export function CancelledDeparturesView() {
                   </TableCell>
                   <TableCell>{departure.lineName}</TableCell>
                   <TableCell>
-                    <Badge variant={departure.source === "EXTRA" ? "secondary" : "outline"}>
-                      {departure.source === "EXTRA" ? "Dodatni" : "Redovni"}
-                    </Badge>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant={departure.source === "EXTRA" ? "secondary" : "outline"}>
+                        {departure.source === "EXTRA" ? "Dodatni" : "Redovni"}
+                      </Badge>
+                      {!canRestore(departure) && <Badge variant="outline">Ne saobraca</Badge>}
+                    </div>
                   </TableCell>
                   <TableCell>{departure.activeReservationCount}</TableCell>
                   <TableCell>{departure.cancelledAt ? formatCancelledAt(departure.cancelledAt) : ""}</TableCell>
@@ -175,7 +195,7 @@ export function CancelledDeparturesView() {
                       variant="outline"
                       aria-label={`Vrati polazak ${departure.serviceDate} u ${departure.departureTime}, ${departure.lineName}`}
                       onClick={() => handleRestore(departure)}
-                      disabled={restore.isPending}
+                      disabled={restore.isPending || !canRestore(departure)}
                     >
                       <RotateCcw className="mr-2 h-4 w-4" />
                       {restoringId === departure.id ? "Vracanje..." : "Vrati"}

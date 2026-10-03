@@ -116,7 +116,13 @@ describe('OpenAPI contract', () => {
     const query = (list?.parameters ?? []).flatMap((parameter) =>
       '$ref' in parameter === false && parameter.in === 'query' ? [[parameter.name, parameter.required]] : []
     );
-    expect(Object.fromEntries(query)).toEqual({ from: true, to: true, rideId: false, lineId: false });
+    expect(Object.fromEntries(query)).toEqual({
+      from: true,
+      to: true,
+      rideId: false,
+      lineId: false,
+      cancelled: false
+    });
     expect(list?.responses['400']).toBeDefined();
     expect(detail?.responses['404']).toBeDefined();
   });
@@ -167,7 +173,12 @@ describe('OpenAPI contract', () => {
     if ('$ref' in states) throw new Error('Expected inline schema');
     expect(states.required).toEqual(expect.arrayContaining(['code', 'message']));
     expect(states.properties!.code).toMatchObject({
-      enum: expect.arrayContaining(['DEPARTURE_ALREADY_CANCELLED', 'DEPARTURE_NOT_CANCELLED', 'DEPARTURE_HAS_RESERVATIONS'])
+      enum: expect.arrayContaining([
+        'DEPARTURE_ALREADY_CANCELLED',
+        'DEPARTURE_NOT_CANCELLED',
+        'DEPARTURE_DROPPED',
+        'DEPARTURE_HAS_RESERVATIONS'
+      ])
     });
   });
 
