@@ -9,6 +9,8 @@ interface SelectedSeatsBarProps {
   onRemoveSeat: (seatNumber: number) => void
   onClear: () => void
   onReserve: () => void
+  /** Set on a bus that no longer takes bookings. */
+  reserveDisabled?: boolean
   selectionType?: "available" | "reserved"
   onEdit?: () => void
   onAssignGroup?: () => void
@@ -21,6 +23,7 @@ export function SelectedSeatsBar({
   onRemoveSeat,
   onClear,
   onReserve,
+  reserveDisabled = false,
   selectionType = "available",
   onEdit,
   onAssignGroup,
@@ -74,7 +77,7 @@ export function SelectedSeatsBar({
             <Eraser className="mr-1.5 h-3.5 w-3.5" />
             Očisti
           </Button>
-          {selectionType === "available" ? <Button size="sm" onClick={onReserve}><Ticket className="mr-1.5 h-3.5 w-3.5" />Rezerviši ({sortedSeats.length})</Button> : <>
+          {selectionType === "available" ? <Button size="sm" onClick={onReserve} disabled={reserveDisabled}><Ticket className="mr-1.5 h-3.5 w-3.5" />Rezerviši ({sortedSeats.length})</Button> : <>
             {sortedSeats.length === 1 && <Button size="sm" onClick={onEdit}><Pencil className="mr-1.5 h-3.5 w-3.5" />Izmeni</Button>}
             {sortedSeats.length > 1 && <Button variant="outline" size="sm" onClick={onAssignGroup}><Users className="mr-1.5 h-3.5 w-3.5" />Poveži u grupu</Button>}
             <Button variant="destructive" size="sm" onClick={onCancel}>Otkaži ({sortedSeats.length})</Button>

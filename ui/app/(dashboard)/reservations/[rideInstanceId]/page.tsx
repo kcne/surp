@@ -22,6 +22,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRideInstanceSeatMapPage } from "@/hooks/useRideInstanceSeatMapPage"
@@ -62,6 +63,7 @@ export default function SeatMapPage() {
     departureNotFound,
     departureError,
     retryDeparture,
+    bookingClosed,
   } = useRideInstanceSeatMapPage({ rideInstanceId })
 
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
@@ -140,6 +142,16 @@ export default function SeatMapPage() {
           onExport={() => setIsExportDialogOpen(true)}
         />
 
+        {bookingClosed ? (
+          <Alert variant="destructive">
+            <AlertTitle>Polazak ne prima rezervacije</AlertTitle>
+            <AlertDescription>
+              Polazak je otkazan ili vise nije u redu voznje. Putnike i dalje mozete izmeniti ili
+              otkazati, a nove rezervacije napravite na drugom polasku.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {/* Seat Map */}
         {loading && !seatMap ? (
           <Skeleton className="h-96 w-full" />
@@ -161,6 +173,7 @@ export default function SeatMapPage() {
           onRemoveSeat={(seatNumber) => handleSeatClick(seatNumber)}
           onClear={clearSelectedSeats}
           onReserve={() => setIsMultiReservationModalOpen(true)}
+          reserveDisabled={bookingClosed}
           selectionType={selectionType}
           onEdit={openSelectedReservationForEdit}
           onAssignGroup={() => {

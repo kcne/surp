@@ -64,6 +64,9 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   // A failed read is not a missing bus: the page offers a retry instead.
   const departureError = legacyRedirect.isError || departureQuery.isError
   const retryDeparture = legacyLink ? legacyRedirect.retry : departureQuery.refetch
+  // A cancelled, dropped or LEGACY departure refuses every booking (#27, PR
+  // 4b). Its passengers can still be edited, moved or cancelled.
+  const bookingClosed = selectedRideInstance?.status === "cancelled"
   const reservationsQuery = useReservationsByRideInstanceQuery(selectedRideInstance)
   const moveSeatMutation = useMoveReservationSeatMutation()
   const reservations = useMemo(
@@ -104,6 +107,14 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     setSelectedSeats([])
     setReservationToEdit(null)
   }, [rideInstanceId])
+
+  // A refused booking refetches the departure. When it no longer runs, the
+  // booking form closes rather than offer a bus the server will refuse again.
+  useEffect(() => {
+    if (bookingClosed) {
+      setIsMultiReservationModalOpen(false)
+    }
+  }, [bookingClosed])
 
   const toggleSelectedSeat = (seatNumber: number) => {
     setSelectedSeats((previous) =>
@@ -311,6 +322,7 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
     departureNotFound,
     departureError,
     retryDeparture,
+    bookingClosed,
     selectedSeat,
     selectedSeats,
     selectedReservations,
