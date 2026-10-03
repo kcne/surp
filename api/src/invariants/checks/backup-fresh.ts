@@ -96,7 +96,7 @@ function backupStorageConfig(env: NodeJS.ProcessEnv): BackupStorageConfig | null
   const accessKeyId = env.BACKUP_S3_ACCESS_KEY_ID;
   const secretAccessKey = env.BACKUP_S3_SECRET_ACCESS_KEY;
   if (!endpoint || !bucket || !accessKeyId || !secretAccessKey) return null;
-  return { endpoint, bucket, accessKeyId, secretAccessKey, region: env.BACKUP_S3_REGION ?? 'auto' };
+  return { endpoint, bucket, accessKeyId, secretAccessKey, region: env.BACKUP_S3_REGION || 'auto' };
 }
 
 async function readBackupHeartbeat(config: BackupStorageConfig): Promise<string> {
