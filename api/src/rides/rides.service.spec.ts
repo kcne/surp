@@ -823,6 +823,13 @@ describe('RidesService', () => {
       ])
     );
     expect(result.items).toHaveLength(3);
+    // Old tabs key and select by ID: the two extras keep apart, and the
+    // timetable bus keeps the ID links to it already carry.
+    expect(result.items.map((item) => item.id).sort()).toEqual([
+      'ride-1:2026-03-31:09:00:ADDITIONAL:exc-1',
+      'ride-1:2026-03-31:09:00:ADDITIONAL:exc-2',
+      'ride-1:2026-03-31:09:00:BASE'
+    ]);
   });
 
   it('computes availability from active reservations for matching ride instance', async () => {
@@ -1255,6 +1262,8 @@ describe('RidesService', () => {
             findMany: jest.fn().mockResolvedValue([
               {
                 id: 'departure-1',
+                rideId: 'ride-1',
+                serviceDate: travelDate,
                 source: 'SCHEDULE',
                 departureTime: '10:00',
                 arrivalTime: '11:30',

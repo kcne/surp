@@ -9742,7 +9742,8 @@
         "properties": {
           "id": {
             "type": "string",
-            "example": "ride-1:2026-03-30:09:00:BASE"
+            "example": "ride-1:2026-03-30:09:00:BASE",
+            "description": "rideId:date:departureTime:source, unique within the response. Two extra buses at one time also end in their exception ID."
           },
           "rideId": {
             "type": "string",

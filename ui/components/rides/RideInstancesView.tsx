@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import type { Ride, RideInstance } from "@/types"
 import {
   Dialog,
@@ -25,7 +27,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Ban, ChevronDown, Pencil, Plus, Ticket, Trash2 } from "lucide-react"
-import { useRunningDeparturesQuery } from "@/infrastructure/hooks/queries/useDeparturesQuery"
+import {
+  departureWindowQueryKey,
+  fetchDepartureWindow,
+  useRunningDeparturesQuery,
+} from "@/infrastructure/hooks/queries/useDeparturesQuery"
 import {
   useCancelDepartureMutation,
   useCreateExtraDepartureMutation,
@@ -36,9 +42,13 @@ import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdat
 import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog"
 import { ExtraDepartureDialog, type ExtraDepartureValues } from "@/components/rides/ExtraDepartureDialog"
-import { addDaysToIsoDate, DEPARTURE_WINDOW_DAYS } from "@/utils/departureWindows"
+import {
+  addDaysToIsoDate,
+  DEPARTURE_WINDOW_DAYS,
+  splitIntoDepartureWindows,
+} from "@/utils/departureWindows"
 import { formatDateToISO } from "@/utils/dateHelpers"
-import { cancellingDeletesRide } from "@/utils/rideInstanceHelpers"
+import { cancellingDeletesRide, isExtraBus } from "@/utils/rideInstanceHelpers"
 
 /** Bookings and operator decisions reach no further than 365 days ahead. */
 const HORIZON_DAYS = 365
@@ -49,8 +59,9 @@ interface RideInstancesViewProps {
   ride: Ride
   loading: boolean
   /**
-   * Cancelling the only bus of a one-time ride deletes the ride, as it always
-   * has; every other cancellation is an operation on the departure.
+   * Cancelling the only bus of a one-time ride, with nobody booked on it,
+   * deletes the ride (`cancellingDeletesRide`); every other cancellation is
+   * an operation on the departure.
    */
   onDeleteRide: (ride: Ride) => Promise<void>
 }
@@ -80,6 +91,10 @@ export function RideInstancesView({
   onDeleteRide,
 }: RideInstancesViewProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const [checkingCancel, setCheckingCancel] = useState(false)
+  const today = useMemo(() => formatDateToISO(new Date()), [])
+  const horizon = addDaysToIsoDate(today, HORIZON_DAYS)
   const cancelDeparture = useCancelDepartureMutation()
   const createExtra = useCreateExtraDepartureMutation()
   const updateExtra = useUpdateExtraDepartureMutation()
@@ -88,6 +103,7 @@ export function RideInstancesView({
   const [extraToDelete, setExtraToDelete] = useState<RideInstance | null>(null)
   const operationPending =
     loading ||
+    checkingCancel ||
     cancelDeparture.isPending ||
     createExtra.isPending ||
     updateExtra.isPending ||
@@ -108,14 +124,48 @@ export function RideInstancesView({
     router.push(`/reservations/${instanceId}?date=${instanceDate}`)
   }
 
+  // Every stored departure of the ride from today to the horizon, read fresh:
+  // the list shows running ones only, and may predate an extra just added.
+  const fetchRideDepartures = async () => {
+    const windows = splitIntoDepartureWindows({ from: today, to: horizon })
+    const filter = { rideId: ride.id }
+    const pages = await Promise.all(
+      windows.map((window) =>
+        queryClient.fetchQuery({
+          queryKey: departureWindowQueryKey(window, filter),
+          queryFn: () => fetchDepartureWindow(window, filter),
+          staleTime: 0,
+        })
+      )
+    )
+
+    return pages.flat()
+  }
+
   const handleCancelInstance = async (instance: RideInstance) => {
+    const departureId = instance.departureId ?? instance.id
+
     try {
-      if (instance.source !== "ADDITIONAL" && cancellingDeletesRide(ride)) {
-        await onDeleteRide(ride)
-        return
+      if (!isExtraBus(instance) && ride.type === "one-time") {
+        setCheckingCancel(true)
+        let deletesRide: boolean
+
+        try {
+          deletesRide = cancellingDeletesRide(ride, departureId, await fetchRideDepartures())
+        } catch {
+          toast.error("Polasci voznje nisu mogli biti ucitani. Pokusajte ponovo.")
+          return
+        } finally {
+          setCheckingCancel(false)
+        }
+
+        if (deletesRide) {
+          await onDeleteRide(ride)
+          return
+        }
       }
 
-      await confirmable.run({ kind: "cancel", id: instance.departureId ?? instance.id })
+      await confirmable.run({ kind: "cancel", id: departureId })
     } catch {
       // A refusal opens the confirmation dialog, and an ordinary failure has
       // already raised its toast. The list refetches and keeps showing the
@@ -171,16 +221,14 @@ export function RideInstancesView({
   // The ride's stored departures (#27, PR 4a), read 62 days at a time from
   // the "from" date; "show more" reads the next 62 days once the loaded ones
   // are all shown.
-  const today = useMemo(() => formatDateToISO(new Date()), [])
   const rangeFrom = fromDate || today
-  const rangeEnd = toDate || addDaysToIsoDate(today, HORIZON_DAYS)
+  const rangeEnd = toDate || horizon
   const loadedEnd = addDaysToIsoDate(rangeFrom, loadedWindows * DEPARTURE_WINDOW_DAYS - 1)
   const range = useMemo(
     () => ({ from: rangeFrom, to: loadedEnd < rangeEnd ? loadedEnd : rangeEnd }),
     [rangeFrom, loadedEnd, rangeEnd]
   )
   const hasUnloadedDates = range.to < rangeEnd
-  const horizon = addDaysToIsoDate(today, HORIZON_DAYS)
   const rides = useMemo(() => [ride], [ride])
   const departuresQuery = useRunningDeparturesQuery(range, rides, {
     rideId: ride.id,
@@ -405,7 +453,12 @@ export function RideInstancesView({
                       <TableCell className="font-medium">
                         {formatInstanceDate(instance.date)}
                       </TableCell>
-                      <TableCell>{formatTimeDisplay(instance.departureTime)}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center gap-2">
+                          {formatTimeDisplay(instance.departureTime)}
+                          {isExtraBus(instance) && <Badge variant="secondary">Dodatni</Badge>}
+                        </span>
+                      </TableCell>
                       <TableCell>{formatTimeDisplay(instance.arrivalTime)}</TableCell>
                       <TableCell>{getStatusBadge(instance.status)}</TableCell>
                       <TableCell>
@@ -454,7 +507,7 @@ export function RideInstancesView({
                             disabled={operationPending || isPastInstance(instance.date)}
                           >
                             <Ban className="mr-2 h-4 w-4" />
-                            Otkaži
+                            Otkazi
                           </Button>
                           {/* A booked extra is cancelled, never deleted: it is the record of the bus they were sold. */}
                           {instance.source === "ADDITIONAL" && !instance.reservationCount && (

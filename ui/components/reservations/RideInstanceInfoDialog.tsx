@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { LineRoute } from "@/components/lines/LineRoute"
 import { formatDateDisplay, formatTimeDisplay } from "@/utils/dateHelpers"
+import { EXTRA_BUS_SUFFIX, isExtraBus } from "@/utils/rideInstanceHelpers"
 import type { Reservation, RideInstance, RideStatus } from "@/types"
 
 interface RideInstanceInfoDialogProps {
@@ -32,7 +33,11 @@ export function RideInstanceInfoDialog({
                 Datum: <span className="font-medium">{formatDateDisplay(selectedInstance.date)}</span>
               </p>
               <p className="text-sm">
-                Vreme: <span className="font-medium">{formatTimeDisplay(selectedInstance.departureTime)}</span>
+                Vreme:{" "}
+                <span className="font-medium">
+                  {formatTimeDisplay(selectedInstance.departureTime)}
+                  {isExtraBus(selectedInstance) ? EXTRA_BUS_SUFFIX : ""}
+                </span>
               </p>
               <p className="text-sm">
                 Status: <span className="font-medium">{statusLabels[selectedInstance.status]}</span>

@@ -171,7 +171,7 @@ describe("RideInstancesView", () => {
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Polazak je vec otkazan."))
     })
 
-    it("deletes a one-time ride when its only bus is cancelled, as before", async () => {
+    it("deletes a one-time ride when its only bus is cancelled and nobody is booked on it", async () => {
       serve([departure({ id: "dep-9", serviceDate: "2026-10-05" })])
       const onDeleteRide = vi.fn().mockResolvedValue(undefined)
       const oneTime = ride({ type: "one-time", date: "2026-10-05", exceptions: [] })
@@ -181,6 +181,91 @@ describe("RideInstancesView", () => {
 
       await waitFor(() => expect(onDeleteRide).toHaveBeenCalledWith(oneTime))
       expect(api.departuresControllerCancel).not.toHaveBeenCalled()
+    })
+
+    // Deleting a ride cancels every passenger it has, so a one-time ride is
+    // kept, and its bus cancelled, whenever someone would lose a seat.
+    it("cancels, and asks first, rather than delete a one-time ride with passengers booked", async () => {
+      serve([departure({ id: "dep-9", serviceDate: "2026-10-05", activeReservationCount: 2 })])
+      api.departuresControllerCancel.mockRejectedValueOnce(wouldBreak("token-1"))
+      const onDeleteRide = vi.fn()
+      renderView(ride({ type: "one-time", date: "2026-10-05", exceptions: [] }), onDeleteRide)
+
+      fireEvent.click(await screen.findByRole("button", { name: "Otkazi polazak 2026-10-05 u 09:00" }))
+
+      expect(await screen.findByText("3 putnika ostaju na otkazanom polasku.")).toBeTruthy()
+      expect(api.departuresControllerCancel).toHaveBeenCalledWith("dep-9", expect.anything())
+      expect(onDeleteRide).not.toHaveBeenCalled()
+    })
+
+    it("keeps a one-time ride whose cancelled extra still has passengers on it", async () => {
+      // The cancelled extra has lost its ADDITIONAL and is not listed, but
+      // its passengers stay on it.
+      serve([
+        departure({ id: "dep-9", serviceDate: "2026-10-05" }),
+        departure({
+          id: "extra-cancelled",
+          source: "EXTRA",
+          serviceDate: "2026-10-05",
+          departureTime: "15:00",
+          cancelledAt: "2026-10-02T08:00:00.000Z",
+          activeReservationCount: 2,
+        }),
+      ])
+      api.departuresControllerCancel.mockResolvedValue(ok())
+      const onDeleteRide = vi.fn()
+      renderView(ride({ type: "one-time", date: "2026-10-05", exceptions: [] }), onDeleteRide)
+
+      expect(screen.queryByRole("button", { name: "Otkazi polazak 2026-10-05 u 15:00" })).toBeNull()
+      fireEvent.click(await screen.findByRole("button", { name: "Otkazi polazak 2026-10-05 u 09:00" }))
+
+      await waitFor(() => expect(api.departuresControllerCancel).toHaveBeenCalledWith("dep-9", expect.anything()))
+      expect(onDeleteRide).not.toHaveBeenCalled()
+    })
+
+    it("reads the ride's departures again, so an extra added since keeps the ride", async () => {
+      serve([departure({ id: "dep-9", serviceDate: "2026-10-05" })])
+      api.departuresControllerCancel.mockResolvedValue(ok())
+      const onDeleteRide = vi.fn()
+      renderView(ride({ type: "one-time", date: "2026-10-05", exceptions: [] }), onDeleteRide)
+      const cancel = await screen.findByRole("button", { name: "Otkazi polazak 2026-10-05 u 09:00" })
+
+      // Added in another tab; this list has not refetched.
+      serve([
+        departure({ id: "dep-9", serviceDate: "2026-10-05" }),
+        departure({ id: "extra-new", source: "EXTRA", serviceDate: "2026-10-05", departureTime: "15:00" }),
+      ])
+      fireEvent.click(cancel)
+
+      await waitFor(() => expect(api.departuresControllerCancel).toHaveBeenCalledWith("dep-9", expect.anything()))
+      expect(onDeleteRide).not.toHaveBeenCalled()
+    })
+
+    it("deletes nothing and cancels nothing when the ride's departures cannot be read", async () => {
+      serve([departure({ id: "dep-9", serviceDate: "2026-10-05" })])
+      const onDeleteRide = vi.fn()
+      renderView(ride({ type: "one-time", date: "2026-10-05", exceptions: [] }), onDeleteRide)
+      const cancel = await screen.findByRole("button", { name: "Otkazi polazak 2026-10-05 u 09:00" })
+
+      api.departuresControllerList.mockRejectedValue(new Error("Network Error"))
+      fireEvent.click(cancel)
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith("Polasci voznje nisu mogli biti ucitani. Pokusajte ponovo.")
+      )
+      expect(onDeleteRide).not.toHaveBeenCalled()
+      expect(api.departuresControllerCancel).not.toHaveBeenCalled()
+    })
+
+    it("marks the extra bus of two that leave at the same time", async () => {
+      serve([
+        departure({ id: "dep-9", serviceDate: "2026-10-05" }),
+        departure({ id: "extra-1", source: "EXTRA", serviceDate: "2026-10-05" }),
+      ])
+      renderView()
+
+      await screen.findByRole("button", { name: "Izmeni dodatni polazak 2026-10-05 u 09:00" })
+      expect(screen.getAllByText("Dodatni")).toHaveLength(1)
     })
 
     it("cancels an extra bus of a one-time ride instead of deleting the ride", async () => {

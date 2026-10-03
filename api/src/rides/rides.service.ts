@@ -566,6 +566,22 @@ export class RidesService {
       ])
     );
 
+    // The ID old tabs key and select an instance by. Two extras at one time
+    // (#27, PR 4c) would share it, so theirs also name their ADDITIONAL; every
+    // other instance keeps the ID it always had, and links to it still work.
+    const baseIdOf = (instance: (typeof materialized)[number]) =>
+      `${instance.rideId}:${instance.date}:${instance.departureTime}:${instance.source}`;
+    const baseIdCounts = new Map<string, number>();
+
+    for (const instance of materialized) {
+      baseIdCounts.set(baseIdOf(instance), (baseIdCounts.get(baseIdOf(instance)) ?? 0) + 1);
+    }
+
+    const instanceIdOf = (instance: (typeof materialized)[number]) =>
+      (baseIdCounts.get(baseIdOf(instance)) ?? 0) > 1 && instance.rideExceptionId
+        ? `${baseIdOf(instance)}:${instance.rideExceptionId}`
+        : baseIdOf(instance);
+
     const items = materialized.map((instance) => {
       const departure = departureOf(instance);
       const capacity = departure?.capacity ?? instance.capacity;
@@ -575,7 +591,7 @@ export class RidesService {
       const availableSeats = Math.max(capacity - reservationCount, 0);
 
       return {
-        id: `${instance.rideId}:${instance.date}:${instance.departureTime}:${instance.source}`,
+        id: instanceIdOf(instance),
         rideId: instance.rideId,
         date: instance.date,
         departureTime: instance.departureTime,

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { RideInstance } from "@/types"
 import { formatTimeDisplay } from "@/utils/dateHelpers"
+import { isExtraBus } from "@/utils/rideInstanceHelpers"
 import {
   OccupancyMeter,
   RideStatusBadge,
@@ -54,7 +55,7 @@ export function RideInstanceCard({
           <div className="flex items-center gap-1.5 self-start">
             <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
               <BusFront className="h-3 w-3" aria-hidden="true" />
-              Bus
+              {isExtraBus(instance) ? "Dodatni bus" : "Bus"}
             </span>
             <RideStatusBadge
               status={instance.status}
