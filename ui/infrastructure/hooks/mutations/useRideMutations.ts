@@ -20,6 +20,7 @@ import { ridesListQueryKey } from "@/infrastructure/hooks/queries/useRidesListQu
 import type { RideFormData } from "@/types"
 import {
   ChangeNeedsConfirmationError,
+  scheduleBeingUpdatedMessage,
   throwBreakingChangeConflict,
 } from "@/infrastructure/utils/breaking-change"
 import {
@@ -176,6 +177,60 @@ export function useUpdateRideMutation() {
       }
 
       toast.error(getErrorMessage(error, "Neuspesno azuriranje voznje"))
+    },
+  })
+}
+
+/** The server kept the ride because someone is booked on it. */
+export class RideHasReservationsError extends Error {
+  constructor() {
+    super("Voznja ima aktivne rezervacije")
+    this.name = "RideHasReservationsError"
+  }
+}
+
+/**
+ * Deletes a ride only while nobody is booked on it (#27, PR 4c). Sent without
+ * `cascade`, so the server counts the ride's ACTIVE reservations, on every
+ * date, under the schedule lock, and refuses rather than cancel a booking
+ * the screen could not see: one on a past date, or one made after it read
+ * the ride's departures. That refusal raises no toast and rejects with
+ * `RideHasReservationsError`, for the caller to cancel the bus instead.
+ */
+export function useDeleteUnbookedRideMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await ridesControllerRemove(id).catch((error: unknown) => {
+        const status = (error as { response?: { status?: number } })?.response?.status
+
+        // The other 409 is a busy schedule, which is retried, not a booking.
+        if (status === 409 && !scheduleBeingUpdatedMessage(error)) {
+          throw new RideHasReservationsError()
+        }
+
+        throw error
+      })
+
+      if (!isRideMutationSuccess(response)) {
+        throw new Error("Neuspesno brisanje voznje")
+      }
+
+      return response.data
+    },
+    onSuccess: () => {
+      toast.success("Voznja je uspesno obrisana")
+      invalidateRidesList(queryClient)
+    },
+    onError: (error) => {
+      if (error instanceof RideHasReservationsError) {
+        return
+      }
+
+      toast.error(
+        scheduleBeingUpdatedMessage(error) ?? getErrorMessage(error, "Neuspesno brisanje voznje")
+      )
     },
   })
 }

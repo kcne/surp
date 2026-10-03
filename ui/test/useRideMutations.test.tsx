@@ -1,6 +1,7 @@
 import { renderHook } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createQueryWrapper } from "./queryWrapper"
+import { refusal } from "./fixtures"
 
 const api = vi.hoisted(() => ({
   ridesControllerCreate: vi.fn(),
@@ -13,10 +14,13 @@ const api = vi.hoisted(() => ({
 }))
 
 vi.mock("@/infrastructure/generated/surp-api", () => api)
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
+vi.mock("sonner", () => ({ toast }))
 
 import {
+  RideHasReservationsError,
   useCreateRideMutation,
+  useDeleteUnbookedRideMutation,
   useUpdateRideMutation,
 } from "@/infrastructure/hooks/mutations/useRideMutations"
 
@@ -27,6 +31,8 @@ describe("ride mutations (#27, PR 4c)", () => {
     for (const mock of Object.values(api)) {
       mock.mockReset()
     }
+    toast.success.mockReset()
+    toast.error.mockReset()
     api.ridesControllerCreate.mockResolvedValue({ status: 201, data: rideDto })
     api.ridesControllerUpdate.mockResolvedValue({ status: 200, data: rideDto })
     api.ridesControllerGetById.mockResolvedValue({ status: 200, data: rideDto })
@@ -60,5 +66,47 @@ describe("ride mutations (#27, PR 4c)", () => {
     expect(api.ridesControllerUpdate.mock.calls[0][1]).not.toHaveProperty("exceptions")
     expect(api.ridesControllerAddException).not.toHaveBeenCalled()
     expect(api.ridesControllerRemoveException).not.toHaveBeenCalled()
+  })
+
+  // Deleting a one-time ride from its departures list must never cancel a
+  // passenger: the server, not the screen's read, decides whether anyone is
+  // booked.
+  describe("deleting an unbooked one-time ride", () => {
+    it("deletes without cascade", async () => {
+      api.ridesControllerRemove.mockResolvedValue({ status: 200, data: rideDto })
+      const { result } = renderHook(() => useDeleteUnbookedRideMutation(), { wrapper: createQueryWrapper() })
+
+      await result.current.mutateAsync("ride-1")
+
+      expect(api.ridesControllerRemove).toHaveBeenCalledWith("ride-1")
+      expect(toast.success).toHaveBeenCalledWith("Voznja je uspesno obrisana")
+    })
+
+    it("reports a ride the server keeps for its reservations without a toast", async () => {
+      api.ridesControllerRemove.mockRejectedValue(
+        Object.assign(new Error("Request failed with status code 409"), {
+          response: {
+            status: 409,
+            data: { statusCode: 409, message: "Ride cannot be deleted because it has active reservations." },
+          },
+        })
+      )
+      const { result } = renderHook(() => useDeleteUnbookedRideMutation(), { wrapper: createQueryWrapper() })
+
+      await expect(result.current.mutateAsync("ride-1")).rejects.toBeInstanceOf(RideHasReservationsError)
+      expect(toast.error).not.toHaveBeenCalled()
+    })
+
+    it("tells a busy schedule apart from a booked ride", async () => {
+      api.ridesControllerRemove.mockRejectedValue(
+        refusal("SCHEDULE_BEING_UPDATED", "Raspored se upravo menja. Pokusajte ponovo.")
+      )
+      const { result } = renderHook(() => useDeleteUnbookedRideMutation(), { wrapper: createQueryWrapper() })
+
+      const failure = await result.current.mutateAsync("ride-1").catch((error: unknown) => error)
+
+      expect(failure).not.toBeInstanceOf(RideHasReservationsError)
+      expect(toast.error).toHaveBeenCalledWith("Raspored se upravo menja. Pokusajte ponovo.")
+    })
   })
 })

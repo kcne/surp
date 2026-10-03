@@ -13,8 +13,10 @@ import { RideInstancesView } from "@/components/rides/RideInstancesView"
 import { RidesDataTable } from "@/components/rides/RidesDataTable"
 import { useCrudDialogState } from "@/hooks/useCrudDialogState"
 import {
+  RideHasReservationsError,
   useCreateRideMutation,
   useDeleteRideMutation,
+  useDeleteUnbookedRideMutation,
   useUpdateRideMutation,
 } from "@/infrastructure/hooks/mutations/useRideMutations"
 import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
@@ -28,11 +30,15 @@ export default function SchedulePage() {
   const createRideMutation = useCreateRideMutation()
   const updateRideMutation = useUpdateRideMutation()
   const deleteRideMutation = useDeleteRideMutation()
+  const deleteUnbookedRideMutation = useDeleteUnbookedRideMutation()
   const rides = ridesQuery.data ?? EMPTY_RIDES
   const loading = ridesQuery.isLoading
   const error = ridesQuery.error
   const mutationLoading =
-    createRideMutation.isPending || updateRideMutation.isPending || deleteRideMutation.isPending
+    createRideMutation.isPending ||
+    updateRideMutation.isPending ||
+    deleteRideMutation.isPending ||
+    deleteUnbookedRideMutation.isPending
   const [isInstancesViewOpen, setIsInstancesViewOpen] = useState(false)
   const [instancesRide, setInstancesRide] = useState<Ride | null>(null)
   const {
@@ -95,8 +101,18 @@ export default function SchedulePage() {
     await deleteRideMutation.mutateAsync(id)
   }
 
-  const handleDeleteOneTimeRide = async (ride: Ride) => {
-    await deleteRideMutation.mutateAsync(ride.id)
+  // False when the server kept the ride because someone is booked on it.
+  const handleDeleteOneTimeRide = async (ride: Ride): Promise<boolean> => {
+    try {
+      await deleteUnbookedRideMutation.mutateAsync(ride.id)
+      return true
+    } catch (error) {
+      if (error instanceof RideHasReservationsError) {
+        return false
+      }
+
+      throw error
+    }
   }
 
   const scheduledRides = rides.filter((ride) => ride.status === "scheduled")

@@ -173,7 +173,7 @@ describe("RideInstancesView", () => {
 
     it("deletes a one-time ride when its only bus is cancelled and nobody is booked on it", async () => {
       serve([departure({ id: "dep-9", serviceDate: "2026-10-05" })])
-      const onDeleteRide = vi.fn().mockResolvedValue(undefined)
+      const onDeleteRide = vi.fn().mockResolvedValue(true)
       const oneTime = ride({ type: "one-time", date: "2026-10-05", exceptions: [] })
       renderView(oneTime, onDeleteRide)
 
@@ -239,6 +239,22 @@ describe("RideInstancesView", () => {
 
       await waitFor(() => expect(api.departuresControllerCancel).toHaveBeenCalledWith("dep-9", expect.anything()))
       expect(onDeleteRide).not.toHaveBeenCalled()
+    })
+
+    // A seat sold after the read above, or one on a past date the read does
+    // not reach: the server keeps the ride, and the bus is cancelled instead.
+    it("cancels the bus, asking first, when the server keeps the ride for its reservations", async () => {
+      serve([departure({ id: "dep-9", serviceDate: "2026-10-05" })])
+      api.departuresControllerCancel.mockRejectedValueOnce(wouldBreak("token-1"))
+      const onDeleteRide = vi.fn().mockResolvedValue(false)
+      const oneTime = ride({ type: "one-time", date: "2026-10-05", exceptions: [] })
+      renderView(oneTime, onDeleteRide)
+
+      fireEvent.click(await screen.findByRole("button", { name: "Otkazi polazak 2026-10-05 u 09:00" }))
+
+      await waitFor(() => expect(onDeleteRide).toHaveBeenCalledWith(oneTime))
+      expect(await screen.findByText("3 putnika ostaju na otkazanom polasku.")).toBeTruthy()
+      expect(api.departuresControllerCancel).toHaveBeenCalledWith("dep-9", expect.anything())
     })
 
     it("deletes nothing and cancels nothing when the ride's departures cannot be read", async () => {

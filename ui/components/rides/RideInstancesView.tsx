@@ -61,9 +61,11 @@ interface RideInstancesViewProps {
   /**
    * Cancelling the only bus of a one-time ride, with nobody booked on it,
    * deletes the ride (`cancellingDeletesRide`); every other cancellation is
-   * an operation on the departure.
+   * an operation on the departure. Resolves false when the server keeps the
+   * ride because someone is booked on it after all; the bus is then
+   * cancelled instead.
    */
-  onDeleteRide: (ride: Ride) => Promise<void>
+  onDeleteRide: (ride: Ride) => Promise<boolean>
 }
 
 type ConfirmableOperation =
@@ -159,8 +161,9 @@ export function RideInstancesView({
           setCheckingCancel(false)
         }
 
-        if (deletesRide) {
-          await onDeleteRide(ride)
+        // The server has the last word: it keeps a ride anyone is booked on,
+        // on any date, including a booking made since the read above.
+        if (deletesRide && (await onDeleteRide(ride))) {
           return
         }
       }
