@@ -17,6 +17,7 @@ export {
 export {
   getRouteStationIds,
   resolveRideInstance,
+  selectRideInstance,
   rideInstanceServesSegment,
 } from "./rideInstanceMatching"
 export { assignSeats, type SeatAssignmentContext } from "./seatAssignment"

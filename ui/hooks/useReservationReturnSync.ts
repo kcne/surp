@@ -110,7 +110,16 @@ export function useReservationReturnSync({
       (instance) => instance.id === selectedReturnRideInstanceId
     )
 
-    if (!selectedStillExists) {
+    if (selectedStillExists) return
+
+    // A chosen bus that dropped out of the list, refused by the server and
+    // refetched, stays chosen so the operator picks again (#27, PR 4b).
+    // Moving to the next bus that day would book one they never chose.
+    const selectedBusGone =
+      selectedReturnRideInstanceId !== "" &&
+      !returnRideInstances.some((instance) => instance.id === selectedReturnRideInstanceId)
+
+    if (!selectedBusGone) {
       setSelectedReturnRideInstanceId(returnInstancesForSelectedDate[0]?.id || "")
     }
   }, [
@@ -118,6 +127,7 @@ export function useReservationReturnSync({
     selectedReturnDateKey,
     selectedReturnRideInstanceId,
     returnInstancesForSelectedDate,
+    returnRideInstances,
     setSelectedReturnRideInstanceId,
   ])
 }
