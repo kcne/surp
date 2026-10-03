@@ -18,6 +18,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { formatDateToISO, parseISODate } from "@/utils/dateHelpers"
+import { EXTRA_BUS_SUFFIX, isExtraBus } from "@/utils/rideInstanceHelpers"
 import type { ImportIssue, ImportRowField } from "@/lib/csv-import"
 import type { RideInstance } from "@/types"
 
@@ -237,7 +238,8 @@ export function RideInstanceCell({
       <SelectContent>
         {candidates.map((rideInstance) => (
           <SelectItem key={rideInstance.id} value={rideInstance.id}>
-            {rideInstance.departureTime} · {rideInstance.ride.name}
+            {rideInstance.departureTime}
+            {isExtraBus(rideInstance) ? EXTRA_BUS_SUFFIX : ""} · {rideInstance.ride.name}
             {typeof rideInstance.availableSeats === "number"
               ? ` · ${rideInstance.availableSeats} slob.`
               : ""}

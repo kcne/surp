@@ -1,4 +1,4 @@
-import { ORPHAN_NO_FREE_SEAT_ADVICE } from './orphaned-reservations';
+import { ORPHAN_AMBIGUOUS_TARGET_ADVICE, ORPHAN_NO_FREE_SEAT_ADVICE } from './orphaned-reservations';
 import { buildOrphanReport, repairOrphanedReservations } from './reservation-reachable';
 import { InvariantContext } from '../invariant.types';
 
@@ -299,6 +299,62 @@ describe('reservation.reachable', () => {
         })
       })
     );
+  });
+
+  // #27, PR 4c lets two buses of a ride share a time. A link to neither would
+  // keep the seat off the count booking checks, which is by departureId.
+  describe('with two stored buses at the new time', () => {
+    const stored = (id: string, overrides: Record<string, unknown> = {}) => ({
+      id,
+      rideId: 'ride-1',
+      serviceDate: travelDate,
+      departureTime: '07:30',
+      capacity: 48,
+      cancelledAt: null,
+      timetableDroppedAt: null,
+      ...overrides
+    });
+
+    it('links the one that runs when the other is cancelled', async () => {
+      prismaMock.departure.findMany.mockResolvedValue([
+        stored('dep-schedule'),
+        stored('dep-cancelled-extra', { cancelledAt: new Date(), capacity: 20 })
+      ]);
+      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-stranded', 30, '07:45')]);
+
+      const result = await repairOrphanedReservations(ctx);
+
+      expect(result.repairedCount).toBe(1);
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'res-stranded' },
+          // Seat 30 fits the running 48-seat bus, not the cancelled 20-seat one.
+          data: expect.objectContaining({ departureId: 'dep-schedule', seatNumber: 30 })
+        })
+      );
+    });
+
+    it('declines, and says why, when both run', async () => {
+      prismaMock.departure.findMany.mockResolvedValue([stored('dep-schedule'), stored('dep-extra')]);
+      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-stranded', 12, '07:45')]);
+
+      const report = await buildOrphanReport(ctx);
+
+      expect(report.items[0]).toEqual(
+        expect.objectContaining({
+          reason: 'DEPARTURE_TIME_MOVED',
+          targetDepartureTime: '07:30',
+          targetSeatNumber: null,
+          canRepair: false,
+          reasonAdvice: ORPHAN_AMBIGUOUS_TARGET_ADVICE
+        })
+      );
+
+      const result = await repairOrphanedReservations(ctx);
+
+      expect(result).toEqual(expect.objectContaining({ repairedCount: 0, skippedCount: 1 }));
+      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+    });
   });
 
   it('leaves unrelated pre-existing orphans untouched during a prospective repair', async () => {

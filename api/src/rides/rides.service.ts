@@ -199,6 +199,7 @@ type RideWithInstanceMaterialization = Prisma.RideGetPayload<{
     };
     exceptions: {
       select: {
+        id: true;
         exceptionDate: true;
         type: true;
         departureTime: true;
@@ -220,6 +221,7 @@ type MaterializedRideInstance = {
   departureTime: string;
   arrivalTime: string;
   source: 'BASE' | 'ADDITIONAL';
+  rideExceptionId?: string;
   rideType: RideType;
   status: RideStatus;
   capacity: number;
@@ -461,6 +463,7 @@ export class RidesService {
             exceptionDate: utcDate
           },
           select: {
+            id: true,
             exceptionDate: true,
             type: true,
             departureTime: true,
@@ -496,9 +499,10 @@ export class RidesService {
     // Capacity and booked seats come from the stored departure an instance
     // names, as booking counts them (#27, PR 4a): seats by `departureId`, and
     // an extra's own capacity. A timetable instance reads the SCHEDULE
-    // departure at its time and an extra the EXTRA one, so a same-time pair
-    // stored before PR 3c keeps two counts. This endpoint stays for old tabs
-    // until PR 6; the screens read GET /departures.
+    // departure at its time. An extra reads the EXTRA departure its ADDITIONAL
+    // links (PR 4c): two extras may share a time, so the time cannot tell them
+    // apart. This endpoint stays for old tabs until PR 6; the screens read
+    // GET /departures.
     const departures =
       rideIds.length > 0
         ? await this.prisma.departure.findMany({
@@ -515,26 +519,27 @@ export class RidesService {
               departureTime: true,
               source: true,
               capacity: true,
+              rideExceptionId: true,
               _count: { select: { reservations: { where: { status: ReservationStatus.ACTIVE } } } }
             }
           })
         : [];
-    const departureKey = (rideId: string, departureTime: string, extra: boolean) =>
-      `${rideId}:${departureTime}:${extra ? DepartureSource.EXTRA : DepartureSource.SCHEDULE}`;
-    const departureByKey = new Map(
-      departures.map((departure) => [
-        departureKey(
-          departure.rideId,
-          departure.departureTime,
-          departure.source === DepartureSource.EXTRA
-        ),
-        departure
-      ])
+    const scheduledByTime = new Map(
+      departures
+        .filter((departure) => departure.source === DepartureSource.SCHEDULE)
+        .map((departure) => [`${departure.rideId}:${departure.departureTime}`, departure])
+    );
+    const extraByException = new Map(
+      departures
+        .filter((departure) => departure.source === DepartureSource.EXTRA && departure.rideExceptionId)
+        .map((departure) => [departure.rideExceptionId!, departure])
     );
     const departureOf = (instance: (typeof materialized)[number]) =>
-      departureByKey.get(
-        departureKey(instance.rideId, instance.departureTime, instance.source === 'ADDITIONAL')
-      );
+      instance.source === 'ADDITIONAL'
+        ? instance.rideExceptionId
+          ? extraByException.get(instance.rideExceptionId)
+          : undefined
+        : scheduledByTime.get(`${instance.rideId}:${instance.departureTime}`);
 
     // A date the departure window does not reach yet has no stored departure:
     // its instances keep the ride's capacity and count the time copies.
@@ -561,6 +566,22 @@ export class RidesService {
       ])
     );
 
+    // The ID old tabs key and select an instance by. Two extras at one time
+    // (#27, PR 4c) would share it, so theirs also name their ADDITIONAL; every
+    // other instance keeps the ID it always had, and links to it still work.
+    const baseIdOf = (instance: (typeof materialized)[number]) =>
+      `${instance.rideId}:${instance.date}:${instance.departureTime}:${instance.source}`;
+    const baseIdCounts = new Map<string, number>();
+
+    for (const instance of materialized) {
+      baseIdCounts.set(baseIdOf(instance), (baseIdCounts.get(baseIdOf(instance)) ?? 0) + 1);
+    }
+
+    const instanceIdOf = (instance: (typeof materialized)[number]) =>
+      (baseIdCounts.get(baseIdOf(instance)) ?? 0) > 1 && instance.rideExceptionId
+        ? `${baseIdOf(instance)}:${instance.rideExceptionId}`
+        : baseIdOf(instance);
+
     const items = materialized.map((instance) => {
       const departure = departureOf(instance);
       const capacity = departure?.capacity ?? instance.capacity;
@@ -570,7 +591,7 @@ export class RidesService {
       const availableSeats = Math.max(capacity - reservationCount, 0);
 
       return {
-        id: `${instance.rideId}:${instance.date}:${instance.departureTime}:${instance.source}`,
+        id: instanceIdOf(instance),
         rideId: instance.rideId,
         date: instance.date,
         departureTime: instance.departureTime,
@@ -1383,6 +1404,7 @@ export class RidesService {
         departureTime: times.departureTime,
         arrivalTime: times.arrivalTime,
         source: times.source,
+        rideExceptionId: times.rideExceptionId,
         rideType: ride.type,
         status: ride.status,
         capacity: ride.capacity,

@@ -173,7 +173,11 @@ export class RideInstanceAvailabilitySummaryDto {
 }
 
 export class RideInstanceResponseDto {
-  @ApiProperty({ example: 'ride-1:2026-03-30:09:00:BASE' })
+  @ApiProperty({
+    example: 'ride-1:2026-03-30:09:00:BASE',
+    description:
+      'rideId:date:departureTime:source, unique within the response. Two extra buses at one time also end in their exception ID.'
+  })
   id!: string;
 
   @ApiProperty({ example: 'ride-1' })

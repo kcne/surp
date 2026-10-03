@@ -5,6 +5,7 @@
  * Backend API for SURP, providing tenant-scoped authentication, operational health endpoints, and secure session management for transportation workflows. Protected endpoints require BOTH Authorization: Bearer <accessToken> and X-Tenant-Slug headers (except /platform/* routes), and the tenant must match the token claim.
  * OpenAPI spec version: 0.1.0
  */
+import type { DeparturesControllerListCancelled } from './departuresControllerListCancelled';
 
 export type DeparturesControllerListParams = {
 /**
@@ -12,7 +13,7 @@ export type DeparturesControllerListParams = {
  */
 from: string;
 /**
- * Last service date, included. The range covers at most 62 days, both ends included.
+ * Last service date, included. The range covers at most 62 days, both ends included, or 366 with cancelled=true.
  */
 to: string;
 /**
@@ -23,4 +24,8 @@ rideId?: string;
  * Only departures on this line.
  */
 lineId?: string;
+/**
+ * Only departures an operator cancelled, LEGACY ones left out: the few the cancelled-departures page restores from. The range may then cover up to 366 days.
+ */
+cancelled?: DeparturesControllerListCancelled;
 };

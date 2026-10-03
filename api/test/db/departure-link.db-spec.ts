@@ -126,8 +126,7 @@ describe('departure links (real database)', () => {
     expect(reservation.departureId).toBe(departure.id);
   });
 
-  it('refuses an old tab when an extra bus stored before PR 3a leaves at the same time, and books either by departureId', async () => {
-    // The endpoint refuses a new same-time extra, so this is one already stored.
+  it('refuses an old tab when an extra bus leaves at the same time, and books either by departureId', async () => {
     const extraId = await prisma.$transaction(async (tx) => {
       const exception = await tx.rideException.create({
         data: {
@@ -149,8 +148,7 @@ describe('departure links (real database)', () => {
           serviceDate: new Date(seeded.travelDate),
           departureTime: '09:00',
           arrivalTime: '11:00'
-        },
-        { allowSameTime: true }
+        }
       );
 
       return (await tx.departure.findFirstOrThrow({
@@ -161,7 +159,7 @@ describe('departure links (real database)', () => {
     expect(await departuresOnTravelDate()).toHaveLength(2);
 
     await expect(book(1)).rejects.toMatchObject({
-      response: { code: 'DEPARTURE_NOT_FOUND' }
+      response: { code: 'DEPARTURE_NOT_FOUND', message: expect.stringContaining('vise polazaka u 09:00') }
     });
 
     const onExtra = await book(1, '09:00', '11:00', extraId);

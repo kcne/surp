@@ -108,8 +108,7 @@ describe('diffDepartures', () => {
       creates: [],
       updates: [],
       drops: [],
-      deletes: [],
-      conflicts: []
+      deletes: []
     });
   });
 
@@ -248,23 +247,25 @@ describe('diffDepartures', () => {
     expect(diff([ride()], [orphan]).updates).toEqual([]);
   });
 
-  it("reports a timetable departure it would write at an extra's time", () => {
+  it("writes a timetable departure at an extra's time, and keeps both (PR 4c)", () => {
     const atNine = extra({
       departureTime: '09:00',
       stops: linePathStops(ride(), '09:00', '17:00')
     });
 
-    expect(diff([ride()], [atNine]).conflicts).toEqual([
-      expect.objectContaining({ extraId: 'extra-1', create: true })
+    expect(diff([ride()], [atNine]).creates).toEqual([
+      expect.objectContaining({ source: 'SCHEDULE', departureTime: '09:00' })
     ]);
 
     const movedOnto = diff([ride()], [stored({ departureTime: '08:00' }), atNine]);
-    expect(movedOnto.conflicts).toEqual([
-      expect.objectContaining({ extraId: 'extra-1', create: false })
+    expect(movedOnto.updates).toEqual([
+      expect.objectContaining({ fields: expect.arrayContaining(['departureTime']) })
     ]);
+    expect(movedOnto.drops).toEqual([]);
+    expect(movedOnto.deletes).toEqual([]);
   });
 
-  it('does not report a same-time pair that is already stored', () => {
+  it('leaves a same-time pair that is already stored as it is', () => {
     const atNine = extra({
       departureTime: '09:00',
       stops: linePathStops(ride(), '09:00', '17:00')
@@ -274,7 +275,6 @@ describe('diffDepartures', () => {
 
     // The extra keeps its own capacity.
     expect(plan.updates.map((update) => update.fields)).toEqual([['capacity']]);
-    expect(plan.conflicts).toEqual([]);
   });
 
   describe('decisions stored only as an exception row', () => {
@@ -328,11 +328,10 @@ describe('diffDepartures', () => {
       ).toEqual([]);
     });
 
-    it('does not count an extra it creates at the timetable time as a conflict', () => {
+    it('creates an extra at the timetable time next to the timetable departure', () => {
       const plan = diff([ride()], [], [additional({ departureTime: '09:00' })]);
 
       expect(plan.creates.map((created) => created.source)).toEqual(['SCHEDULE', 'EXTRA']);
-      expect(plan.conflicts).toEqual([]);
     });
   });
 });

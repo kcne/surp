@@ -6,9 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type DepartureTimeTakenDtoCode = typeof DepartureTimeTakenDtoCode[keyof typeof DepartureTimeTakenDtoCode];
+export type DeparturesControllerListCancelled = typeof DeparturesControllerListCancelled[keyof typeof DeparturesControllerListCancelled];
 
 
-export const DepartureTimeTakenDtoCode = {
-  DEPARTURE_TIME_TAKEN: 'DEPARTURE_TIME_TAKEN',
+export const DeparturesControllerListCancelled = {
+  true: 'true',
 } as const;

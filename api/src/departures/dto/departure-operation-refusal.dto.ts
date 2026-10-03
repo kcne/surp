@@ -7,6 +7,7 @@ export class DepartureOperationRefusalDto {
       'DEPARTURE_LEGACY',
       'DEPARTURE_ALREADY_CANCELLED',
       'DEPARTURE_NOT_CANCELLED',
+      'DEPARTURE_DROPPED',
       'DEPARTURE_NOT_EXTRA',
       'DEPARTURE_HAS_RESERVATIONS'
     ]

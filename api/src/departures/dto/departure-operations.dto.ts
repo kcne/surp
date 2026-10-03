@@ -24,7 +24,7 @@ export class CreateExtraDepartureDto {
 
   @ApiProperty({
     example: '15:00',
-    description: 'Time at the first stop. No other departure of the ride that day may have it.'
+    description: 'Time at the first stop. Another bus of the ride may leave at the same time that day.'
   })
   @Matches(TIME_PATTERN, { message: 'departureTime must be in HH:mm format' })
   departureTime!: string;

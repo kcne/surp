@@ -119,6 +119,28 @@ describe('reservation.arrivalTimeCurrent', () => {
     expect(scan.items).toEqual([]);
   });
 
+  // Two buses at 07:30 (#27, PR 4c) arrive at different times. An unlinked
+  // row could be on either, so neither arrival is copied onto it;
+  // reservation.departureLinked lists it.
+  it('copies no arrival onto an unlinked reservation two buses share the time of', async () => {
+    prismaMock.ride.findMany.mockResolvedValue([
+      {
+        ...ride,
+        exceptions: [
+          { exceptionDate: travelDate, type: 'ADDITIONAL', departureTime: '07:30', arrivalTime: '23:00' }
+        ]
+      }
+    ]);
+    prismaMock.reservation.findMany.mockResolvedValue([
+      reservation({ id: 'res-extra', rideArrivalTime: '23:00' }),
+      reservation({ id: 'res-stale', rideArrivalTime: '21:00' })
+    ]);
+
+    const scan = await scanForStaleArrivalTimes(ctx);
+
+    expect(scan.items).toEqual([]);
+  });
+
   it('reports the stale copy as a warning the agency can act on', async () => {
     prismaMock.reservation.findMany.mockResolvedValue([reservation()]);
 

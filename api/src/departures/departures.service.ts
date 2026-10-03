@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, ReservationStatus } from '@prisma/client';
+import { DepartureSource, Prisma, ReservationStatus } from '@prisma/client';
 import { AccessTokenPayload } from '../auth/auth.types';
 import { consentFrom } from '../invariants/dto/confirm-breaking-change.dto';
 import {
@@ -39,6 +39,13 @@ import { ListDeparturesQueryDto } from './dto/list-departures.query.dto';
 
 /** The longest range one list request covers, both ends counted. */
 export const DEPARTURE_LIST_MAX_DAYS = 62;
+
+/**
+ * The range for cancelled departures only: the agency's today to +365, in one
+ * request. What comes back is bounded by operator decisions, not by the
+ * timetable, so the 62-day cap on a full read is not needed.
+ */
+export const CANCELLED_DEPARTURE_LIST_MAX_DAYS = 366;
 
 const DEPARTURE_SELECT = {
   id: true,
@@ -108,8 +115,11 @@ export class DeparturesService {
       throw new BadRequestException('to must not be before from');
     }
 
-    if ((to.getTime() - from.getTime()) / DAY_MS + 1 > DEPARTURE_LIST_MAX_DAYS) {
-      throw new BadRequestException(`A range covers at most ${DEPARTURE_LIST_MAX_DAYS} days`);
+    const cancelledOnly = query.cancelled === 'true';
+    const maxDays = cancelledOnly ? CANCELLED_DEPARTURE_LIST_MAX_DAYS : DEPARTURE_LIST_MAX_DAYS;
+
+    if ((to.getTime() - from.getTime()) / DAY_MS + 1 > maxDays) {
+      throw new BadRequestException(`A range covers at most ${maxDays} days`);
     }
 
     const rows = await this.prisma.departure.findMany({
@@ -117,7 +127,10 @@ export class DeparturesService {
         tenantId: auth.tenantId,
         serviceDate: { gte: from, lte: to },
         ...(query.rideId ? { rideId: query.rideId } : {}),
-        ...(query.lineId ? { lineId: query.lineId } : {})
+        ...(query.lineId ? { lineId: query.lineId } : {}),
+        ...(cancelledOnly
+          ? { cancelledAt: { not: null }, source: { not: DepartureSource.LEGACY } }
+          : {})
       },
       select: DEPARTURE_SELECT,
       orderBy: [{ serviceDate: 'asc' }, { departureTime: 'asc' }, { id: 'asc' }]

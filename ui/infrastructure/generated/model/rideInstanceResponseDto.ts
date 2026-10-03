@@ -12,6 +12,7 @@ import type { RideInstanceResponseDtoSource } from './rideInstanceResponseDtoSou
 import type { RideInstanceResponseDtoStatus } from './rideInstanceResponseDtoStatus';
 
 export interface RideInstanceResponseDto {
+  /** rideId:date:departureTime:source, unique within the response. Two extra buses at one time also end in their exception ID. */
   id: string;
   rideId: string;
   date: string;

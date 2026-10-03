@@ -774,16 +774,13 @@ function createLegacyDeparture(
   });
 }
 
-/**
- * An extra bus, stored before PR 3a when it shares the timetable bus's time:
- * the endpoints refuse a new same-time pair, but the ones already stored stay.
- */
+/** An extra bus, which may share the timetable bus's time since PR 4c. */
 function createExtraBus(
   tx: Prisma.TransactionClient,
   state: FixtureState,
   { id, departureTime }: { id: string; departureTime: string }
 ) {
-  return addExtra(tx, state, { id, departureTime, allowSameTime: true });
+  return addExtra(tx, state, { id, departureTime });
 }
 
 function exceptionRow(state: FixtureState, id: string, exceptionDate: Date = state.travelDate) {
@@ -825,11 +822,7 @@ async function skipDate(
 async function addExtra(
   tx: Prisma.TransactionClient,
   state: FixtureState,
-  {
-    id,
-    departureTime,
-    allowSameTime = false
-  }: { id: string; departureTime: string; allowSameTime?: boolean }
+  { id, departureTime }: { id: string; departureTime: string }
 ) {
   const arrivalTime = departureTime === '12:00' ? '14:00' : '17:00';
   await tx.rideException.create({
@@ -844,8 +837,7 @@ async function addExtra(
   return insertExtraDeparture(
     tx,
     decisionOf(state),
-    { rideExceptionId: fixtureId(id), serviceDate: state.travelDate, departureTime, arrivalTime },
-    { allowSameTime }
+    { rideExceptionId: fixtureId(id), serviceDate: state.travelDate, departureTime, arrivalTime }
   );
 }
 

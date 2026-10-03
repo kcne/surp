@@ -116,7 +116,13 @@ describe('OpenAPI contract', () => {
     const query = (list?.parameters ?? []).flatMap((parameter) =>
       '$ref' in parameter === false && parameter.in === 'query' ? [[parameter.name, parameter.required]] : []
     );
-    expect(Object.fromEntries(query)).toEqual({ from: true, to: true, rideId: false, lineId: false });
+    expect(Object.fromEntries(query)).toEqual({
+      from: true,
+      to: true,
+      rideId: false,
+      lineId: false,
+      cancelled: false
+    });
     expect(list?.responses['400']).toBeDefined();
     expect(detail?.responses['404']).toBeDefined();
   });
@@ -131,9 +137,15 @@ describe('OpenAPI contract', () => {
     for (const operation of [create, cancel, restore, update, remove]) {
       expect(operation?.security?.some((entry) => 'access-token' in entry)).toBe(true);
       expect(operation?.responses['400']).toBeDefined();
-      expect(operation?.responses['409']).toBeDefined();
       expect(operation?.responses['403']).toBeDefined();
     }
+    for (const operation of [cancel, restore, update, remove]) {
+      expect(operation?.responses['409']).toBeDefined();
+    }
+    // An extra bus may share its time with another bus since #27 PR 4c, so
+    // adding one has nothing left to refuse with 409.
+    expect(create?.responses['409']).toBeUndefined();
+    expect(JSON.stringify(document)).not.toContain('DEPARTURE_TIME_TAKEN');
 
     expect(create?.responses['201']).toBeDefined();
     expect(create?.responses['404']).toBeDefined();
@@ -150,18 +162,23 @@ describe('OpenAPI contract', () => {
     expect(bodyRef(update)).toBe('#/components/schemas/UpdateExtraDepartureDto');
 
     const stateRef = '#/components/schemas/DepartureOperationRefusalDto';
-    for (const operation of [cancel, restore, update]) {
+    for (const operation of [cancel, restore, update, remove]) {
       const response = operation!.responses['409']!;
       if ('$ref' in response) throw new Error('Expected inline response');
       const schema = response.content!['application/json'].schema!;
-      if ('$ref' in schema) throw new Error('Expected all refusal variants');
-      expect(schema.oneOf).toContainEqual({ $ref: stateRef });
+      const variants = '$ref' in schema ? [schema] : schema.oneOf;
+      expect(variants).toContainEqual({ $ref: stateRef });
     }
     const states = document.components!.schemas!.DepartureOperationRefusalDto;
     if ('$ref' in states) throw new Error('Expected inline schema');
     expect(states.required).toEqual(expect.arrayContaining(['code', 'message']));
     expect(states.properties!.code).toMatchObject({
-      enum: expect.arrayContaining(['DEPARTURE_ALREADY_CANCELLED', 'DEPARTURE_NOT_CANCELLED', 'DEPARTURE_HAS_RESERVATIONS'])
+      enum: expect.arrayContaining([
+        'DEPARTURE_ALREADY_CANCELLED',
+        'DEPARTURE_NOT_CANCELLED',
+        'DEPARTURE_DROPPED',
+        'DEPARTURE_HAS_RESERVATIONS'
+      ])
     });
   });
 

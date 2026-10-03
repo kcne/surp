@@ -692,6 +692,7 @@ describe('RidesService', () => {
         ],
         exceptions: [
           {
+            id: 'exc-1',
             exceptionDate: new Date('2026-03-30T00:00:00.000Z'),
             type: RideExceptionType.ADDITIONAL,
             departureTime: '13:00',
@@ -714,7 +715,7 @@ describe('RidesService', () => {
     // A stored departure gives the capacity and the count, by departureId:
     // the time copies' 30 are not read.
     prismaMock.departure.findMany.mockResolvedValue([
-      { rideId: 'ride-1', departureTime: '13:00', source: 'EXTRA', capacity: 60, _count: { reservations: 48 } }
+      { rideId: 'ride-1', departureTime: '13:00', source: 'EXTRA', capacity: 60, rideExceptionId: 'exc-1', _count: { reservations: 48 } }
     ]);
     prismaMock.reservation.groupBy.mockClear();
     prismaMock.reservation.groupBy.mockResolvedValue([
@@ -740,6 +741,7 @@ describe('RidesService', () => {
         departureTime: true,
         source: true,
         capacity: true,
+        rideExceptionId: true,
         _count: { select: { reservations: { where: { status: 'ACTIVE' } } } }
       }
     });
@@ -753,9 +755,8 @@ describe('RidesService', () => {
 
   });
 
-  it('counts a same-time timetable bus and extra on their own departures (#27, PR 4a)', async () => {
-    // A pair stored before PR 3c refused one: Tuesday's 09:00 bus and an extra
-    // at 09:00 the same day.
+  it('counts same-time buses on their own departures, pairing extras by exception (#27, PRs 4a and 4c)', async () => {
+    // Tuesday's 09:00 bus and two extras at 09:00 the same day.
     prismaMock.ride.findMany.mockResolvedValue([
       {
         id: 'ride-1',
@@ -788,6 +789,14 @@ describe('RidesService', () => {
         ],
         exceptions: [
           {
+            id: 'exc-1',
+            exceptionDate: new Date('2026-03-31T00:00:00.000Z'),
+            type: RideExceptionType.ADDITIONAL,
+            departureTime: '09:00',
+            arrivalTime: '10:30'
+          },
+          {
+            id: 'exc-2',
             exceptionDate: new Date('2026-03-31T00:00:00.000Z'),
             type: RideExceptionType.ADDITIONAL,
             departureTime: '09:00',
@@ -797,8 +806,9 @@ describe('RidesService', () => {
       }
     ]);
     prismaMock.departure.findMany.mockResolvedValue([
-      { rideId: 'ride-1', departureTime: '09:00', source: 'SCHEDULE', capacity: 38, _count: { reservations: 10 } },
-      { rideId: 'ride-1', departureTime: '09:00', source: 'EXTRA', capacity: 20, _count: { reservations: 3 } }
+      { rideId: 'ride-1', departureTime: '09:00', source: 'SCHEDULE', capacity: 38, rideExceptionId: null, _count: { reservations: 10 } },
+      { rideId: 'ride-1', departureTime: '09:00', source: 'EXTRA', capacity: 20, rideExceptionId: 'exc-1', _count: { reservations: 3 } },
+      { rideId: 'ride-1', departureTime: '09:00', source: 'EXTRA', capacity: 30, rideExceptionId: 'exc-2', _count: { reservations: 7 } }
     ]);
 
     const result = await service.listInstancesByDate(auth, { date: '2026-03-31' });
@@ -808,10 +818,18 @@ describe('RidesService', () => {
     ).toEqual(
       expect.arrayContaining([
         ['BASE', 38, 10],
-        ['ADDITIONAL', 20, 3]
+        ['ADDITIONAL', 20, 3],
+        ['ADDITIONAL', 30, 7]
       ])
     );
-    expect(result.items).toHaveLength(2);
+    expect(result.items).toHaveLength(3);
+    // Old tabs key and select by ID: the two extras keep apart, and the
+    // timetable bus keeps the ID links to it already carry.
+    expect(result.items.map((item) => item.id).sort()).toEqual([
+      'ride-1:2026-03-31:09:00:ADDITIONAL:exc-1',
+      'ride-1:2026-03-31:09:00:ADDITIONAL:exc-2',
+      'ride-1:2026-03-31:09:00:BASE'
+    ]);
   });
 
   it('computes availability from active reservations for matching ride instance', async () => {
@@ -1244,6 +1262,8 @@ describe('RidesService', () => {
             findMany: jest.fn().mockResolvedValue([
               {
                 id: 'departure-1',
+                rideId: 'ride-1',
+                serviceDate: travelDate,
                 source: 'SCHEDULE',
                 departureTime: '10:00',
                 arrivalTime: '11:30',

@@ -1,18 +1,16 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { DepartureSource, Prisma, RideExceptionType, RideStatus } from '@prisma/client';
+import { DepartureSource, Prisma, RideExceptionType } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { formatDateOnly, utcDateOf } from '../rides/ride-instance-materialization';
 import { DepartureWindow, departureWindow, resolveAgencyTimezone } from './agency-date';
-import { GeneratorRide, generateDepartures, planExtra } from './departure-generator';
-import { LINKABLE_SOURCES } from './departure-link';
+import { GeneratorRide, planExtra } from './departure-generator';
 import {
   departureUpdate,
   extraDropped,
   insertPlannedDepartures,
   loadRides,
   loadStoredDeparture,
-  sameTimeRefusal,
   updateDepartures
 } from './departure-sync';
 
@@ -103,6 +101,7 @@ export const OPERATED_DEPARTURE_SELECT = {
   arrivalTime: true,
   capacity: true,
   cancelledAt: true,
+  timetableDroppedAt: true,
   rideExceptionId: true,
   _count: { select: { reservations: true } }
 } as const satisfies Prisma.DepartureSelect;
@@ -159,6 +158,17 @@ export function assertOperable(
     throw new ConflictException({ code: 'DEPARTURE_NOT_CANCELLED', message: 'Polazak nije otkazan.' });
   }
 
+  // Restored, it would still not run: its ride or line is inactive, or the
+  // timetable no longer has that day. It stays cancelled, so it comes back
+  // to this list once the timetable makes it again (the sync clears the mark).
+  if (operation === 'restore' && departure.timetableDroppedAt) {
+    throw new ConflictException({
+      code: 'DEPARTURE_DROPPED',
+      message:
+        'Polazak se ne moze vratiti jer ga red voznje trenutno ne pravi: voznja ili linija ne saobraca, ili taj dan vise nije u rasporedu. Kada voznja ponovo saobraca tog dana, vratite polazak ovde.'
+    });
+  }
+
   if (
     (operation === 'editExtra' || operation === 'deleteExtra') &&
     departure.source !== DepartureSource.EXTRA
@@ -175,73 +185,6 @@ export function assertOperable(
       message:
         'Na ovom dodatnom polasku postoje rezervacije, ukljucujuci i otkazane, pa se ne moze obrisati. Otkazite ga umesto toga.'
     });
-  }
-}
-
-/**
- * Refuses a departure time another departure of the ride already has that day
- * (until PR 4, a booking from the UI names its bus by that time). Cancelled
- * departures count: their passengers stay on them. So does an ADDITIONAL
- * other than the extra's own, stored extra or not: the ride screen and
- * `/rides/instances` would show it as a second bus at that time.
- *
- * With no timetable departure stored, the one the timetable would write
- * counts: the newest day between the agency's midnight and the nightly job,
- * or any day of a ride that does not run yet. Read as if the ride ran, so
- * activating it later cannot put its bus on this extra's time.
- */
-async function assertDepartureTimeFree(
-  tx: Tx,
-  scope: DecisionScope,
-  ride: GeneratorRide,
-  serviceDate: Date,
-  departureTime: string,
-  {
-    exceptDepartureId,
-    exceptExceptionId
-  }: { exceptDepartureId?: string; exceptExceptionId?: string | null } = {}
-): Promise<void> {
-  const day = formatDateOnly(serviceDate)!;
-  const stored = await tx.departure.findMany({
-    where: {
-      tenantId: scope.tenantId,
-      rideId: scope.rideId,
-      serviceDate,
-      source: { in: [...LINKABLE_SOURCES] },
-      ...(exceptDepartureId ? { id: { not: exceptDepartureId } } : {})
-    },
-    select: { source: true, departureTime: true, cancelledAt: true }
-  });
-  const coming = stored.some((departure) => departure.source === DepartureSource.SCHEDULE)
-    ? []
-    : generateDepartures([asRunning(ride)], day, day).map((departure) => ({
-        source: departure.source,
-        departureTime: departure.departureTime,
-        cancelledAt: null
-      }));
-  const clash = [...stored, ...coming].find(
-    (departure) => departure.departureTime === departureTime
-  );
-  const additional = await tx.rideException.findFirst({
-    where: {
-      tenantId: scope.tenantId,
-      rideId: scope.rideId,
-      exceptionDate: serviceDate,
-      type: RideExceptionType.ADDITIONAL,
-      departureTime,
-      ...(exceptExceptionId ? { id: { not: exceptExceptionId } } : {})
-    },
-    select: { id: true }
-  });
-
-  if (clash || additional) {
-    throw sameTimeRefusal(
-      { serviceDate: day, departureTime },
-      {
-        cancelledExtra:
-          clash?.source === DepartureSource.EXTRA && clash.cancelledAt !== null
-      }
-    );
   }
 }
 
@@ -434,8 +377,8 @@ async function releaseAdditional(tx: Tx, departure: OperatedDeparture): Promise<
 
 /**
  * Brings a cancelled departure back. A timetable departure loses its date's
- * SKIP. An extra gets an ADDITIONAL again, at its own times, and must not
- * share its departure time with another departure of the ride that day.
+ * SKIP. An extra gets an ADDITIONAL again, at its own times. Since PR 4c it
+ * may share its departure time with another bus of the ride that day.
  */
 export async function restoreDeparture(
   tx: Tx,
@@ -450,15 +393,6 @@ export async function restoreDeparture(
 
     return;
   }
-
-  await assertDepartureTimeFree(
-    tx,
-    scope,
-    await loadRide(tx, scope),
-    departure.serviceDate,
-    departure.departureTime,
-    { exceptDepartureId: departure.id }
-  );
 
   const exception = await tx.rideException.create({
     data: withCreateAudit(
@@ -498,25 +432,16 @@ export interface ExtraDecision {
 /**
  * Inserts the extra bus an ADDITIONAL adds, with the whole line path. On a
  * ride that does not run it is inserted already dropped, and comes back with
- * the ride.
- *
- * `allowSameTime` is for fixtures that stand for a pair stored before PR 3a;
- * every request is refused one.
+ * the ride. It may leave at the same time as another bus of the ride that
+ * day (PR 4c): bookings name their bus by `departureId`.
  */
 export async function insertExtraDeparture(
   tx: Tx,
   scope: DecisionScope,
   extra: ExtraDecision,
-  { now = new Date(), allowSameTime = false }: { now?: Date; allowSameTime?: boolean } = {}
+  { now = new Date() }: { now?: Date } = {}
 ): Promise<{ id: string }> {
   const ride = await loadRide(tx, scope);
-
-  if (!allowSameTime) {
-    await assertDepartureTimeFree(tx, scope, ride, extra.serviceDate, extra.departureTime, {
-      exceptExceptionId: extra.rideExceptionId
-    });
-  }
-
   const { departure, dropped } = planExtra(ride, {
     keyId: extra.rideExceptionId,
     serviceDate: formatDateOnly(extra.serviceDate)!,
@@ -537,11 +462,11 @@ export async function insertExtraDeparture(
 
 /**
  * Carries a ride's capacity edit to its extras that are still at the old
- * capacity. Until PR 4 the ride screen adds an extra through an ADDITIONAL,
- * which copies the ride's capacity, and gives nobody a way to change it, so
- * such an extra follows its ride as it did before PR 3d. An extra an operator
- * resized keeps its own. One set to exactly its ride's capacity cannot be
- * told apart and follows too.
+ * capacity. An extra added through an ADDITIONAL copies the ride's capacity,
+ * and so does one added from the schedule page (PR 4c) unless the operator
+ * changes it, so such an extra follows its ride as it did before PR 3d. An
+ * extra an operator resized keeps its own. One set to exactly its ride's
+ * capacity cannot be told apart and follows too.
  *
  * Past dates are the record of what ran and stay as they are. The caller's
  * guard asks before the new capacity strands a sold seat.
@@ -567,10 +492,6 @@ export async function followRideCapacity(
     },
     data: { capacity: to, updatedById: scope.actorId }
   });
-}
-
-function asRunning(ride: GeneratorRide): GeneratorRide {
-  return { ...ride, status: RideStatus.ACTIVE, line: { ...ride.line, isActive: true } };
 }
 
 export interface NewExtra {
@@ -652,16 +573,9 @@ export async function updateExtra(
     return;
   }
 
-  // Read only for a move: the stops and the same-time refusal need the ride,
-  // and a capacity edit needs neither while bookings wait on the lock.
+  // Read only for a move: the stops need the ride, and a capacity edit does
+  // not while bookings wait on the lock.
   const ride = await loadRide(tx, scope);
-
-  if (departureTime !== departure.departureTime) {
-    await assertDepartureTimeFree(tx, scope, ride, departure.serviceDate, departureTime, {
-      exceptDepartureId: departure.id,
-      exceptExceptionId: departure.rideExceptionId
-    });
-  }
 
   // Written by the sync's own update writer, so the stops and the time copies
   // its reservations carry follow an operator's move by the same rules as a
