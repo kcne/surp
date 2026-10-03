@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRideInstanceSeatMapPage } from "@/hooks/useRideInstanceSeatMapPage"
 import { formatDateDisplay } from "@/utils/dateHelpers"
+import { reservationsListHref } from "@/utils/reservationsDateParam"
 
 export default function SeatMapPage() {
   const params = useParams<{ rideInstanceId: string }>()
@@ -118,12 +119,16 @@ export default function SeatMapPage() {
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="/reservations">Rezervacije</BreadcrumbLink>
+              <BreadcrumbLink asChild>
+                <Link href={reservationsListHref(selectedDate)}>Rezervacije</Link>
+              </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbLink href="/reservations">
-                {selectedDate ? formatDateDisplay(selectedDate) : "Datum"}
+              <BreadcrumbLink asChild>
+                <Link href={reservationsListHref(selectedDate)}>
+                  {selectedDate ? formatDateDisplay(selectedDate) : "Datum"}
+                </Link>
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
