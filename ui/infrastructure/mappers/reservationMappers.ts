@@ -96,12 +96,22 @@ export function toReservation(
   }
 }
 
+/**
+ * A booking names its bus by `departureId` (#27, PR 4b). The ride, date and
+ * times sent with it are the departure's own, so the API refuses the booking
+ * with DEPARTURE_CHANGED if the bus moved after the page loaded.
+ */
 export function toCreateReservationDto(
   data: ReservationFormData,
   rideInstance: RideInstance
 ): CreateReservationDto {
+  if (!rideInstance.departureId) {
+    throw new Error("Polazak nije ucitan. Osvezite stranicu i izaberite polazak ponovo.")
+  }
+
   const trimmedNotes = data.notes?.trim()
   return {
+    departureId: rideInstance.departureId,
     rideId: rideInstance.rideId,
     passengerId: data.passengerId,
     travelDate: rideInstance.date,

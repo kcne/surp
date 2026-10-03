@@ -61,6 +61,7 @@ export function toDepartureInstance(departure: DepartureResponseDto, ride?: Ride
 
   return {
     id: departure.id,
+    departureId: departure.id,
     source: departure.source === "EXTRA" ? "ADDITIONAL" : "BASE",
     rideId: departure.rideId,
     ride: { ...baseRide, busCapacity: departure.capacity },
