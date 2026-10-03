@@ -1,193 +1,88 @@
+<div align="center">
+
+<img src="ui/public/logo.jpg" alt="SURP" width="96" />
+
 # SURP
 
-System for Unified Ride Processing.
+**Reservation and dispatch software for intercity bus agencies.**
 
-SURP is a full-stack ride operations platform with:
+[Website](https://surp.rs) · [Deployment](docs/deployment.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-- `api/`: NestJS + Prisma backend
-- `ui/`: Next.js frontend
+[![Backend CI](https://github.com/kcne/surp/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/kcne/surp/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/kcne/surp/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/kcne/surp/actions/workflows/frontend-ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Features
+</div>
 
-- Tenant-scoped backend architecture
-- JWT-based authentication and session handling
-- Health and readiness endpoints
-- Modular frontend for lines, stations, passengers, rides, and reservations
+[![Watch the SURP demo](ui/public/marketing/demo-poster.jpg)](https://media.surp.rs/presentation-site.mp4)
 
-## Tech Stack
+<p align="center"><sub>Click to watch the product demo.</sub></p>
 
-- Backend: NestJS, Prisma, PostgreSQL
-- Frontend: Next.js, TypeScript, Tailwind CSS
-- Tooling: pnpm, Docker, Jest
+## About
 
-## Getting Started
+SURP runs the daily work of a bus agency: timetables, bookings, passenger
+lists, and the departures that actually leave. It is in production with
+agencies in Serbia, so the on-screen UI is in Serbian; code and docs are in
+English.
 
-### Prerequisites
+- **Reservations** — book one-way and return trips against a specific departure
+- **Schedule and dispatch** — lines, stations, timetables, cancelled and extra buses
+- **Passengers** — passenger records and passenger lists per departure
+- **Online booking** — a public storefront each agency can turn on
+- **Multi-tenant** — every agency's data is isolated; one platform admin oversees all
 
-- Node.js 20+
-- pnpm 10+
-- Docker + Docker Compose
+## Quick start
 
-### 1. Install dependencies
-
-```bash
-cd api && pnpm install
-cd ../ui && pnpm install
-```
-
-### 2. Start backend database
+Requires Node.js 20+, pnpm 10+, and Docker.
 
 ```bash
-cd api
-docker compose up -d postgres
+git clone https://github.com/kcne/surp.git && cd surp
+docker compose -f api/docker-compose.yml up -d postgres
 ```
 
-### 3. Configure and run backend
+Start the API on http://localhost:3001 (interactive docs at `/docs`):
 
 ```bash
 cd api
 cp .env.example .env
-pnpm prisma:generate
-pnpm prisma:migrate:deploy
-pnpm prisma:seed
+pnpm install
+pnpm prisma:generate && pnpm prisma:migrate:deploy && pnpm prisma:seed
 pnpm start:dev
 ```
 
-Backend docs: `http://localhost:3001/docs`
-
-### 4. Run frontend
+In a second terminal, start the UI on http://localhost:3000:
 
 ```bash
 cd ui
+pnpm install
 pnpm dev
 ```
 
-Frontend: `http://localhost:3000`
+Sign in with the seeded demo agency account: `admin@demo.local` /
+`demo-admin-pass`.
 
-## Repository Structure
+## Repository layout
 
 ```text
-.
-├── api/    # NestJS backend
-└── ui/     # Next.js frontend
+api/   NestJS + Prisma + PostgreSQL backend, OpenAPI schema in api/docs/
+ui/    Next.js + Tailwind frontend; API client generated from the schema
+ops/   Production jobs: database backup, staging refresh, rollback patches
+docs/  Project documentation
 ```
 
-## Deploy on Railway
+## Documentation
 
-Recommended setup is two Railway services plus one PostgreSQL instance:
-
-1. `api` service (root directory: `api`)
-2. `ui` service (root directory: `ui`)
-3. `postgres` service (Railway PostgreSQL)
-
-If you are only deploying the API from this monorepo, Railway can build directly from the repo root using the top-level `Dockerfile`.
-
-### Monorepo Root Docker Deploy (API only)
-
-1. In Railway, create the API service from this repository.
-2. Keep root directory as repository root (default).
-3. Railway will detect and use the top-level `Dockerfile`.
-4. Add service variables from `.env.railway.example` and set `DATABASE_URL` using Railway Postgres variable reference.
-
-Important:
-
-1. Do not commit real secrets in `.env` files.
-2. Use Railway Variables for production credentials.
-
-### API service settings
-
-Build command:
-
-```bash
-pnpm install --frozen-lockfile && pnpm prisma:generate && pnpm build
-```
-
-Start command:
-
-```bash
-pnpm prisma:migrate:deploy && pnpm start:prod
-```
-
-Required environment variables:
-
-1. `NODE_ENV=production`
-2. `PORT` (provided by Railway)
-3. `DATABASE_URL` (from Railway PostgreSQL)
-4. `JWT_ACCESS_TOKEN_SECRET`
-5. `JWT_ACCESS_TOKEN_TTL_SECONDS=900`
-6. `JWT_REFRESH_TOKEN_TTL_SECONDS=1209600`
-7. `CORS_ALLOWED_ORIGINS=https://<your-ui-domain>`
-8. `RESEND_API_KEY=<resend-api-key>`
-9. `RESEND_FROM="SURP <contact@surp.rs>"`
-10. `EMAIL_TIMEOUT_MS=10000`
-11. `MARKETING_EMAIL_LOGO_URL=https://surp.rs/logo.jpg`
-12. `MARKETING_LEADS_EMAIL_TO=<lead-recipient-email>`
-13. `INVARIANT_SCHEDULE_ENABLED=true` (set to `false` to disable daily checks and alerts)
-14. `BACKUP_FRESHNESS_CHECK_ENABLED=true` (set to `false` only where backup storage is intentionally unavailable)
-15. `BACKUP_S3_ENDPOINT=<backup-bucket-endpoint>` (must be `https://` in production; the signed request carries the backup key)
-16. `BACKUP_S3_REGION=auto`
-17. `BACKUP_S3_BUCKET=<backup-bucket-name>`
-18. `BACKUP_S3_ACCESS_KEY_ID=<read-only-backup-key-id>`
-19. `BACKUP_S3_SECRET_ACCESS_KEY=<read-only-backup-secret>`
-
-Variables 14–19 are production-only. Where there is no backup storage (staging, local), set `BACKUP_FRESHNESS_CHECK_ENABLED=false`; the `BACKUP_S3_*` variables can then be absent or empty. An empty value counts as unset, so a reference to a removed Railway service does not stop the API from booting.
-
-The API backup credentials only need `GetObject` for `latest.json`. Keep them separate from both the backup writer credentials and the ticket-image bucket credentials.
-The invariant job runs daily at 02:00 UTC for every active tenant. Each tenant's run is claimed under a unique `(tenantId, runDate)` row before the checks start, so running the API on more than one replica does not duplicate the run, the BUG ticket or the email.
-
-### UI service settings
-
-Build command:
-
-```bash
-pnpm install --frozen-lockfile && pnpm build
-```
-
-Start command:
-
-```bash
-pnpm start
-```
-
-Required environment variable:
-
-1. `NEXT_PUBLIC_API_URL=https://<your-api-domain>`
-
-Optional SEO and analytics environment variables:
-
-1. `NEXT_PUBLIC_SITE_URL=https://<your-ui-domain>`
-2. `NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX`
-3. `NEXT_PUBLIC_MARKETING_CONTACT_EMAIL=<public-contact-email>`
-
-The homepage renders only a lightweight poster until Play is clicked, then streams `https://media.surp.rs/presentation-site.mp4` from Cloudflare R2. No video environment variable is required. Keep the small poster in the repository; the CDN must serve `Content-Type: video/mp4` and support byte-range requests (`206 Partial Content`) for seeking.
-
-### Railway-native CI/CD model
-
-Use GitHub Actions for verification and Railway for deployment orchestration:
-
-1. Keep Railway auto-deploy enabled for `main` on both `api` and `ui` services.
-2. Use GitHub branch protection to require CI workflows before merging to `main`:
-   - `Backend CI`
-   - `Frontend CI`
-   - `Security CI`
-3. Keep deployment secrets in Railway Variables, not in GitHub deploy-hook secrets.
-4. Use Railway deployment history for rollback and release audit.
-
-This keeps deployment logic in Railway while preserving strict merge-time quality gates in GitHub.
-
-### Post-deploy checks
-
-1. API health endpoint responds: `/health`
-2. API docs endpoint responds: `/docs`
-3. UI can authenticate against API with tenant header flows
-4. CORS allows UI domain and blocks unknown origins
+- [Deployment](docs/deployment.md) — Railway setup and environment variables
+- [Quality gates](api/docs/quality-gates.md) — the checks every PR must pass
+- [Database backup](ops/backup/README.md) and [staging refresh](ops/staging-refresh/README.md)
+- API reference — run the API and open `/docs`
 
 ## Contributing
 
-- Keep changes focused and small.
-- Add tests for new behavior and at least one failure path.
-- Update API docs and Postman collection when endpoints change.
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
+opening a pull request, and report vulnerabilities privately as described in
+[SECURITY.md](SECURITY.md).
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+[MIT](LICENSE)
