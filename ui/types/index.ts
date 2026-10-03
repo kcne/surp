@@ -132,7 +132,6 @@ export type RideFormData = {
   departureTime?: string // Deprecated
   arrivalTime?: string // Deprecated
   daySchedules?: Record<string, DayScheduleStationTime[]> // Map day number (0-6) to station time list
-  exceptions?: RideException[]
   // One-time fields
   date?: string
   oneTimeDepartureTime?: string
