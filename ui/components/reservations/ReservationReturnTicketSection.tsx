@@ -142,6 +142,12 @@ export function ReservationReturnTicketSection({
             </Select>
           </div>
 
+          {selectedReturnRideInstanceId && !selectedReturnRideInstance ? (
+            <p role="alert" className="text-xs text-destructive">
+              Izabrani povratni polazak vise nije dostupan. Izaberite drugi polazak.
+            </p>
+          ) : null}
+
           {selectedReturnRideInstance ? (
             <div className="space-y-1 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
               <p>

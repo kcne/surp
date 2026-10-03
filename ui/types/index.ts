@@ -142,6 +142,12 @@ export type RideFormData = {
 // Ride Instance Types
 export interface RideInstance {
   id: string
+  /**
+   * The stored departure this bus is, sent with every booking (#27, PR 4b).
+   * Only set on a bus read from `/departures`; a bus pieced together from a
+   * reservation's copies has none and cannot be booked.
+   */
+  departureId?: string
   source?: "BASE" | "ADDITIONAL"
   rideId: string
   ride: Ride

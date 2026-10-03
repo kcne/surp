@@ -1,4 +1,4 @@
-import type { DepartureResponseDto } from "@/infrastructure/generated/model"
+import type { DepartureResponseDto, ReservationResponseDto } from "@/infrastructure/generated/model"
 import type { Ride } from "@/types"
 
 export function departure(overrides: Partial<DepartureResponseDto> = {}): DepartureResponseDto {
@@ -48,4 +48,44 @@ export function ride(overrides: Partial<Ride> = {}): Ride {
     },
     ...overrides,
   }
+}
+
+export function reservationResponse(
+  overrides: Partial<ReservationResponseDto> = {}
+): ReservationResponseDto {
+  return {
+    id: "res-1",
+    tenantId: "tenant-1",
+    rideId: "ride-1",
+    departureId: "dep-1" as unknown as ReservationResponseDto["departureId"],
+    passengerId: "pass-1",
+    createdById: null,
+    updatedById: null,
+    travelDate: "2026-10-05",
+    rideDepartureTime: "09:00",
+    rideArrivalTime: "10:30",
+    seatNumber: 1,
+    status: "ACTIVE",
+    cancelledAt: null,
+    departureStationId: "st-ns",
+    arrivalStationId: "st-bg",
+    groupId: null,
+    roundTripId: null,
+    returnOfReservationId: null,
+    notes: null,
+    ride: { id: "ride-1", name: "Novi Sad - Beograd", lineId: "line-1" },
+    passenger: { id: "pass-1", firstName: "Ana", lastName: "Petrovic", phone: "+381601234567" },
+    departureStation: { id: "st-ns", name: "Novi Sad" },
+    arrivalStation: { id: "st-bg", name: "Beograd" },
+    createdAt: "2026-10-01T00:00:00.000Z",
+    updatedAt: "2026-10-01T00:00:00.000Z",
+    ...overrides,
+  }
+}
+
+/** The error the API client throws for a refused booking. */
+export function refusal(code: string, message: string, status = 409) {
+  return Object.assign(new Error(`Request failed with status code ${status}`), {
+    response: { status, data: { code, message } },
+  })
 }
