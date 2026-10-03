@@ -22,13 +22,23 @@ import { toCreateReservationDto } from "@/infrastructure/mappers/reservationMapp
 import type { ReservationFormData } from "@/types"
 
 const outbound = toDepartureInstance(departure({ id: "dep-out" }), ride())
+// The reverse line, so the return leg's Beograd -> Novi Sad is a segment the
+// API's route check would accept.
 const inbound = toDepartureInstance(
   departure({
     id: "dep-back",
     rideId: "ride-2",
+    rideName: "Beograd - Novi Sad",
+    lineId: "line-2",
+    lineName: "Beograd - Novi Sad",
     serviceDate: "2026-10-07",
     departureTime: "17:00",
     arrivalTime: "18:30",
+    stops: [
+      { stationId: "st-bg", stationName: "Beograd", orderIndex: 0, time: "17:00", isBoarding: true, isDropoff: false },
+      { stationId: "st-in", stationName: "Indjija", orderIndex: 1, time: null, isBoarding: true, isDropoff: true },
+      { stationId: "st-ns", stationName: "Novi Sad", orderIndex: 2, time: "18:30", isBoarding: false, isDropoff: true },
+    ],
   })
 )
 
