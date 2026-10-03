@@ -55,7 +55,6 @@ import type {
   DepartureListResponseDto,
   DepartureOperationRefusalDto,
   DepartureResponseDto,
-  DepartureTimeTakenDto,
   DeparturesControllerListParams,
   DomainAuditEventResponseDto,
   InvariantDetailDto,
@@ -282,7 +281,7 @@ export function useDeparturesControllerList<TData = Awaited<ReturnType<typeof de
 
 
 /**
- * @summary Add an extra bus to a ride on one service date. It follows the ride's line and stops; its times and capacity are its own. Until PR 4 it also writes the ride's ADDITIONAL exception, which the ride screen reads.
+ * @summary Add an extra bus to a ride on one service date. It follows the ride's line and stops; its times and capacity are its own. It may leave at the same time as another bus of the ride that day. Until PR 6 it also writes the ride's ADDITIONAL exception.
  */
 export type departuresControllerCreateExtraResponse201 = {
   data: DepartureResponseDto
@@ -309,15 +308,10 @@ export type departuresControllerCreateExtraResponse404 = {
   status: 404
 }
 
-export type departuresControllerCreateExtraResponse409 = {
-  data: DepartureTimeTakenDto
-  status: 409
-}
-
 export type departuresControllerCreateExtraResponseSuccess = (departuresControllerCreateExtraResponse201) & {
   headers: Headers;
 };
-export type departuresControllerCreateExtraResponseError = (departuresControllerCreateExtraResponse400 | departuresControllerCreateExtraResponse401 | departuresControllerCreateExtraResponse403 | departuresControllerCreateExtraResponse404 | departuresControllerCreateExtraResponse409) & {
+export type departuresControllerCreateExtraResponseError = (departuresControllerCreateExtraResponse400 | departuresControllerCreateExtraResponse401 | departuresControllerCreateExtraResponse403 | departuresControllerCreateExtraResponse404) & {
   headers: Headers;
 };
 
@@ -346,7 +340,7 @@ export const departuresControllerCreateExtra = async (createExtraDepartureDto: C
 
 
 
-export const getDeparturesControllerCreateExtraMutationOptions = <TError = ErrorType<void | DepartureTimeTakenDto>,
+export const getDeparturesControllerCreateExtraMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof departuresControllerCreateExtra>>, TError,{data: CreateExtraDepartureDto}, TContext>, request?: SecondParameter<typeof customInstance>}
 ): UseMutationOptions<Awaited<ReturnType<typeof departuresControllerCreateExtra>>, TError,{data: CreateExtraDepartureDto}, TContext> => {
 
@@ -375,12 +369,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeparturesControllerCreateExtraMutationResult = NonNullable<Awaited<ReturnType<typeof departuresControllerCreateExtra>>>
     export type DeparturesControllerCreateExtraMutationBody = CreateExtraDepartureDto
-    export type DeparturesControllerCreateExtraMutationError = ErrorType<void | DepartureTimeTakenDto>
+    export type DeparturesControllerCreateExtraMutationError = ErrorType<void>
 
     /**
- * @summary Add an extra bus to a ride on one service date. It follows the ride's line and stops; its times and capacity are its own. Until PR 4 it also writes the ride's ADDITIONAL exception, which the ride screen reads.
+ * @summary Add an extra bus to a ride on one service date. It follows the ride's line and stops; its times and capacity are its own. It may leave at the same time as another bus of the ride that day. Until PR 6 it also writes the ride's ADDITIONAL exception.
  */
-export const useDeparturesControllerCreateExtra = <TError = ErrorType<void | DepartureTimeTakenDto>,
+export const useDeparturesControllerCreateExtra = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof departuresControllerCreateExtra>>, TError,{data: CreateExtraDepartureDto}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof departuresControllerCreateExtra>>,
@@ -548,7 +542,7 @@ export type departuresControllerUpdateExtraResponse404 = {
 }
 
 export type departuresControllerUpdateExtraResponse409 = {
-  data: WouldBreakReservationsDto | DepartureTimeTakenDto | DepartureOperationRefusalDto
+  data: WouldBreakReservationsDto | DepartureOperationRefusalDto
   status: 409
 }
 
@@ -585,7 +579,7 @@ export const departuresControllerUpdateExtra = async (id: string,
 
 
 
-export const getDeparturesControllerUpdateExtraMutationOptions = <TError = ErrorType<void | WouldBreakReservationsDto | DepartureTimeTakenDto | DepartureOperationRefusalDto>,
+export const getDeparturesControllerUpdateExtraMutationOptions = <TError = ErrorType<void | WouldBreakReservationsDto | DepartureOperationRefusalDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof departuresControllerUpdateExtra>>, TError,{id: string;data: UpdateExtraDepartureDto}, TContext>, request?: SecondParameter<typeof customInstance>}
 ): UseMutationOptions<Awaited<ReturnType<typeof departuresControllerUpdateExtra>>, TError,{id: string;data: UpdateExtraDepartureDto}, TContext> => {
 
@@ -614,12 +608,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeparturesControllerUpdateExtraMutationResult = NonNullable<Awaited<ReturnType<typeof departuresControllerUpdateExtra>>>
     export type DeparturesControllerUpdateExtraMutationBody = UpdateExtraDepartureDto
-    export type DeparturesControllerUpdateExtraMutationError = ErrorType<void | WouldBreakReservationsDto | DepartureTimeTakenDto | DepartureOperationRefusalDto>
+    export type DeparturesControllerUpdateExtraMutationError = ErrorType<void | WouldBreakReservationsDto | DepartureOperationRefusalDto>
 
     /**
  * @summary Change the times or capacity of an extra bus. Its stops, its reservations' time copies and its ADDITIONAL follow the new times. Moving a booked bus, or cutting its seats under a booked seat or a full stretch, is refused with WOULD_BREAK_RESERVATIONS until confirmed.
  */
-export const useDeparturesControllerUpdateExtra = <TError = ErrorType<void | WouldBreakReservationsDto | DepartureTimeTakenDto | DepartureOperationRefusalDto>,
+export const useDeparturesControllerUpdateExtra = <TError = ErrorType<void | WouldBreakReservationsDto | DepartureOperationRefusalDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof departuresControllerUpdateExtra>>, TError,{id: string;data: UpdateExtraDepartureDto}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof departuresControllerUpdateExtra>>,
@@ -740,7 +734,7 @@ export const useDeparturesControllerDeleteExtra = <TError = ErrorType<void | Dep
     }
     
 /**
- * @summary Cancel a departure. Its passengers stay ACTIVE on it. A booked departure is refused with WOULD_BREAK_RESERVATIONS until its confirmationToken is sent back. Until PR 4 a timetable departure also gets its date's SKIP exception, and an extra bus loses its ADDITIONAL.
+ * @summary Cancel a departure. Its passengers stay ACTIVE on it. A booked departure is refused with WOULD_BREAK_RESERVATIONS until its confirmationToken is sent back. Until PR 6 a timetable departure also gets its date's SKIP exception, and an extra bus loses its ADDITIONAL.
  */
 export type departuresControllerCancelResponse200 = {
   data: DepartureResponseDto
@@ -837,7 +831,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type DeparturesControllerCancelMutationError = ErrorType<void | WouldBreakReservationsDto | DepartureOperationRefusalDto>
 
     /**
- * @summary Cancel a departure. Its passengers stay ACTIVE on it. A booked departure is refused with WOULD_BREAK_RESERVATIONS until its confirmationToken is sent back. Until PR 4 a timetable departure also gets its date's SKIP exception, and an extra bus loses its ADDITIONAL.
+ * @summary Cancel a departure. Its passengers stay ACTIVE on it. A booked departure is refused with WOULD_BREAK_RESERVATIONS until its confirmationToken is sent back. Until PR 6 a timetable departure also gets its date's SKIP exception, and an extra bus loses its ADDITIONAL.
  */
 export const useDeparturesControllerCancel = <TError = ErrorType<void | WouldBreakReservationsDto | DepartureOperationRefusalDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof departuresControllerCancel>>, TError,{id: string;data: CancelDepartureDto}, TContext>, request?: SecondParameter<typeof customInstance>}
@@ -851,7 +845,7 @@ export const useDeparturesControllerCancel = <TError = ErrorType<void | WouldBre
     }
     
 /**
- * @summary Bring a cancelled departure back. Until PR 4 a timetable departure loses its date's SKIP exception, and an extra bus gets an ADDITIONAL again.
+ * @summary Bring a cancelled departure back. Until PR 6 a timetable departure loses its date's SKIP exception, and an extra bus gets an ADDITIONAL again.
  */
 export type departuresControllerRestoreResponse200 = {
   data: DepartureResponseDto
@@ -879,7 +873,7 @@ export type departuresControllerRestoreResponse404 = {
 }
 
 export type departuresControllerRestoreResponse409 = {
-  data: DepartureTimeTakenDto | DepartureOperationRefusalDto
+  data: DepartureOperationRefusalDto
   status: 409
 }
 
@@ -914,7 +908,7 @@ export const departuresControllerRestore = async (id: string, options?: RequestI
 
 
 
-export const getDeparturesControllerRestoreMutationOptions = <TError = ErrorType<void | DepartureTimeTakenDto | DepartureOperationRefusalDto>,
+export const getDeparturesControllerRestoreMutationOptions = <TError = ErrorType<void | DepartureOperationRefusalDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof departuresControllerRestore>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customInstance>}
 ): UseMutationOptions<Awaited<ReturnType<typeof departuresControllerRestore>>, TError,{id: string}, TContext> => {
 
@@ -943,12 +937,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeparturesControllerRestoreMutationResult = NonNullable<Awaited<ReturnType<typeof departuresControllerRestore>>>
     
-    export type DeparturesControllerRestoreMutationError = ErrorType<void | DepartureTimeTakenDto | DepartureOperationRefusalDto>
+    export type DeparturesControllerRestoreMutationError = ErrorType<void | DepartureOperationRefusalDto>
 
     /**
- * @summary Bring a cancelled departure back. Until PR 4 a timetable departure loses its date's SKIP exception, and an extra bus gets an ADDITIONAL again.
+ * @summary Bring a cancelled departure back. Until PR 6 a timetable departure loses its date's SKIP exception, and an extra bus gets an ADDITIONAL again.
  */
-export const useDeparturesControllerRestore = <TError = ErrorType<void | DepartureTimeTakenDto | DepartureOperationRefusalDto>,
+export const useDeparturesControllerRestore = <TError = ErrorType<void | DepartureOperationRefusalDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof departuresControllerRestore>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof departuresControllerRestore>>,
@@ -8123,7 +8117,7 @@ export type ridesControllerAddExceptionResponse404 = {
 }
 
 export type ridesControllerAddExceptionResponse409 = {
-  data: WouldBreakReservationsDto | RideExceptionConflictDto | DepartureTimeTakenDto
+  data: WouldBreakReservationsDto | RideExceptionConflictDto
   status: 409
 }
 
@@ -8160,7 +8154,7 @@ export const ridesControllerAddException = async (id: string,
 
 
 
-export const getRidesControllerAddExceptionMutationOptions = <TError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto | DepartureTimeTakenDto>,
+export const getRidesControllerAddExceptionMutationOptions = <TError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerAddException>>, TError,{id: string;data: CreateRideExceptionDto}, TContext>, request?: SecondParameter<typeof customInstance>}
 ): UseMutationOptions<Awaited<ReturnType<typeof ridesControllerAddException>>, TError,{id: string;data: CreateRideExceptionDto}, TContext> => {
 
@@ -8189,12 +8183,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type RidesControllerAddExceptionMutationResult = NonNullable<Awaited<ReturnType<typeof ridesControllerAddException>>>
     export type RidesControllerAddExceptionMutationBody = CreateRideExceptionDto
-    export type RidesControllerAddExceptionMutationError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto | DepartureTimeTakenDto>
+    export type RidesControllerAddExceptionMutationError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto>
 
     /**
  * @summary Add a ride exception (skip/additional) in the current tenant.
  */
-export const useRidesControllerAddException = <TError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto | DepartureTimeTakenDto>,
+export const useRidesControllerAddException = <TError = ErrorType<void | WouldBreakReservationsDto | RideExceptionConflictDto>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ridesControllerAddException>>, TError,{id: string;data: CreateRideExceptionDto}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof ridesControllerAddException>>,

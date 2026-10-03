@@ -61,8 +61,6 @@ export * from './departureResponseDto';
 export * from './departureResponseDtoSource';
 export * from './departuresControllerListParams';
 export * from './departureStopResponseDto';
-export * from './departureTimeTakenDto';
-export * from './departureTimeTakenDtoCode';
 export * from './domainAuditEventResponseDto';
 export * from './domainAuditEventResponseDtoAction';
 export * from './domainAuditEventResponseDtoChanges';

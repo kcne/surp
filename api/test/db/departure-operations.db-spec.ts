@@ -292,10 +292,62 @@ describe('departure operations (real database)', () => {
       await expectChecksClean();
     });
 
-    it('refuses an extra at the time of another departure, a date outside the window, and an unknown ride', async () => {
-      expect(responseOf(await refusalOf(addExtra({ departureTime: '09:00' })))).toMatchObject({
-        code: 'DEPARTURE_TIME_TAKEN'
-      });
+    it('adds extras at the time of the timetable bus and of each other (PR 4c)', async () => {
+      const first = await addExtra({ departureTime: '09:00', arrivalTime: '11:00', capacity: 20 });
+      const second = await addExtra({ departureTime: '09:00', arrivalTime: '11:00', capacity: 30 });
+
+      expect(first.id).not.toBe(second.id);
+      const additionals = await exceptionsOnTravelDate();
+      expect(additionals.filter((row) => row.type === RideExceptionType.ADDITIONAL)).toHaveLength(2);
+      expect(
+        await prisma.departure.findMany({
+          where: { id: { in: [first.id, second.id] } },
+          select: { rideExceptionId: true }
+        })
+      ).toEqual(
+        expect.arrayContaining(
+          additionals.map((row) => ({ rideExceptionId: row.id }))
+        )
+      );
+      await expectChecksClean();
+
+      // A sync and a timetable edit keep all three.
+      await prisma.$transaction((tx) =>
+        syncDepartures(tx, { tenantId: seeded.auth.tenantId, actorId: SYSTEM_ACTOR_ID })
+      );
+      await rides.update(seeded.auth, seeded.rideId, { capacity: 40 });
+      expect(
+        await prisma.departure.count({
+          where: {
+            rideId: seeded.rideId,
+            serviceDate: new Date(seeded.travelDate),
+            departureTime: '09:00',
+            cancelledAt: null,
+            timetableDroppedAt: null
+          }
+        })
+      ).toBe(3);
+      await expectChecksClean();
+
+      // The old screens' instances count each extra on its own departure.
+      await book(first.id, { seatNumber: 1 });
+      await book(second.id, { seatNumber: 1 });
+      await book(second.id, { seatNumber: 2 });
+      const instances = await rides.listInstancesByDate(seeded.auth, { date: seeded.travelDate });
+      expect(
+        instances.items
+          .filter((item) => item.rideId === seeded.rideId && item.departureTime === '09:00')
+          .map((item) => [item.source, item.availability.capacity, item.reservationCount])
+      ).toEqual(
+        expect.arrayContaining([
+          ['BASE', 40, 0],
+          ['ADDITIONAL', 20, 1],
+          ['ADDITIONAL', 30, 2]
+        ])
+      );
+    });
+
+    it('refuses an extra on a date outside the window, with equal times, or for an unknown ride', async () => {
       expect(
         await refusalOf(
           departures.createExtra(seeded.auth, {
@@ -361,40 +413,16 @@ describe('departure operations (real database)', () => {
       await expectChecksClean();
     });
 
-    it('refuses to restore an extra whose time another departure has taken', async () => {
+    it('restores an extra whose time another extra has taken since (PR 4c)', async () => {
       const extra = await addExtra();
       await departures.cancel(seeded.auth, extra.id, {});
-      // A pair stored before PR 3a, the only way left to take the time.
-      await prisma.$transaction(async (tx) => {
-        const exception = await tx.rideException.create({
-          data: {
-            tenantId: seeded.auth.tenantId,
-            rideId: seeded.rideId,
-            exceptionDate: new Date(seeded.travelDate),
-            type: RideExceptionType.ADDITIONAL,
-            departureTime: '15:00',
-            arrivalTime: '16:00',
-            createdById: seeded.auth.sub,
-            updatedById: seeded.auth.sub
-          }
-        });
-        await insertExtraDeparture(
-          tx,
-          { tenantId: seeded.auth.tenantId, rideId: seeded.rideId, actorId: seeded.auth.sub },
-          {
-            rideExceptionId: exception.id,
-            serviceDate: new Date(seeded.travelDate),
-            departureTime: '15:00',
-            arrivalTime: '16:00'
-          },
-          { allowSameTime: true }
-        );
-      });
+      await addExtra({ arrivalTime: '16:00' });
 
-      expect(responseOf(await refusalOf(departures.restore(seeded.auth, extra.id)))).toMatchObject({
-        code: 'DEPARTURE_TIME_TAKEN'
-      });
-      expect((await departures.getById(seeded.auth, extra.id)).cancelledAt).not.toBeNull();
+      expect((await departures.restore(seeded.auth, extra.id)).cancelledAt).toBeNull();
+      expect(
+        (await exceptionsOnTravelDate()).filter((row) => row.departureTime === '15:00')
+      ).toHaveLength(2);
+      await expectChecksClean();
     });
 
     it('moves an unbooked extra and resizes it, with its stops and its ADDITIONAL', async () => {
@@ -508,14 +536,13 @@ describe('departure operations (real database)', () => {
       );
     });
 
-    it('refuses to move an extra onto the time of another departure', async () => {
+    it('moves an extra onto the time of another departure (PR 4c), but not onto its own arrival', async () => {
       const extra = await addExtra();
 
       expect(
-        responseOf(
-          await refusalOf(departures.updateExtra(seeded.auth, extra.id, { departureTime: '09:00' }))
-        )
-      ).toMatchObject({ code: 'DEPARTURE_TIME_TAKEN' });
+        (await departures.updateExtra(seeded.auth, extra.id, { departureTime: '09:00' })).departureTime
+      ).toBe('09:00');
+      await expectChecksClean();
       expect(
         await refusalOf(
           departures.updateExtra(seeded.auth, extra.id, { departureTime: '17:00' })
@@ -705,8 +732,8 @@ describe('departure operations (real database)', () => {
           departureTime: '15:00',
           arrivalTime: '17:00'
         };
-        const first = await insertExtraDeparture(tx, scope, extra, { allowSameTime: true });
-        const second = await insertExtraDeparture(tx, scope, extra, { allowSameTime: true });
+        const first = await insertExtraDeparture(tx, scope, extra);
+        const second = await insertExtraDeparture(tx, scope, extra);
 
         return { exceptionId: exception.id, first: first.id, second: second.id };
       });
@@ -752,28 +779,34 @@ describe('departure operations (real database)', () => {
       });
     }
 
-    it('holds its time against a restored, created or moved extra', async () => {
+    it('no longer holds its time, and the sync still gives it its own extra (PR 4c)', async () => {
       const extra = await addExtra();
       await departures.cancel(seeded.auth, extra.id, {});
-      await strayAdditional();
+      const stray = await strayAdditional();
 
-      expect(responseOf(await refusalOf(departures.restore(seeded.auth, extra.id)))).toMatchObject({
-        code: 'DEPARTURE_TIME_TAKEN'
-      });
-      expect(responseOf(await refusalOf(addExtra()))).toMatchObject({
-        code: 'DEPARTURE_TIME_TAKEN'
-      });
-
+      await departures.restore(seeded.auth, extra.id);
+      await addExtra();
       const other = await addExtra({ departureTime: '18:00', arrivalTime: '20:00' });
+      await departures.updateExtra(seeded.auth, other.id, { departureTime: '15:00' });
 
+      await prisma.$transaction((tx) =>
+        syncDepartures(tx, { tenantId: seeded.auth.tenantId, actorId: SYSTEM_ACTOR_ID })
+      );
+
+      // Each ADDITIONAL names its own extra, the stray one included.
+      const additionals = (await exceptionsOnTravelDate()).filter(
+        (row) => row.departureTime === '15:00'
+      );
+      expect(additionals).toHaveLength(4);
       expect(
-        responseOf(
-          await refusalOf(departures.updateExtra(seeded.auth, other.id, { departureTime: '15:00' }))
-        )
-      ).toMatchObject({ code: 'DEPARTURE_TIME_TAKEN' });
+        await prisma.departure.count({
+          where: { rideExceptionId: { in: additionals.map((row) => row.id) } }
+        })
+      ).toBe(4);
       expect(
-        (await exceptionsOnTravelDate()).filter((row) => row.departureTime === '15:00')
-      ).toHaveLength(1);
+        await prisma.departure.count({ where: { rideExceptionId: stray.id } })
+      ).toBe(1);
+      await expectChecksClean();
     });
   });
 

@@ -58,3 +58,29 @@ Do not reset capacity to make rollback checks pass. If the compatible build or
 this rehearsal is unavailable, keep 3d running and fix forward; do not roll back
 to the original 3c binary. This procedure is a deployment gate, not an assertion
 that a production-dump rehearsal has already been run.
+
+## After 4c: buses that share a departure time
+
+From #27 PR 4c two buses of one ride on one date may leave at the same time:
+the timetable bus and an extra, or two extras. The UI books by `departureId`
+since PR 4b, and an ADDITIONAL names its extra by `rideExceptionId`, so neither
+needs the time to tell them apart. No migration is involved.
+
+What the compatible 3c build does with a pair 4c stored:
+
+- It keeps the pair. Its sync refuses only a pair it would write itself, so
+  an unrelated timetable edit still passes.
+- It refuses a timetable edit that would move the timetable bus onto an
+  extra's time, and new same-time extras through its endpoints. Both are
+  refusals, not data loss.
+- Its nightly job fails for a tenant whose newest date gets a timetable bus at
+  an extra's time, until that extra is moved or the job runs on 4c again.
+  Other tenants continue.
+- A booking that sends `departureId` books the bus it names. One that sends
+  only a time gets 409 for the pair.
+
+Add to the rehearsal gate above, before step 3: with 4c, add an extra at the
+timetable bus's time and book one seat on each. After step 3, verify that both
+departures keep their IDs and seats, that `departure.matchesExceptions` and
+`departure.matchesTimetable` stay clean, and that a booking by `departureId` on
+each still lands on it.

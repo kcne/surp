@@ -129,16 +129,6 @@
           },
           "404": {
             "description": "Ride not found in current tenant."
-          },
-          "409": {
-            "description": "Another departure of the ride that day already has this departure time. Not confirmable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DepartureTimeTakenDto"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -146,7 +136,7 @@
             "access-token": []
           }
         ],
-        "summary": "Add an extra bus to a ride on one service date. It follows the ride's line and stops; its times and capacity are its own. Until PR 4 it also writes the ride's ADDITIONAL exception, which the ride screen reads.",
+        "summary": "Add an extra bus to a ride on one service date. It follows the ride's line and stops; its times and capacity are its own. It may leave at the same time as another bus of the ride that day. Until PR 6 it also writes the ride's ADDITIONAL exception.",
         "tags": [
           "Departures"
         ]
@@ -260,16 +250,13 @@
             "description": "Departure not found in current tenant."
           },
           "409": {
-            "description": "WOULD_BREAK_RESERVATIONS, confirmable; DEPARTURE_TIME_TAKEN, not confirmable; or a departure that is not an extra bus.",
+            "description": "WOULD_BREAK_RESERVATIONS, confirmable; or a departure that is not an extra bus, which is not.",
             "content": {
               "application/json": {
                 "schema": {
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/WouldBreakReservationsDto"
-                    },
-                    {
-                      "$ref": "#/components/schemas/DepartureTimeTakenDto"
                     },
                     {
                       "$ref": "#/components/schemas/DepartureOperationRefusalDto"
@@ -434,7 +421,7 @@
             "access-token": []
           }
         ],
-        "summary": "Cancel a departure. Its passengers stay ACTIVE on it. A booked departure is refused with WOULD_BREAK_RESERVATIONS until its confirmationToken is sent back. Until PR 4 a timetable departure also gets its date's SKIP exception, and an extra bus loses its ADDITIONAL.",
+        "summary": "Cancel a departure. Its passengers stay ACTIVE on it. A booked departure is refused with WOULD_BREAK_RESERVATIONS until its confirmationToken is sent back. Until PR 6 a timetable departure also gets its date's SKIP exception, and an extra bus loses its ADDITIONAL.",
         "tags": [
           "Departures"
         ]
@@ -486,18 +473,11 @@
             "description": "Departure not found in current tenant."
           },
           "409": {
-            "description": "A departure that is not cancelled or is LEGACY, or DEPARTURE_TIME_TAKEN: an extra bus whose time another departure of the ride has taken since.",
+            "description": "A departure that is not cancelled, or is LEGACY.",
             "content": {
               "application/json": {
                 "schema": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/DepartureTimeTakenDto"
-                    },
-                    {
-                      "$ref": "#/components/schemas/DepartureOperationRefusalDto"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/DepartureOperationRefusalDto"
                 }
               }
             }
@@ -508,7 +488,7 @@
             "access-token": []
           }
         ],
-        "summary": "Bring a cancelled departure back. Until PR 4 a timetable departure loses its date's SKIP exception, and an extra bus gets an ADDITIONAL again.",
+        "summary": "Bring a cancelled departure back. Until PR 6 a timetable departure loses its date's SKIP exception, and an extra bus gets an ADDITIONAL again.",
         "tags": [
           "Departures"
         ]
@@ -1836,7 +1816,7 @@
             "description": "Line not found in current tenant."
           },
           "409": {
-            "description": "The proposed line would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.",
+            "description": "The proposed line would break existing reservations.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1911,7 +1891,7 @@
             "description": "Line not found in current tenant."
           },
           "409": {
-            "description": "The proposed line would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.",
+            "description": "The proposed line would break existing reservations.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2052,7 +2032,7 @@
             "description": "Line not found in current tenant."
           },
           "409": {
-            "description": "The proposed stop sequence would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.",
+            "description": "The proposed stop sequence would break existing reservations.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4171,7 +4151,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.",
+            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4246,7 +4226,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.",
+            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4387,7 +4367,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "The proposed schedule would break an existing reservation. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.",
+            "description": "The proposed schedule would break an existing reservation.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4464,7 +4444,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "Either a SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable; a duplicate or conflicting exception; or an ADDITIONAL at the time of another departure of the ride that day, carrying DEPARTURE_TIME_TAKEN. Only the first is confirmable.",
+            "description": "Either a SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable; or a duplicate or conflicting exception, which is not.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4474,9 +4454,6 @@
                     },
                     {
                       "$ref": "#/components/schemas/RideExceptionConflictDto"
-                    },
-                    {
-                      "$ref": "#/components/schemas/DepartureTimeTakenDto"
                     }
                   ]
                 }
@@ -6775,7 +6752,7 @@
           "departureTime": {
             "type": "string",
             "example": "15:00",
-            "description": "Time at the first stop. No other departure of the ride that day may have it."
+            "description": "Time at the first stop. Another bus of the ride may leave at the same time that day."
           },
           "arrivalTime": {
             "type": "string",
@@ -6793,26 +6770,6 @@
           "serviceDate",
           "departureTime",
           "arrivalTime"
-        ]
-      },
-      "DepartureTimeTakenDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "enum": [
-              "DEPARTURE_TIME_TAKEN"
-            ],
-            "example": "DEPARTURE_TIME_TAKEN"
-          },
-          "message": {
-            "type": "string",
-            "example": "Voznja na liniji Beograd - Nis 2026-10-05 vec ima polazak u 09:00. Dva polaska iste voznje istog dana ne mogu da krecu u isto vreme."
-          }
-        },
-        "required": [
-          "code",
-          "message"
         ]
       },
       "WouldBreakReservationsDto": {

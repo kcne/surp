@@ -7,8 +7,7 @@ import { ApiProperty } from '@nestjs/swagger';
  * ADDITIONAL on the same date, is refused with Nest's standard error body —
  * no `code`, and nothing to confirm. Documenting it alongside
  * `WouldBreakReservationsDto` is what lets a client tell the two apart before
- * it offers the agency a confirmation button that cannot work. An extra bus at
- * another departure's time is refused with `DepartureTimeTakenDto`.
+ * it offers the agency a confirmation button that cannot work.
  */
 export class RideExceptionConflictDto {
   @ApiProperty({ example: 409 })

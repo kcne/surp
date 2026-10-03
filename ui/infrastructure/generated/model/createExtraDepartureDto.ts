@@ -11,7 +11,7 @@ export interface CreateExtraDepartureDto {
   rideId: string;
   /** Service date, from the agency's today to 365 days ahead. */
   serviceDate: string;
-  /** Time at the first stop. No other departure of the ride that day may have it. */
+  /** Time at the first stop. Another bus of the ride may leave at the same time that day. */
   departureTime: string;
   /** Time at the last stop. Overnight is allowed. */
   arrivalTime: string;

@@ -15,6 +15,8 @@ export interface MaterializationSchedule {
 }
 
 export interface MaterializationException {
+  /** Carried onto the instance an ADDITIONAL adds, when given. */
+  id?: string;
   type: RideExceptionType;
   departureTime: string | null;
   arrivalTime: string | null;
@@ -34,6 +36,12 @@ export interface MaterializedInstanceTimes {
   departureTime: string;
   arrivalTime: string;
   source: 'BASE' | 'ADDITIONAL';
+  /**
+   * The ADDITIONAL an extra instance comes from, when the exception's ID was
+   * given. Two extras may share a time since #27 PR 4c, so this, not the
+   * time, names the extra bus.
+   */
+  rideExceptionId?: string;
 }
 
 /**
@@ -163,7 +171,8 @@ export function materializeInstanceTimesForDate(
     .map((item) => ({
       departureTime: item.departureTime!,
       arrivalTime: item.arrivalTime!,
-      source: 'ADDITIONAL' as const
+      source: 'ADDITIONAL' as const,
+      ...(item.id ? { rideExceptionId: item.id } : {})
     }));
 
   return [...(hasSkip ? [] : baseInstances), ...additionalInstances];
