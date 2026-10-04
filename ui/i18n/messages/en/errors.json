@@ -1,0 +1,12 @@
+{
+  "generic": "Something went wrong. Please try again.",
+  "network": "Could not reach the server. Check your internet connection.",
+  "timeout": "The request took too long. Please try again.",
+  "unauthorized": "Your session expired. Please sign in again.",
+  "forbidden": "You do not have permission for this action.",
+  "notFound": "The requested record was not found.",
+  "conflict": "This record changed in the meantime. Refresh the page.",
+  "validation": "Check the values you entered.",
+  "serverError": "The server is unavailable right now. Try again later.",
+  "withCode": "{message} (code: {code})"
+}
