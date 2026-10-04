@@ -36,13 +36,14 @@ def next_tag(tags, today):
 
 
 def migrations_added(paths):
-    """Migration directory names from the paths of files added in a release."""
-    names = set()
-    for path in paths:
-        parts = PurePosixPath(path).relative_to(MIGRATIONS_DIR).parts
-        if len(parts) > 1:
-            names.add(parts[0])
-    return sorted(names)
+    """Migration directory names from the paths of files added in a release.
+
+    Only a new migration.sql counts, so a file added to an existing migration
+    directory does not list that migration again.
+    """
+    return sorted(parts[0] for path in paths
+                  if len(parts := PurePosixPath(path).relative_to(MIGRATIONS_DIR).parts) == 2
+                  and parts[1] == "migration.sql")
 
 
 def release_notes(previous, migrations):
@@ -61,17 +62,24 @@ def main():
         log(f"{head} is already released; nothing to do")
         return
 
-    previous = tags[-1] if tags else None
     # A re-run of an older push must not tag a commit behind the latest release.
-    if previous and subprocess.run(["git", "merge-base", "--is-ancestor", head, previous]).returncode == 0:
-        log(f"{head} is already part of {previous}; nothing to do")
+    if tags and subprocess.run(["git", "merge-base", "--is-ancestor", head, tags[-1]]).returncode == 0:
+        log(f"{head} is already part of {tags[-1]}; nothing to do")
         return
+
+    # The notes start from the latest release head contains, so a release tag
+    # on a commit that never reached master cannot hide its migrations.
+    reachable = release_tags(git("tag", "--list", "v*", "--merged", head).split())
+    previous = reachable[-1] if reachable else None
 
     tag = next_tag(tags, datetime.now(timezone.utc).date())
     migrations = []
     if previous:
-        added = git("diff", "--name-only", "--diff-filter=A", previous, head, "--", MIGRATIONS_DIR)
-        migrations = migrations_added(added.split())
+        # Prisma tracks migrations by directory name, so a renamed one runs
+        # again; --no-renames reports it as added instead of hiding it.
+        added = git("diff", "--name-only", "--no-renames", "--diff-filter=A",
+                    previous, head, "--", MIGRATIONS_DIR)
+        migrations = migrations_added(added.splitlines())
 
     args = ["gh", "release", "create", tag, "--target", head, "--title", tag,
             "--notes", release_notes(previous, migrations)]

@@ -41,9 +41,11 @@ jobs:
 
     steps:
       # Full history and tags: the next tag and the notes range come from them.
+      # The script never pushes; gh creates the tag through the API.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Tag and publish the release
         env:
           GH_TOKEN: ${{ github.token }}

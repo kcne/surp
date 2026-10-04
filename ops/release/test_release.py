@@ -48,6 +48,10 @@ class MigrationsAdded(unittest.TestCase):
         self.assertEqual(release.migrations_added(paths),
                          ["20260930120000_a", "20261001120000_b"])
 
+    def test_ignores_a_file_added_to_an_existing_migration(self):
+        paths = ["api/prisma/migrations/20260930120000_a/down.sql"]
+        self.assertEqual(release.migrations_added(paths), [])
+
 
 class ReleaseNotes(unittest.TestCase):
     def test_names_the_migrations(self):
@@ -86,14 +90,16 @@ class Main(unittest.TestCase):
         self.run_git("commit", "-q", "-m", path)
         return self.run_git("rev-parse", "HEAD")
 
-    def release(self, head):
+    def release(self, head, gh_returncode=0):
         real_run = subprocess.run
         gh_calls = []
 
         def run(args, *rest, **kwargs):
             if args[0] == "gh":
                 gh_calls.append(args)
-                return subprocess.CompletedProcess(args, 0)
+                if kwargs.get("check") and gh_returncode:
+                    raise subprocess.CalledProcessError(gh_returncode, args)
+                return subprocess.CompletedProcess(args, gh_returncode)
             return real_run(args, *rest, **kwargs)
 
         with patch.dict(os.environ, {"GITHUB_SHA": head}), \
@@ -119,6 +125,41 @@ class Main(unittest.TestCase):
         notes = call[call.index("--notes") + 1]
         self.assertIn("- `20261001120000_b`", notes)
         self.assertEqual(call[-3:], ["--generate-notes", "--notes-start-tag", "v2000.1.1"])
+
+    def test_lists_a_renamed_migration_as_added(self):
+        self.commit("api/prisma/migrations/20261001120000_b/migration.sql")
+        self.run_git("tag", "v2000.1.1")
+        self.run_git("mv", "api/prisma/migrations/20261001120000_b",
+                     "api/prisma/migrations/20261002120000_b")
+        self.run_git("commit", "-q", "-m", "rename")
+        head = self.run_git("rev-parse", "HEAD")
+
+        [call] = self.release(head)
+
+        notes = call[call.index("--notes") + 1]
+        self.assertIn("- `20261002120000_b`", notes)
+
+    def test_starts_from_the_latest_release_head_contains(self):
+        self.run_git("tag", "v2000.1.1")
+        migration = "api/prisma/migrations/20261001120000_b/migration.sql"
+        self.run_git("checkout", "-q", "-b", "side")
+        self.commit(migration)
+        self.run_git("tag", "v2000.1.2")
+        self.run_git("checkout", "-q", "master")
+        self.commit("a.txt")
+        head = self.commit(migration)
+
+        [call] = self.release(head)
+
+        notes = call[call.index("--notes") + 1]
+        self.assertIn("- `20261001120000_b`", notes)
+        self.assertEqual(call[-3:], ["--generate-notes", "--notes-start-tag", "v2000.1.1"])
+
+    def test_fails_when_gh_fails(self):
+        head = self.run_git("rev-parse", "HEAD")
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.release(head, gh_returncode=1)
 
     def test_does_nothing_when_the_commit_is_already_released(self):
         head = self.commit("a.txt")
