@@ -16,6 +16,7 @@ export class HealthController {
       example: {
         status: 'ok',
         db: 'up',
+        commit: 'bd01855745f3c2a1e0b7d9c6f4a8e2b1c3d5f7a9',
         timestamp: '2026-03-13T00:00:00.000Z'
       }
     }

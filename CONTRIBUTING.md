@@ -8,6 +8,8 @@ and verified before they merge.
 1. Branch from `rolling` (staging). `master` is production.
 2. Keep each pull request to one focused change and open it against `rolling`.
 3. Fill in the pull request template.
+4. Releases promote `rolling` into `master` with a merge commit; see
+   [Releases](docs/deployment.md#releases).
 
 ## Before you open a pull request
 

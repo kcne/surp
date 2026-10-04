@@ -42,6 +42,12 @@ describe('HealthController (e2e)', () => {
     expect(response.body.db).toBe('up');
   });
 
+  it('reports no commit when the deploy did not set one', async () => {
+    const response = await request(app.getHttpServer()).get('/health').expect(200);
+
+    expect(response.body.commit).toBeNull();
+  });
+
   it('fails readiness when DB is unavailable', async () => {
     prismaMock.isHealthy.mockResolvedValue(false);
 

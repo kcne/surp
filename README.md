@@ -66,7 +66,7 @@ Sign in with the seeded demo agency account: `admin@demo.local` /
 ```text
 api/   NestJS + Prisma + PostgreSQL backend, OpenAPI schema in api/docs/
 ui/    Next.js + Tailwind frontend; API client generated from the schema
-ops/   Production jobs: database backup, staging refresh, rollback patches
+ops/   Production jobs: database backup, staging refresh, releases, rollback patches
 docs/  Project documentation
 ```
 
