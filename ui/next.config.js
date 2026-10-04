@@ -1,3 +1,5 @@
+const createNextIntlPlugin = require("next-intl/plugin")
+
 const r2PublicBaseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL
 
 function buildRemotePatterns() {
@@ -28,7 +30,11 @@ const nextConfig = {
   },
 }
 
-module.exports = nextConfig
+// Points next-intl at the request config; locale resolution itself lives in
+// `i18n/resolve-locale.ts`.
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts")
+
+module.exports = withNextIntl(nextConfig)
 
 
 
