@@ -1,0 +1,32 @@
+name: Master source
+
+permissions: {}
+
+# master only moves by promoting rolling, so whatever reaches production has
+# been on staging first. A ruleset on master requires this check; GitHub has
+# no rule that restricts a pull request's source branch on its own.
+on:
+  pull_request:
+    branches: [master]
+    # `edited` re-runs the check when an open PR's base is switched to master.
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  rolling-only:
+    name: master source
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # Branch names go through env, not inline expressions, so a crafted
+      # name cannot inject shell. The repo check stops a fork's `rolling`.
+      - name: Require rolling as the source
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [ "$HEAD_REF" != "rolling" ] || [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::master only accepts pull requests from rolling (got $HEAD_REPO:$HEAD_REF)"
+            exit 1
+          fi
+          echo "Source is $HEAD_REPO:$HEAD_REF"
