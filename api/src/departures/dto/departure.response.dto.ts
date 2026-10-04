@@ -62,6 +62,15 @@ export class DepartureResponseDto {
   @ApiProperty({ example: 48 })
   capacity!: number;
 
+  @ApiProperty({ example: 12, description: 'ACTIVE reservations on this departure.' })
+  activeReservationCount!: number;
+
+  @ApiProperty({
+    example: 36,
+    description: 'Capacity less the ACTIVE reservations, never below 0. Counts whole-bus seats, not stretches.'
+  })
+  availableSeats!: number;
+
   @ApiProperty({
     type: String,
     format: 'date-time',

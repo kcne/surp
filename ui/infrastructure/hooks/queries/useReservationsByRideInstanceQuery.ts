@@ -28,9 +28,9 @@ async function fetchReservationsForRideInstance(
     const response = await reservationsControllerList({
       page: currentPage,
       pageSize: MAX_PAGE_SIZE,
-      rideId: rideInstance.rideId,
-      travelDate: rideInstance.date,
-      rideDepartureTime: rideInstance.departureTime,
+      // An instance's ID is its departure's (#27, PR 4a): the reservations
+      // that reference the bus, whatever their time copies say.
+      departureId: rideInstance.id,
     })
 
     if (!isReservationsListSuccess(response)) {

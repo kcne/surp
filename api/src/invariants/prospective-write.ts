@@ -58,6 +58,15 @@ export const PROSPECTIVE_INVARIANTS = {
     reservationSegmentValid
   ],
   rideException: [reservationReachable],
+  // A cancelled departure keeps its passengers ACTIVE; this lists them.
+  departureCancel: [reservationReachable],
+  extraUpdate: [
+    // First, for the same reason as on a line update.
+    reservationDepartureTimeKept,
+    reservationReachable,
+    reservationSeatWithinCapacity,
+    instanceNotOverbooked
+  ],
   stationDeactivation: [routeStationsActive],
   passengerDeactivation: [reservationPassengerActive]
 } satisfies Record<string, readonly ProspectiveInvariant[]>;

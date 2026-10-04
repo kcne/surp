@@ -26,6 +26,14 @@ export class ListReservationsQueryDto {
   @IsString()
   rideId?: string;
 
+  @ApiPropertyOptional({
+    example: 'departure-id-123',
+    description: 'Only reservations on this stored departure (one bus on one date).'
+  })
+  @IsOptional()
+  @IsString()
+  departureId?: string;
+
   @ApiPropertyOptional({ example: 'passenger-id-123' })
   @IsOptional()
   @IsString()

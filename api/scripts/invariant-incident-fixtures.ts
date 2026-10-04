@@ -20,9 +20,9 @@ import { syncDepartures } from '../src/departures/departure-sync';
 import {
   cancelScheduledDeparture,
   insertExtraDeparture,
-  restoreScheduledDeparture,
-  retireExtraDeparture
-} from '../src/departures/exception-departures';
+  removeAdditional,
+  unskipDate
+} from '../src/departures/departure-operations';
 import { dayOfWeekOf, formatDateOnly } from '../src/rides/ride-instance-materialization';
 
 interface FixtureState {
@@ -774,16 +774,13 @@ function createLegacyDeparture(
   });
 }
 
-/**
- * An extra bus, stored before PR 3a when it shares the timetable bus's time:
- * the endpoints refuse a new same-time pair, but the ones already stored stay.
- */
+/** An extra bus, which may share the timetable bus's time since PR 4c. */
 function createExtraBus(
   tx: Prisma.TransactionClient,
   state: FixtureState,
   { id, departureTime }: { id: string; departureTime: string }
 ) {
-  return addExtra(tx, state, { id, departureTime, allowSameTime: true });
+  return addExtra(tx, state, { id, departureTime });
 }
 
 function exceptionRow(state: FixtureState, id: string, exceptionDate: Date = state.travelDate) {
@@ -825,11 +822,7 @@ async function skipDate(
 async function addExtra(
   tx: Prisma.TransactionClient,
   state: FixtureState,
-  {
-    id,
-    departureTime,
-    allowSameTime = false
-  }: { id: string; departureTime: string; allowSameTime?: boolean }
+  { id, departureTime }: { id: string; departureTime: string }
 ) {
   const arrivalTime = departureTime === '12:00' ? '14:00' : '17:00';
   await tx.rideException.create({
@@ -844,8 +837,7 @@ async function addExtra(
   return insertExtraDeparture(
     tx,
     decisionOf(state),
-    { rideExceptionId: fixtureId(id), serviceDate: state.travelDate, departureTime, arrivalTime },
-    { allowSameTime }
+    { rideExceptionId: fixtureId(id), serviceDate: state.travelDate, departureTime, arrivalTime }
   );
 }
 
@@ -853,12 +845,10 @@ async function removeException(tx: Prisma.TransactionClient, state: FixtureState
   const exception = await tx.rideException.findUniqueOrThrow({ where: { id: fixtureId(id) } });
 
   if (exception.type === RideExceptionType.SKIP) {
-    await restoreScheduledDeparture(tx, decisionOf(state), exception.exceptionDate);
+    await unskipDate(tx, decisionOf(state), exception.exceptionDate);
   } else {
-    await retireExtraDeparture(tx, decisionOf(state), exception.id);
+    await removeAdditional(tx, decisionOf(state), exception.id);
   }
-
-  await tx.rideException.delete({ where: { id: exception.id } });
 }
 
 export async function runIncidentFixtures(prisma: PrismaClient): Promise<IncidentFixtureResult[]> {

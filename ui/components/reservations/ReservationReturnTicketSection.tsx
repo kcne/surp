@@ -2,6 +2,7 @@ import { format } from "date-fns"
 import { srLatn } from "date-fns/locale"
 import type { RideInstance } from "@/types"
 import { formatDateDisplay, formatTimeDisplay } from "@/utils/dateHelpers"
+import { EXTRA_BUS_SUFFIX, isExtraBus } from "@/utils/rideInstanceHelpers"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar } from "@/components/ui/calendar"
@@ -136,11 +137,18 @@ export function ReservationReturnTicketSection({
                 {returnInstancesForSelectedDate.map((instance) => (
                   <SelectItem key={instance.id} value={instance.id}>
                     {formatTimeDisplay(instance.departureTime)}
+                    {isExtraBus(instance) ? EXTRA_BUS_SUFFIX : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
+          {selectedReturnRideInstanceId && !selectedReturnRideInstance ? (
+            <p role="alert" className="text-xs text-destructive">
+              Izabrani povratni polazak vise nije dostupan. Izaberite drugi polazak.
+            </p>
+          ) : null}
 
           {selectedReturnRideInstance ? (
             <div className="space-y-1 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
@@ -149,6 +157,7 @@ export function ReservationReturnTicketSection({
                 {formatDateDisplay(new Date(selectedReturnRideInstance.date))} •{" "}
                 {formatTimeDisplay(selectedReturnRideInstance.departureTime)} -{" "}
                 {formatTimeDisplay(selectedReturnRideInstance.arrivalTime)}
+                {isExtraBus(selectedReturnRideInstance) ? EXTRA_BUS_SUFFIX : ""}
               </p>
               <p>
                 <span className="font-semibold text-foreground">Ruta:</span>{" "}

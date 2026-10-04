@@ -1,8 +1,8 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DepartureSource, Prisma } from '@prisma/client';
 import { formatDateOnly } from '../rides/ride-instance-materialization';
-import { decisionWindow } from './exception-departures';
-import { resolveDepartureLink } from './departure-link';
+import { decisionWindow } from './departure-operations';
+import { departureLinkCandidates } from './departure-link';
 
 /**
  * The departure a booking is for, and the seats and route it is checked
@@ -73,21 +73,26 @@ export async function resolveBookingDepartureId(
     return request.departureId;
   }
 
-  const departureId = await resolveDepartureLink(tx, {
+  const candidates = await departureLinkCandidates(tx, {
     tenantId: request.tenantId,
     rideId: request.rideId,
     travelDate: request.travelDate,
     departureTime: request.departureTime
   });
 
-  if (!departureId) {
+  // Two buses at one time (PR 4c) are not guessed between. The code stays
+  // DEPARTURE_NOT_FOUND, the one old tabs already show the sentence of.
+  if (candidates.length !== 1) {
     throw new ConflictException({
       code: 'DEPARTURE_NOT_FOUND',
-      message: `Voznja ${day} nema polazak u ${request.departureTime}. Osvezite stranicu i izaberite polazak ponovo.`
+      message:
+        candidates.length === 0
+          ? `Voznja ${day} nema polazak u ${request.departureTime}. Osvezite stranicu i izaberite polazak ponovo.`
+          : `Voznja ${day} ima vise polazaka u ${request.departureTime}. Osvezite stranicu i izaberite polazak ponovo.`
     });
   }
 
-  return departureId;
+  return candidates[0];
 }
 
 /**

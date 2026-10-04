@@ -28,6 +28,7 @@ const contextWith = (departureTime: string, arrivalTime: string) =>
     actorId: 'admin-1',
     windowDays: 30,
     prisma: {
+      tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
       reservation: {
         findMany: jest
           .fn()

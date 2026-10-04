@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import type { Ride } from "@/types"
+import { useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
+import type { Ride, RideInstance } from "@/types"
 import {
   Dialog,
   DialogContent,
@@ -24,15 +26,63 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Ban, ChevronDown, Ticket } from "lucide-react"
-import { generateRideInstances } from "@/utils/rideInstanceHelpers"
+import { Ban, ChevronDown, Pencil, Plus, Ticket, Trash2 } from "lucide-react"
+import {
+  departureWindowQueryKey,
+  fetchDepartureWindow,
+  useRunningDeparturesQuery,
+} from "@/infrastructure/hooks/queries/useDeparturesQuery"
+import {
+  useCancelDepartureMutation,
+  useCreateExtraDepartureMutation,
+  useDeleteExtraDepartureMutation,
+  useUpdateExtraDepartureMutation,
+} from "@/infrastructure/hooks/mutations/useDepartureMutations"
+import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
+import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog"
+import { ExtraDepartureDialog, type ExtraDepartureValues } from "@/components/rides/ExtraDepartureDialog"
+import {
+  addDaysToIsoDate,
+  DEPARTURE_WINDOW_DAYS,
+  splitIntoDepartureWindows,
+} from "@/utils/departureWindows"
+import { formatDateToISO } from "@/utils/dateHelpers"
+import { cancellingDeletesRide, isExtraBus } from "@/utils/rideInstanceHelpers"
+
+/** Bookings and operator decisions reach no further than 365 days ahead. */
+const HORIZON_DAYS = 365
 
 interface RideInstancesViewProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   ride: Ride
   loading: boolean
-  onCancelInstance: (ride: Ride, instanceDate: string) => Promise<Ride | void>
+  /**
+   * Cancelling the only bus of a one-time ride, with nobody booked on it,
+   * deletes the ride (`cancellingDeletesRide`); every other cancellation is
+   * an operation on the departure. Resolves false when the server keeps the
+   * ride because someone is booked on it after all; the bus is then
+   * cancelled instead.
+   */
+  onDeleteRide: (ride: Ride) => Promise<boolean>
+}
+
+type ConfirmableOperation =
+  | { kind: "cancel"; id: string }
+  | { kind: "updateExtra"; id: string; changes: Partial<Omit<ExtraDepartureValues, "serviceDate">> }
+
+type ExtraDialogState =
+  | { mode: "create"; values: ExtraDepartureValues }
+  | { mode: "edit"; id: string; values: ExtraDepartureValues }
+
+/** The changed fields of an edited extra, so an untouched time is not resent. */
+function extraChanges(before: ExtraDepartureValues, after: ExtraDepartureValues) {
+  return {
+    ...(after.departureTime !== before.departureTime ? { departureTime: after.departureTime } : {}),
+    ...(after.arrivalTime !== before.arrivalTime ? { arrivalTime: after.arrivalTime } : {}),
+    ...(after.capacity !== before.capacity ? { capacity: after.capacity } : {}),
+  }
 }
 
 export function RideInstancesView({
@@ -40,40 +90,154 @@ export function RideInstancesView({
   onOpenChange,
   ride,
   loading,
-  onCancelInstance,
+  onDeleteRide,
 }: RideInstancesViewProps) {
   const router = useRouter()
-  const [activeRide, setActiveRide] = useState<Ride>(ride)
+  const queryClient = useQueryClient()
+  const [checkingCancel, setCheckingCancel] = useState(false)
+  const today = useMemo(() => formatDateToISO(new Date()), [])
+  const horizon = addDaysToIsoDate(today, HORIZON_DAYS)
+  const cancelDeparture = useCancelDepartureMutation()
+  const createExtra = useCreateExtraDepartureMutation()
+  const updateExtra = useUpdateExtraDepartureMutation()
+  const deleteExtra = useDeleteExtraDepartureMutation()
+  const [extraDialog, setExtraDialog] = useState<ExtraDialogState | null>(null)
+  const [extraToDelete, setExtraToDelete] = useState<RideInstance | null>(null)
+  const operationPending =
+    loading ||
+    checkingCancel ||
+    cancelDeparture.isPending ||
+    createExtra.isPending ||
+    updateExtra.isPending ||
+    deleteExtra.isPending
 
-  useEffect(() => {
-    setActiveRide(ride)
-  }, [ride])
+  // A cancellation or a move of a booked bus is refused until the operator
+  // has seen its passengers; the same dialog the timetable edits use asks.
+  const confirmable = useConfirmableUpdate<ConfirmableOperation>({
+    update: (operation, answers) =>
+      operation.kind === "cancel"
+        ? cancelDeparture.mutateAsync({ id: operation.id, answers })
+        : updateExtra.mutateAsync({ id: operation.id, changes: operation.changes, answers }),
+    onConfirmed: () => setExtraDialog(null),
+  })
 
-  const instances = useMemo(() => generateRideInstances(activeRide), [activeRide])
-    const handleReserve = async (instanceId: string, instanceDate: string) => {
-      onOpenChange(false)
-      router.push(`/reservations/${instanceId}?date=${instanceDate}`)
-    }
+  const handleReserve = async (instanceId: string, instanceDate: string) => {
+    onOpenChange(false)
+    router.push(`/reservations/${instanceId}?date=${instanceDate}`)
+  }
 
-    const handleCancelInstance = async (instanceDate: string) => {
-      try {
-        const maybeUpdatedRide = await onCancelInstance(activeRide, instanceDate)
+  // Every stored departure of the ride from today to the horizon, read fresh:
+  // the list shows running ones only, and may predate an extra just added.
+  const fetchRideDepartures = async () => {
+    const windows = splitIntoDepartureWindows({ from: today, to: horizon })
+    const filter = { rideId: ride.id }
+    const pages = await Promise.all(
+      windows.map((window) =>
+        queryClient.fetchQuery({
+          queryKey: departureWindowQueryKey(window, filter),
+          queryFn: () => fetchDepartureWindow(window, filter),
+          staleTime: 0,
+        })
+      )
+    )
 
-        if (maybeUpdatedRide) {
-          setActiveRide(maybeUpdatedRide)
+    return pages.flat()
+  }
+
+  const handleCancelInstance = async (instance: RideInstance) => {
+    const departureId = instance.departureId ?? instance.id
+
+    try {
+      if (!isExtraBus(instance) && ride.type === "one-time") {
+        setCheckingCancel(true)
+        let deletesRide: boolean
+
+        try {
+          deletesRide = cancellingDeletesRide(ride, departureId, await fetchRideDepartures())
+        } catch {
+          toast.error("Polasci voznje nisu mogli biti ucitani. Pokusajte ponovo.")
+          return
+        } finally {
+          setCheckingCancel(false)
         }
-      } catch {
-        // The page answers for this one: a refusal opens the confirmation
-        // dialog and an ordinary failure has already raised its toast. What
-        // matters here is that the list keeps showing the instance as it still
-        // is — running — instead of marking it cancelled on a write that was
-        // refused.
+
+        // The server has the last word: it keeps a ride anyone is booked on,
+        // on any date, including a booking made since the read above.
+        if (deletesRide && (await onDeleteRide(ride))) {
+          return
+        }
       }
+
+      await confirmable.run({ kind: "cancel", id: departureId })
+    } catch {
+      // A refusal opens the confirmation dialog, and an ordinary failure has
+      // already raised its toast. The list refetches and keeps showing the
+      // bus as it still is.
     }
+  }
+
+  const submitExtra = async (values: ExtraDepartureValues) => {
+    if (!extraDialog) {
+      return
+    }
+
+    if (extraDialog.mode === "create") {
+      await createExtra.mutateAsync({
+        rideId: ride.id,
+        serviceDate: values.serviceDate,
+        departureTime: values.departureTime,
+        arrivalTime: values.arrivalTime,
+        capacity: values.capacity,
+      })
+      setExtraDialog(null)
+      return
+    }
+
+    const changes = extraChanges(extraDialog.values, values)
+
+    if (Object.keys(changes).length > 0) {
+      await confirmable.run({ kind: "updateExtra", id: extraDialog.id, changes })
+    }
+
+    setExtraDialog(null)
+  }
+
+  const confirmDeleteExtra = async () => {
+    if (!extraToDelete) {
+      return
+    }
+
+    try {
+      await deleteExtra.mutateAsync(extraToDelete.departureId ?? extraToDelete.id)
+    } catch {
+      // Reported by the mutation's toast.
+    } finally {
+      setExtraToDelete(null)
+    }
+  }
 
   const [visibleCount, setVisibleCount] = useState(10)
   const [fromDate, setFromDate] = useState("")
   const [toDate, setToDate] = useState("")
+  const [loadedWindows, setLoadedWindows] = useState(1)
+
+  // The ride's stored departures (#27, PR 4a), read 62 days at a time from
+  // the "from" date; "show more" reads the next 62 days once the loaded ones
+  // are all shown.
+  const rangeFrom = fromDate || today
+  const rangeEnd = toDate || horizon
+  const loadedEnd = addDaysToIsoDate(rangeFrom, loadedWindows * DEPARTURE_WINDOW_DAYS - 1)
+  const range = useMemo(
+    () => ({ from: rangeFrom, to: loadedEnd < rangeEnd ? loadedEnd : rangeEnd }),
+    [rangeFrom, loadedEnd, rangeEnd]
+  )
+  const hasUnloadedDates = range.to < rangeEnd
+  const rides = useMemo(() => [ride], [ride])
+  const departuresQuery = useRunningDeparturesQuery(range, rides, {
+    rideId: ride.id,
+    enabled: open,
+  })
+  const instances = departuresQuery.instances
 
   const formatInstanceDate = (dateString: string) => {
     return new Date(`${dateString}T00:00:00`).toLocaleDateString("sr-Latn-RS", {
@@ -117,12 +281,25 @@ export function RideInstancesView({
   useEffect(() => {
     if (open) {
       setVisibleCount(10)
-      const today = new Date()
-      const todayISO = today.toISOString().slice(0, 10)
-      setFromDate(todayISO)
+      setLoadedWindows(1)
+      setFromDate(formatDateToISO(new Date()))
       setToDate("")
     }
   }, [open, ride.id])
+
+  useEffect(() => {
+    setLoadedWindows(1)
+  }, [fromDate, toDate])
+
+  const showMore = () => {
+    if (filteredInstances.length > visibleCount) {
+      setVisibleCount((prev) => prev + 10)
+      return
+    }
+
+    setLoadedWindows((prev) => prev + 1)
+    setVisibleCount((prev) => prev + 10)
+  }
 
   const getStatusBadge = (status: string) => {
     const variants = {
@@ -153,7 +330,7 @@ export function RideInstancesView({
         <DialogHeader>
           <DialogTitle>Raspored vožnje: {ride.line.name}</DialogTitle>
           <DialogDescription>
-            Generisane instance vožnje za naredna 3 meseca
+            Polasci ove voznje od izabranog datuma
           </DialogDescription>
         </DialogHeader>
 
@@ -161,47 +338,107 @@ export function RideInstancesView({
           <div className="rounded-lg border p-4">
             <div className="space-y-2">
               <p className="text-sm">
-                <span className="font-semibold">Linija:</span> {activeRide.line.name}
+                <span className="font-semibold">Linija:</span> {ride.line.name}
               </p>
               <p className="text-sm">
                 <span className="font-semibold">Tip:</span>{" "}
-                {activeRide.type === "recurring" ? "Ponavljajuća" : "Jednokratna"}
+                {ride.type === "recurring" ? "Ponavljajuća" : "Jednokratna"}
               </p>
-              {activeRide.type === "recurring" && activeRide.daysOfWeek && (
+              {ride.type === "recurring" && ride.daysOfWeek && (
                 <p className="text-sm">
                   <span className="font-semibold">Dani:</span>{" "}
-                  {formatDaysOfWeek(activeRide.daysOfWeek)}
+                  {formatDaysOfWeek(ride.daysOfWeek)}
                 </p>
               )}
               <p className="text-sm">
-                <span className="font-semibold">Kapacitet:</span> {activeRide.busCapacity} sedišta
+                <span className="font-semibold">Kapacitet:</span> {ride.busCapacity} sedišta
               </p>
             </div>
           </div>
 
-          {allInstances.length === 0 ? (
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setExtraDialog({
+                  mode: "create",
+                  values: {
+                    serviceDate: fromDate && fromDate > today ? fromDate : today,
+                    departureTime: "",
+                    arrivalTime: "",
+                    capacity: ride.busCapacity,
+                  },
+                })
+              }
+              disabled={operationPending}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Dodaj dodatni polazak
+            </Button>
+          </div>
+
+          {/* Always shown: the range is what is read, so an empty one must stay changeable. */}
+          <div className="grid gap-3 rounded-md border p-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <label htmlFor="ride-instances-from" className="text-xs font-semibold uppercase text-muted-foreground">
+                Od
+              </label>
+              <Input
+                id="ride-instances-from"
+                type="date"
+                value={fromDate}
+                onChange={(event) => setFromDate(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="ride-instances-to" className="text-xs font-semibold uppercase text-muted-foreground">
+                Do
+              </label>
+              <Input
+                id="ride-instances-to"
+                type="date"
+                value={toDate}
+                onChange={(event) => setToDate(event.target.value)}
+              />
+            </div>
+          </div>
+
+          {departuresQuery.isError ? (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-3 rounded-lg border border-destructive/50 p-4 text-sm text-destructive"
+            >
+              <span>Polasci nisu mogli biti ucitani.</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void departuresQuery.refetch()}
+                disabled={departuresQuery.isFetching}
+              >
+                Pokusaj ponovo
+              </Button>
+            </div>
+          ) : departuresQuery.isLoading && allInstances.length === 0 ? (
+            <div className="space-y-2" role="status" aria-busy="true" aria-label="Ucitavanje polazaka">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : allInstances.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12">
               <p className="text-lg font-medium text-muted-foreground">
-                Nema generisanih instanci
+                {hasUnloadedDates ? "Nema polazaka u ucitanom periodu" : "Nema polazaka u izabranom periodu"}
               </p>
               <p className="text-sm text-muted-foreground">
-                {ride.type === "recurring"
-                  ? "Proverite da li su svi podaci za ponavljajuću vožnju popunjeni."
-                  : "Jednokratna vožnja ima samo jednu instancu."}
+                {hasUnloadedDates
+                  ? "Ucitajte naredni period dugmetom ispod."
+                  : "Promenite period ili proverite raspored voznje."}
               </p>
             </div>
           ) : (
             <div className="rounded-md border max-h-[420px] overflow-y-auto">
-              <div className="grid gap-3 border-b p-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">Od</p>
-                  <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">Do</p>
-                  <Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
-                </div>
-              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -219,11 +456,16 @@ export function RideInstancesView({
                       <TableCell className="font-medium">
                         {formatInstanceDate(instance.date)}
                       </TableCell>
-                      <TableCell>{formatTimeDisplay(instance.departureTime)}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center gap-2">
+                          {formatTimeDisplay(instance.departureTime)}
+                          {isExtraBus(instance) && <Badge variant="secondary">Dodatni</Badge>}
+                        </span>
+                      </TableCell>
                       <TableCell>{formatTimeDisplay(instance.arrivalTime)}</TableCell>
                       <TableCell>{getStatusBadge(instance.status)}</TableCell>
                       <TableCell>
-                        {instance.availableSeats ?? activeRide.busCapacity}/{activeRide.busCapacity}
+                        {instance.availableSeats ?? instance.ride.busCapacity}/{instance.ride.busCapacity}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -236,16 +478,53 @@ export function RideInstancesView({
                             <Ticket className="mr-2 h-4 w-4" />
                             Rezerviši
                           </Button>
+                          {instance.source === "ADDITIONAL" && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              aria-label={`Izmeni dodatni polazak ${instance.date} u ${instance.departureTime}`}
+                              onClick={() =>
+                                setExtraDialog({
+                                  mode: "edit",
+                                  id: instance.departureId ?? instance.id,
+                                  values: {
+                                    serviceDate: instance.date,
+                                    departureTime: instance.departureTime,
+                                    arrivalTime: instance.arrivalTime,
+                                    capacity: instance.ride.busCapacity,
+                                  },
+                                })
+                              }
+                              disabled={operationPending || isPastInstance(instance.date)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => handleCancelInstance(instance.date)}
-                            disabled={loading || isPastInstance(instance.date)}
+                            aria-label={`Otkazi polazak ${instance.date} u ${instance.departureTime}`}
+                            onClick={() => handleCancelInstance(instance)}
+                            disabled={operationPending || isPastInstance(instance.date)}
                           >
                             <Ban className="mr-2 h-4 w-4" />
-                            Otkaži
+                            Otkazi
                           </Button>
+                          {/* A booked extra is cancelled, never deleted: it is the record of the bus they were sold. */}
+                          {instance.source === "ADDITIONAL" && !instance.reservationCount && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              aria-label={`Obrisi dodatni polazak ${instance.date} u ${instance.departureTime}`}
+                              onClick={() => setExtraToDelete(instance)}
+                              disabled={operationPending || isPastInstance(instance.date)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -255,12 +534,13 @@ export function RideInstancesView({
             </div>
           )}
 
-          {filteredInstances.length > visibleCount && (
+          {(filteredInstances.length > visibleCount || hasUnloadedDates) && (
             <div className="flex justify-center">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setVisibleCount((prev) => prev + 10)}
+                onClick={showMore}
+                disabled={departuresQuery.isFetching}
               >
                 <ChevronDown className="mr-2 h-4 w-4" />
                 Prikaži još
@@ -269,14 +549,49 @@ export function RideInstancesView({
           )}
 
           <div className="text-sm text-muted-foreground">
-            Ukupno instanci: {filteredInstances.length}
+            Ucitano polazaka: {filteredInstances.length}
           </div>
         </div>
+
+        <ExtraDepartureDialog
+          open={extraDialog !== null}
+          onOpenChange={(next) => {
+            if (!next) {
+              setExtraDialog(null)
+            }
+          }}
+          mode={extraDialog?.mode ?? "create"}
+          initialValues={
+            extraDialog?.values ?? { serviceDate: today, departureTime: "", arrivalTime: "", capacity: ride.busCapacity }
+          }
+          minDate={today}
+          maxDate={horizon}
+          loading={operationPending}
+          onSubmit={submitExtra}
+        />
+
+        <ConfirmDeleteDialog
+          open={extraToDelete !== null}
+          onOpenChange={(next) => {
+            if (!next) {
+              setExtraToDelete(null)
+            }
+          }}
+          title="Obrisati dodatni polazak?"
+          description={
+            extraToDelete
+              ? `Dodatni polazak ${extraToDelete.date} u ${extraToDelete.departureTime} bice obrisan.`
+              : ""
+          }
+          loading={deleteExtra.isPending}
+          onConfirm={confirmDeleteExtra}
+        />
+
+        <ConfirmBreakingChangeDialog {...confirmable.dialogProps} loading={operationPending} />
       </DialogContent>
     </Dialog>
   )
 }
-
 
 
 

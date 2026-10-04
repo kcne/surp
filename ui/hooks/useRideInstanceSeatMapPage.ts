@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import ExcelJS from "exceljs"
 import { useRidesListQuery } from "@/infrastructure/hooks/queries/useRidesListQuery"
-import { useRidesInstancesByDateQuery } from "@/infrastructure/hooks/queries/useRidesInstancesByDateQuery"
+import { useDepartureQuery } from "@/infrastructure/hooks/queries/useDeparturesQuery"
+import { toDepartureInstance } from "@/infrastructure/mappers/departureMappers"
+import { useLegacyDepartureRedirect } from "@/hooks/useLegacyDepartureRedirect"
+import { parseLegacyInstanceId } from "@/utils/legacyDepartureLinks"
 import { useReservationsByRideInstanceQuery } from "@/infrastructure/hooks/queries/useReservationsByRideInstanceQuery"
 import { useMoveReservationSeatMutation } from "@/infrastructure/hooks/mutations/useReservationMutations"
 import { buildSeatMap } from "@/utils/seatHelpers"
@@ -29,20 +32,6 @@ function sanitizeFileNamePart(value: string): string {
     .replace(/\s+/g, "-")
 }
 
-function extractDateFromRideInstanceId(rideInstanceId: string): Date | null {
-  const parts = rideInstanceId.split(":")
-  if (parts.length < 2) {
-    return null
-  }
-
-  const parsed = new Date(`${parts[1]}T00:00:00`)
-  if (Number.isNaN(parsed.getTime())) {
-    return null
-  }
-
-  return parsed
-}
-
 export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSeatMapPageParams) {
   const searchParams = useSearchParams()
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
@@ -53,16 +42,31 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   const [reservationToEdit, setReservationToEdit] = useState<Reservation | null>(null)
   const [isBulkCancelOpen, setIsBulkCancelOpen] = useState(false)
   const ridesQuery = useRidesListQuery()
-  const rides = ridesQuery.data || []
-  const rideInstancesQuery = useRidesInstancesByDateQuery(selectedDate, rides)
-  const rideInstances = useMemo(
-    () => rideInstancesQuery.data ?? [],
-    [rideInstancesQuery.data]
+  const rides = useMemo(() => ridesQuery.data ?? [], [ridesQuery.data])
+  // The page is keyed by departureId (#27, PR 4a). An old link names the bus
+  // by ride, date and time, and is replaced with the departure it meant.
+  const legacyLink = useMemo(() => parseLegacyInstanceId(rideInstanceId), [rideInstanceId])
+  const legacyRedirect = useLegacyDepartureRedirect(
+    legacyLink,
+    (departureId) =>
+      `/reservations/${encodeURIComponent(departureId)}?date=${encodeURIComponent(legacyLink?.date ?? "")}`
   )
-  const selectedRideInstance = useMemo(
-    () => rideInstances.find((rideInstance) => rideInstance.id === rideInstanceId) ?? null,
-    [rideInstanceId, rideInstances]
-  )
+  const departureQuery = useDepartureQuery(legacyLink ? null : rideInstanceId)
+  const selectedRideInstance = useMemo(() => {
+    if (!departureQuery.data) return null
+    return toDepartureInstance(
+      departureQuery.data,
+      rides.find((ride) => ride.id === departureQuery.data?.rideId)
+    )
+  }, [departureQuery.data, rides])
+  const departureNotFound =
+    legacyRedirect.notFound || (!legacyLink && departureQuery.isSuccess && departureQuery.data === null)
+  // A failed read is not a missing bus: the page offers a retry instead.
+  const departureError = legacyRedirect.isError || departureQuery.isError
+  const retryDeparture = legacyLink ? legacyRedirect.retry : departureQuery.refetch
+  // A cancelled, dropped or LEGACY departure refuses every booking (#27, PR
+  // 4b). Its passengers can still be edited, moved or cancelled.
+  const bookingClosed = selectedRideInstance?.status === "cancelled"
   const reservationsQuery = useReservationsByRideInstanceQuery(selectedRideInstance)
   const moveSeatMutation = useMoveReservationSeatMutation()
   const reservations = useMemo(
@@ -89,26 +93,28 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
   }, [reservations, selectedRideInstance])
 
   useEffect(() => {
-    const queryDate = searchParams?.get("date")
-    if (queryDate) {
-      const parsedFromQuery = new Date(`${queryDate}T00:00:00`)
-      if (!Number.isNaN(parsedFromQuery.getTime())) {
-        setSelectedDate(parsedFromQuery)
+    const date = selectedRideInstance?.date ?? searchParams?.get("date")
+    if (date) {
+      const parsed = new Date(`${date}T00:00:00`)
+      if (!Number.isNaN(parsed.getTime())) {
+        setSelectedDate(parsed)
       }
-      return
     }
-
-    const parsedFromSlug = extractDateFromRideInstanceId(rideInstanceId)
-    if (parsedFromSlug) {
-      setSelectedDate(parsedFromSlug)
-    }
-  }, [rideInstanceId, searchParams, setSelectedDate])
+  }, [selectedRideInstance?.date, searchParams, setSelectedDate])
 
   useEffect(() => {
     setSelectedSeat(null)
     setSelectedSeats([])
     setReservationToEdit(null)
   }, [rideInstanceId])
+
+  // A refused booking refetches the departure. When it no longer runs, the
+  // booking form closes rather than offer a bus the server will refuse again.
+  useEffect(() => {
+    if (bookingClosed) {
+      setIsMultiReservationModalOpen(false)
+    }
+  }, [bookingClosed])
 
   const toggleSelectedSeat = (seatNumber: number) => {
     setSelectedSeats((previous) =>
@@ -311,7 +317,12 @@ export function useRideInstanceSeatMapPage({ rideInstanceId }: UseRideInstanceSe
       reservationsQuery.isLoading ||
       reservationsQuery.isFetching ||
       ridesQuery.isLoading ||
-      rideInstancesQuery.isLoading,
+      departureQuery.isLoading ||
+      legacyRedirect.resolving,
+    departureNotFound,
+    departureError,
+    retryDeparture,
+    bookingClosed,
     selectedSeat,
     selectedSeats,
     selectedReservations,

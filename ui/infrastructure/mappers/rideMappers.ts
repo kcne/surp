@@ -1,6 +1,5 @@
 import type {
   CreateRideDto,
-  CreateRideExceptionDto,
   RideDayScheduleInputDto,
   RideExceptionResponseDto,
   RideInstanceResponseDto,
@@ -123,10 +122,6 @@ function toUiExceptionType(type: RideExceptionResponseDto["type"]): RideExceptio
   return type === "ADDITIONAL" ? "additional" : "skip"
 }
 
-function toApiExceptionType(type: RideException["type"]): "SKIP" | "ADDITIONAL" {
-  return type === "additional" ? "ADDITIONAL" : "SKIP"
-}
-
 function buildStationNameLookup(line?: Line): Map<string, string> {
   const stationNameById = new Map<string, string>()
   if (!line) {
@@ -170,6 +165,7 @@ function toUiExceptions(exceptions: RideResponseDto["exceptions"]): RideExceptio
     type: toUiExceptionType(exception.type),
     departureTime: normalizeTime(exception.departureTime),
     arrivalTime: normalizeTime(exception.arrivalTime),
+    capacity: exception.capacity ?? undefined,
   }))
 }
 
@@ -298,8 +294,9 @@ export function toRideInstance(dto: RideInstanceResponseDto, ride?: Ride): RideI
 
   return {
     id: dto.id,
+    source: dto.source,
     rideId: dto.rideId,
-    ride: fallbackRide,
+    ride: { ...fallbackRide, busCapacity: dto.availability.capacity },
     date: normalizeDate(dto.date) ?? "",
     departureTime: normalizeTime(dto.departureTime) ?? "",
     arrivalTime: normalizeTime(dto.arrivalTime) ?? "",
@@ -358,14 +355,5 @@ export function toReplaceRideDaySchedulesDto(
 ): ReplaceRideDaySchedulesDto {
   return {
     daySchedules: toApiDaySchedules(daySchedules) ?? [],
-  }
-}
-
-export function toCreateRideExceptionDto(exception: RideException): CreateRideExceptionDto {
-  return {
-    date: exception.date,
-    type: toApiExceptionType(exception.type),
-    departureTime: exception.departureTime,
-    arrivalTime: exception.arrivalTime,
   }
 }

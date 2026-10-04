@@ -1,11 +1,12 @@
 "use client"
 
+import { Suspense } from "react"
 import { Layout } from "@/components/layout/Layout"
 import { RidesListPanel } from "@/components/reservations/RidesListPanel"
 import { useReservationsDashboardPage } from "@/hooks/useReservationsDashboardPage"
 import { Ticket } from "lucide-react"
 
-export default function ReservationsPage() {
+function ReservationsDashboard() {
   const { rides, rideInstances, selectedDate, loading, setSelectedDate } =
     useReservationsDashboardPage()
 
@@ -31,5 +32,14 @@ export default function ReservationsPage() {
         />
       </div>
     </Layout>
+  )
+}
+
+// useSearchParams needs a Suspense boundary on a statically rendered page.
+export default function ReservationsPage() {
+  return (
+    <Suspense>
+      <ReservationsDashboard />
+    </Suspense>
   )
 }

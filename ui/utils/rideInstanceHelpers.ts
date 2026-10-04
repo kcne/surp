@@ -1,141 +1,45 @@
-import { formatDateToISO, generateRideInstanceDates } from "@/utils/dateHelpers"
-import type { Ride, RideException, RideInstance } from "@/types"
-
-/** How far ahead a recurring ride is materialized when no end date caps it. */
-const DEFAULT_HORIZON_MONTHS = 3
-
-interface GenerateRideInstancesOptions {
-  /** Latest date to materialize; defaults to three months from today. */
-  until?: Date
-}
+import type { DepartureResponseDto } from "@/infrastructure/generated/model"
+import type { Ride, RideInstance } from "@/types"
 
 /**
- * Materializes the instances of a single ride on the client.
+ * Whether cancelling a ride's timetable bus deletes the whole ride: only the
+ * one bus of a one-time ride, with nobody booked on it.
  *
- * The API serves instances one date at a time, which is fine for a seat map but
- * far too many round trips for a list spanning months, so the schedule views
- * expand the ride template themselves. Instances are built the same way the API
- * builds them: skip exceptions drop a date, additional exceptions override the
- * times, and otherwise the day's station times give the first departure and the
- * last arrival.
+ * Deleting a ride cancels every passenger it has, on any of its buses. So a
+ * booked bus is cancelled instead, and its passengers stay on it to be
+ * restored or moved, as on any other ride. Any other departure of the ride
+ * keeps the ride too, running or cancelled: a cancelled extra's passengers
+ * stay on it as well, although it no longer has an ADDITIONAL.
+ *
+ * `rideDepartures` are the ride's stored departures read just before, not
+ * the screen's list, which holds running departures only.
  */
-export function generateRideInstances(
+export function cancellingDeletesRide(
   ride: Ride,
-  options: GenerateRideInstancesOptions = {}
-): RideInstance[] {
-  const instances: RideInstance[] = []
-
-  if (ride.type === "one-time") {
-    if (ride.date && ride.oneTimeDepartureTime && ride.oneTimeArrivalTime) {
-      instances.push({
-        id: `${ride.id}-${ride.date}`,
-        rideId: ride.id,
-        ride,
-        date: ride.date,
-        departureTime: ride.oneTimeDepartureTime,
-        arrivalTime: ride.oneTimeArrivalTime,
-        status: ride.status,
-        reservationCount: 0,
-        availableSeats: ride.busCapacity,
-      })
-    }
-
-    return instances
+  departureId: string,
+  rideDepartures: readonly DepartureResponseDto[]
+): boolean {
+  if (ride.type !== "one-time") {
+    return false
   }
 
-  if (!ride.startDate || !ride.daysOfWeek || ride.daysOfWeek.length === 0) {
-    return instances
-  }
+  const buses = rideDepartures.filter((departure) => departure.source !== "LEGACY")
 
-  const horizon = options.until ?? defaultHorizon()
-  const startDate = new Date(`${ride.startDate}T00:00:00`)
-  const endDate = ride.endDate ? new Date(`${ride.endDate}T00:00:00`) : null
-  const effectiveEndDate = endDate && endDate < horizon ? endDate : horizon
-
-  const dates = generateRideInstanceDates(startDate, effectiveEndDate, ride.daysOfWeek)
-
-  dates.forEach((date) => {
-    const dateString = formatDateToISO(date)
-    const exception = ride.exceptions?.find((entry) => entry.date === dateString)
-
-    if (exception?.type === "skip") {
-      return
-    }
-
-    const { departureTime, arrivalTime } = resolveInstanceTimes(ride, date, exception)
-
-    if (!departureTime || !arrivalTime) {
-      return
-    }
-
-    instances.push({
-      id: `${ride.id}-${dateString}`,
-      rideId: ride.id,
-      ride,
-      date: dateString,
-      departureTime,
-      arrivalTime,
-      status: ride.status,
-      reservationCount: 0,
-      availableSeats: ride.busCapacity,
-    })
-  })
-
-  return instances
-}
-
-interface UpcomingRideInstancesOptions extends GenerateRideInstancesOptions {
-  /** Earliest date to keep, inclusive; defaults to today. */
-  from?: string
+  return (
+    buses.length === 1 &&
+    buses[0].id === departureId &&
+    buses[0].activeReservationCount === 0
+  )
 }
 
 /**
- * Materializes every scheduled ride into instances from `from` onwards, sorted
- * by date and then departure time so the nearest departure leads the list.
+ * Whether a bus is an extra one. Two buses of one ride may leave at the same
+ * time since #27 PR 4c, so every screen that offers a bus by its time says
+ * which of them is the extra.
  */
-export function generateUpcomingRideInstances(
-  rides: Ride[],
-  options: UpcomingRideInstancesOptions = {}
-): RideInstance[] {
-  const from = options.from ?? formatDateToISO(new Date())
-
-  return rides
-    .filter((ride) => ride.status === "scheduled")
-    .flatMap((ride) => generateRideInstances(ride, options))
-    .filter((instance) => instance.date >= from)
-    .sort(
-      (left, right) =>
-        left.date.localeCompare(right.date) ||
-        left.departureTime.localeCompare(right.departureTime) ||
-        left.ride.line.name.localeCompare(right.ride.line.name)
-    )
+export function isExtraBus(instance: Pick<RideInstance, "source">): boolean {
+  return instance.source === "ADDITIONAL"
 }
 
-function defaultHorizon(): Date {
-  const horizon = new Date()
-  horizon.setMonth(horizon.getMonth() + DEFAULT_HORIZON_MONTHS)
-  return horizon
-}
-
-function resolveInstanceTimes(
-  ride: Ride,
-  date: Date,
-  exception: RideException | undefined
-): { departureTime?: string; arrivalTime?: string } {
-  if (exception?.type === "additional") {
-    return { departureTime: exception.departureTime, arrivalTime: exception.arrivalTime }
-  }
-
-  const daySchedule = ride.daySchedules?.[date.getDay()]
-  if (daySchedule && daySchedule.length > 0) {
-    const stationTimes = [...daySchedule].sort(
-      (left, right) => left.orderIndex - right.orderIndex
-    )
-    return {
-      departureTime: stationTimes[0]?.time,
-      arrivalTime: stationTimes[stationTimes.length - 1]?.time,
-    }
-  }
-
-  return { departureTime: ride.departureTime, arrivalTime: ride.arrivalTime }
-}
+/** The words a bus's time is followed by in a list of options. */
+export const EXTRA_BUS_SUFFIX = " · dodatni"

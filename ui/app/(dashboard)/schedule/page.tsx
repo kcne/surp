@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { Layout } from "@/components/layout/Layout"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Plus, CalendarClock } from "lucide-react"
+import Link from "next/link"
+import { Ban, Plus, CalendarClock } from "lucide-react"
 import { RideModal } from "@/components/rides/RideModal"
 import { ConfirmBreakingChangeDialog } from "@/components/data-integrity/ConfirmBreakingChangeDialog"
 import { DeleteRideDialog } from "@/components/rides/DeleteRideDialog"
@@ -12,8 +13,10 @@ import { RideInstancesView } from "@/components/rides/RideInstancesView"
 import { RidesDataTable } from "@/components/rides/RidesDataTable"
 import { useCrudDialogState } from "@/hooks/useCrudDialogState"
 import {
+  RideHasReservationsError,
   useCreateRideMutation,
   useDeleteRideMutation,
+  useDeleteUnbookedRideMutation,
   useUpdateRideMutation,
 } from "@/infrastructure/hooks/mutations/useRideMutations"
 import { useConfirmableUpdate } from "@/infrastructure/hooks/useConfirmableUpdate"
@@ -27,11 +30,15 @@ export default function SchedulePage() {
   const createRideMutation = useCreateRideMutation()
   const updateRideMutation = useUpdateRideMutation()
   const deleteRideMutation = useDeleteRideMutation()
+  const deleteUnbookedRideMutation = useDeleteUnbookedRideMutation()
   const rides = ridesQuery.data ?? EMPTY_RIDES
   const loading = ridesQuery.isLoading
   const error = ridesQuery.error
   const mutationLoading =
-    createRideMutation.isPending || updateRideMutation.isPending || deleteRideMutation.isPending
+    createRideMutation.isPending ||
+    updateRideMutation.isPending ||
+    deleteRideMutation.isPending ||
+    deleteUnbookedRideMutation.isPending
   const [isInstancesViewOpen, setIsInstancesViewOpen] = useState(false)
   const [instancesRide, setInstancesRide] = useState<Ride | null>(null)
   const {
@@ -94,47 +101,18 @@ export default function SchedulePage() {
     await deleteRideMutation.mutateAsync(id)
   }
 
-  const handleCancelInstance = async (ride: Ride, instanceDate: string): Promise<Ride | void> => {
-    if (ride.type === "one-time") {
-      await deleteRideMutation.mutateAsync(ride.id)
-      return
+  // False when the server kept the ride because someone is booked on it.
+  const handleDeleteOneTimeRide = async (ride: Ride): Promise<boolean> => {
+    try {
+      await deleteUnbookedRideMutation.mutateAsync(ride.id)
+      return true
+    } catch (error) {
+      if (error instanceof RideHasReservationsError) {
+        return false
+      }
+
+      throw error
     }
-
-    const existingExceptions = ride.exceptions || []
-    const alreadyCancelled = existingExceptions.some(
-      (exception) => exception.date === instanceDate && exception.type === "skip"
-    )
-
-    if (alreadyCancelled) {
-      return ride
-    }
-
-    const nextRide = {
-      ...ride,
-      exceptions: [
-        ...existingExceptions,
-        {
-          id: `${Date.now()}-${instanceDate}`,
-          date: instanceDate,
-          type: "skip" as const,
-        },
-      ],
-    }
-
-    // Through the shared confirmation rather than straight at the mutation:
-    // cancelling an instance writes a SKIP exception, which is the one write
-    // the ride-exception guard refuses when reservations are sold on that
-    // date. Called directly, that refusal would raise no toast — the mutation
-    // deliberately stays quiet on it — and open no dialog, so the instance
-    // would simply stay uncancelled with nothing said.
-    await confirmableUpdate.run({
-      id: ride.id,
-      payload: {
-        exceptions: nextRide.exceptions,
-      },
-    })
-
-    return nextRide
   }
 
   const scheduledRides = rides.filter((ride) => ride.status === "scheduled")
@@ -150,10 +128,18 @@ export default function SchedulePage() {
             </h1>
             <p className="text-muted-foreground">Upravljajte rasporedom autobuskih vožnji</p>
           </div>
-          <Button onClick={handleAddNew}>
-            <Plus className="mr-2 h-4 w-4" />
-            Dodaj Vožnju
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline">
+              <Link href="/schedule/cancelled">
+                <Ban className="mr-2 h-4 w-4" />
+                Otkazani polasci
+              </Link>
+            </Button>
+            <Button onClick={handleAddNew}>
+              <Plus className="mr-2 h-4 w-4" />
+              Dodaj Vožnju
+            </Button>
+          </div>
         </div>
 
         {loading && rides.length === 0 ? (
@@ -222,7 +208,7 @@ export default function SchedulePage() {
             }}
             ride={instancesRide}
             loading={mutationLoading}
-            onCancelInstance={handleCancelInstance}
+            onDeleteRide={handleDeleteOneTimeRide}
           />
         )}
       </div>

@@ -24,10 +24,10 @@ import { CheckResult, Invariant, InvariantContext, Violation } from '../invarian
  *   names the wrong bus;
  * - a link whose time copy matches neither its departure nor any other: the
  *   sync keeps a linked row's copies in step with its departure, so only a
- *   write that bypassed it leaves one, and until PR 4 the screens find a
- *   passenger by that copy;
+ *   write that bypassed it leaves one, and old tabs still find a passenger
+ *   by that copy;
  * - an unlinked reservation, either with a unique match (a writer skipped the
- *   link, or the backfill has not run) or without one (an extra at the same
+ *   link, or the backfill has not run) or without one (two buses at the same
  *   time, a stale time, or no stored departure).
  *
  * A link to a departure that does not run is not wrong, and is listed by

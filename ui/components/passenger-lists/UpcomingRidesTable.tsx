@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { formatTimeDisplay } from "@/utils/dateHelpers"
+import { EXTRA_BUS_SUFFIX, isExtraBus } from "@/utils/rideInstanceHelpers"
 import { cn } from "@/lib/utils"
 import type { UpcomingRideListItem } from "@/hooks/usePassengerListsPage"
 
@@ -29,9 +30,10 @@ function formatInstanceDate(dateString: string): string {
   })
 }
 
+/** The instance's ID is its departure's (#27, PR 4a). */
 function passengerListHref(item: UpcomingRideListItem): string {
   const { rideInstance } = item
-  return `/passenger-lists/${encodeURIComponent(rideInstance.rideId)}?date=${rideInstance.date}&departure=${encodeURIComponent(rideInstance.departureTime)}`
+  return `/passenger-lists/${encodeURIComponent(rideInstance.id)}`
 }
 
 function OccupancyLabel({
@@ -80,6 +82,7 @@ export function UpcomingRidesTable({ items, isCountsLoading }: UpcomingRidesTabl
                 <TableCell>{formatInstanceDate(item.rideInstance.date)}</TableCell>
                 <TableCell className="tabular-nums">
                   {formatTimeDisplay(item.rideInstance.departureTime)}
+                  {isExtraBus(item.rideInstance) ? EXTRA_BUS_SUFFIX : ""}
                 </TableCell>
                 <TableCell className="tabular-nums">
                   {formatTimeDisplay(item.rideInstance.arrivalTime)}
@@ -123,6 +126,7 @@ export function UpcomingRidesTable({ items, isCountsLoading }: UpcomingRidesTabl
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Polazak</p>
                 <p className="tabular-nums">
                   {formatTimeDisplay(item.rideInstance.departureTime)}
+                  {isExtraBus(item.rideInstance) ? EXTRA_BUS_SUFFIX : ""}
                 </p>
               </div>
               <div>

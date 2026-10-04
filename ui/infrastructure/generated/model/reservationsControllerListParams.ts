@@ -11,6 +11,10 @@ export type ReservationsControllerListParams = {
 page?: number;
 pageSize?: number;
 rideId?: string;
+/**
+ * Only reservations on this stored departure (one bus on one date).
+ */
+departureId?: string;
 passengerId?: string;
 travelDate?: string;
 rideDepartureTime?: string;

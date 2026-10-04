@@ -1,0 +1,52 @@
+name: Release
+
+permissions: {}
+
+# Every push to master is a promotion of rolling (see master-source.yml), so
+# each one becomes a release: a vYEAR.MONTH.N tag and a GitHub release whose
+# notes list the migrations and pull requests since the previous tag.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    paths:
+      - "ops/release/**"
+      - ".github/workflows/release.yml"
+
+jobs:
+  test:
+    name: release script
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        run: python3 -m unittest discover -s ops/release -p 'test_*.py' -v
+
+  release:
+    name: release
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    # Two promotions in a row must not both pick the same next tag.
+    concurrency:
+      group: release
+      cancel-in-progress: false
+
+    steps:
+      # Full history and tags: the next tag and the notes range come from them.
+      # The script never pushes; gh creates the tag through the API.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tag and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ops/release/release.py

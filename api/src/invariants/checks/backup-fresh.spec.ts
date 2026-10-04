@@ -45,6 +45,21 @@ describe('backup.fresh', () => {
     expect(result.violations[0].detail).toEqual({ reason: 'NOT_CONFIGURED' });
   });
 
+  it('reports empty backup variables as missing configuration', async () => {
+    const empty = Object.fromEntries(Object.keys(configured).map((key) => [key, '']));
+    const result = await checkBackupFreshness(empty, now);
+    expect(result.violations[0].detail).toEqual({ reason: 'NOT_CONFIGURED' });
+  });
+
+  it('falls back to the auto region when the region is empty', async () => {
+    let region: string | undefined;
+    await checkBackupFreshness({ ...configured, BACKUP_S3_REGION: '' }, now, async (config) => {
+      region = config.region;
+      return JSON.stringify({ completedAt: '2026-09-16T10:01:00.000Z' });
+    });
+    expect(region).toBe('auto');
+  });
+
   it('can be explicitly disabled for offline environments', async () => {
     const result = await checkBackupFreshness({ BACKUP_FRESHNESS_CHECK_ENABLED: 'false' }, now);
     expect(result).toEqual({ scannedCount: 0, violations: [] });

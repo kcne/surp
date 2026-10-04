@@ -47,13 +47,16 @@ export async function scanForStaleArrivalTimes(ctx: InvariantContext): Promise<{
     }
 
     // A linked reservation's copy follows its departure (#27, PR 3b), which
-    // the sync rewrites; one with no departure follows the timetable.
+    // the sync rewrites; one with no departure follows the timetable. Two
+    // buses at its time (PR 4c) may arrive at different times, and nothing
+    // says which one it is on, so neither is copied from.
     const departure = window.departureOf(reservation);
-    const instance = departure
-      ? departure
+    const atItsTime = departure
+      ? [departure]
       : window
           .dayOf(ride, travelDate)
-          .instances.find((candidate) => candidate.departureTime === reservation.rideDepartureTime);
+          .instances.filter((candidate) => candidate.departureTime === reservation.rideDepartureTime);
+    const instance = atItsTime.length === 1 ? atItsTime[0] : undefined;
 
     // A reservation no instance reaches is unreachable, which is a different
     // invariant's finding. Reporting it here too would double-count the same

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useParams } from "next/navigation"
 import { Layout } from "@/components/layout/Layout"
 import { SeatMap } from "@/components/reservations/SeatMap"
@@ -21,9 +22,12 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRideInstanceSeatMapPage } from "@/hooks/useRideInstanceSeatMapPage"
 import { formatDateDisplay } from "@/utils/dateHelpers"
+import { reservationsListHref } from "@/utils/reservationsDateParam"
 
 export default function SeatMapPage() {
   const params = useParams<{ rideInstanceId: string }>()
@@ -57,12 +61,46 @@ export default function SeatMapPage() {
     isBulkCancelOpen,
     setIsBulkCancelOpen,
     openSelectedReservationForEdit,
+    departureNotFound,
+    departureError,
+    retryDeparture,
+    bookingClosed,
   } = useRideInstanceSeatMapPage({ rideInstanceId })
 
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const assignGroupMutation = useAssignReservationGroupMutation()
   const cancelReservationsMutation = useCancelReservationsMutation()
   const selectionType = selectedReservations.length > 0 ? "reserved" : "available"
+
+  if (departureNotFound) {
+    return (
+      <Layout>
+        <div className="space-y-4" role="alert">
+          <h1 className="text-2xl font-bold">Polazak nije pronadjen</h1>
+          <p className="text-muted-foreground">
+            Link vodi do polaska koji ne postoji ili se ne moze jednoznacno odrediti.
+          </p>
+          <Link href="/reservations" className="text-primary underline underline-offset-4">
+            Nazad na rezervacije
+          </Link>
+        </div>
+      </Layout>
+    )
+  }
+
+  if (departureError) {
+    return (
+      <Layout>
+        <div className="space-y-4" role="alert">
+          <h1 className="text-2xl font-bold">Polazak nije ucitan</h1>
+          <p className="text-muted-foreground">Podaci o polasku trenutno nisu dostupni.</p>
+          <Button type="button" variant="outline" onClick={() => void retryDeparture()}>
+            Pokusaj ponovo
+          </Button>
+        </div>
+      </Layout>
+    )
+  }
 
   if (!selectedRideInstance) {
     return (
@@ -81,12 +119,16 @@ export default function SeatMapPage() {
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="/reservations">Rezervacije</BreadcrumbLink>
+              <BreadcrumbLink asChild>
+                <Link href={reservationsListHref(selectedDate)}>Rezervacije</Link>
+              </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbLink href="/reservations">
-                {selectedDate ? formatDateDisplay(selectedDate) : "Datum"}
+              <BreadcrumbLink asChild>
+                <Link href={reservationsListHref(selectedDate)}>
+                  {selectedDate ? formatDateDisplay(selectedDate) : "Datum"}
+                </Link>
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
@@ -104,6 +146,16 @@ export default function SeatMapPage() {
           totalSeats={totalSeats}
           onExport={() => setIsExportDialogOpen(true)}
         />
+
+        {bookingClosed ? (
+          <Alert variant="destructive">
+            <AlertTitle>Polazak ne prima rezervacije</AlertTitle>
+            <AlertDescription>
+              Polazak je otkazan ili vise nije u redu voznje. Putnike i dalje mozete izmeniti ili
+              otkazati, a nove rezervacije napravite na drugom polasku.
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         {/* Seat Map */}
         {loading && !seatMap ? (
@@ -126,6 +178,7 @@ export default function SeatMapPage() {
           onRemoveSeat={(seatNumber) => handleSeatClick(seatNumber)}
           onClear={clearSelectedSeats}
           onReserve={() => setIsMultiReservationModalOpen(true)}
+          reserveDisabled={bookingClosed}
           selectionType={selectionType}
           onEdit={openSelectedReservationForEdit}
           onAssignGroup={() => {

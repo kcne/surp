@@ -21,6 +21,7 @@ import type {
 } from "@/infrastructure/generated/model"
 import type { ImportRowState } from "@/lib/csv-import"
 import type { RideInstance } from "@/types"
+import { departuresQueryKey } from "@/infrastructure/hooks/queries/useDeparturesQuery"
 
 /** The API caps a reservation batch at 50 items. */
 const MAX_BATCH_SIZE = 50
@@ -273,6 +274,7 @@ export function useImportCommit({
         }
 
         queryClient.invalidateQueries({ queryKey: ["reservations"] })
+        queryClient.invalidateQueries({ queryKey: departuresQueryKey })
         publishCreatedPassengers()
 
         const failedRowCount = failures.reduce(

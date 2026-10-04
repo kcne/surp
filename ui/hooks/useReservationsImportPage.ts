@@ -9,7 +9,7 @@ import {
   findDuplicateRows,
   findExistingPassenger,
   getStationAliases,
-  resolveRideInstance,
+  selectRideInstance,
   summarizeRows,
   validateImportRows,
   type ImportRow,
@@ -45,8 +45,14 @@ export function useReservationsImportPage() {
   const aliases = useMemo(() => getStationAliases(getTenantSlug()), [])
 
   const travelDates = useMemo(() => rows.map((row) => row.travelDate), [rows])
-  const { rideInstancesByDate, rideInstancesById, isLoading: isLoadingRideInstances } =
-    useRideInstancesByDatesQuery(travelDates, rides)
+  const {
+    rideInstancesByDate,
+    rideInstancesById,
+    isLoading: isLoadingRideInstances,
+    isFetching: isFetchingRideInstances,
+    isError: isRideInstancesError,
+    refetch: retryRideInstances,
+  } = useRideInstancesByDatesQuery(travelDates, rides)
 
   // Ride instances actually referenced by a row, so seat availability is only
   // fetched for rides this import will touch.
@@ -151,34 +157,24 @@ export function useReservationsImportPage() {
       let changed = false
 
       const nextRows = currentRows.map((row) => {
-        const instancesForDate = rideInstancesByDate[row.travelDate] ?? []
-        const resolution = resolveRideInstance(
-          instancesForDate,
-          row.departureStationId,
-          row.arrivalStationId
+        const selection = selectRideInstance(
+          row,
+          rideInstancesByDate[row.travelDate] ?? [],
+          rideInstancesById
         )
 
         const candidatesChanged =
-          resolution.candidateIds.join("|") !== row.rideInstanceCandidateIds.join("|")
+          selection.candidateIds.join("|") !== row.rideInstanceCandidateIds.join("|")
 
-        // Never overwrite an operator's explicit pick; only drop it if the
-        // ride no longer serves the row's route.
-        const keepsCurrentSelection =
-          row.rideInstanceId !== null && resolution.candidateIds.includes(row.rideInstanceId)
-
-        const nextRideInstanceId = keepsCurrentSelection
-          ? row.rideInstanceId
-          : resolution.resolvedId
-
-        if (!candidatesChanged && nextRideInstanceId === row.rideInstanceId) {
+        if (!candidatesChanged && selection.rideInstanceId === row.rideInstanceId) {
           return row
         }
 
         changed = true
         return {
           ...row,
-          rideInstanceCandidateIds: resolution.candidateIds,
-          rideInstanceId: nextRideInstanceId,
+          rideInstanceCandidateIds: selection.candidateIds,
+          rideInstanceId: selection.rideInstanceId,
         }
       })
 
@@ -187,7 +183,7 @@ export function useReservationsImportPage() {
     // `routeSignature` stands in for the row fields the resolution reads; the
     // rows themselves are reached through the setState updater.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rideInstancesByDate, routeSignature])
+  }, [rideInstancesByDate, rideInstancesById, routeSignature])
 
   // Link rows to existing passengers once the passenger directory is loaded.
   useEffect(() => {
@@ -392,6 +388,9 @@ export function useReservationsImportPage() {
     commitResult,
     isLoadingReference: stationsQuery.isLoading || ridesQuery.isLoading,
     isResolving: isLoadingRideInstances || isLoadingReservations || passengersQuery.isLoading,
+    isRideInstancesError,
+    isRetryingRideInstances: isFetchingRideInstances,
+    retryRideInstances,
     isCommitting,
     parseFile,
     updateRow,

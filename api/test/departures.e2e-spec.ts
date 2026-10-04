@@ -25,6 +25,7 @@ describe('DeparturesController (e2e)', () => {
     updatedAt: new Date('2026-10-01T08:00:00.000Z'),
     ride: { name: 'Morning Central Route' },
     line: { name: 'Central - North' },
+    _count: { reservations: 50 },
     stops: [
       {
         stationId: 'station-a',
@@ -144,6 +145,8 @@ describe('DeparturesController (e2e)', () => {
             departureTime: '09:00',
             arrivalTime: '11:00',
             capacity: 48,
+            activeReservationCount: 50,
+            availableSeats: 0,
             timetableDroppedAt: null,
             cancelledAt: '2026-10-01T08:00:00.000Z',
             cancelledById: 'admin-1',
@@ -158,7 +161,9 @@ describe('DeparturesController (e2e)', () => {
         ]
       });
 
-      const { where, orderBy } = prismaMock.departure.findMany.mock.calls[0][0];
+      const { where, orderBy, select } = prismaMock.departure.findMany.mock.calls[0][0];
+      // Seats left count only ACTIVE reservations, by departureId (#27, PR 4a).
+      expect(select._count).toEqual({ select: { reservations: { where: { status: 'ACTIVE' } } } });
       expect(where).toEqual({
         tenantId: 'tenant-1',
         serviceDate: {
@@ -183,8 +188,27 @@ describe('DeparturesController (e2e)', () => {
       await get('/departures?from=2026-10-01&to=2026-12-01').expect(200);
     });
 
+    it('reads only operator-cancelled departures with cancelled=true, over up to 366 days', async () => {
+      await get('/departures?from=2026-10-01&to=2027-10-01&cancelled=true').expect(200);
+
+      expect(prismaMock.departure.findMany.mock.calls[0][0].where).toEqual({
+        tenantId: 'tenant-1',
+        serviceDate: {
+          gte: new Date('2026-10-01T00:00:00.000Z'),
+          lte: new Date('2027-10-01T00:00:00.000Z')
+        },
+        cancelledAt: { not: null },
+        source: { not: 'LEGACY' }
+      });
+    });
+
     it.each([
       ['a range of 63 days', 'from=2026-10-01&to=2026-12-02', 'A range covers at most 62 days'],
+      [
+        'a range of 367 days of cancelled departures',
+        'from=2026-10-01&to=2027-10-02&cancelled=true',
+        'A range covers at most 366 days'
+      ],
       ['to before from', 'from=2026-10-02&to=2026-10-01', 'to must not be before from'],
       ['a date that does not exist', 'from=2026-02-30&to=2026-03-02', 'from and to must be real dates'],
       ['year 0000, which Postgres cannot store', 'from=0000-01-01&to=0000-01-02', 'from and to must be real dates']
@@ -199,6 +223,7 @@ describe('DeparturesController (e2e)', () => {
       ['a missing to', 'from=2026-10-01'],
       ['a malformed date', 'from=01.10.2026&to=2026-10-31'],
       ['an unknown filter', 'from=2026-10-01&to=2026-10-31&status=ACTIVE'],
+      ['cancelled=false, which the list does not take', 'from=2026-10-01&to=2026-10-31&cancelled=false'],
       ['a source filter, which the list does not take', 'from=2026-10-01&to=2026-10-31&source=LEGACY'],
       ['an empty ride filter', 'from=2026-10-01&to=2026-10-31&rideId='],
       ['a whitespace line filter', 'from=2026-10-01&to=2026-10-31&lineId=%20']
@@ -258,6 +283,83 @@ describe('DeparturesController (e2e)', () => {
       await get('/departures/departure-1', 'access-token-superadmin').expect(403);
 
       expect(prismaMock.departure.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('departure operations', () => {
+    function send(
+      method: 'post' | 'patch' | 'delete',
+      path: string,
+      body: object = {},
+      token = 'access-token-admin'
+    ) {
+      return request(app.getHttpServer())
+        [method](path)
+        .set('X-Tenant-Slug', 'demo-tenant')
+        .set('Authorization', `Bearer ${token}`)
+        .send(body);
+    }
+
+    const extra = {
+      rideId: 'ride-1',
+      serviceDate: '2026-10-05',
+      departureTime: '15:00',
+      arrivalTime: '17:00'
+    };
+
+    it('refuses STAFF and DRIVER on every operation, before reading anything', async () => {
+      for (const token of ['access-token-staff', 'access-token-driver']) {
+        await send('post', '/departures', extra, token).expect(403);
+        await send('post', '/departures/departure-1/cancel', {}, token).expect(403);
+        await send('post', '/departures/departure-1/restore', {}, token).expect(403);
+        await send('patch', '/departures/departure-1', { capacity: 30 }, token).expect(403);
+        await send('delete', '/departures/departure-1', {}, token).expect(403);
+      }
+
+      expect(prismaMock.departure.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('refuses a request without a token', async () => {
+      await request(app.getHttpServer())
+        .post('/departures/departure-1/cancel')
+        .set('X-Tenant-Slug', 'demo-tenant')
+        .send({})
+        .expect(401);
+    });
+
+    it('validates a new extra bus', async () => {
+      const invalid = [
+        { ...extra, rideId: '' },
+        { ...extra, rideId: ' ride-1' },
+        { ...extra, serviceDate: '5.10.2026' },
+        { ...extra, departureTime: '25:00' },
+        { ...extra, arrivalTime: '9:00' },
+        { ...extra, capacity: 0 },
+        { ...extra, capacity: 101 },
+        { ...extra, capacity: 12.5 },
+        { ...extra, source: 'SCHEDULE' },
+        { serviceDate: '2026-10-05', departureTime: '15:00', arrivalTime: '17:00' }
+      ];
+
+      for (const body of invalid) {
+        await send('post', '/departures', body).expect(400);
+      }
+    });
+
+    it('validates an extra bus edit', async () => {
+      for (const body of [
+        { departureTime: '24:00' },
+        { capacity: -1 },
+        { serviceDate: '2026-10-06' },
+        { rideId: 'ride-2' },
+        { confirmationTokens: 'token' }
+      ]) {
+        await send('patch', '/departures/departure-1', body).expect(400);
+      }
+    });
+
+    it('refuses an unknown field on a cancellation', async () => {
+      await send('post', '/departures/departure-1/cancel', { force: true }).expect(400);
     });
   });
 });

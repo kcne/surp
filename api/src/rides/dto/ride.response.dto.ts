@@ -61,6 +61,14 @@ export class RideExceptionResponseDto {
 
   @ApiProperty()
   updatedAt!: Date;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description:
+      "For an ADDITIONAL, its extra bus's own capacity, which can differ from the ride's. Null for a SKIP, or an ADDITIONAL whose bus is not stored."
+  })
+  capacity!: number | null;
 }
 
 export class RideResponseDto {
@@ -165,7 +173,11 @@ export class RideInstanceAvailabilitySummaryDto {
 }
 
 export class RideInstanceResponseDto {
-  @ApiProperty({ example: 'ride-1:2026-03-30:09:00:BASE' })
+  @ApiProperty({
+    example: 'ride-1:2026-03-30:09:00:BASE',
+    description:
+      'rideId:date:departureTime:source, unique within the response. Two extra buses at one time also end in their exception ID.'
+  })
   id!: string;
 
   @ApiProperty({ example: 'ride-1' })

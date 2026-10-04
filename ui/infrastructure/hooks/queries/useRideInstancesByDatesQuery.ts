@@ -1,79 +1,70 @@
-import { useMemo } from "react"
-import { useQueries } from "@tanstack/react-query"
+import { useCallback, useMemo } from "react"
+import { useQueries, useQueryClient } from "@tanstack/react-query"
 import {
-  ridesControllerListInstancesByDate,
-  ridesControllerListInstancesByDateResponse,
-} from "@/infrastructure/generated/surp-api"
-import { toRideInstance } from "@/infrastructure/mappers/rideMappers"
+  departureWindowQueryKey,
+  fetchDepartureWindow,
+} from "@/infrastructure/hooks/queries/useDeparturesQuery"
+import { toRunningDepartureInstances } from "@/infrastructure/mappers/departureMappers"
+import { windowsCoveringDates } from "@/utils/departureWindows"
 import type { Ride, RideInstance } from "@/types"
 
-export const rideInstancesByDateQueryKey = (dateIso: string, ridesSignature: string) =>
-  ["rides", "instances", dateIso, ridesSignature] as const
-
-function isSuccess(
-  response: ridesControllerListInstancesByDateResponse
-): response is Extract<ridesControllerListInstancesByDateResponse, { status: 200 }> {
-  return response.status === 200
-}
-
 /**
- * A CSV import spans many travel dates, so instances are fetched per distinct
- * date and flattened into one lookup keyed by ISO date.
+ * A CSV import spans many travel dates, so the running departures covering
+ * them (#27, PR 4a) are fetched in as few windows as reach every date, and
+ * flattened into lookups by ISO date and by departure ID.
  */
 export function useRideInstancesByDatesQuery(dates: string[], rides: Ride[]) {
-  const uniqueDates = useMemo(
-    () => Array.from(new Set(dates.filter((date) => date.length > 0))).sort(),
-    [dates]
-  )
+  const queryClient = useQueryClient()
+  const windows = useMemo(() => windowsCoveringDates(dates), [dates])
 
-  const ridesSignature = useMemo(
-    () => rides.map((ride) => `${ride.id}:${ride.updatedAt ?? ""}`).join("|"),
-    [rides]
-  )
-
-  const rideLookup = useMemo(() => new Map(rides.map((ride) => [ride.id, ride])), [rides])
-
-  // Combined inside `useQueries` rather than in a `useMemo` over its return
-  // value: that array is rebuilt on every render, so a memo keyed on it would
-  // hand out a new lookup each time and re-run every consumer's effects.
-  // `combine` results are structurally shared, so the identity holds while the
-  // underlying data does.
-  return useQueries({
-    queries: uniqueDates.map((dateIso) => ({
-      queryKey: rideInstancesByDateQueryKey(dateIso, ridesSignature),
+  const query = useQueries({
+    queries: windows.map((window) => ({
+      queryKey: departureWindowQueryKey(window),
+      queryFn: () => fetchDepartureWindow(window),
       enabled: rides.length > 0,
       staleTime: 60_000,
-      queryFn: async (): Promise<RideInstance[]> => {
-        const response = await ridesControllerListInstancesByDate({ date: dateIso })
-
-        if (!isSuccess(response)) {
-          throw new Error("Neuspesno ucitavanje instanci voznji")
-        }
-
-        return response.data.items.map((instance) =>
-          toRideInstance(instance, rideLookup.get(instance.rideId))
-        )
-      },
     })),
-    combine: (results) => {
-      const rideInstancesByDate: Record<string, RideInstance[]> = {}
-      const rideInstancesById: Record<string, RideInstance> = {}
-
-      uniqueDates.forEach((dateIso, index) => {
-        const instances = results[index]?.data ?? []
-        rideInstancesByDate[dateIso] = instances
-
-        instances.forEach((instance) => {
-          rideInstancesById[instance.id] = instance
-        })
-      })
-
-      return {
-        rideInstancesByDate,
-        rideInstancesById,
-        isLoading: results.some((result) => result.isLoading),
-        isFetching: results.some((result) => result.isFetching),
-      }
-    },
+    combine: (results) => ({
+      departures: results.flatMap((result) => result.data ?? []),
+      isLoading: results.some((result) => result.isLoading),
+      isFetching: results.some((result) => result.isFetching),
+      isError: results.some((result) => result.isError),
+    }),
   })
+
+  // A failed window leaves its dates without buses, which must not read as
+  // "no departure": the page reports it and retries every window.
+  const refetch = useCallback(
+    () =>
+      Promise.all(
+        windows.map((window) =>
+          queryClient.refetchQueries({ queryKey: departureWindowQueryKey(window), exact: true })
+        )
+      ).then(() => undefined),
+    [queryClient, windows]
+  )
+
+  const lookups = useMemo(() => {
+    const rideInstancesByDate: Record<string, RideInstance[]> = {}
+    const rideInstancesById: Record<string, RideInstance> = {}
+
+    for (const date of dates) {
+      if (date) rideInstancesByDate[date] = []
+    }
+
+    for (const instance of toRunningDepartureInstances(query.departures, rides)) {
+      ;(rideInstancesByDate[instance.date] ??= []).push(instance)
+      rideInstancesById[instance.id] = instance
+    }
+
+    return { rideInstancesByDate, rideInstancesById }
+  }, [dates, query.departures, rides])
+
+  return {
+    ...lookups,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch,
+  }
 }

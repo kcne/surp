@@ -25,4 +25,9 @@ export interface RideExceptionResponseDto {
   updatedById: RideExceptionResponseDtoUpdatedById;
   createdAt: string;
   updatedAt: string;
+  /**
+   * For an ADDITIONAL, its extra bus's own capacity, which can differ from the ride's. Null for a SKIP, or an ADDITIONAL whose bus is not stored.
+   * @nullable
+   */
+  capacity: number | null;
 }

@@ -29,6 +29,9 @@ introducing a parallel pattern.
 
 ## Pull requests
 
+- Always target `rolling` as the PR base branch, never `master`. Verify the
+  base branch when creating or editing a PR.
+
 Before creating or editing a PR, read `.github/PULL_REQUEST_TEMPLATE.md` in
 full and use every applicable section. Do not improvise a replacement format.
 

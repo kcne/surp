@@ -1,13 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
-  ridesControllerAddException,
   ridesControllerCreate,
   ridesControllerCreateResponse,
   ridesControllerGetById,
   ridesControllerGetByIdResponse,
   ridesControllerRemove,
-  ridesControllerRemoveException,
   ridesControllerRemoveResponse,
   ridesControllerReplace,
   ridesControllerReplaceResponse,
@@ -16,21 +14,22 @@ import {
 } from "@/infrastructure/generated/surp-api"
 import {
   toCreateRideDto,
-  toCreateRideExceptionDto,
   toUpdateRideDto,
 } from "@/infrastructure/mappers/rideMappers"
 import { ridesListQueryKey } from "@/infrastructure/hooks/queries/useRidesListQuery"
 import type { RideFormData } from "@/types"
 import {
   ChangeNeedsConfirmationError,
+  scheduleBeingUpdatedMessage,
   throwBreakingChangeConflict,
 } from "@/infrastructure/utils/breaking-change"
 import {
   answerTokens,
   type BreakingChangeAnswers,
 } from "@/infrastructure/hooks/useConfirmableUpdate"
+import { departuresQueryKey } from "@/infrastructure/hooks/queries/useDeparturesQuery"
 
-/** The confirmation key for the ride request itself; exceptions key by id. */
+/** The confirmation key for the ride request. */
 const RIDE_STEP = "ride"
 
 function isRideMutationSuccess<TResponse extends { status: number }>(
@@ -54,6 +53,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 function invalidateRidesList(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ridesListQueryKey })
+  // A timetable edit syncs the stored departures.
+  queryClient.invalidateQueries({ queryKey: departuresQueryKey })
 }
 
 function hasPatchableFields(data: Partial<RideFormData>): boolean {
@@ -87,19 +88,6 @@ export function useCreateRideMutation() {
       const createResponse = await ridesControllerCreate(toCreateRideDto(payload))
       if (!isCreateRideSuccess(createResponse)) {
         throw new Error("Neuspesno kreiranje voznje")
-      }
-
-      if (payload.exceptions?.length) {
-        for (const exception of payload.exceptions) {
-          const addExceptionResponse = await ridesControllerAddException(
-            createResponse.data.id,
-            toCreateRideExceptionDto(exception)
-          )
-
-          if (!isRideMutationSuccess(addExceptionResponse)) {
-            throw new Error("Neuspesno dodavanje izuzetka voznje")
-          }
-        }
       }
 
       const detailResponse = await ridesControllerGetById(createResponse.data.id)
@@ -140,14 +128,6 @@ export function useUpdateRideMutation() {
       answers?: BreakingChangeAnswers
     }) => {
       const answeredFor = (step: string) => answerTokens(answers, step)
-      const hasExceptionsUpdate = Array.isArray(payload.exceptions)
-      // Whether any request in this edit has already been written. Every step
-      // that lands sets it, not just the ride: an exception-only edit that
-      // removes one exception and is then refused on the next has left the
-      // first removal behind, and the dialog must not offer to cancel as
-      // though nothing had happened yet.
-      let anyWriteLanded = false
-
       if (hasPatchableFields(payload)) {
         // The day schedules travel with the ride update instead of going ahead
         // of it in their own request: anything written before it would survive
@@ -158,12 +138,9 @@ export function useUpdateRideMutation() {
         // or none of it does, and it validates them against the line the ride
         // is being moved to rather than the one it is leaving.
         //
-        // Exceptions cannot join it — they are their own endpoints — so they
-        // follow, and they can be refused too. Two things follow from that:
-        // once this call has landed a later refusal is no longer a clean
-        // "nothing happened", which `anyWriteLanded` tells the dialog to say;
-        // and each request is confirmed under its own key, so answering for
-        // this one never answers for an exception nobody was asked about.
+        // The form sends no exceptions (#27, PR 4c): a cancelled date or an
+        // extra bus is an operation on its departure, made from the ride's
+        // departures list.
         const updatePayload = toUpdateRideDto(payload)
 
         const requestBody = { ...updatePayload, ...answeredFor(RIDE_STEP) }
@@ -178,51 +155,6 @@ export function useUpdateRideMutation() {
 
         if (!isSuccess) {
           throw new Error("Neuspesno azuriranje voznje")
-        }
-
-        anyWriteLanded = true
-      }
-
-      if (hasExceptionsUpdate) {
-        const currentResponse = await ridesControllerGetById(id)
-        if (!isGetRideByIdSuccess(currentResponse)) {
-          throw new Error("Neuspesno ucitavanje izuzetaka voznje")
-        }
-
-        const existingExceptions = currentResponse.data.exceptions
-        const nextExceptions = payload.exceptions ?? []
-
-        const nextIds = new Set(nextExceptions.map((exception) => exception.id))
-        const existingIds = new Set(existingExceptions.map((exception) => exception.id))
-
-        const toRemove = existingExceptions.filter((exception) => !nextIds.has(exception.id))
-        const toAdd = nextExceptions.filter((exception) => !existingIds.has(exception.id))
-
-        for (const exception of toRemove) {
-          const step = `exception:remove:${exception.id}`
-          const removeResponse = await ridesControllerRemoveException(
-            id,
-            exception.id,
-            answeredFor(step)
-          ).catch((error: unknown) => throwBreakingChangeConflict(error, step, anyWriteLanded))
-          if (!isRideMutationSuccess(removeResponse)) {
-            throw new Error("Neuspesno uklanjanje izuzetka voznje")
-          }
-
-          anyWriteLanded = true
-        }
-
-        for (const exception of toAdd) {
-          const step = `exception:add:${exception.id}`
-          const addResponse = await ridesControllerAddException(id, {
-            ...toCreateRideExceptionDto(exception),
-            ...answeredFor(step),
-          }).catch((error: unknown) => throwBreakingChangeConflict(error, step, anyWriteLanded))
-          if (!isRideMutationSuccess(addResponse)) {
-            throw new Error("Neuspesno dodavanje izuzetka voznje")
-          }
-
-          anyWriteLanded = true
         }
       }
 
@@ -245,6 +177,60 @@ export function useUpdateRideMutation() {
       }
 
       toast.error(getErrorMessage(error, "Neuspesno azuriranje voznje"))
+    },
+  })
+}
+
+/** The server kept the ride because someone is booked on it. */
+export class RideHasReservationsError extends Error {
+  constructor() {
+    super("Voznja ima aktivne rezervacije")
+    this.name = "RideHasReservationsError"
+  }
+}
+
+/**
+ * Deletes a ride only while nobody is booked on it (#27, PR 4c). Sent without
+ * `cascade`, so the server counts the ride's ACTIVE reservations, on every
+ * date, under the schedule lock, and refuses rather than cancel a booking
+ * the screen could not see: one on a past date, or one made after it read
+ * the ride's departures. That refusal raises no toast and rejects with
+ * `RideHasReservationsError`, for the caller to cancel the bus instead.
+ */
+export function useDeleteUnbookedRideMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await ridesControllerRemove(id).catch((error: unknown) => {
+        const status = (error as { response?: { status?: number } })?.response?.status
+
+        // The other 409 is a busy schedule, which is retried, not a booking.
+        if (status === 409 && !scheduleBeingUpdatedMessage(error)) {
+          throw new RideHasReservationsError()
+        }
+
+        throw error
+      })
+
+      if (!isRideMutationSuccess(response)) {
+        throw new Error("Neuspesno brisanje voznje")
+      }
+
+      return response.data
+    },
+    onSuccess: () => {
+      toast.success("Voznja je uspesno obrisana")
+      invalidateRidesList(queryClient)
+    },
+    onError: (error) => {
+      if (error instanceof RideHasReservationsError) {
+        return
+      }
+
+      toast.error(
+        scheduleBeingUpdatedMessage(error) ?? getErrorMessage(error, "Neuspesno brisanje voznje")
+      )
     },
   })
 }

@@ -1,4 +1,3 @@
-import { ConflictException } from '@nestjs/common';
 import { DepartureSource, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -96,18 +95,6 @@ export interface DepartureUpdate {
   fields: DepartureField[];
 }
 
-/**
- * A `SCHEDULE` departure the sync would write at the departure time of an
- * extra bus of the same ride and date. Until PR 4 a booking from the UI names
- * its bus by that time, so two buses sharing one would make both unbookable.
- */
-export interface SameTimeConflict {
-  planned: PlannedDeparture;
-  extraId: string;
-  /** From a create, which the nightly job also writes, rather than an update. */
-  create: boolean;
-}
-
 export interface DepartureSyncPlan {
   window: DepartureWindow;
   /** The zone the window was read in. */
@@ -126,8 +113,6 @@ export interface DepartureSyncPlan {
   drops: StoredDeparture[];
   /** No longer produced, never cancelled, and referenced by nothing. */
   deletes: StoredDeparture[];
-  /** Pairs this sync would create; applying refuses while there are any. */
-  conflicts: SameTimeConflict[];
 }
 
 export interface DepartureSyncCounts {
@@ -186,18 +171,6 @@ export async function applyDepartureSync(
   mode: DepartureSyncMode,
   now: Date = new Date()
 ): Promise<DepartureSyncCounts> {
-  const conflicts = plan.conflicts.filter((conflict) => mode === 'full' || conflict.create);
-
-  if (conflicts.length > 0) {
-    const [conflict] = conflicts;
-    const ride = await tx.ride.findUnique({
-      where: { id: conflict.planned.rideId },
-      select: { line: { select: { name: true } } }
-    });
-
-    throw sameTimeRefusal(conflict.planned, { lineName: ride?.line.name });
-  }
-
   await createDepartures(tx, plan.creates, scope, now);
 
   if (mode === 'insertOnly') {
@@ -243,27 +216,6 @@ export async function syncDepartures(
 }
 
 /**
- * The refusal for any write that would leave two departures of one ride on
- * one date at the same departure time. A timetable edit can reach every ride
- * of a line, so it names the line; an extra that holds the time after its
- * exception was removed is invisible on the ride screen, so it says so.
- */
-export function sameTimeRefusal(
-  departure: { serviceDate: string; departureTime: string },
-  { lineName, cancelledExtra = false }: { lineName?: string; cancelledExtra?: boolean } = {}
-): ConflictException {
-  const ride = lineName ? `Voznja na liniji ${lineName}` : 'Ova voznja';
-  const taken = cancelledExtra
-    ? `vec ima otkazan dodatni polazak u ${departure.departureTime}, na kom su ostali prodati putnici`
-    : `vec ima polazak u ${departure.departureTime}`;
-
-  return new ConflictException({
-    code: 'DEPARTURE_TIME_TAKEN',
-    message: `${ride} ${departure.serviceDate} ${taken}. Dva polaska iste voznje istog dana ne mogu da krecu u isto vreme.`
-  });
-}
-
-/**
  * What the sync would write, from the timetable's departures, the stored
  * window and the rides. Pure, so the rules below are tested without a
  * database.
@@ -272,8 +224,9 @@ export function sameTimeRefusal(
  *   capacity and stops follow the timetable, and a dropped one comes back.
  * - An `EXTRA` is never produced by the timetable. Its line and stops follow
  *   its ride, and it is dropped while the ride does not run. Its times are the
- *   operator's. So is its capacity once PR 3d lets one be set; until then an
- *   extra an ADDITIONAL added follows its ride's capacity.
+ *   operator's, and so is its capacity (PR 3d); one inserted for an ADDITIONAL
+ *   starts at its ride's, and a ride capacity edit moves the extras still at
+ *   the old one (`followRideCapacity`), not this diff.
  * - A departure the timetable no longer produces is deleted only when nothing
  *   references it and nobody cancelled it. Otherwise it is marked dropped.
  * - A created `SCHEDULE` departure carries its date's SKIP, if there is one.
@@ -285,7 +238,7 @@ export function diffDepartures(
   stored: readonly StoredDeparture[],
   rides: readonly GeneratorRide[],
   exceptions: readonly ExceptionRecord[] = []
-): Pick<DepartureSyncPlan, 'creates' | 'updates' | 'drops' | 'deletes' | 'conflicts'> {
+): Pick<DepartureSyncPlan, 'creates' | 'updates' | 'drops' | 'deletes'> {
   const ridesById = new Map(rides.map((ride) => [ride.id, ride]));
   const skips = skipsByRideDate(exceptions);
   const storedByKey = new Map<string, StoredDeparture>();
@@ -343,16 +296,12 @@ export function diffDepartures(
       serviceDate: extra.serviceDate,
       departureTime: extra.departureTime,
       arrivalTime: extra.arrivalTime,
-      // An extra an ADDITIONAL added has no capacity of its own until PR 3d
-      // lets an operator set one, so it follows its ride's, as it did before.
-      capacity: extra.rideExceptionId !== null ? ride.capacity : extra.capacity,
+      // The operator's since PR 3d, which lets one be set: a ride's capacity
+      // edit leaves its extras as they are.
+      capacity: extra.capacity,
       rideExceptionId: extra.rideExceptionId
     });
-    // Before PR 3a, deleting a booked ADDITIONAL left its extra dropped rather
-    // than cancelled. Nobody has decided anything about such an orphan since,
-    // so it is not brought back; `departure.matchesExceptions` lists it.
-    const orphan = extra.rideExceptionId === null && extra.cancelledAt === null;
-    const dropped = rideDropped || (orphan && extra.timetableDroppedAt !== null);
+    const dropped = extraDropped(extra, rideDropped);
     const fields = changedFields(extra, departure, dropped);
 
     if (fields.length > 0) {
@@ -378,8 +327,6 @@ export function diffDepartures(
       rideExceptionId: exception.id
     });
 
-    // Not checked against the timetable's time: the pair was allowed when the
-    // row was saved, and refusing it here would block every edit of the tenant.
     creates.push({ ...departure, timetableDropped: dropped });
   }
 
@@ -392,44 +339,37 @@ export function diffDepartures(
     updates,
     // A kept departure already marked dropped needs nothing more.
     drops: gone.filter((departure) => kept(departure) && !departure.timetableDroppedAt),
-    deletes: gone.filter((departure) => !kept(departure)),
-    conflicts: sameTimeConflicts(creates, updates, extras)
+    deletes: gone.filter((departure) => !kept(departure))
   };
 }
 
-function sameTimeConflicts(
-  creates: readonly PlannedDeparture[],
-  updates: readonly DepartureUpdate[],
-  extras: readonly StoredDeparture[]
-): SameTimeConflict[] {
-  if (extras.length === 0) {
-    return [];
-  }
+/**
+ * Whether a stored extra should carry `timetableDroppedAt`: while its ride does
+ * not run, and for good once it is an orphan the timetable dropped. Before PR
+ * 3a, deleting a booked ADDITIONAL left its extra dropped rather than
+ * cancelled. Nobody has decided anything about such an orphan since, so neither
+ * the sync nor an operator's move brings it back;
+ * `departure.matchesExceptions` lists it.
+ */
+export function extraDropped(extra: StoredDeparture, rideDropped: boolean): boolean {
+  const orphan = extra.rideExceptionId === null && extra.cancelledAt === null;
 
-  const extraAt = new Map(
-    extras.map((extra) => [`${extra.rideId}:${extra.serviceDate}:${extra.departureTime}`, extra.id])
-  );
-  const conflictOf = (planned: PlannedDeparture, create: boolean): SameTimeConflict[] => {
-    const extraId = extraAt.get(
-      `${planned.rideId}:${planned.serviceDate}:${planned.departureTime}`
-    );
+  return rideDropped || (orphan && extra.timetableDroppedAt !== null);
+}
 
-    return extraId ? [{ planned, extraId, create }] : [];
-  };
+/**
+ * The update that brings a stored departure to its planned state, or null when
+ * nothing differs. Operator edits of an extra build theirs here, so they are
+ * written by the same rules as the sync's.
+ */
+export function departureUpdate(
+  stored: StoredDeparture,
+  planned: PlannedDeparture,
+  dropped: boolean
+): DepartureUpdate | null {
+  const fields = changedFields(stored, planned, dropped);
 
-  // Only what this sync writes: a pair already stored is counted by the
-  // rehearsal and left for PR 4, not allowed to block every edit meanwhile.
-  return [
-    ...creates
-      .filter((planned) => planned.source === DepartureSource.SCHEDULE)
-      .flatMap((planned) => conflictOf(planned, true)),
-    ...updates
-      .filter(
-        ({ stored, fields }) =>
-          stored.source === DepartureSource.SCHEDULE && fields.includes('departureTime')
-      )
-      .flatMap(({ planned }) => conflictOf(planned, false))
-  ];
+  return fields.length > 0 ? { stored, planned, dropped, fields } : null;
 }
 
 function changedFields(
@@ -535,7 +475,7 @@ export async function insertPlannedDepartures(
  * are replaced in one delete and one insert across every departure whose stops
  * changed, and a departure whose only change is its stops keeps its row as is.
  */
-async function updateDepartures(
+export async function updateDepartures(
   tx: Prisma.TransactionClient,
   updates: readonly DepartureUpdate[],
   scope: DepartureSyncScope,
@@ -631,7 +571,7 @@ async function rewriteReservationTimes(
   }
 }
 
-function stopRows(departureId: string, stops: readonly PlannedStop[], scope: DepartureSyncScope) {
+export function stopRows(departureId: string, stops: readonly PlannedStop[], scope: DepartureSyncScope) {
   return stops.map((stop) => ({
     id: randomUUID(),
     tenantId: scope.tenantId,
@@ -685,6 +625,43 @@ export async function loadRides(
   });
 }
 
+const STORED_SELECT = {
+  id: true,
+  source: true,
+  rideId: true,
+  serviceDate: true,
+  lineId: true,
+  departureTime: true,
+  arrivalTime: true,
+  capacity: true,
+  timetableDroppedAt: true,
+  cancelledAt: true,
+  cancelledById: true,
+  rideExceptionId: true,
+  stops: {
+    select: {
+      stationId: true,
+      orderIndex: true,
+      time: true,
+      isBoarding: true,
+      isDropoff: true
+    }
+  },
+  _count: { select: { reservations: true } }
+} as const satisfies Prisma.DepartureSelect;
+
+function toStored({
+  _count,
+  serviceDate,
+  ...departure
+}: Prisma.DepartureGetPayload<{ select: typeof STORED_SELECT }>): StoredDeparture {
+  return {
+    ...departure,
+    serviceDate: formatDateOnly(serviceDate)!,
+    referenceCount: _count.reservations
+  };
+}
+
 async function loadStored(
   db: Db,
   tenantId: string,
@@ -696,36 +673,14 @@ async function loadStored(
       source: { in: [DepartureSource.SCHEDULE, DepartureSource.EXTRA] },
       serviceDate: { gte: utcDateOf(window.from), lte: utcDateOf(window.to) }
     },
-    select: {
-      id: true,
-      source: true,
-      rideId: true,
-      serviceDate: true,
-      lineId: true,
-      departureTime: true,
-      arrivalTime: true,
-      capacity: true,
-      timetableDroppedAt: true,
-      cancelledAt: true,
-      cancelledById: true,
-      rideExceptionId: true,
-      stops: {
-        select: {
-          stationId: true,
-          orderIndex: true,
-          time: true,
-          isBoarding: true,
-          isDropoff: true
-        }
-      },
-      _count: { select: { reservations: true } }
-    },
+    select: STORED_SELECT,
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]
   });
 
-  return departures.map(({ _count, serviceDate, ...departure }) => ({
-    ...departure,
-    serviceDate: formatDateOnly(serviceDate)!,
-    referenceCount: _count.reservations
-  }));
+  return departures.map(toStored);
+}
+
+/** One stored departure as the sync sees it, for an operator edit to diff against. */
+export async function loadStoredDeparture(db: Db, id: string): Promise<StoredDeparture> {
+  return toStored(await db.departure.findUniqueOrThrow({ where: { id }, select: STORED_SELECT }));
 }

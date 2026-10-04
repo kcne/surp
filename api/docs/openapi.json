@@ -28,7 +28,7 @@
             "name": "to",
             "required": true,
             "in": "query",
-            "description": "Last service date, included. The range covers at most 62 days, both ends included.",
+            "description": "Last service date, included. The range covers at most 62 days, both ends included, or 366 with cancelled=true.",
             "schema": {
               "example": "2026-10-31",
               "type": "string"
@@ -51,6 +51,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "cancelled",
+            "required": false,
+            "in": "query",
+            "description": "Only departures an operator cancelled, LEGACY ones left out: the few the cancelled-departures page restores from. The range may then cover up to 366 days.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         ],
         "responses": {
@@ -65,7 +77,7 @@
             }
           },
           "400": {
-            "description": "Validation failure, a date that does not exist, to before from, or a range over 62 days."
+            "description": "Validation failure, a date that does not exist, to before from, or a range over 62 days (366 with cancelled=true)."
           },
           "401": {
             "description": "Missing or invalid access token."
@@ -79,7 +91,64 @@
             "access-token": []
           }
         ],
-        "summary": "List stored departures (one bus on one date) in the current tenant between two service dates. Past, cancelled, dropped and LEGACY departures are included.",
+        "summary": "List stored departures (one bus on one date) in the current tenant between two service dates. Past, cancelled, dropped and LEGACY departures are included, unless cancelled=true asks for operator-cancelled ones only.",
+        "tags": [
+          "Departures"
+        ]
+      },
+      "post": {
+        "operationId": "DeparturesController_createExtra",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExtraDepartureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure, a date that does not exist or lies outside the agency's today to 365 days ahead, or equal departure and arrival times."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Ride not found in current tenant."
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Add an extra bus to a ride on one service date. It follows the ride's line and stops; its times and capacity are its own. It may leave at the same time as another bus of the ride that day. Until PR 6 it also writes the ride's ADDITIONAL exception.",
         "tags": [
           "Departures"
         ]
@@ -137,6 +206,304 @@
         "tags": [
           "Departures"
         ]
+      },
+      "patch": {
+        "operationId": "DeparturesController_updateExtra",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExtraDepartureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure, nothing to change, equal departure and arrival times, or a service date outside the agency's today to 365 days ahead."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Departure not found in current tenant."
+          },
+          "409": {
+            "description": "WOULD_BREAK_RESERVATIONS, confirmable; or a departure that is not an extra bus, which is not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/WouldBreakReservationsDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DepartureOperationRefusalDto"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Change the times or capacity of an extra bus. Its stops, its reservations' time copies and its ADDITIONAL follow the new times. Moving a booked bus, or cutting its seats under a booked seat or a full stretch, is refused with WOULD_BREAK_RESERVATIONS until confirmed.",
+        "tags": [
+          "Departures"
+        ]
+      },
+      "delete": {
+        "operationId": "DeparturesController_deleteExtra",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A service date outside the agency's today to 365 days ahead."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Departure not found in current tenant."
+          },
+          "409": {
+            "description": "DEPARTURE_HAS_RESERVATIONS: a reservation references the bus, a cancelled one included; cancel it instead. Also a departure that is not an extra bus.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureOperationRefusalDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Delete an extra bus nobody was ever booked on, with its ADDITIONAL exception. Answers with the departure as it was.",
+        "tags": [
+          "Departures"
+        ]
+      }
+    },
+    "/departures/{id}/cancel": {
+      "post": {
+        "operationId": "DeparturesController_cancel",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelDepartureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failure, or a service date outside the agency's today to 365 days ahead."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Departure not found in current tenant."
+          },
+          "409": {
+            "description": "Either WOULD_BREAK_RESERVATIONS, confirmable, listing the passengers left on a cancelled bus; or a departure that is already cancelled or LEGACY.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/WouldBreakReservationsDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DepartureOperationRefusalDto"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Cancel a departure. Its passengers stay ACTIVE on it. A booked departure is refused with WOULD_BREAK_RESERVATIONS until its confirmationToken is sent back. Until PR 6 a timetable departure also gets its date's SKIP exception, and an extra bus loses its ADDITIONAL.",
+        "tags": [
+          "Departures"
+        ]
+      }
+    },
+    "/departures/{id}/restore": {
+      "post": {
+        "operationId": "DeparturesController_restore",
+        "parameters": [
+          {
+            "name": "X-Tenant-Slug",
+            "in": "header",
+            "description": "Tenant slug that must match authenticated token tenant.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A service date outside the agency's today to 365 days ahead."
+          },
+          "401": {
+            "description": "Missing or invalid access token."
+          },
+          "403": {
+            "description": "Insufficient role for this resource."
+          },
+          "404": {
+            "description": "Departure not found in current tenant."
+          },
+          "409": {
+            "description": "A departure that is not cancelled, is LEGACY, or is DEPARTURE_DROPPED: the timetable does not make it now, so restored it would still not run.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureOperationRefusalDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Bring a cancelled departure back. Until PR 6 a timetable departure loses its date's SKIP exception, and an extra bus gets an ADDITIONAL again.",
+        "tags": [
+          "Departures"
+        ]
       }
     },
     "/health": {
@@ -152,6 +519,7 @@
                   "example": {
                     "status": "ok",
                     "db": "up",
+                    "commit": "bd01855745f3c2a1e0b7d9c6f4a8e2b1c3d5f7a9",
                     "timestamp": "2026-03-13T00:00:00.000Z"
                   }
                 }
@@ -1461,7 +1829,7 @@
             "description": "Line not found in current tenant."
           },
           "409": {
-            "description": "The proposed line would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.",
+            "description": "The proposed line would break existing reservations.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1536,7 +1904,7 @@
             "description": "Line not found in current tenant."
           },
           "409": {
-            "description": "The proposed line would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.",
+            "description": "The proposed line would break existing reservations.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1677,7 +2045,7 @@
             "description": "Line not found in current tenant."
           },
           "409": {
-            "description": "The proposed stop sequence would break existing reservations. Also DEPARTURE_TIME_TAKEN, not confirmable, when a ride of the line would get a departure at the time of one of its extra buses.",
+            "description": "The proposed stop sequence would break existing reservations.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3796,7 +4164,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.",
+            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3871,7 +4239,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.",
+            "description": "The change would break existing reservations, such as lowering capacity under a seat already sold. Resend with its confirmationToken in confirmationTokens to proceed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4012,7 +4380,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "The proposed schedule would break an existing reservation. Also DEPARTURE_TIME_TAKEN, not confirmable, when the timetable would put a departure at the time of an extra bus of the same ride and date.",
+            "description": "The proposed schedule would break an existing reservation.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4089,7 +4457,7 @@
             "description": "Ride not found in current tenant."
           },
           "409": {
-            "description": "Either a SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable; a duplicate or conflicting exception; or an ADDITIONAL at the time of another departure of the ride that day, carrying DEPARTURE_TIME_TAKEN. Only the first is confirmable.",
+            "description": "Either a SKIP that would break a reservation, carrying WOULD_BREAK_RESERVATIONS and confirmable; or a duplicate or conflicting exception, which is not.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4099,9 +4467,6 @@
                     },
                     {
                       "$ref": "#/components/schemas/RideExceptionConflictDto"
-                    },
-                    {
-                      "$ref": "#/components/schemas/DepartureTimeTakenDto"
                     }
                   ]
                 }
@@ -4298,6 +4663,16 @@
             "in": "query",
             "schema": {
               "example": "ride-id-123",
+              "type": "string"
+            }
+          },
+          {
+            "name": "departureId",
+            "required": false,
+            "in": "query",
+            "description": "Only reservations on this stored departure (one bus on one date).",
+            "schema": {
+              "example": "departure-id-123",
               "type": "string"
             }
           },
@@ -6287,6 +6662,16 @@
             "type": "number",
             "example": 48
           },
+          "activeReservationCount": {
+            "type": "number",
+            "example": 12,
+            "description": "ACTIVE reservations on this departure."
+          },
+          "availableSeats": {
+            "type": "number",
+            "example": 36,
+            "description": "Capacity less the ACTIVE reservations, never below 0. Counts whole-bus seats, not stretches."
+          },
           "timetableDroppedAt": {
             "type": "string",
             "format": "date-time",
@@ -6330,6 +6715,8 @@
           "departureTime",
           "arrivalTime",
           "capacity",
+          "activeReservationCount",
+          "availableSeats",
           "timetableDroppedAt",
           "cancelledAt",
           "cancelledById",
@@ -6362,6 +6749,201 @@
           "to",
           "items"
         ]
+      },
+      "CreateExtraDepartureDto": {
+        "type": "object",
+        "properties": {
+          "rideId": {
+            "type": "string",
+            "description": "The ride the extra bus runs for. It follows that ride's line and stops."
+          },
+          "serviceDate": {
+            "type": "string",
+            "example": "2026-10-05",
+            "description": "Service date, from the agency's today to 365 days ahead."
+          },
+          "departureTime": {
+            "type": "string",
+            "example": "15:00",
+            "description": "Time at the first stop. Another bus of the ride may leave at the same time that day."
+          },
+          "arrivalTime": {
+            "type": "string",
+            "example": "17:00",
+            "description": "Time at the last stop. Overnight is allowed."
+          },
+          "capacity": {
+            "type": "number",
+            "example": 48,
+            "description": "Seats. The ride's capacity when omitted."
+          }
+        },
+        "required": [
+          "rideId",
+          "serviceDate",
+          "departureTime",
+          "arrivalTime"
+        ]
+      },
+      "WouldBreakReservationsDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "WOULD_BREAK_RESERVATIONS"
+          },
+          "invariant": {
+            "type": "string",
+            "example": "reservation.seatWithinCapacity",
+            "description": "Key of the invariant the change would violate."
+          },
+          "affectedCount": {
+            "type": "number",
+            "example": 8,
+            "description": "New invariant violations the proposed change would introduce."
+          },
+          "message": {
+            "type": "string",
+            "example": "Ova izmena cini 8 rezervacija nevidljivim."
+          },
+          "confirmationToken": {
+            "type": "string",
+            "example": "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e",
+            "description": "Identifies the affected set described here. Send it back in confirmationTokens or repairTokens to answer this refusal. If the set changes before the answer arrives, the write is refused again with a new token."
+          },
+          "staleClient": {
+            "type": "boolean",
+            "example": true,
+            "description": "Present when the request answered with the retired confirmBreakingChange or repairBreakingChange boolean. The page predates tokens and must be reloaded; message says so."
+          },
+          "repairable": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether resending with confirmationToken in repairTokens would settle every affected subject rather than leaving it broken."
+          },
+          "repairMessage": {
+            "type": "string",
+            "example": "Premesta 8 rezervacija na novo vreme polaska i slobodna mesta.",
+            "description": "What the repair would do, in Serbian. Present when repairable."
+          }
+        },
+        "required": [
+          "code",
+          "invariant",
+          "affectedCount",
+          "message",
+          "confirmationToken",
+          "repairable"
+        ]
+      },
+      "DepartureOperationRefusalDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "DEPARTURE_LEGACY",
+              "DEPARTURE_ALREADY_CANCELLED",
+              "DEPARTURE_NOT_CANCELLED",
+              "DEPARTURE_DROPPED",
+              "DEPARTURE_NOT_EXTRA",
+              "DEPARTURE_HAS_RESERVATIONS"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "example": "Polazak je vec otkazan."
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "CancelDepartureDto": {
+        "type": "object",
+        "properties": {
+          "confirmationTokens": {
+            "example": [
+              "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e"
+            ],
+            "description": "confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repairTokens": {
+            "example": [],
+            "description": "confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confirmBreakingChange": {
+            "type": "boolean",
+            "deprecated": true,
+            "example": false,
+            "description": "Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead."
+          },
+          "repairBreakingChange": {
+            "type": "boolean",
+            "deprecated": true,
+            "example": false,
+            "description": "Ignored. Send repairTokens instead."
+          }
+        }
+      },
+      "UpdateExtraDepartureDto": {
+        "type": "object",
+        "properties": {
+          "confirmationTokens": {
+            "example": [
+              "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e"
+            ],
+            "description": "confirmationToken values from WOULD_BREAK_RESERVATIONS refusals the operator chose to save anyway. Permits exactly the violations each refusal listed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repairTokens": {
+            "example": [],
+            "description": "confirmationToken values from repairable WOULD_BREAK_RESERVATIONS refusals the operator chose to repair. A failed repair refuses the whole write.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confirmBreakingChange": {
+            "type": "boolean",
+            "deprecated": true,
+            "example": false,
+            "description": "Permits nothing. A refusal to a request carrying it tells the operator to reload the page. Send confirmationTokens instead."
+          },
+          "repairBreakingChange": {
+            "type": "boolean",
+            "deprecated": true,
+            "example": false,
+            "description": "Ignored. Send repairTokens instead."
+          },
+          "departureTime": {
+            "type": "string",
+            "example": "15:30",
+            "description": "New time at the first stop. Reservations on the bus follow it, once confirmed."
+          },
+          "arrivalTime": {
+            "type": "string",
+            "example": "17:30",
+            "description": "New time at the last stop."
+          },
+          "capacity": {
+            "type": "number",
+            "example": 40,
+            "description": "New number of seats. Below a booked seat number it is refused until confirmed."
+          }
+        }
       },
       "LoginDto": {
         "type": "object",
@@ -6840,57 +7422,6 @@
             "example": false
           }
         }
-      },
-      "WouldBreakReservationsDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "example": "WOULD_BREAK_RESERVATIONS"
-          },
-          "invariant": {
-            "type": "string",
-            "example": "reservation.seatWithinCapacity",
-            "description": "Key of the invariant the change would violate."
-          },
-          "affectedCount": {
-            "type": "number",
-            "example": 8,
-            "description": "New invariant violations the proposed change would introduce."
-          },
-          "message": {
-            "type": "string",
-            "example": "Ova izmena cini 8 rezervacija nevidljivim."
-          },
-          "confirmationToken": {
-            "type": "string",
-            "example": "9f2c5c0e6a1d4b7f8e3a2c1b0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e",
-            "description": "Identifies the affected set described here. Send it back in confirmationTokens or repairTokens to answer this refusal. If the set changes before the answer arrives, the write is refused again with a new token."
-          },
-          "staleClient": {
-            "type": "boolean",
-            "example": true,
-            "description": "Present when the request answered with the retired confirmBreakingChange or repairBreakingChange boolean. The page predates tokens and must be reloaded; message says so."
-          },
-          "repairable": {
-            "type": "boolean",
-            "example": true,
-            "description": "Whether resending with confirmationToken in repairTokens would settle every affected subject rather than leaving it broken."
-          },
-          "repairMessage": {
-            "type": "string",
-            "example": "Premesta 8 rezervacija na novo vreme polaska i slobodna mesta.",
-            "description": "What the repair would do, in Serbian. Present when repairable."
-          }
-        },
-        "required": [
-          "code",
-          "invariant",
-          "affectedCount",
-          "message",
-          "confirmationToken",
-          "repairable"
-        ]
       },
       "LineStopInputDto": {
         "type": "object",
@@ -8984,6 +9515,11 @@
           "updatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "capacity": {
+            "type": "number",
+            "nullable": true,
+            "description": "For an ADDITIONAL, its extra bus's own capacity, which can differ from the ride's. Null for a SKIP, or an ADDITIONAL whose bus is not stored."
           }
         },
         "required": [
@@ -8995,7 +9531,8 @@
           "createdById",
           "updatedById",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "capacity"
         ]
       },
       "RideLineSummaryDto": {
@@ -9219,7 +9756,8 @@
         "properties": {
           "id": {
             "type": "string",
-            "example": "ride-1:2026-03-30:09:00:BASE"
+            "example": "ride-1:2026-03-30:09:00:BASE",
+            "description": "rideId:date:departureTime:source, unique within the response. Two extra buses at one time also end in their exception ID."
           },
           "rideId": {
             "type": "string",
@@ -9464,26 +10002,6 @@
           "statusCode",
           "message",
           "error"
-        ]
-      },
-      "DepartureTimeTakenDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "enum": [
-              "DEPARTURE_TIME_TAKEN"
-            ],
-            "example": "DEPARTURE_TIME_TAKEN"
-          },
-          "message": {
-            "type": "string",
-            "example": "Voznja na liniji Beograd - Nis 2026-10-05 vec ima polazak u 09:00. Dva polaska iste voznje istog dana ne mogu da krecu u isto vreme."
-          }
-        },
-        "required": [
-          "code",
-          "message"
         ]
       },
       "CreateRideExceptionDto": {

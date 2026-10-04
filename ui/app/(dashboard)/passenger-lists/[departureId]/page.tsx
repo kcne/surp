@@ -12,8 +12,8 @@ import { PASSENGER_LIST_HEADERS, toPassengerListCells } from "@/utils/passengerL
 import { createPassengerListPdf } from "@/utils/passengerListPdf"
 
 export default function PassengerListDetailPage() {
-  const params = useParams<{ rideId: string }>()
-  const rideId = decodeURIComponent(params?.rideId ?? "")
+  const params = useParams<{ departureId: string }>()
+  const departureId = decodeURIComponent(params?.departureId ?? "")
   const {
     rideInstance,
     rows,
@@ -21,7 +21,9 @@ export default function PassengerListDetailPage() {
     isLoading,
     isRowsLoading,
     isNotFound,
-  } = usePassengerListDetailPage({ rideId })
+    isError,
+    retry,
+  } = usePassengerListDetailPage({ departureId })
   const hasOpenedPdf = useRef(false)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [exportAttempt, setExportAttempt] = useState(0)
@@ -69,10 +71,28 @@ export default function PassengerListDetailPage() {
       <Layout>
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
           <FileText className="mb-3 h-10 w-10 text-muted-foreground" />
-          <p className="text-lg font-medium text-muted-foreground">Vožnja nije pronađena</p>
+          <p className="text-lg font-medium text-muted-foreground">Polazak nije pronadjen</p>
           <p className="mb-4 text-sm text-muted-foreground">
-            Vožnja za traženi datum više ne postoji u rasporedu.
+            Polazak ne postoji ili link ne vodi do jednog polaska.
           </p>
+        </div>
+      </Layout>
+    )
+  }
+
+  if (isError) {
+    return (
+      <Layout>
+        <div className="flex min-h-64 flex-col items-center justify-center gap-3 text-center">
+          <Alert variant="destructive" className="max-w-md text-left">
+            <AlertTitle>Polazak nije ucitan</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>Podaci o polasku trenutno nisu dostupni.</p>
+              <Button type="button" variant="outline" onClick={() => void retry()}>
+                Pokusaj ponovo
+              </Button>
+            </AlertDescription>
+          </Alert>
         </div>
       </Layout>
     )

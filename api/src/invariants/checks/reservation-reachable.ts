@@ -1,7 +1,8 @@
-import { resolveDepartureLink } from '../../departures/departure-link';
+import { LINKABLE_SOURCES, departureLinkKey } from '../../departures/departure-link';
 import { withUpdateAudit } from '../../prisma/audit-write.helper';
-import { formatDateOnly } from '../../rides/ride-instance-materialization';
+import { formatDateOnly, utcDateOf } from '../../rides/ride-instance-materialization';
 import {
+  ORPHAN_AMBIGUOUS_TARGET_ADVICE,
   ORPHAN_NO_FREE_SEAT_ADVICE,
   ORPHAN_REASON_ADVICE,
   ORPHAN_REASON_LABELS,
@@ -121,17 +122,9 @@ export async function repairOrphanedReservations(
     }
 
     // The new time can belong to another bus on the same date, an extra, so
-    // the departure link is matched again rather than kept (#27 PR 1b).
-    const { rideId, travelDate } = await ctx.prisma.reservation.findUniqueOrThrow({
-      where: { id: item.reservationId },
-      select: { rideId: true, travelDate: true }
-    });
-    const departureId = await resolveDepartureLink(ctx.prisma, {
-      tenantId: ctx.tenantId,
-      rideId,
-      travelDate,
-      departureTime: item.targetDepartureTime
-    });
+    // the link is the bus the scan resolved for it rather than kept (#27 PR
+    // 1b). It is empty only where no departure is stored for that date yet.
+    const departureId = scan.targetDepartureIds.get(item.reservationId) ?? null;
 
     // A prospective write passes its transaction here, so a later failure
     // rolls back every selected update along with the proposed write.
@@ -176,6 +169,8 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
   windowEndDate: string;
   scannedReservationCount: number;
   items: OrphanedReservationItem[];
+  /** The bus a repairable orphan is linked to, null where none is stored yet. */
+  targetDepartureIds: ReadonlyMap<string, string | null>;
 }> {
   const window = await loadReservationWindow(ctx);
 
@@ -184,7 +179,8 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
       windowStartDate: window.windowStartDate,
       windowEndDate: window.windowEndDate,
       scannedReservationCount: 0,
-      items: []
+      items: [],
+      targetDepartureIds: new Map()
     };
   }
 
@@ -247,6 +243,12 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
     });
   }
 
+  // An orphan moves onto the bus its new time names, and an extra has its own
+  // capacity (#27, PR 3d), so seats are checked against that bus.
+  const targetOf = await loadRepairTargets(ctx, orphanCandidates);
+  const capacityOf = (ride: { id: string; capacity: number }, travelDate: string, time: string) =>
+    targetOf(ride, travelDate, time).capacity;
+
   // Seats are resolved only after every visible reservation has claimed its
   // own, so an orphan never wins a seat that a visible passenger holds.
   //
@@ -266,7 +268,9 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
 
     const { reservation, ride, travelDate, targetDepartureTime } = candidate;
 
-    if (!targetDepartureTime) {
+    // Two buses at the new time are not guessed between, so no seat is
+    // placed on either.
+    if (!targetDepartureTime || targetOf(ride, travelDate, targetDepartureTime).ambiguous) {
       seatByReservationId.set(reservation.id, null);
       continue;
     }
@@ -274,7 +278,10 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
     const key = `${reservation.rideId}:${travelDate}:${targetDepartureTime}`;
     const taken = occupiedSeats.get(key) ?? new Set<number>();
 
-    if (reservation.seatNumber <= ride.capacity && !taken.has(reservation.seatNumber)) {
+    if (
+      reservation.seatNumber <= capacityOf(ride, travelDate, targetDepartureTime) &&
+      !taken.has(reservation.seatNumber)
+    ) {
       seatByReservationId.set(reservation.id, reservation.seatNumber);
       claimSeat(reservation.rideId, travelDate, targetDepartureTime, reservation.seatNumber);
       continue;
@@ -289,7 +296,7 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
     const seat = resolveSeatNumber(
       reservation.seatNumber,
       occupiedSeats.get(key) ?? new Set<number>(),
-      ride.capacity
+      capacityOf(ride, travelDate, targetDepartureTime!)
     );
 
     seatByReservationId.set(reservation.id, seat);
@@ -311,8 +318,11 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
     const targetSeatNumber = seatByReservationId.get(reservation.id) ?? null;
     const stationName = (stationId: string) => stationNameById.get(stationId) ?? stationId;
 
-    // A known departure with no free seat is the one case where the reason's
-    // own sentence would promise a repair that declines to run.
+    // A known departure with no free seat, or two buses at the new time, are
+    // the cases where the reason's own sentence would promise a repair that
+    // declines to run.
+    const ambiguousTarget =
+      targetDepartureTime !== null && targetOf(ride, travelDate, targetDepartureTime).ambiguous;
     const noFreeSeat = targetDepartureTime !== null && targetSeatNumber === null;
 
     return {
@@ -331,9 +341,11 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
       targetSeatNumber,
       reason: candidate.reason,
       reasonLabel: ORPHAN_REASON_LABELS[candidate.reason],
-      reasonAdvice: noFreeSeat
-        ? ORPHAN_NO_FREE_SEAT_ADVICE
-        : ORPHAN_REASON_ADVICE[candidate.reason],
+      reasonAdvice: ambiguousTarget
+        ? ORPHAN_AMBIGUOUS_TARGET_ADVICE
+        : noFreeSeat
+          ? ORPHAN_NO_FREE_SEAT_ADVICE
+          : ORPHAN_REASON_ADVICE[candidate.reason],
       canRepair: targetDepartureTime !== null && targetSeatNumber !== null,
       offRouteStationNames: findOffRouteStationIds(
         { ...reservation, travelDate },
@@ -342,11 +354,23 @@ export async function scanForOrphans(ctx: InvariantContext, subjectIds?: Readonl
     };
   });
 
+  const targetDepartureIds = new Map<string, string | null>();
+
+  for (const candidate of orphanCandidates) {
+    if (candidate.targetDepartureTime) {
+      targetDepartureIds.set(
+        candidate.reservation.id,
+        targetOf(candidate.ride, candidate.travelDate, candidate.targetDepartureTime).departureId
+      );
+    }
+  }
+
   return {
     windowStartDate: window.windowStartDate,
     windowEndDate: window.windowEndDate,
     scannedReservationCount: window.reservations.length,
-    items
+    items,
+    targetDepartureIds
   };
 }
 
@@ -400,5 +424,88 @@ function toCheckResult(report: OrphanReport): CheckResult {
       detail: { ...item },
       canRepair: item.canRepair
     }))
+  };
+}
+
+interface RepairTarget {
+  /** Null when no departure is stored for that date yet. */
+  departureId: string | null;
+  capacity: number;
+  /** More than one stored bus at the time, and not exactly one of them runs. */
+  ambiguous: boolean;
+}
+
+/**
+ * The bus each orphan would move onto, and its capacity.
+ *
+ * - None stored at the new time: the ride's capacity, and no link, as for a
+ *   date the nightly job has yet to store.
+ * - One stored: that one.
+ * - Several (#27, PR 4c lets two buses of a ride share a time): the one that
+ *   runs, when a cancelled or dropped bus shares its time. Otherwise the
+ *   repair declines rather than leave the passenger unlinked, which would
+ *   keep the seat off the count booking checks (`departureId` only). The
+ *   smallest capacity is reported, so a seat is never placed past any of them.
+ */
+async function loadRepairTargets(
+  ctx: InvariantContext,
+  candidates: ReadonlyArray<{
+    reservation: { rideId: string };
+    travelDate: string;
+    targetDepartureTime: string | null;
+  }>
+): Promise<
+  (ride: { id: string; capacity: number }, travelDate: string, departureTime: string) => RepairTarget
+> {
+  const targeted = candidates.filter((candidate) => candidate.targetDepartureTime !== null);
+  const rideIds = [...new Set(targeted.map((candidate) => candidate.reservation.rideId))];
+  const dates = [...new Set(targeted.map((candidate) => candidate.travelDate))];
+  const departures =
+    targeted.length === 0
+      ? []
+      : await ctx.prisma.departure.findMany({
+          where: {
+            tenantId: ctx.tenantId,
+            rideId: { in: rideIds },
+            serviceDate: { in: dates.map(utcDateOf) },
+            source: { in: [...LINKABLE_SOURCES] }
+          },
+          select: {
+            id: true,
+            rideId: true,
+            serviceDate: true,
+            departureTime: true,
+            capacity: true,
+            cancelledAt: true,
+            timetableDroppedAt: true
+          }
+        });
+  const departuresByKey = new Map<string, typeof departures>();
+
+  for (const departure of departures) {
+    const key = departureLinkKey(departure.rideId, departure.serviceDate, departure.departureTime);
+
+    departuresByKey.set(key, [...(departuresByKey.get(key) ?? []), departure]);
+  }
+
+  return (ride, travelDate, departureTime) => {
+    const stored = departuresByKey.get(`${ride.id}:${travelDate}:${departureTime}`) ?? [];
+
+    if (stored.length === 0) {
+      return { departureId: null, capacity: ride.capacity, ambiguous: false };
+    }
+
+    const running = stored.filter(
+      (departure) => departure.cancelledAt === null && departure.timetableDroppedAt === null
+    );
+    const target = stored.length === 1 ? stored[0] : running.length === 1 ? running[0] : null;
+
+    return target
+      ? { departureId: target.id, capacity: target.capacity, ambiguous: false }
+      : {
+          departureId: null,
+          capacity: Math.min(...stored.map((departure) => departure.capacity)),
+          ambiguous: true
+        };
   };
 }

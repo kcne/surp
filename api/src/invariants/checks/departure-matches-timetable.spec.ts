@@ -30,8 +30,7 @@ function plan(creates: PlannedDeparture[]): DepartureSyncPlan {
     creates,
     updates: [],
     drops: [],
-    deletes: [],
-    conflicts: []
+    deletes: []
   };
 }
 

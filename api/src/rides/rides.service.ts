@@ -4,7 +4,14 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
-import { Prisma, ReservationStatus, RideExceptionType, RideStatus, RideType } from '@prisma/client';
+import {
+  DepartureSource,
+  Prisma,
+  ReservationStatus,
+  RideExceptionType,
+  RideStatus,
+  RideType
+} from '@prisma/client';
 import { AccessTokenPayload } from '../auth/auth.types';
 import { withCreateAudit, withUpdateAudit } from '../prisma/audit-write.helper';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, resolvePagination } from '../prisma/repository-helpers';
@@ -12,11 +19,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { scheduleEditTransaction } from '../prisma/schedule-lock';
 import {
   assertDecisionDate,
-  cancelScheduledDeparture,
-  insertExtraDeparture,
-  restoreScheduledDeparture,
-  retireExtraDeparture
-} from '../departures/exception-departures';
+  createExtra,
+  followRideCapacity,
+  removeAdditional,
+  skipDate,
+  unskipDate
+} from '../departures/departure-operations';
 import {
   NO_CONSENT,
   PROSPECTIVE_INVARIANTS,
@@ -107,7 +115,12 @@ const SAFE_RIDE_SELECT = Prisma.validator<Prisma.RideSelect>()({
       createdById: true,
       updatedById: true,
       createdAt: true,
-      updatedAt: true
+      updatedAt: true,
+      // The extra bus an ADDITIONAL adds, for its own capacity (#27, PR 3d).
+      departures: {
+        where: { source: DepartureSource.EXTRA },
+        select: { capacity: true }
+      }
     },
     orderBy: [
       {
@@ -133,7 +146,7 @@ type RideExceptionRecord = Prisma.RideExceptionGetPayload<{
     createdAt: true;
     updatedAt: true;
   };
-}>;
+}> & { departures?: Array<{ capacity: number }> };
 
 type RideWithInstanceMaterialization = Prisma.RideGetPayload<{
   select: {
@@ -186,6 +199,7 @@ type RideWithInstanceMaterialization = Prisma.RideGetPayload<{
     };
     exceptions: {
       select: {
+        id: true;
         exceptionDate: true;
         type: true;
         departureTime: true;
@@ -207,6 +221,7 @@ type MaterializedRideInstance = {
   departureTime: string;
   arrivalTime: string;
   source: 'BASE' | 'ADDITIONAL';
+  rideExceptionId?: string;
   rideType: RideType;
   status: RideStatus;
   capacity: number;
@@ -448,6 +463,7 @@ export class RidesService {
             exceptionDate: utcDate
           },
           select: {
+            id: true,
             exceptionDate: true,
             type: true,
             departureTime: true,
@@ -479,13 +495,62 @@ export class RidesService {
       });
 
     const rideIds = [...new Set(materialized.map((instance) => instance.rideId))];
-    const reservationCounts =
+
+    // Capacity and booked seats come from the stored departure an instance
+    // names, as booking counts them (#27, PR 4a): seats by `departureId`, and
+    // an extra's own capacity. A timetable instance reads the SCHEDULE
+    // departure at its time. An extra reads the EXTRA departure its ADDITIONAL
+    // links (PR 4c): two extras may share a time, so the time cannot tell them
+    // apart. This endpoint stays for old tabs until PR 6; the screens read
+    // GET /departures.
+    const departures =
       rideIds.length > 0
+        ? await this.prisma.departure.findMany({
+            where: {
+              tenantId: auth.tenantId,
+              rideId: { in: rideIds },
+              serviceDate: utcDate,
+              source: { in: [DepartureSource.SCHEDULE, DepartureSource.EXTRA] },
+              cancelledAt: null,
+              timetableDroppedAt: null
+            },
+            select: {
+              rideId: true,
+              departureTime: true,
+              source: true,
+              capacity: true,
+              rideExceptionId: true,
+              _count: { select: { reservations: { where: { status: ReservationStatus.ACTIVE } } } }
+            }
+          })
+        : [];
+    const scheduledByTime = new Map(
+      departures
+        .filter((departure) => departure.source === DepartureSource.SCHEDULE)
+        .map((departure) => [`${departure.rideId}:${departure.departureTime}`, departure])
+    );
+    const extraByException = new Map(
+      departures
+        .filter((departure) => departure.source === DepartureSource.EXTRA && departure.rideExceptionId)
+        .map((departure) => [departure.rideExceptionId!, departure])
+    );
+    const departureOf = (instance: (typeof materialized)[number]) =>
+      instance.source === 'ADDITIONAL'
+        ? instance.rideExceptionId
+          ? extraByException.get(instance.rideExceptionId)
+          : undefined
+        : scheduledByTime.get(`${instance.rideId}:${instance.departureTime}`);
+
+    // A date the departure window does not reach yet has no stored departure:
+    // its instances keep the ride's capacity and count the time copies.
+    const unstored = materialized.filter((instance) => !departureOf(instance));
+    const reservationCounts =
+      unstored.length > 0
         ? await this.prisma.reservation.groupBy({
             by: ['rideId', 'rideDepartureTime'],
             where: {
               tenantId: auth.tenantId,
-              rideId: { in: rideIds },
+              rideId: { in: [...new Set(unstored.map((instance) => instance.rideId))] },
               travelDate: utcDate,
               status: ReservationStatus.ACTIVE
             },
@@ -494,7 +559,6 @@ export class RidesService {
             }
           })
         : [];
-
     const reservationCountByInstance = new Map<string, number>(
       reservationCounts.map((item) => [
         `${item.rideId}:${item.rideDepartureTime}`,
@@ -502,13 +566,32 @@ export class RidesService {
       ])
     );
 
+    // The ID old tabs key and select an instance by. Two extras at one time
+    // (#27, PR 4c) would share it, so theirs also name their ADDITIONAL; every
+    // other instance keeps the ID it always had, and links to it still work.
+    const baseIdOf = (instance: (typeof materialized)[number]) =>
+      `${instance.rideId}:${instance.date}:${instance.departureTime}:${instance.source}`;
+    const baseIdCounts = new Map<string, number>();
+
+    for (const instance of materialized) {
+      baseIdCounts.set(baseIdOf(instance), (baseIdCounts.get(baseIdOf(instance)) ?? 0) + 1);
+    }
+
+    const instanceIdOf = (instance: (typeof materialized)[number]) =>
+      (baseIdCounts.get(baseIdOf(instance)) ?? 0) > 1 && instance.rideExceptionId
+        ? `${baseIdOf(instance)}:${instance.rideExceptionId}`
+        : baseIdOf(instance);
+
     const items = materialized.map((instance) => {
-      const reservationCount =
-        reservationCountByInstance.get(`${instance.rideId}:${instance.departureTime}`) ?? 0;
-      const availableSeats = Math.max(instance.capacity - reservationCount, 0);
+      const departure = departureOf(instance);
+      const capacity = departure?.capacity ?? instance.capacity;
+      const reservationCount = departure
+        ? departure._count.reservations
+        : reservationCountByInstance.get(`${instance.rideId}:${instance.departureTime}`) ?? 0;
+      const availableSeats = Math.max(capacity - reservationCount, 0);
 
       return {
-        id: `${instance.rideId}:${instance.date}:${instance.departureTime}:${instance.source}`,
+        id: instanceIdOf(instance),
         rideId: instance.rideId,
         date: instance.date,
         departureTime: instance.departureTime,
@@ -523,7 +606,7 @@ export class RidesService {
           arrivalStationId: instance.line.arrivalStationId
         },
         availability: {
-          capacity: instance.capacity,
+          capacity,
           reservedSeats: reservationCount,
           availableSeats,
           hasAvailability: availableSeats > 0
@@ -560,9 +643,13 @@ export class RidesService {
       consentFrom(dto),
       async (
         tx,
-        prepared: { nextLineName: string; normalizedSchedule: RideScheduleNormalized }
+        prepared: {
+          nextLineName: string;
+          normalizedSchedule: RideScheduleNormalized;
+          previousCapacity: number;
+        }
       ) => {
-        const { nextLineName, normalizedSchedule } = prepared;
+        const { nextLineName, normalizedSchedule, previousCapacity } = prepared;
 
         await tx.ride.update({
           where: {
@@ -593,6 +680,14 @@ export class RidesService {
           this.toTotalDaySchedules(normalizedSchedule.daySchedules),
           true
         );
+
+        if (dto.capacity !== undefined) {
+          await followRideCapacity(
+            tx,
+            { tenantId: auth.tenantId, rideId: id, actorId: auth.sub },
+            { from: previousCapacity, to: dto.capacity }
+          );
+        }
 
         return tx.ride.findFirst({
           where: {
@@ -659,7 +754,7 @@ export class RidesService {
         const nextStatus = dto.status ?? existing.status;
         this.validateStatusTransition(existing.status, nextStatus);
 
-        return { nextLineName, normalizedSchedule };
+        return { nextLineName, normalizedSchedule, previousCapacity: existing.capacity };
       }
     );
 
@@ -758,50 +853,24 @@ export class RidesService {
         // for the first to commit, then this read finds the row it created.
         await this.ensureExceptionIsNew(tx, auth.tenantId, rideId, exceptionDate, dto);
 
-        const exception = await tx.rideException.create({
-          data: withCreateAudit(
-            {
-              tenantId: auth.tenantId,
-              rideId,
-              exceptionDate,
-              type: dto.type,
-              departureTime:
-                dto.type === RideExceptionType.ADDITIONAL ? dto.departureTime!.trim() : null,
-              arrivalTime:
-                dto.type === RideExceptionType.ADDITIONAL ? dto.arrivalTime!.trim() : null
-            },
-            auth.sub
-          ),
-          select: {
-            id: true,
-            exceptionDate: true,
-            type: true,
-            departureTime: true,
-            arrivalTime: true,
-            createdById: true,
-            updatedById: true,
-            createdAt: true,
-            updatedAt: true
-          }
-        });
-
-        // The departure carries the decision (#27, PR 3a); the row above
-        // stays until PR 6 for the screens that still read it.
-        if (exception.type === RideExceptionType.SKIP) {
-          await cancelScheduledDeparture(tx, decision, exceptionDate, {
-            at: exception.createdAt,
-            by: exception.updatedById ?? exception.createdById ?? auth.sub
-          });
-        } else {
-          await insertExtraDeparture(tx, decision, {
-            rideExceptionId: exception.id,
-            serviceDate: exceptionDate,
-            departureTime: exception.departureTime!,
-            arrivalTime: exception.arrivalTime!
-          });
+        // A wrapper over the departure operations (#27, PR 3d), which write
+        // the departure and, until PR 6, this row for the screens that still
+        // read it.
+        if (dto.type === RideExceptionType.SKIP) {
+          return skipDate(tx, decision, exceptionDate);
         }
 
-        return exception;
+        const { departureId, exception } = await createExtra(tx, decision, {
+          serviceDate: exceptionDate,
+          departureTime: dto.departureTime!.trim(),
+          arrivalTime: dto.arrivalTime!.trim()
+        });
+        const extra = await tx.departure.findUniqueOrThrow({
+          where: { id: departureId },
+          select: { capacity: true }
+        });
+
+        return { ...exception, departures: [extra] };
       },
       (tx) => assertDecisionDate(tx, auth.tenantId, exceptionDate)
     );
@@ -816,11 +885,14 @@ export class RidesService {
     exceptionDate: Date,
     dto: CreateRideExceptionDto
   ): Promise<void> {
+    // A SKIP and an ADDITIONAL may share a date (#27, PR 3d): the SKIP
+    // cancels the timetable bus only, and the extra runs.
     const existingOnDate = await tx.rideException.findMany({
       where: {
         tenantId,
         rideId,
-        exceptionDate
+        exceptionDate,
+        type: dto.type
       },
       select: {
         type: true,
@@ -828,10 +900,6 @@ export class RidesService {
         arrivalTime: true
       }
     });
-
-    if (existingOnDate.some((item) => item.type !== dto.type)) {
-      throw new ConflictException('Cannot mix SKIP and ADDITIONAL exceptions on the same date');
-    }
 
     if (
       dto.type === RideExceptionType.ADDITIONAL &&
@@ -882,17 +950,9 @@ export class RidesService {
       PROSPECTIVE_INVARIANTS.rideException,
       consent,
       async (tx) => {
-        // Before the row goes: deleting it unlinks its extra bus.
-        if (existing.type === RideExceptionType.SKIP) {
-          await restoreScheduledDeparture(tx, decision, existing.exceptionDate);
-        } else {
-          await retireExtraDeparture(tx, decision, existing.id);
-        }
-
-        return tx.rideException.delete({
-          where: {
-            id: exceptionId
-          },
+        // Read again under the lock: another request may have removed it.
+        const row = await tx.rideException.findFirst({
+          where: { id: exceptionId, tenantId: auth.tenantId },
           select: {
             id: true,
             exceptionDate: true,
@@ -905,6 +965,20 @@ export class RidesService {
             updatedAt: true
           }
         });
+
+        if (!row) {
+          throw new NotFoundException('Ride exception not found');
+        }
+
+        // A wrapper over the departure operations (#27, PR 3d). A booked
+        // extra is cancelled rather than deleted; the guard has asked.
+        if (existing.type === RideExceptionType.SKIP) {
+          await unskipDate(tx, decision, existing.exceptionDate);
+        } else {
+          await removeAdditional(tx, decision, existing.id);
+        }
+
+        return row;
       },
       (tx) => assertDecisionDate(tx, auth.tenantId, existing.exceptionDate)
     );
@@ -1330,6 +1404,7 @@ export class RidesService {
         departureTime: times.departureTime,
         arrivalTime: times.arrivalTime,
         source: times.source,
+        rideExceptionId: times.rideExceptionId,
         rideType: ride.type,
         status: ride.status,
         capacity: ride.capacity,
@@ -1375,7 +1450,12 @@ export class RidesService {
       createdById: exception.createdById,
       updatedById: exception.updatedById,
       createdAt: exception.createdAt,
-      updatedAt: exception.updatedAt
+      updatedAt: exception.updatedAt,
+      // Rows stored before PR 3a can share one ADDITIONAL; the smallest bus
+      // is the one no seat may go past.
+      capacity: exception.departures?.length
+        ? Math.min(...exception.departures.map((departure) => departure.capacity))
+        : null
     };
   }
 }

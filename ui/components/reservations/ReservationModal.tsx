@@ -49,7 +49,8 @@ import { useReservationReturnSync } from "@/hooks/useReservationReturnSync"
 import { useReservationSubmission } from "@/hooks/useReservationSubmission"
 import { useDuplicatePassengerCheck } from "@/hooks/useDuplicatePassengerCheck"
 import { DuplicatePassengerDialog } from "@/components/passengers/DuplicatePassengerDialog"
-import { generateRideInstancesForRide } from "@/utils/rideInstanceGenerators"
+import { useRunningDeparturesQuery } from "@/infrastructure/hooks/queries/useDeparturesQuery"
+import { addDaysToIsoDate, DEPARTURE_WINDOW_DAYS } from "@/utils/departureWindows"
 import { findReturnCounterpart } from "@/utils/reservationReturnMatching"
 import {
   CancelReservationDialog,
@@ -157,16 +158,16 @@ export function ReservationModal({
     form,
   })
 
-  const returnRideInstances = useMemo(() => {
+  const returnRideIds = useMemo(() => {
     if (!selectedRideInstance) {
-      return []
+      return new Set<string>()
     }
 
     const currentLine = selectedRideInstance.ride.line
 
-    return rides
-      .filter(
-        (ride) => {
+    return new Set(
+      rides
+        .filter((ride) => {
           if (ride.status === "cancelled") {
             return false
           }
@@ -184,16 +185,38 @@ export function ReservationModal({
             ride.line.arrivalStation.id === currentLine.departureStation.id
 
           return isReverseDirection
-        }
-      )
-      .flatMap((ride) => generateRideInstancesForRide(ride))
-      .filter((instance) => instance.date >= selectedRideInstance.date)
-      .sort((left, right) => {
-        const leftDateTime = `${left.date}T${left.departureTime}`
-        const rightDateTime = `${right.date}T${right.departureTime}`
-        return leftDateTime.localeCompare(rightDateTime)
-      })
+        })
+        .map((ride) => ride.id)
+    )
   }, [rides, selectedRideInstance])
+
+  // Return buses are the stored departures of the reverse rides, from the
+  // outbound date over the next 62 days (#27, PR 4a).
+  const returnRange = useMemo(
+    () =>
+      selectedRideInstance
+        ? {
+            from: selectedRideInstance.date,
+            to: addDaysToIsoDate(selectedRideInstance.date, DEPARTURE_WINDOW_DAYS - 1),
+          }
+        : { from: "", to: "" },
+    [selectedRideInstance]
+  )
+  const returnDepartures = useRunningDeparturesQuery(returnRange, rides, {
+    enabled: open && returnRideIds.size > 0,
+  })
+
+  const returnRideInstances = useMemo(
+    () =>
+      returnDepartures.instances
+        .filter((instance) => returnRideIds.has(instance.rideId))
+        .sort((left, right) => {
+          const leftDateTime = `${left.date}T${left.departureTime}`
+          const rightDateTime = `${right.date}T${right.departureTime}`
+          return leftDateTime.localeCompare(rightDateTime)
+        }),
+    [returnDepartures.instances, returnRideIds]
+  )
 
   const availableReturnDateKeys = useMemo(
     () => new Set(returnRideInstances.map((instance) => instance.date)),

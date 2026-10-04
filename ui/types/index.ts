@@ -83,6 +83,8 @@ export interface RideException {
   type: 'skip' | 'additional'
   departureTime?: string // HH:MM
   arrivalTime?: string // HH:MM
+  /** An extra bus's own capacity; read-only, set by the API. */
+  capacity?: number
 }
 
 export interface DayScheduleStationTime {
@@ -130,7 +132,6 @@ export type RideFormData = {
   departureTime?: string // Deprecated
   arrivalTime?: string // Deprecated
   daySchedules?: Record<string, DayScheduleStationTime[]> // Map day number (0-6) to station time list
-  exceptions?: RideException[]
   // One-time fields
   date?: string
   oneTimeDepartureTime?: string
@@ -140,6 +141,13 @@ export type RideFormData = {
 // Ride Instance Types
 export interface RideInstance {
   id: string
+  /**
+   * The stored departure this bus is, sent with every booking (#27, PR 4b).
+   * Only set on a bus read from `/departures`; a bus pieced together from a
+   * reservation's copies has none and cannot be booked.
+   */
+  departureId?: string
+  source?: "BASE" | "ADDITIONAL"
   rideId: string
   ride: Ride
   date: string // YYYY-MM-DD

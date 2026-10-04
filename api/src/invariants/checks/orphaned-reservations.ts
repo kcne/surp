@@ -94,6 +94,14 @@ export const ORPHAN_REASON_ADVICE: Record<OrphanReason, string> = {
 export const ORPHAN_NO_FREE_SEAT_ADVICE =
   'Tog dana voznja saobraca u drugo vreme, ali na tom polasku nema nijedno slobodno sediste, pa popravka ne moze da prebaci rezervaciju. Povecajte kapacitet voznje ili prebacite putnika na drugi polazak.';
 
+/**
+ * Advice for an orphan whose new time more than one stored bus of the ride
+ * has that day (#27, PR 4c lets two share one). The repair would link it to
+ * neither, which leaves its seat off every count, so it declines instead.
+ */
+export const ORPHAN_AMBIGUOUS_TARGET_ADVICE =
+  'Tog dana voznja saobraca u drugo vreme, ali u to vreme polazi vise autobusa, pa popravka ne zna na koji da prebaci rezervaciju. Prebacite je rucno na autobus koji je putnik kupio.';
+
 export interface ReservationToCheck {
   id: string;
   rideId: string;

@@ -34,6 +34,8 @@ describe('RidesService', () => {
     $transaction: jest.fn(),
     // The schedule lock every guarded write takes first.
     $executeRaw: jest.fn().mockResolvedValue(1),
+    tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
+    departure: { findMany: jest.fn(), updateMany: jest.fn() },
     line: {
       findFirst: jest.fn()
     },
@@ -79,6 +81,7 @@ describe('RidesService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prismaMock.reservation.groupBy.mockResolvedValue([]);
+    prismaMock.departure.findMany.mockResolvedValue([]);
     // Nothing sold and nothing to name: the prospective checks find an empty
     // window and report no violations, which is what every test that is not
     // about them wants.
@@ -404,6 +407,7 @@ describe('RidesService', () => {
       let written = false;
 
       return {
+        tenant: prismaMock.tenant,
         $executeRaw: jest.fn().mockResolvedValue(1),
         reservation: { findMany: jest.fn().mockResolvedValue(reservations) },
         station: { findMany: jest.fn().mockResolvedValue([]) },
@@ -483,7 +487,7 @@ describe('RidesService', () => {
     });
   });
 
-  it('rejects mixed skip and additional exceptions for same date', async () => {
+  it('rejects a duplicate additional, comparing only exceptions of its type', async () => {
     prismaMock.ride.findFirst.mockResolvedValue({
       id: 'ride-1',
       tenantId: 'tenant-1',
@@ -523,9 +527,9 @@ describe('RidesService', () => {
     prismaMock.rideException.findMany.mockResolvedValue([
       {
         id: 'ex-1',
-        type: RideExceptionType.SKIP,
-        departureTime: null,
-        arrivalTime: null
+        type: RideExceptionType.ADDITIONAL,
+        departureTime: '11:00',
+        arrivalTime: '12:00'
       }
     ]);
     prismaMock.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
@@ -546,6 +550,12 @@ describe('RidesService', () => {
         arrivalTime: '12:00'
       })
     ).rejects.toBeInstanceOf(ConflictException);
+    // A SKIP on the date is no reason to refuse an ADDITIONAL (#27, PR 3d).
+    expect(prismaMock.rideException.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ type: RideExceptionType.ADDITIONAL })
+      })
+    );
   });
 
   it('throws not found when ride is out of tenant scope', async () => {
@@ -682,6 +692,7 @@ describe('RidesService', () => {
         ],
         exceptions: [
           {
+            id: 'exc-1',
             exceptionDate: new Date('2026-03-30T00:00:00.000Z'),
             type: RideExceptionType.ADDITIONAL,
             departureTime: '13:00',
@@ -700,6 +711,125 @@ describe('RidesService', () => {
     expect(result.items[0].departureTime).toBe('13:00');
     expect(result.items[0].reservationCount).toBe(0);
     expect(result.items[0].availability.availableSeats).toBe(38);
+
+    // A stored departure gives the capacity and the count, by departureId:
+    // the time copies' 30 are not read.
+    prismaMock.departure.findMany.mockResolvedValue([
+      { rideId: 'ride-1', departureTime: '13:00', source: 'EXTRA', capacity: 60, rideExceptionId: 'exc-1', _count: { reservations: 48 } }
+    ]);
+    prismaMock.reservation.groupBy.mockClear();
+    prismaMock.reservation.groupBy.mockResolvedValue([
+      { rideId: 'ride-1', rideDepartureTime: '13:00', _count: { _all: 30 } }
+    ]);
+    const largerExtra = await service.listInstancesByDate(auth, { date: '2026-03-30' });
+    expect(largerExtra.items[0].availability).toEqual({
+      capacity: 60, reservedSeats: 48, availableSeats: 12, hasAvailability: true
+    });
+    expect(largerExtra.items[0].reservationCount).toBe(48);
+    expect(prismaMock.reservation.groupBy).not.toHaveBeenCalled();
+    expect(prismaMock.departure.findMany).toHaveBeenLastCalledWith({
+      where: {
+        tenantId: auth.tenantId,
+        rideId: { in: ['ride-1'] },
+        serviceDate: new Date('2026-03-30'),
+        source: { in: ['SCHEDULE', 'EXTRA'] },
+        cancelledAt: null,
+        timetableDroppedAt: null
+      },
+      select: {
+        rideId: true,
+        departureTime: true,
+        source: true,
+        capacity: true,
+        rideExceptionId: true,
+        _count: { select: { reservations: { where: { status: 'ACTIVE' } } } }
+      }
+    });
+
+    // With no stored departure, the ride's capacity and the time copies.
+    prismaMock.departure.findMany.mockResolvedValue([]);
+    const unstored = await service.listInstancesByDate(auth, { date: '2026-03-30' });
+    expect(unstored.items[0].availability).toEqual({
+      capacity: 38, reservedSeats: 30, availableSeats: 8, hasAvailability: true
+    });
+
+  });
+
+  it('counts same-time buses on their own departures, pairing extras by exception (#27, PRs 4a and 4c)', async () => {
+    // Tuesday's 09:00 bus and two extras at 09:00 the same day.
+    prismaMock.ride.findMany.mockResolvedValue([
+      {
+        id: 'ride-1',
+        tenantId: 'tenant-1',
+        lineId: 'line-1',
+        name: 'Paired Ride',
+        capacity: 38,
+        type: RideType.RECURRING,
+        status: RideStatus.ACTIVE,
+        recurringStartDate: new Date('2026-03-20T00:00:00.000Z'),
+        recurringEndDate: null,
+        oneTimeDate: null,
+        oneTimeDepartureTime: null,
+        oneTimeArrivalTime: null,
+        line: {
+          id: 'line-1',
+          name: 'Line 1',
+          departureStationId: 'station-a',
+          arrivalStationId: 'station-b',
+          intermediateStops: []
+        },
+        daySchedules: [
+          {
+            dayOfWeek: 2,
+            stationTimes: [
+              { stationId: 'station-a', orderIndex: 0, time: '09:00' },
+              { stationId: 'station-b', orderIndex: 1, time: '10:30' }
+            ]
+          }
+        ],
+        exceptions: [
+          {
+            id: 'exc-1',
+            exceptionDate: new Date('2026-03-31T00:00:00.000Z'),
+            type: RideExceptionType.ADDITIONAL,
+            departureTime: '09:00',
+            arrivalTime: '10:30'
+          },
+          {
+            id: 'exc-2',
+            exceptionDate: new Date('2026-03-31T00:00:00.000Z'),
+            type: RideExceptionType.ADDITIONAL,
+            departureTime: '09:00',
+            arrivalTime: '10:30'
+          }
+        ]
+      }
+    ]);
+    prismaMock.departure.findMany.mockResolvedValue([
+      { rideId: 'ride-1', departureTime: '09:00', source: 'SCHEDULE', capacity: 38, rideExceptionId: null, _count: { reservations: 10 } },
+      { rideId: 'ride-1', departureTime: '09:00', source: 'EXTRA', capacity: 20, rideExceptionId: 'exc-1', _count: { reservations: 3 } },
+      { rideId: 'ride-1', departureTime: '09:00', source: 'EXTRA', capacity: 30, rideExceptionId: 'exc-2', _count: { reservations: 7 } }
+    ]);
+
+    const result = await service.listInstancesByDate(auth, { date: '2026-03-31' });
+
+    expect(
+      result.items.map((item) => [item.source, item.availability.capacity, item.reservationCount])
+    ).toEqual(
+      expect.arrayContaining([
+        ['BASE', 38, 10],
+        ['ADDITIONAL', 20, 3],
+        ['ADDITIONAL', 30, 7]
+      ])
+    );
+    expect(result.items).toHaveLength(3);
+    // Old tabs key and select by ID: the two extras keep apart, and the
+    // timetable bus keeps the ID links to it already carry.
+    expect(result.items.map((item) => item.id).sort()).toEqual([
+      'ride-1:2026-03-31:09:00:ADDITIONAL:exc-1',
+      'ride-1:2026-03-31:09:00:ADDITIONAL:exc-2',
+      'ride-1:2026-03-31:09:00:BASE'
+    ]);
   });
 
   it('computes availability from active reservations for matching ride instance', async () => {
@@ -1107,7 +1237,8 @@ describe('RidesService', () => {
       return {
         updates,
         tx: {
-          $executeRaw: jest.fn().mockResolvedValue(1),
+          tenant: prismaMock.tenant,
+        $executeRaw: jest.fn().mockResolvedValue(1),
           reservation: {
             findMany: jest.fn(async () => reservations.map((item) => ({ ...item }))),
             findUniqueOrThrow: jest.fn(async ({ where }: never) =>
@@ -1131,6 +1262,8 @@ describe('RidesService', () => {
             findMany: jest.fn().mockResolvedValue([
               {
                 id: 'departure-1',
+                rideId: 'ride-1',
+                serviceDate: travelDate,
                 source: 'SCHEDULE',
                 departureTime: '10:00',
                 arrivalTime: '11:30',
