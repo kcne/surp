@@ -98,9 +98,27 @@ Use GitHub Actions for verification and Railway for deployment orchestration:
    - `Backend CI`
    - `Frontend CI`
 3. Keep deployment secrets in Railway Variables, not in GitHub deploy-hook secrets.
-4. Use Railway deployment history for rollback and release audit.
+4. Use Railway deployment history for rollback.
 
 This keeps deployment logic in Railway while preserving strict merge-time quality gates in GitHub.
+
+## Releases
+
+`master` changes only by promoting `rolling` (staging), and every promotion is a release:
+
+1. Open a pull request from `rolling` into `master`. The `master source` check rejects any other source branch.
+2. Merge it with **Create a merge commit**, not squash. A merge commit keeps `rolling`'s history on `master`, so `rolling` does not drift from `master` and the release notes can list each pull request.
+3. On the push to `master`, the `Release` workflow (`ops/release/release.py`) tags the merge commit and publishes a GitHub release.
+
+Tags are `vYEAR.MONTH.N`, where `N` counts releases within the month in UTC: `v2026.10.1`, `v2026.10.2`, `v2026.11.1`. A promotion just after midnight Belgrade time on the 1st still gets the previous month's tag. Each release lists the Prisma migrations added since the previous tag, then the pull requests GitHub generates notes for. A renamed migration directory is listed as added, since Prisma applies it again under its new name. The first release has no previous tag and lists neither.
+
+A squash-merged promotion cuts `rolling`'s history out of `master`, so the next release's generated notes list pull requests that earlier releases already shipped. The migrations list is unaffected.
+
+When promotions land faster than releases finish, a waiting `Release` run can show as cancelled. That is expected: the next run releases a commit that contains it.
+
+The tag is the version. `package.json` versions are not bumped, since that would need a commit on `master` that did not come from `rolling`.
+
+To see which release is running, `GET /health` returns the deployed commit (`commit`, from Railway's `RAILWAY_GIT_COMMIT_SHA`, `null` when unset). Find that commit's tag on the GitHub releases page; the previous tag is the rollback target.
 
 ## Post-deploy checks
 

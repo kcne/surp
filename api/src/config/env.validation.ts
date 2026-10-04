@@ -43,6 +43,8 @@ export const envValidationSchema = Joi.object({
     then: Joi.string().email().required(),
     otherwise: Joi.string().email().optional()
   }),
+  // Set by Railway at deploy time; empty or absent locally and in tests.
+  RAILWAY_GIT_COMMIT_SHA: Joi.string().trim().empty('').optional(),
   SANDBOX_RESET_TOKEN: Joi.string().trim().min(32).optional(),
   SANDBOX_DEMO_PASSWORD: Joi.string().trim().min(8).optional()
 });
