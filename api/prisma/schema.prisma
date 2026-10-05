@@ -470,12 +470,10 @@ model Reservation {
    */
   returnOfReservationId String?
   /**
-   * The departure this seat is on. Nullable until every row is linked (#27):
-   * bookings fill it from PR 1b, the backfill links the rest, and a later
-   * migration makes it required. The foreign key also carries rideId and
-   * travelDate, so a linked reservation cannot disagree with its departure.
+   * The departure this seat is on (#27). The foreign key also carries rideId
+   * and travelDate, so a reservation cannot disagree with its departure.
    */
-  departureId           String?
+  departureId           String
   notes                 String?           @db.Text
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
@@ -486,7 +484,7 @@ model Reservation {
   arrivalStation        Station           @relation("ReservationArrivalStation", fields: [arrivalStationId], references: [id], onDelete: Restrict)
   returnOf              Reservation?      @relation("ReservationReturnLeg", fields: [returnOfReservationId], references: [id], onDelete: Restrict)
   returnLegs            Reservation[]     @relation("ReservationReturnLeg")
-  departure             Departure?        @relation(fields: [departureId, rideId, travelDate, tenantId], references: [id, rideId, serviceDate, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  departure             Departure         @relation(fields: [departureId, rideId, travelDate, tenantId], references: [id, rideId, serviceDate, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId])
   @@index([rideId])

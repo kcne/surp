@@ -37,10 +37,6 @@ export const reservationDepartureTimeKept: ProspectiveInvariant = {
     for (const reservation of window.reservations) {
       const departure = window.departureOf(reservation);
 
-      if (!departure) {
-        continue;
-      }
-
       const times = `${departure.departureTime}-${departure.arrivalTime}`;
 
       violations.push({

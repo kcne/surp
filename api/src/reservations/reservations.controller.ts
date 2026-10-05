@@ -171,7 +171,7 @@ export class ReservationsController {
   @ApiBadRequestResponse({ description: 'Validation failure or route path violation.' })
   @ApiConflictResponse({
     description:
-      'Seat is already booked for overlapping route segment. RESERVATION_NOT_LINKED when the reservation has no departure. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
+      'Seat is already booked for overlapping route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
   })
   @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })
@@ -195,7 +195,7 @@ export class ReservationsController {
   @ApiBadRequestResponse({ description: 'Validation failure or cancelled reservation.' })
   @ApiConflictResponse({
     description:
-      'The destination seat cannot be used for the route segment. RESERVATION_NOT_LINKED when the reservation has no departure. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
+      'The destination seat cannot be used for the route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant\'s schedule longer than a booking waits.'
   })
   @ApiNotFoundResponse({ description: 'Reservation not found in current tenant.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token.' })

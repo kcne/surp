@@ -338,7 +338,7 @@ export class ReservationsService {
         throw new NotFoundException('One or more active reservations were not found');
       }
       const departures = new Set(reservations.map((item) => item.departureId));
-      if (departures.size !== 1 || departures.has(null)) {
+      if (departures.size !== 1) {
         throw new BadRequestException('Reservations must belong to the same departure');
       }
       await lockDepartures(tx, departures);
@@ -363,7 +363,7 @@ export class ReservationsService {
       // Read once to find the bus, and again under its lock, since another
       // write on the same bus may have landed while this one waited.
       const beforeLock = await this.getReservationOrThrow(auth.tenantId, id, tx);
-      const departureId = this.linkedDepartureOrThrow(beforeLock);
+      const { departureId } = beforeLock;
       await lockDepartures(tx, [departureId]);
       const existing = await this.getReservationOrThrow(auth.tenantId, id, tx);
 
@@ -488,7 +488,7 @@ export class ReservationsService {
       // source again after the lock, since another move may have completed
       // while this transaction was waiting for it.
       const sourceBeforeLock = await this.getReservationOrThrow(auth.tenantId, id, tx);
-      const departureId = this.linkedDepartureOrThrow(sourceBeforeLock);
+      const { departureId } = sourceBeforeLock;
       await lockDepartures(tx, [departureId]);
 
       const source = await this.getReservationOrThrow(auth.tenantId, id, tx);
@@ -591,8 +591,6 @@ export class ReservationsService {
     const cancelled = await reservationWriteTransaction(this.prisma, auth.tenantId, async (tx) => {
       const reservationBeforeLock = await this.getReservationOrThrow(auth.tenantId, id, tx);
 
-      // Cancelling is never refused for want of a departure: an unlinked row
-      // frees no seat anyone else can count, so it has nothing to lock.
       await lockDepartures(tx, [reservationBeforeLock.departureId]);
 
       const existing = await this.getReservationOrThrow(auth.tenantId, id, tx);
@@ -692,23 +690,6 @@ export class ReservationsService {
     });
 
     return this.routeContextOf(departure, ride?.line ?? departureRoute(departure.stops));
-  }
-
-  /**
-   * Every reservation is linked since PR 2's backfill, and every booking links
-   * itself, so an unlinked row is drift `reservation.departureLinked` reports.
-   * Its seats cannot be counted on any bus, so it is not edited until linked.
-   */
-  private linkedDepartureOrThrow(reservation: SelectedReservation): string {
-    if (!reservation.departureId) {
-      throw new ConflictException({
-        code: 'RESERVATION_NOT_LINKED',
-        message:
-          'Rezervacija nije vezana za polazak, pa ne moze da se menja. Pokrenite proveru "Rezervacija je vezana za svoj polazak" ili javite podrsci.'
-      });
-    }
-
-    return reservation.departureId;
   }
 
   private bookingRequest(auth: AccessTokenPayload, dto: CreateReservationDto): BookingDepartureRequest {

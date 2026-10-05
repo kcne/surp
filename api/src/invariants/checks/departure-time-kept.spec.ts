@@ -9,7 +9,7 @@ const travelDate = (() => {
   return date;
 })();
 
-const reservation = (id: string, departureId: string | null) => ({
+const reservation = (id: string, departureId: string) => ({
   id,
   rideId: 'ride-1',
   departureId,
@@ -32,7 +32,10 @@ const contextWith = (departureTime: string, arrivalTime: string) =>
       reservation: {
         findMany: jest
           .fn()
-          .mockResolvedValue([reservation('res-1', 'departure-1'), reservation('res-2', null)])
+          .mockResolvedValue([
+            reservation('res-1', 'departure-1'),
+            reservation('res-2', 'departure-1')
+          ])
       },
       ride: { findMany: jest.fn().mockResolvedValue([]) },
       departure: {
@@ -53,10 +56,13 @@ const contextWith = (departureTime: string, arrivalTime: string) =>
   }) as unknown as InvariantContext;
 
 describe('reservation.departureTimeKept', () => {
-  it('lists linked reservations under their departure times, and leaves unlinked ones out', async () => {
+  it('lists every reservation under its departure times', async () => {
     const { violations } = await reservationDepartureTimeKept.check(contextWith('07:30', '10:45'));
 
-    expect(violations.map((violation) => violation.subjectId)).toEqual(['res-1@07:30-10:45']);
+    expect(violations.map((violation) => violation.subjectId)).toEqual([
+      'res-1@07:30-10:45',
+      'res-2@07:30-10:45'
+    ]);
     expect(violations[0].canRepair).toBe(false);
   });
 

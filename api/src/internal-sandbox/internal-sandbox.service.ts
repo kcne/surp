@@ -321,7 +321,7 @@ export class InternalSandboxService {
     const rides = this.demoRides();
     const linesById = new Map(this.demoLines().map((line) => [line.id, line]));
     const passengers = this.demoPassengers();
-    const reservations: Prisma.ReservationCreateManyInput[] = [];
+    const reservations: Array<Omit<Prisma.ReservationCreateManyInput, 'departureId'>> = [];
     let reservationIndex = 0;
 
     rides.forEach((ride) => {
@@ -403,23 +403,26 @@ export class InternalSandboxService {
     });
 
     // Linked by the same rule a booking uses, so demo data looks like
-    // production and `reservation.departureLinked` stays quiet here.
+    // production. A seat whose bus is not stored is not seeded: the window
+    // starts at the agency's date, which can already be tomorrow in UTC.
     const departureIndex = indexLinkableDepartures(
       await tx.departure.findMany({
         where: { tenantId, source: { in: [...LINKABLE_SOURCES] } },
         select: { id: true, rideId: true, serviceDate: true, departureTime: true }
       })
     );
-    for (const reservation of reservations) {
-      reservation.departureId = uniqueDepartureMatch(
+    const linked = reservations.flatMap((reservation) => {
+      const departureId = uniqueDepartureMatch(
         departureIndex,
         reservation.rideId,
         reservation.travelDate as Date,
         reservation.rideDepartureTime
       );
-    }
 
-    const result = await tx.reservation.createMany({ data: reservations });
+      return departureId ? [{ ...reservation, departureId }] : [];
+    });
+
+    const result = await tx.reservation.createMany({ data: linked });
 
     return result.count;
   }

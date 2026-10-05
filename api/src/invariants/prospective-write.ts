@@ -33,10 +33,8 @@ const PROSPECTIVE_WINDOW_DAYS = 3650;
 
 export const PROSPECTIVE_INVARIANTS = {
   lineUpdate: [
-    // First, ahead of any repair: a reachable repair links a reservation that
-    // had no departure, and judged after it, that row would look like a
-    // passenger whose bus the edit moved. A stop added at the head of the
-    // line moves every departure's time.
+    // First: a stop added at the head of the line moves every departure's
+    // time, and that is what the operator is asked about before anything else.
     reservationDepartureTimeKept,
     reservationReachable,
     reservationStationsOnRoute,

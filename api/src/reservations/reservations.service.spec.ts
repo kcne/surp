@@ -704,29 +704,6 @@ describe('ReservationsService', () => {
         'Departure and arrival stations must exist on the ride line path'
       );
     });
-
-    it('refuses to edit a reservation that has no departure', async () => {
-      prismaMock.reservation.findFirst.mockResolvedValue({ ...baseReservation, departureId: null });
-
-      await expect(service.update(auth, 'reservation-1', { seatNumber: 3 })).rejects.toMatchObject({
-        status: 409,
-        response: { code: 'RESERVATION_NOT_LINKED' }
-      });
-      await expect(service.moveSeat(auth, 'reservation-1', 3)).rejects.toMatchObject({
-        status: 409,
-        response: { code: 'RESERVATION_NOT_LINKED' }
-      });
-      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
-    });
-
-    it('still cancels a reservation that has no departure', async () => {
-      prismaMock.reservation.findFirst.mockResolvedValue({ ...baseReservation, departureId: null });
-
-      await expect(service.cancel(auth, 'reservation-1')).resolves.toMatchObject({
-        status: ReservationStatus.CANCELLED
-      });
-      expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
-    });
   });
 
   describe('return legs', () => {

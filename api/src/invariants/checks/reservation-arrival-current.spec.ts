@@ -4,7 +4,8 @@ import { InvariantContext } from '../invariant.types';
 const prismaMock = {
   tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
   reservation: { findMany: jest.fn(), update: jest.fn() },
-  ride: { findMany: jest.fn() }
+  ride: { findMany: jest.fn() },
+  departure: { findMany: jest.fn() }
 };
 
 // A context per test, not per file: checks sharing one context share one load
@@ -32,8 +33,8 @@ const dateInDays = (days: number) => {
 
 const travelDate = dateInDays(7);
 
-// The last station was moved from 23:00 to 22:15. The departure time is
-// untouched, so every reservation here is still perfectly visible.
+// The last station was moved from 23:00 to 22:15, and the sync moved the
+// departure's arrival with it. The departure time is untouched.
 const ride = {
   id: 'ride-1',
   name: 'Istanbul - Novi Sad',
@@ -64,9 +65,22 @@ const ride = {
   exceptions: []
 };
 
+const departure = (overrides: Record<string, unknown> = {}) => ({
+  id: 'departure-1',
+  source: 'SCHEDULE',
+  departureTime: '07:30',
+  arrivalTime: '22:15',
+  capacity: 48,
+  cancelledAt: null,
+  timetableDroppedAt: null,
+  stops: [],
+  ...overrides
+});
+
 const reservation = (overrides: Record<string, unknown> = {}) => ({
   id: 'res-1',
   rideId: 'ride-1',
+  departureId: 'departure-1',
   travelDate,
   rideDepartureTime: '07:30',
   rideArrivalTime: '23:00',
@@ -81,6 +95,7 @@ describe('reservation.arrivalTimeCurrent', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prismaMock.ride.findMany.mockResolvedValue([ride]);
+    prismaMock.departure.findMany.mockResolvedValue([departure()]);
   });
 
   it('finds the reservation still quoting the old arrival time', async () => {
@@ -107,38 +122,23 @@ describe('reservation.arrivalTimeCurrent', () => {
     expect(scan.items).toEqual([]);
   });
 
-  // An unreachable reservation has no instance to compare against, and it is
-  // already reported — loudly — by reservation.reachable.
-  it('says nothing about a reservation no instance reaches', async () => {
+  // Two buses at 07:30 (#27, PR 4c) arrive at different times. Each copy is
+  // compared with its own bus, never with the other one.
+  it('compares each reservation with its own bus when two leave at one time', async () => {
+    prismaMock.departure.findMany.mockResolvedValue([
+      departure(),
+      departure({ id: 'departure-extra', source: 'EXTRA', arrivalTime: '23:00' })
+    ]);
     prismaMock.reservation.findMany.mockResolvedValue([
-      reservation({ rideDepartureTime: '07:45' })
+      reservation({ id: 'res-extra', departureId: 'departure-extra', rideArrivalTime: '23:00' }),
+      reservation({ id: 'res-stale', rideArrivalTime: '23:00' })
     ]);
 
     const scan = await scanForStaleArrivalTimes(ctx);
 
-    expect(scan.items).toEqual([]);
-  });
-
-  // Two buses at 07:30 (#27, PR 4c) arrive at different times. An unlinked
-  // row could be on either, so neither arrival is copied onto it;
-  // reservation.departureLinked lists it.
-  it('copies no arrival onto an unlinked reservation two buses share the time of', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([
-      {
-        ...ride,
-        exceptions: [
-          { exceptionDate: travelDate, type: 'ADDITIONAL', departureTime: '07:30', arrivalTime: '23:00' }
-        ]
-      }
+    expect(scan.items).toEqual([
+      expect.objectContaining({ reservationId: 'res-stale', currentArrivalTime: '22:15' })
     ]);
-    prismaMock.reservation.findMany.mockResolvedValue([
-      reservation({ id: 'res-extra', rideArrivalTime: '23:00' }),
-      reservation({ id: 'res-stale', rideArrivalTime: '21:00' })
-    ]);
-
-    const scan = await scanForStaleArrivalTimes(ctx);
-
-    expect(scan.items).toEqual([]);
   });
 
   it('reports the stale copy as a warning the agency can act on', async () => {
@@ -151,7 +151,7 @@ describe('reservation.arrivalTimeCurrent', () => {
     expect(result.violations[0].summary).toContain('22:15');
   });
 
-  it('refreshes the stored copy from the schedule it was copied from', async () => {
+  it('refreshes the stored copy from the departure it follows', async () => {
     prismaMock.reservation.findMany.mockResolvedValue([reservation()]);
 
     const outcome = await reservationArrivalCurrent.repair!(ctx);
