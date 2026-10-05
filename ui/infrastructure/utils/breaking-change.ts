@@ -93,14 +93,13 @@ export function scheduleBeingUpdatedMessage(error: unknown): string | null {
 /**
  * Refusals of a booking or reservation edit that carry a code and a Serbian
  * sentence for the operator: the bus on the page moved, stopped running or is
- * gone, the date is too far ahead, or the reservation is not tied to its bus.
+ * gone, or the date is too far ahead.
  */
 const BOOKING_REFUSAL_CODES = new Set([
   "DEPARTURE_NOT_FOUND",
   "DEPARTURE_CHANGED",
   "DEPARTURE_NOT_RUNNING",
   "DEPARTURE_ROUTE_MISSING",
-  "RESERVATION_NOT_LINKED",
   "TRAVEL_DATE_OUT_OF_WINDOW",
 ])
 

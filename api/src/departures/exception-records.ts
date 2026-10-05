@@ -10,7 +10,7 @@ import { SYSTEM_ACTOR_ID } from './system-actor';
  *
  * From PR 3a a decision is written on its departure. Two kinds of decision
  * still exist only as an exception row, and are read from here:
- * - a past date, whose departures the backfill writes from history;
+ * - a past date, which no departure is written for any more;
  * - a future date with no stored departure: a SKIP on a date the timetable
  *   does not produce yet, or an exception saved before PR 3a whose departure
  *   the old sync deleted. The sync applies it when it creates the departure,

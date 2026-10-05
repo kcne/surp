@@ -1,7 +1,6 @@
 import { formatDateOnly } from '../../rides/ride-instance-materialization';
 import { RouteSegment, routeStationOrder } from '../../reservations/route-segment';
 import { InvariantContext } from '../invariant.types';
-import { classifyReservation } from './orphaned-reservations';
 import { loadReservationWindow, WindowedRide, WindowedRoute } from './reservation-window';
 
 /**
@@ -22,11 +21,8 @@ import { loadReservationWindow, WindowedRide, WindowedRoute } from './reservatio
  * sold twice. That is how 40 seats were resold in #14.
  *
  * Booking now counts and locks seats on the stored departure, and so does
- * this: a linked reservation is grouped by its `departureId`, with that
- * departure's capacity and stops. A reservation with no departure is still
- * resolved onto the instance that will actually carry it, not the one its
- * stored string names, and put back beside the current ones where the clash
- * is visible.
+ * this: a reservation is grouped by its `departureId`, with that departure's
+ * capacity and stops.
  */
 
 export interface OccupiedSeat {
@@ -84,15 +80,7 @@ export interface OccupancyScan {
  */
 const scanByContext = new WeakMap<InvariantContext, Promise<OccupancyScan>>();
 
-/**
- * Groups every active reservation in the window onto the departure that will
- * carry it.
- *
- * A reservation no departure can be found for is left out entirely: which bus
- * it belongs on is exactly what `reservation.reachable` reports and repairs,
- * and counting it here would name the same passenger under a heading that
- * understates the problem.
- */
+/** Groups every active reservation in the window onto its departure. */
 export function loadInstanceOccupancy(ctx: InvariantContext): Promise<OccupancyScan> {
   const cached = scanByContext.get(ctx);
 
@@ -123,32 +111,11 @@ async function scanInstanceOccupancy(ctx: InvariantContext): Promise<OccupancySc
       continue;
     }
 
+    // The bus itself (#27, PR 3b): booking counts and locks seats on it, so
+    // a time copy that drifted cannot split it in two here either.
     const departure = window.departureOf(reservation);
-    let instanceKey: string;
-    let departureTime: string;
-    let capacity: number;
-
-    if (departure) {
-      // The bus itself (#27, PR 3b): booking counts and locks seats on it,
-      // so a time copy that drifted cannot split it in two here either.
-      instanceKey = `departure:${departure.id}`;
-      departureTime = departure.departureTime;
-      capacity = departure.capacity;
-    } else {
-      const day = window.dayOf(ride, travelDate);
-      const classification = classifyReservation({ ...reservation, travelDate }, day);
-      const resolved = classification
-        ? classification.targetDepartureTime
-        : reservation.rideDepartureTime;
-
-      if (!resolved) {
-        continue;
-      }
-
-      instanceKey = `${ride.id}:${travelDate}:${resolved}`;
-      departureTime = resolved;
-      capacity = ride.capacity;
-    }
+    const instanceKey = `departure:${departure.id}`;
+    const { departureTime, capacity } = departure;
 
     const route = window.routeOf(reservation, ride);
     const instance =

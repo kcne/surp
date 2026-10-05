@@ -5087,7 +5087,7 @@
             "description": "Reservation not found in current tenant."
           },
           "409": {
-            "description": "Seat is already booked for overlapping route segment. RESERVATION_NOT_LINKED when the reservation has no departure. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
+            "description": "Seat is already booked for overlapping route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -5212,7 +5212,7 @@
             "description": "Reservation not found in current tenant."
           },
           "409": {
-            "description": "The destination seat cannot be used for the route segment. RESERVATION_NOT_LINKED when the reservation has no departure. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
+            "description": "The destination seat cannot be used for the route segment. Also SCHEDULE_BEING_UPDATED, which is retryable, when a schedule edit held the tenant's schedule longer than a booking waits."
           }
         },
         "security": [
@@ -10231,9 +10231,8 @@
             "type": "string"
           },
           "departureId": {
-            "type": "object",
-            "nullable": true,
-            "description": "The departure (one bus on one date) the seat is on. Null only for a row the departure backfill could not link, which reservation.departureLinked reports."
+            "type": "string",
+            "description": "The departure (one bus on one date) the seat is on."
           },
           "passengerId": {
             "type": "string"

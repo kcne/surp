@@ -63,33 +63,6 @@ describe('classifyDepartureLinks', () => {
     ]);
   });
 
-  it('reports every unlinked booking, by why it is unlinked', () => {
-    expect(
-      reasons([
-        row({ id: 'linkable', departureId: null, departure: null }),
-        row({
-          id: 'ambiguous',
-          rideId: 'ride-2',
-          rideDepartureTime: '07:00',
-          departureId: null,
-          departure: null
-        }),
-        row({ id: 'nothing', rideDepartureTime: '12:00', departureId: null, departure: null })
-      ])
-    ).toEqual([
-      ['linkable', 'LINKABLE_UNLINKED'],
-      ['ambiguous', 'NO_UNIQUE_MATCH'],
-      ['nothing', 'NO_UNIQUE_MATCH']
-    ]);
-  });
-
-  it('reports an unlinked booking however long ago it was made', () => {
-    // The cutoff PR 1b had is gone: the backfill has linked the older ones.
-    expect(reasons([row({ id: 'r1', departureId: null, departure: null })])).toEqual([
-      ['r1', 'LINKABLE_UNLINKED']
-    ]);
-  });
-
   it('reports an active booking on a LEGACY departure', () => {
     expect(
       reasons([

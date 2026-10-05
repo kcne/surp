@@ -9,10 +9,9 @@ import { formatDateOnly } from '../rides/ride-instance-materialization';
  * `rideDepartureTime`, so linking has to match on those. The rule is the one
  * the backfill (PR 2) and PR 3's old-tab handling use: the same ride, date and
  * exact departure time, among `SCHEDULE` and `EXTRA` departures, and exactly
- * one of them. Anything else stays unlinked and `reservation.departureLinked`
- * reports it. Two buses leaving at the same time (allowed since PR 4c) are
- * the case this refuses to guess at: a wrong link would count seats on the
- * wrong bus, while a missing one only waits for review.
+ * one of them. Anything else is no match. Two buses leaving at the same time
+ * (allowed since PR 4c) are the case this refuses to guess at: a wrong link
+ * would count seats on the wrong bus.
  *
  * Whether the departure runs is not part of the match. A booking on a dropped
  * or cancelled departure is still on that departure, and the check lists it.

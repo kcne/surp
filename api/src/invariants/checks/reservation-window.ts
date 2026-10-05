@@ -1,9 +1,8 @@
-import { Prisma, ReservationStatus, RideExceptionType, RideStatus } from '@prisma/client';
+import { Prisma, ReservationStatus, RideStatus } from '@prisma/client';
 import {
   baseInstanceForDate,
   dayOfWeekOf,
   formatDateOnly,
-  materializeInstanceTimesForDate,
   utcDateOf
 } from '../../rides/ride-instance-materialization';
 import { StopRoute, routeFromStops } from '../../departures/booking-departure';
@@ -14,12 +13,7 @@ import { RideDayInstances } from './orphaned-reservations';
 /**
  * Loads the slice of data every reservation-level check works from: active
  * reservations travelling inside the window, the rides behind them, and the
- * instances each of those rides materializes on each travel date.
- *
- * The instances are the part worth sharing. They are derived on read, so a
- * check that derived them its own way would disagree with the app about which
- * departures exist — and disagreeing about that is the whole incident this
- * epic exists to prevent.
+ * departures they are on.
  */
 
 const RESERVATION_SELECT = {
@@ -92,17 +86,7 @@ export type WindowedReservation = Prisma.ReservationGetPayload<{
   select: typeof RESERVATION_SELECT;
 }> & { travelDate: Date };
 
-export interface WindowedException {
-  exceptionDate: Date;
-  type: RideExceptionType;
-  departureTime: string | null;
-  arrivalTime: string | null;
-}
-
-export type WindowedRide = Prisma.RideGetPayload<{ select: typeof RIDE_SELECT }> & {
-  /** Narrowed to the window, so a ride with years of history stays cheap. */
-  exceptions: WindowedException[];
-};
+export type WindowedRide = Prisma.RideGetPayload<{ select: typeof RIDE_SELECT }>;
 
 export interface ReservationWindow {
   windowStartDate: string;
@@ -110,17 +94,17 @@ export interface ReservationWindow {
   reservations: WindowedReservation[];
   rideOf(reservation: WindowedReservation): WindowedRide | undefined;
   /**
-   * The stored departure a linked reservation is on (#27). Seats are counted
-   * on it and its stops are the route, so the checks judge the bus the
-   * booking was checked against rather than the timetable's reading of it.
+   * The stored departure a reservation is on (#27). Seats are counted on it
+   * and its stops are the route, so the checks judge the bus the booking was
+   * checked against rather than the timetable's reading of it.
    */
-  departureOf(reservation: WindowedReservation): WindowedDeparture | undefined;
+  departureOf(reservation: WindowedReservation): WindowedDeparture;
   /**
    * The route the reservation's stations are read against: its departure's
-   * stored stops, or, for a row with no departure, its ride's line.
+   * stored stops, or its ride's line for a departure stored without them.
    */
   routeOf(reservation: WindowedReservation, ride: WindowedRide): WindowedRoute;
-  /** What the ride does on one travel date: instances, plus why, if none. */
+  /** Whether the ride is active, and what its schedule says of one travel date. */
   dayOf(ride: WindowedRide, travelDate: string): RideDayInstances;
 }
 
@@ -178,24 +162,11 @@ async function buildReservationWindow(ctx: InvariantContext): Promise<Reservatio
       ? []
       : await ctx.prisma.ride.findMany({
           where: { id: { in: rideIds }, tenantId: ctx.tenantId },
-          select: {
-            ...RIDE_SELECT,
-            exceptions: {
-              where: { exceptionDate: { gte: windowStart, lte: windowEnd } },
-              select: { exceptionDate: true, type: true, departureTime: true, arrivalTime: true },
-              orderBy: { createdAt: 'asc' }
-            }
-          }
+          select: RIDE_SELECT
         });
 
   const rideById = new Map(rides.map((ride) => [ride.id, ride]));
-  const departureIds = [
-    ...new Set(
-      reservations
-        .map((reservation) => reservation.departureId)
-        .filter((id): id is string => Boolean(id))
-    )
-  ];
+  const departureIds = [...new Set(reservations.map((reservation) => reservation.departureId))];
   const departures =
     departureIds.length === 0
       ? []
@@ -206,34 +177,40 @@ async function buildReservationWindow(ctx: InvariantContext): Promise<Reservatio
   const departureById = new Map(departures.map((departure) => [departure.id, departure]));
   const routeByDepartureId = new Map<string, WindowedRoute>();
 
-  // Instances are derived per ride and date, so cache them: a busy ride can
-  // carry dozens of reservations on the same day.
+  // A busy ride can carry dozens of reservations on the same day.
   const dayCache = new Map<string, RideDayInstances>();
+
+  // The foreign key makes a missing departure impossible, so one is a bug in
+  // the load above, not drift to report.
+  const departureOf = (reservation: WindowedReservation): WindowedDeparture => {
+    const departure = departureById.get(reservation.departureId);
+
+    if (!departure) {
+      throw new Error(
+        `Departure ${reservation.departureId} of reservation ${reservation.id} was not loaded`
+      );
+    }
+
+    return departure;
+  };
 
   return {
     windowStartDate: today,
     windowEndDate,
     reservations,
     rideOf: (reservation) => rideById.get(reservation.rideId),
-    departureOf: (reservation) =>
-      reservation.departureId ? departureById.get(reservation.departureId) : undefined,
+    departureOf,
     routeOf: (reservation, ride) => {
-      const departure = reservation.departureId
-        ? departureById.get(reservation.departureId)
-        : undefined;
-
-      if (!departure) {
-        return ride.line;
-      }
-
+      const departure = departureOf(reservation);
       const cached = routeByDepartureId.get(departure.id);
 
       if (cached) {
         return cached;
       }
 
-      // Only a half-written departure has fewer than its two termini, and the
-      // line is a better guess for it than a route of nothing.
+      // A LEGACY departure is stored without stops, and a half-written one has
+      // fewer than its two termini. The line is a better guess for either
+      // than a route of nothing.
       const route = routeFromStops(departure.stops) ?? ride.line;
 
       routeByDepartureId.set(departure.id, route);
@@ -248,17 +225,9 @@ async function buildReservationWindow(ctx: InvariantContext): Promise<Reservatio
         return cached;
       }
 
-      const exceptionsForDate = ride.exceptions.filter(
-        (exception) => formatDateOnly(exception.exceptionDate) === travelDate
-      );
-      const dayOfWeek = dayOfWeekOf(travelDate);
       const day: RideDayInstances = {
         rideIsActive: ride.status === RideStatus.ACTIVE,
-        instances: materializeInstanceTimesForDate(ride, exceptionsForDate, travelDate, dayOfWeek),
-        baseInstance: baseInstanceForDate(ride, travelDate, dayOfWeek),
-        skippedByException: exceptionsForDate.some(
-          (exception) => exception.type === RideExceptionType.SKIP
-        )
+        baseInstance: baseInstanceForDate(ride, travelDate, dayOfWeekOf(travelDate))
       };
 
       dayCache.set(key, day);

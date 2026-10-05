@@ -70,9 +70,8 @@ export interface PlannedDeparture {
   capacity: number;
   rideExceptionId: string | null;
   /**
-   * Never produced by the generator. Set from a SKIP row by
-   * `departures:backfill` for a past date, and by the sync only when it
-   * creates a departure on a date that already has a SKIP.
+   * Never produced by the generator. Set by the sync only when it creates a
+   * departure on a date that already has a SKIP.
    */
   cancellation?: PlannedCancellation | null;
   /**

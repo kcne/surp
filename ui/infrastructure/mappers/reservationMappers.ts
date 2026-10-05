@@ -20,10 +20,7 @@ function toReservationStatus(status: ReservationResponseDto["status"]): Reservat
 function toFallbackRideInstance(dto: ReservationResponseDto): RideInstance {
   return {
     // The departure the reservation references names its bus (#27, PR 4a).
-    id:
-      typeof dto.departureId === "string"
-        ? dto.departureId
-        : `${dto.rideId}:${dto.travelDate}:${dto.rideDepartureTime}`,
+    id: dto.departureId,
     rideId: dto.rideId,
     date: normalizeDate(dto.travelDate),
     departureTime: normalizeTime(dto.rideDepartureTime),

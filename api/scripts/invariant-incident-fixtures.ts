@@ -94,19 +94,6 @@ const fixtures: IncidentFixture[] = [
     }
   },
   {
-    // A row with no departure is still found by its time, and repaired.
-    name: 'first schedule station time changes under an unlinked booking',
-    invariantKey: 'reservation.reachable',
-    mutate: async (tx, state) => {
-      await tx.reservation.update({ where: { id: state.reservationId }, data: { departureId: null } });
-      await tx.rideDayScheduleStationTime.update({
-        where: { id: state.stationTimeIds.first },
-        data: { time: '08:30' }
-      });
-    },
-    matches: reason('DEPARTURE_TIME_MOVED')
-  },
-  {
     name: 'last schedule station time changes after sale',
     invariantKey: 'reservation.arrivalTimeCurrent',
     expects: 'silence',
@@ -367,14 +354,13 @@ const fixtures: IncidentFixture[] = [
     invariantKey: 'departure.matchesTimetable',
     skipDepartureSync: true,
     mutate: async (tx, state) => {
-      // A linked departure cannot be deleted at all, so the booking lets go
-      // of it first.
-      await tx.reservation.update({
-        where: { id: state.reservationId },
-        data: { departureId: null }
-      });
+      // A booked departure cannot be deleted at all, so the one a week later,
+      // which nobody is booked on, goes instead.
+      const weekLater = new Date(state.travelDate);
+      weekLater.setUTCDate(weekLater.getUTCDate() + 7);
+
       await tx.departure.deleteMany({
-        where: { rideId: state.rideId, serviceDate: state.travelDate }
+        where: { rideId: state.rideId, serviceDate: weekLater }
       });
     },
     matches: reason('MISSING')
@@ -555,25 +541,6 @@ const fixtures: IncidentFixture[] = [
     }
   },
   {
-    name: 'booking is saved without its departure link',
-    invariantKey: 'reservation.departureLinked',
-    mutate: async (tx, state) => {
-      await createUnlinkedSeat(tx, state, 2);
-    },
-    matches: reason('LINKABLE_UNLINKED')
-  },
-  {
-    // The link rule refuses to guess between two buses leaving at one time,
-    // and the booking is reported instead.
-    name: 'booking cannot tell a same-time extra from the timetable bus',
-    invariantKey: 'reservation.departureLinked',
-    mutate: async (tx, state) => {
-      await createExtraBus(tx, state, { id: 'exception-same-time', departureTime: '09:00' });
-      await createUnlinkedSeat(tx, state, 2);
-    },
-    matches: reason('NO_UNIQUE_MATCH')
-  },
-  {
     name: 'departure time copy is rewritten outside the timetable sync',
     invariantKey: 'reservation.departureLinked',
     mutate: async (tx, state) => {
@@ -623,7 +590,7 @@ const fixtures: IncidentFixture[] = [
       reason('ON_LEGACY')(violation) && violation.subjectId === state.reservationId
   },
   {
-    // What `departures:backfill` writes for a cancelled booking whose time
+    // What the departure backfill (PR 2) wrote for a cancelled booking whose time
     // the timetable no longer produces: a LEGACY departure nothing else reads.
     name: 'cancelled booking on a LEGACY departure stays quiet',
     invariantKey: 'reservation.departureLinked',
@@ -721,7 +688,7 @@ async function createSeatOnSameDeparture(
 
 /** The 09:00 departure a booking on `travelDate` links to, as a booking would. */
 function departureOf(tx: Prisma.TransactionClient, state: FixtureState, travelDate: Date) {
-  return resolveDepartureLink(tx, {
+  return linkOrThrow(tx, {
     tenantId: state.tenantId,
     rideId: state.rideId,
     travelDate,
@@ -729,28 +696,23 @@ function departureOf(tx: Prisma.TransactionClient, state: FixtureState, travelDa
   });
 }
 
-/** A seat on the seeded departure that carries no departure link. */
-function createUnlinkedSeat(tx: Prisma.TransactionClient, state: FixtureState, seatNumber: number) {
-  return tx.reservation.create({
-    data: {
-      tenantId: state.tenantId,
-      rideId: state.rideId,
-      passengerId: state.passengerId,
-      travelDate: state.travelDate,
-      rideDepartureTime: '09:00',
-      rideArrivalTime: '11:00',
-      seatNumber,
-      status: ReservationStatus.ACTIVE,
-      departureStationId: state.stationIds.middle,
-      arrivalStationId: state.stationIds.last,
-      groupId: `${state.groupId}-unlinked-${seatNumber}`,
-      createdById: state.actorId,
-      updatedById: state.actorId
-    }
-  });
+/** A fixture's seat always has a departure, as every reservation must (#27, PR 5). */
+async function linkOrThrow(
+  tx: Prisma.TransactionClient,
+  input: Parameters<typeof resolveDepartureLink>[1]
+): Promise<string> {
+  const departureId = await resolveDepartureLink(tx, input);
+
+  if (!departureId) {
+    throw new Error(
+      `No single departure for ride ${input.rideId} on ${formatDateOnly(input.travelDate)} at ${input.departureTime}`
+    );
+  }
+
+  return departureId;
 }
 
-/** A LEGACY departure on the seeded ride and date, as `departures:backfill` writes one. */
+/** A LEGACY departure on the seeded ride and date, as the departure backfill (PR 2) wrote one. */
 function createLegacyDeparture(
   tx: Prisma.TransactionClient,
   state: FixtureState,
@@ -1096,7 +1058,7 @@ async function seedValidFixture(
   // Departures first, so the seeded booking links to its own the way a
   // booking made through the API does.
   await syncDepartures(tx, { tenantId, actorId });
-  const departureId = await resolveDepartureLink(tx, {
+  const departureId = await linkOrThrow(tx, {
     tenantId,
     rideId,
     travelDate,

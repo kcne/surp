@@ -6,7 +6,6 @@ import { DeparturesService } from '../../src/departures/departures.service';
 import { SYSTEM_ACTOR_ID } from '../../src/departures/system-actor';
 import { departureMatchesExceptions } from '../../src/invariants/checks/departure-matches-exceptions';
 import { departureMatchesTimetable } from '../../src/invariants/checks/departure-matches-timetable';
-import { buildOrphanReport } from '../../src/invariants/checks/reservation-reachable';
 import { InvariantContext } from '../../src/invariants/invariant.types';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { RidesService } from '../../src/rides/rides.service';
@@ -701,35 +700,6 @@ describe('departure operations (real database)', () => {
       expect(ride.exceptions).toEqual([
         expect.objectContaining({ type: RideExceptionType.ADDITIONAL, capacity: 20 })
       ]);
-    });
-
-    it("re-seats an orphan moving onto an extra within the extra's capacity, not the ride's", async () => {
-      await departures.cancel(seeded.auth, (await scheduled()).id, {});
-      await addExtra({ capacity: 20 });
-      // A row with no departure at a time the date no longer has, so the
-      // repair would move it onto the extra, the date's only bus.
-      const orphan = await prisma.reservation.create({
-        data: {
-          tenantId: seeded.auth.tenantId,
-          rideId: seeded.rideId,
-          passengerId: seeded.passengerId,
-          travelDate: new Date(seeded.travelDate),
-          rideDepartureTime: '07:00',
-          rideArrivalTime: '09:00',
-          seatNumber: 35,
-          departureStationId: seeded.stations.first,
-          arrivalStationId: seeded.stations.last,
-          status: ReservationStatus.ACTIVE,
-          createdById: seeded.auth.sub,
-          updatedById: seeded.auth.sub
-        }
-      });
-
-      const report = await buildOrphanReport(context());
-      const item = report.items.find((candidate) => candidate.reservationId === orphan.id);
-
-      expect(item).toMatchObject({ targetDepartureTime: '15:00', canRepair: true });
-      expect(item!.targetSeatNumber).toBeLessThanOrEqual(20);
     });
   });
 
