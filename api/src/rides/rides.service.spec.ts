@@ -80,6 +80,7 @@ describe('RidesService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(syncDepartures).mockReset();
     prismaMock.reservation.groupBy.mockResolvedValue([]);
     prismaMock.departure.findMany.mockResolvedValue([]);
     // Nothing sold and nothing to name: the prospective checks find an empty
@@ -290,9 +291,12 @@ describe('RidesService', () => {
 
     const readInTransaction = jest.fn().mockResolvedValue(stored);
 
+    const tx = Object.fromEntries(
+      Object.entries(prismaMock).filter(([key]) => key !== '$transaction')
+    );
     prismaMock.$transaction.mockImplementation(async (fn: never) =>
       (fn as unknown as (tx: unknown) => Promise<unknown>)({
-        ...prismaMock,
+        ...tx,
         ride: { ...prismaMock.ride, findFirst: readInTransaction }
       })
     );
@@ -406,6 +410,11 @@ describe('RidesService', () => {
      */
     const transactionSeeing = (reservations: unknown[], capacityAfterWrite: number) => {
       let written = false;
+      let synced = false;
+      jest.mocked(syncDepartures).mockImplementation(async () => {
+        synced = written;
+        return { created: 0, updated: 1, dropped: 0, deleted: 0 };
+      });
 
       return {
         tenant: prismaMock.tenant,
@@ -421,7 +430,7 @@ describe('RidesService', () => {
               source: 'SCHEDULE',
               departureTime: '09:00',
               arrivalTime: '10:30',
-              capacity: written ? capacityAfterWrite : 48,
+              capacity: synced ? capacityAfterWrite : 48,
               cancelledAt: null,
               timetableDroppedAt: null,
               stops: [
@@ -1230,6 +1239,11 @@ describe('RidesService', () => {
      */
     const transactionMoving = () => {
       let written = false;
+      let synced = false;
+      jest.mocked(syncDepartures).mockImplementation(async () => {
+        synced = written;
+        return { created: 0, updated: 1, dropped: 0, deleted: 0 };
+      });
 
       const reservations = [
         {
@@ -1283,8 +1297,8 @@ describe('RidesService', () => {
                 rideId: 'ride-1',
                 serviceDate: travelDate,
                 source: 'SCHEDULE',
-                departureTime: written ? '10:00' : '09:00',
-                arrivalTime: written ? '11:30' : '10:30',
+                departureTime: synced ? '10:00' : '09:00',
+                arrivalTime: synced ? '11:30' : '10:30',
                 capacity: 38,
                 cancelledAt: null,
                 timetableDroppedAt: null,

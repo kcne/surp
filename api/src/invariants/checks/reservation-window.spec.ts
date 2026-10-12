@@ -66,6 +66,24 @@ describe('agency date in reservation guards', () => {
     });
   });
 
+  it('loads root-client reads in one snapshot and shares it across checks', async () => {
+    const { tx, departure } = fixture();
+    const root = {
+      ...tx,
+      departure: { findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn(async (work: (client: typeof tx) => Promise<unknown>) => work(tx))
+    };
+    const ctx = { tenantId: 'tenant-1', actorId: 'admin-1', windowDays: 30, prisma: root as never };
+    const [first, second] = await Promise.all([loadReservationWindow(ctx), loadReservationWindow(ctx)]);
+    expect(first.departureOf(first.reservations[0])).toBe(departure);
+    expect(first).toBe(second);
+    expect(root.departure.findMany).not.toHaveBeenCalled();
+    expect(root.$transaction).toHaveBeenCalledTimes(1);
+    expect(root.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: 'RepeatableRead', maxWait: 5_000, timeout: 30_000
+    });
+  });
+
   it('excludes agency yesterday after local midnight', async () => {
     const { tx } = fixture('Europe/Belgrade');
     const window = await loadReservationWindow({ tenantId: 'tenant-1', actorId: 'admin-1', windowDays: 30, prisma: tx as never });

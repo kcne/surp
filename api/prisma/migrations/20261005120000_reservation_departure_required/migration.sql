@@ -8,6 +8,9 @@
 --
 -- Stops with a count instead of Postgres's bare "contains null values", so a
 -- failed deploy says how many rows are in the way. Nothing is written.
+BEGIN;
+SET LOCAL lock_timeout = '10s';
+
 DO $$
 DECLARE
   unlinked bigint;
@@ -19,4 +22,10 @@ BEGIN
   END IF;
 END $$;
 
-ALTER TABLE "Reservation" ALTER COLUMN "departureId" SET NOT NULL;
+-- NOT VALID avoids a table scan under the exclusive lock. The next migration
+-- validates after this transaction releases that lock.
+ALTER TABLE "Reservation"
+  ADD CONSTRAINT "Reservation_departureId_not_null"
+  CHECK ("departureId" IS NOT NULL) NOT VALID;
+
+COMMIT;

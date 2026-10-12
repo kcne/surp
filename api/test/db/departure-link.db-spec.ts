@@ -11,6 +11,7 @@ import {
   reservationDepartureLinked
 } from '../../src/invariants/checks/reservation-departure-linked';
 import { reservationReachable } from '../../src/invariants/checks/reservation-reachable';
+import { loadReservationWindow } from '../../src/invariants/checks/reservation-window';
 import { InvariantContext } from '../../src/invariants/invariant.types';
 import {
   guardProspectiveWrite,
@@ -407,6 +408,32 @@ describe('departure links (real database)', () => {
 
       expect(reasons).toEqual([[wrong.id, 'WRONG_LINK']]);
     });
+  });
+
+  it('keeps a departure visible when a reset commits after reading its reservation', async () => {
+    const booked = await book(1);
+    const root = {
+      $transaction: (work: (client: unknown) => Promise<unknown>, options: object) =>
+        prisma.$transaction(async (tx) => {
+          const snapshot = {
+            ...tx,
+            reservation: {
+              findMany: async (args: Parameters<typeof tx.reservation.findMany>[0]) => {
+                const rows = await tx.reservation.findMany(args);
+                await prisma.$transaction(async (writer) => {
+                  await writer.reservation.delete({ where: { id: booked.id } });
+                  await writer.departure.delete({ where: { id: booked.departureId } });
+                });
+                return rows;
+              }
+            }
+          };
+          return work(snapshot);
+        }, options)
+    };
+    const window = await loadReservationWindow({ ...context(), prisma: root as never });
+    expect(window.reservations).toHaveLength(1);
+    expect(window.departureOf(window.reservations[0]).id).toBe(booked.departureId);
   });
 
   it('refuses a reservation without a departure (PR 5)', async () => {

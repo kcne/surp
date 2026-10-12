@@ -135,6 +135,15 @@ export function loadReservationWindow(ctx: InvariantContext): Promise<Reservatio
 }
 
 async function buildReservationWindow(ctx: InvariantContext): Promise<ReservationWindow> {
+  // Root-client scans can overlap a reset or timetable edit. Keep every read
+  // on one snapshot; a foreign key only guarantees consistency within it.
+  if ('$transaction' in ctx.prisma) {
+    return ctx.prisma.$transaction(
+      (tx) => buildReservationWindow({ ...ctx, prisma: tx }),
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, maxWait: 5_000, timeout: 30_000 }
+    );
+  }
+
   const tenant = await ctx.prisma.tenant.findUniqueOrThrow({
     where: { id: ctx.tenantId },
     select: { timezone: true }
