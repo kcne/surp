@@ -46,22 +46,10 @@ export async function scanForStaleArrivalTimes(ctx: InvariantContext): Promise<{
       continue;
     }
 
-    // A linked reservation's copy follows its departure (#27, PR 3b), which
-    // the sync rewrites; one with no departure follows the timetable. Two
-    // buses at its time (PR 4c) may arrive at different times, and nothing
-    // says which one it is on, so neither is copied from.
+    // The copy follows the departure (#27, PR 3b), which the sync rewrites.
     const departure = window.departureOf(reservation);
-    const atItsTime = departure
-      ? [departure]
-      : window
-          .dayOf(ride, travelDate)
-          .instances.filter((candidate) => candidate.departureTime === reservation.rideDepartureTime);
-    const instance = atItsTime.length === 1 ? atItsTime[0] : undefined;
 
-    // A reservation no instance reaches is unreachable, which is a different
-    // invariant's finding. Reporting it here too would double-count the same
-    // passenger under a heading that understates the problem.
-    if (!instance || instance.arrivalTime === reservation.rideArrivalTime) {
+    if (departure.arrivalTime === reservation.rideArrivalTime) {
       continue;
     }
 
@@ -73,7 +61,7 @@ export async function scanForStaleArrivalTimes(ctx: InvariantContext): Promise<{
       rideName: ride.name,
       departureTime: reservation.rideDepartureTime,
       storedArrivalTime: reservation.rideArrivalTime,
-      currentArrivalTime: instance.arrivalTime
+      currentArrivalTime: departure.arrivalTime
     });
   }
 
@@ -105,10 +93,10 @@ export const reservationArrivalCurrent: Invariant = {
   },
 
   /**
-   * Rewrites the stored copy from the schedule it was copied from.
+   * Rewrites the stored copy from the departure it follows.
    *
    * The scan is re-run rather than trusting a report the caller loaded minutes
-   * ago, so what is written is the arrival time the ride carries right now.
+   * ago, so what is written is the arrival time the departure carries right now.
    */
   async repair(ctx: InvariantContext): Promise<RepairResult> {
     return inScheduleEdit(ctx, async (locked) => {

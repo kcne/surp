@@ -124,12 +124,16 @@ describe('PassengersController (e2e)', () => {
     // `$transaction` is asked two different questions here. The list endpoint
     // batches its queries as an array and wants the results back in order;
     // `guardProspectiveWrite` hands in a callback and wants a transaction
-    // client to run it against. The callback form gets the mock itself, so a
+    // client to run it against. The callback form shares the model stubs, so a
     // guarded write reaches the same model stubs as an unguarded one, and the
     // checks it runs on the way find their tables rather than `undefined`.
+    // Prisma transaction clients cannot start another transaction.
     prismaMock.$transaction.mockImplementation(async (arg: unknown) => {
       if (typeof arg === 'function') {
-        return (arg as (tx: typeof prismaMock) => unknown)(prismaMock);
+        const tx = Object.fromEntries(
+          Object.entries(prismaMock).filter(([key]) => key !== '$transaction')
+        );
+        return (arg as (client: typeof tx) => unknown)(tx);
       }
 
       return [

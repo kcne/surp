@@ -206,13 +206,17 @@ describe('RidesController (e2e)', () => {
     prismaMock.station.findMany.mockResolvedValue([]);
     prismaMock.reservation.findMany.mockResolvedValue([]);
 
-    // The callback form gets the whole mock rather than a hand-picked pair of
+    // The callback form gets every model stub rather than a hand-picked pair of
     // models. A guarded write runs its checks in the same transaction as the
     // write, so the client it is handed has to answer for every table those
     // checks touch — and the set grows whenever an invariant joins the guard.
+    // Prisma transaction clients cannot start another transaction.
     prismaMock.$transaction.mockImplementation(async (arg: unknown) => {
       if (typeof arg === 'function') {
-        return (arg as (tx: typeof prismaMock) => unknown)(prismaMock);
+        const tx = Object.fromEntries(
+          Object.entries(prismaMock).filter(([key]) => key !== '$transaction')
+        );
+        return (arg as (client: typeof tx) => unknown)(tx);
       }
 
       return [[{ ...baseRide }], 1];

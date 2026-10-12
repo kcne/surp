@@ -385,6 +385,28 @@ async function main() {
     }
   });
 
+  // The ride has no weekday schedules, so the generator stores nothing for
+  // it. A past seat sold off the timetable sits on a LEGACY departure, as the
+  // departure backfill (#27, PR 2) left production's.
+  const seedDeparture = {
+    tenantId: tenant.id,
+    rideId: 'seed-ride-referencing-line',
+    serviceDate: new Date('2026-03-30T00:00:00.000Z'),
+    source: 'LEGACY' as const,
+    lineId: 'seed-line-referencing-station',
+    departureTime: '09:00',
+    arrivalTime: '10:00',
+    capacity: 40,
+    createdById: adminUser.id,
+    updatedById: adminUser.id
+  };
+
+  await prisma.departure.upsert({
+    where: { id: 'seed-departure-referencing-line' },
+    update: seedDeparture,
+    create: { id: 'seed-departure-referencing-line', ...seedDeparture }
+  });
+
   await prisma.reservation.upsert({
     where: {
       id: 'seed-reservation-referencing-station'
@@ -402,6 +424,7 @@ async function main() {
       status: 'ACTIVE',
       cancelledAt: null,
       groupId: 'seed-group-reservation-referencing-station',
+      departureId: 'seed-departure-referencing-line',
       createdById: adminUser.id,
       updatedById: adminUser.id
     },
@@ -419,6 +442,7 @@ async function main() {
       status: 'ACTIVE',
       cancelledAt: null,
       groupId: 'seed-group-reservation-referencing-station',
+      departureId: 'seed-departure-referencing-line',
       createdById: adminUser.id,
       updatedById: adminUser.id
     }

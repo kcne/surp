@@ -44,13 +44,8 @@ export class ReservationResponseDto {
   @ApiProperty()
   rideId!: string;
 
-  @ApiProperty({
-    nullable: true,
-    description:
-      'The departure (one bus on one date) the seat is on. Null only for a row the departure ' +
-      'backfill could not link, which reservation.departureLinked reports.'
-  })
-  departureId!: string | null;
+  @ApiProperty({ description: 'The departure (one bus on one date) the seat is on.' })
+  departureId!: string;
 
   @ApiProperty()
   passengerId!: string;

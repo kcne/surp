@@ -80,6 +80,7 @@ describe('RidesService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(syncDepartures).mockReset();
     prismaMock.reservation.groupBy.mockResolvedValue([]);
     prismaMock.departure.findMany.mockResolvedValue([]);
     // Nothing sold and nothing to name: the prospective checks find an empty
@@ -290,9 +291,12 @@ describe('RidesService', () => {
 
     const readInTransaction = jest.fn().mockResolvedValue(stored);
 
+    const tx = Object.fromEntries(
+      Object.entries(prismaMock).filter(([key]) => key !== '$transaction')
+    );
     prismaMock.$transaction.mockImplementation(async (fn: never) =>
       (fn as unknown as (tx: unknown) => Promise<unknown>)({
-        ...prismaMock,
+        ...tx,
         ride: { ...prismaMock.ride, findFirst: readInTransaction }
       })
     );
@@ -353,6 +357,7 @@ describe('RidesService', () => {
     const soldSeat = {
       id: 'reservation-1',
       rideId: 'ride-1',
+      departureId: 'departure-1',
       travelDate,
       rideDepartureTime: '09:00',
       rideArrivalTime: '10:30',
@@ -405,12 +410,36 @@ describe('RidesService', () => {
      */
     const transactionSeeing = (reservations: unknown[], capacityAfterWrite: number) => {
       let written = false;
+      let synced = false;
+      jest.mocked(syncDepartures).mockImplementation(async () => {
+        synced = written;
+        return { created: 0, updated: 1, dropped: 0, deleted: 0 };
+      });
 
       return {
         tenant: prismaMock.tenant,
         $executeRaw: jest.fn().mockResolvedValue(1),
         reservation: { findMany: jest.fn().mockResolvedValue(reservations) },
         station: { findMany: jest.fn().mockResolvedValue([]) },
+        // The guard syncs before its second pass, so the bus carries the new
+        // capacity by then.
+        departure: {
+          findMany: jest.fn(async () => [
+            {
+              id: 'departure-1',
+              source: 'SCHEDULE',
+              departureTime: '09:00',
+              arrivalTime: '10:30',
+              capacity: synced ? capacityAfterWrite : 48,
+              cancelledAt: null,
+              timetableDroppedAt: null,
+              stops: [
+                { stationId: 'station-a', isBoarding: true, isDropoff: false },
+                { stationId: 'station-b', isBoarding: false, isDropoff: true }
+              ]
+            }
+          ])
+        },
         ride: {
           findMany: jest.fn(async () => [windowedRide(written ? capacityAfterWrite : 48)]),
           update: jest.fn(async () => {
@@ -1205,17 +1234,22 @@ describe('RidesService', () => {
     });
 
     /**
-     * A transaction that moves with the write, and with the repair: the scans
-     * after the write see the later departure, and a reservation the repair
-     * updates reads back updated on the scan that follows.
+     * A transaction that moves with the write: the scans after it see the
+     * later departure, as the guard's sync leaves it.
      */
     const transactionMoving = () => {
       let written = false;
+      let synced = false;
+      jest.mocked(syncDepartures).mockImplementation(async () => {
+        synced = written;
+        return { created: 0, updated: 1, dropped: 0, deleted: 0 };
+      });
 
       const reservations = [
         {
           id: 'reservation-1',
           rideId: 'ride-1',
+          departureId: 'departure-1',
           travelDate,
           rideDepartureTime: '09:00',
           rideArrivalTime: '10:30',
@@ -1256,17 +1290,15 @@ describe('RidesService', () => {
             })
           },
           station: { findMany: jest.fn().mockResolvedValue([]) },
-          // The departure the moved reservation is linked to again, which the
-          // scan after the repair then reads the bus from.
           departure: {
-            findMany: jest.fn().mockResolvedValue([
+            findMany: jest.fn(async () => [
               {
                 id: 'departure-1',
                 rideId: 'ride-1',
                 serviceDate: travelDate,
                 source: 'SCHEDULE',
-                departureTime: '10:00',
-                arrivalTime: '11:30',
+                departureTime: synced ? '10:00' : '09:00',
+                arrivalTime: synced ? '11:30' : '10:30',
                 capacity: 38,
                 cancelledAt: null,
                 timetableDroppedAt: null,
@@ -1306,14 +1338,13 @@ describe('RidesService', () => {
       );
     });
 
-    it('refuses, and says the reservations can be moved rather than only overridden', async () => {
+    it('asks before moving a booked bus, and offers no repair', async () => {
       await expect(service.update(auth, 'ride-1', movedLater)).rejects.toMatchObject({
         response: {
           code: 'WOULD_BREAK_RESERVATIONS',
-          invariant: 'reservation.reachable',
+          invariant: 'reservation.departureTimeKept',
           affectedCount: 1,
-          repairable: true,
-          repairMessage: 'Premesta 1 rezervaciju na novo vreme polaska i slobodno sediste.'
+          repairable: false
         }
       });
 
@@ -1321,44 +1352,23 @@ describe('RidesService', () => {
       expect(harness.updates).toHaveLength(0);
     });
 
-    it('moves the reservation onto the new departure when asked to repair', async () => {
+    it('keeps the reservation on its departure once the move is confirmed', async () => {
       const token = await refusalToken(service.update(auth, 'ride-1', movedLater));
       harness = transactionMoving();
       jest.mocked(syncDepartures).mockClear();
 
       await expect(
-        service.update(auth, 'ride-1', { ...movedLater, repairTokens: [token] })
-      ).resolves.toBeDefined();
-
-      expect(harness.updates).toEqual([
-        expect.objectContaining({
-          id: 'reservation-1',
-          departureId: 'departure-1',
-          rideDepartureTime: '10:00',
-          rideArrivalTime: '11:30'
-        })
-      ]);
-      expect(harness.tx.reservation.findMany).toHaveBeenCalledTimes(3);
-      // Departures are synced before the after-scan, so the repair finds the
-      // moved bus, and again once the edit is done.
-      const sync = jest.mocked(syncDepartures);
-      expect(sync).toHaveBeenCalledTimes(2);
-      expect(sync.mock.invocationCallOrder[0]).toBeLessThan(
-        harness.tx.departure.findMany.mock.invocationCallOrder[0]
-      );
-    });
-
-    it('leaves the reservation where it is when the caller only overrides', async () => {
-      const token = await refusalToken(service.update(auth, 'ride-1', movedLater));
-      harness = transactionMoving();
-
-      await expect(
         service.update(auth, 'ride-1', { ...movedLater, confirmationTokens: [token] })
       ).resolves.toBeDefined();
 
-      // Confirming is the other answer: the write lands and the orphan stays
-      // for the integrity report to show.
+      // The passenger stays on the bus; the sync, not the guard, rewrites the
+      // time copies.
       expect(harness.updates).toHaveLength(0);
+      // Departures are synced before the after-scan, so it reads the moved bus.
+      const sync = jest.mocked(syncDepartures);
+      const reads = harness.tx.departure.findMany.mock.invocationCallOrder;
+      expect(sync).toHaveBeenCalledTimes(1);
+      expect(sync.mock.invocationCallOrder[0]).toBeLessThan(reads[reads.length - 1]);
     });
   });
 });

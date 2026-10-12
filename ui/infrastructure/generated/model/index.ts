@@ -208,7 +208,6 @@ export * from './reservationPassengerSummaryDto';
 export * from './reservationResponseDto';
 export * from './reservationResponseDtoCancelledAt';
 export * from './reservationResponseDtoCreatedById';
-export * from './reservationResponseDtoDepartureId';
 export * from './reservationResponseDtoStatus';
 export * from './reservationResponseDtoUpdatedById';
 export * from './reservationRideSummaryDto';

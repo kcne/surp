@@ -11,9 +11,8 @@ import { CheckResult, Invariant, InvariantContext, Violation } from '../invarian
 /**
  * Every future active reservation points at the departure it is on (#27).
  *
- * Bookings link themselves since PR 1b, by the rule in `departure-link.ts`,
- * and `departures:backfill` (PR 2) linked the ones booked before. Since PR 3b
- * seats are counted and locked on the link, so a missing or wrong one is a
+ * Since PR 5 every reservation has a departure; the database refuses one
+ * without. Seats are counted and locked on the link, so a wrong one is a
  * wrong count of free seats, and this is critical.
  *
  * It looks at active reservations from the agency's date to the end of the
@@ -25,10 +24,7 @@ import { CheckResult, Invariant, InvariantContext, Violation } from '../invarian
  * - a link whose time copy matches neither its departure nor any other: the
  *   sync keeps a linked row's copies in step with its departure, so only a
  *   write that bypassed it leaves one, and old tabs still find a passenger
- *   by that copy;
- * - an unlinked reservation, either with a unique match (a writer skipped the
- *   link, or the backfill has not run) or without one (two buses at the same
- *   time, a stale time, or no stored departure).
+ *   by that copy.
  *
  * A link to a departure that does not run is not wrong, and is listed by
  * `reservation.reachable` since PR 3b: its passengers still need a call, and
@@ -37,12 +33,7 @@ import { CheckResult, Invariant, InvariantContext, Violation } from '../invarian
  * Reported, never repaired: repairs ship after the checks that justify them.
  */
 
-export type DepartureLinkReason =
-  | 'ON_LEGACY'
-  | 'WRONG_LINK'
-  | 'STALE_TIME_COPY'
-  | 'LINKABLE_UNLINKED'
-  | 'NO_UNIQUE_MATCH';
+export type DepartureLinkReason = 'ON_LEGACY' | 'WRONG_LINK' | 'STALE_TIME_COPY';
 
 const RESERVATION_SELECT = {
   id: true,
@@ -64,7 +55,7 @@ async function load(
   departures: Array<{ id: string; rideId: string; serviceDate: Date; departureTime: string }>;
 }> {
   // Given a root client, both reads share one snapshot, so a sync committing
-  // between them cannot make an unlinked booking look linkable.
+  // between them cannot make a link look wrong.
   if ('$transaction' in db) {
     return db.$transaction((tx) => load(tx, tenantId), {
       isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
@@ -134,57 +125,39 @@ export function classifyDepartureLinks(
       reservation.rideDepartureTime
     );
 
-    if (reservation.departureId && reservation.departure) {
-      // Before the time comparison: the index holds no LEGACY rows, so a
-      // LEGACY link whose time a timetable bus shares would read as the wrong
-      // bus, and the wrong advice.
-      if (reservation.departure.source === DepartureSource.LEGACY) {
-        violations.push(
-          violation(
-            reservation,
-            'ON_LEGACY',
-            'rezervacija je aktivna, a vezana je za polazak koji red voznje vise ne pravi.'
-          )
-        );
-        continue;
-      }
-
-      if (match && match !== reservation.departureId) {
-        violations.push(
-          violation(
-            reservation,
-            'WRONG_LINK',
-            'rezervacija je vezana za drugi autobus od onog koji odgovara njenom vremenu polaska.',
-            { matchingDepartureId: match }
-          )
-        );
-      } else if (reservation.departure.departureTime !== reservation.rideDepartureTime) {
-        violations.push(
-          violation(
-            reservation,
-            'STALE_TIME_COPY',
-            `rezervacija nosi drugo vreme polaska od svog polaska (${reservation.departure.departureTime}), pa se ne vidi na spisku putnika.`,
-            { departureTime: reservation.departure.departureTime }
-          )
-        );
-      }
+    // Before the time comparison: the index holds no LEGACY rows, so a LEGACY
+    // link whose time a timetable bus shares would read as the wrong bus, and
+    // the wrong advice.
+    if (reservation.departure.source === DepartureSource.LEGACY) {
+      violations.push(
+        violation(
+          reservation,
+          'ON_LEGACY',
+          'rezervacija je aktivna, a vezana je za polazak koji red voznje vise ne pravi.'
+        )
+      );
       continue;
     }
 
-    violations.push(
-      match
-        ? violation(
-            reservation,
-            'LINKABLE_UNLINKED',
-            'rezervacija nije vezana za polazak, iako tacno jedan polazak odgovara njenom vremenu.',
-            { matchingDepartureId: match }
-          )
-        : violation(
-            reservation,
-            'NO_UNIQUE_MATCH',
-            'rezervacija nije vezana za polazak, jer njenom vremenu ne odgovara tacno jedan polazak.'
-          )
-    );
+    if (match && match !== reservation.departureId) {
+      violations.push(
+        violation(
+          reservation,
+          'WRONG_LINK',
+          'rezervacija je vezana za drugi autobus od onog koji odgovara njenom vremenu polaska.',
+          { matchingDepartureId: match }
+        )
+      );
+    } else if (reservation.departure.departureTime !== reservation.rideDepartureTime) {
+      violations.push(
+        violation(
+          reservation,
+          'STALE_TIME_COPY',
+          `rezervacija nosi drugo vreme polaska od svog polaska (${reservation.departure.departureTime}), pa se ne vidi na spisku putnika.`,
+          { departureTime: reservation.departure.departureTime }
+        )
+      );
+    }
   }
 
   return violations;
@@ -194,9 +167,9 @@ export const reservationDepartureLinked: Invariant = {
   key: 'reservation.departureLinked',
   title: 'Rezervacija je vezana za svoj polazak',
   description:
-    'Svaka rezervacija treba da pokazuje na tacno jedan sacuvan polazak. Sedista se broje po tom polasku, pa rezervacija vezana za pogresan autobus ili bez polaska znaci pogresan broj slobodnih mesta.',
+    'Svaka rezervacija treba da pokazuje na tacno jedan sacuvan polazak. Sedista se broje po tom polasku, pa rezervacija vezana za pogresan autobus znaci pogresan broj slobodnih mesta.',
   manualAdvice:
-    'Ako vreme polaska rezervacije vise ne postoji u redu voznje, pokrenite popravku provere "Rezervacija se vidi na svom polasku" ili otkazite rezervaciju. Ako u isto vreme polaze dva autobusa, javite podrsci koji autobus putnik koristi. Ako rezervacija nosi drugo vreme od svog polaska, javite podrsci. Ostale razlike prijavite podrsci: dok rezervacija nije vezana za pravi polazak, njeno sediste se ne broji na tom autobusu i ne moze da se menja.',
+    'Ako rezervacija nosi drugo vreme od svog polaska, javite podrsci. Ostale razlike prijavite podrsci: dok rezervacija nije vezana za pravi polazak, njeno sediste se ne broji na tom autobusu.',
   severity: 'critical',
 
   async check(ctx: InvariantContext): Promise<CheckResult> {

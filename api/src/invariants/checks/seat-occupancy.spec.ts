@@ -7,7 +7,8 @@ const prismaMock = {
   tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
   reservation: { findMany: jest.fn() },
   ride: { findMany: jest.fn() },
-  station: { findMany: jest.fn() }
+  station: { findMany: jest.fn() },
+  departure: { findMany: jest.fn() }
 };
 
 /**
@@ -70,11 +71,29 @@ const rideWith = (overrides: Record<string, unknown> = {}) => ({
   ...overrides
 });
 
+/** The 07:30 bus as the sync stores it: the ride's capacity and line. */
+const storedDeparture = (overrides: Record<string, unknown> = {}) => ({
+  id: 'departure-1',
+  source: 'SCHEDULE',
+  departureTime: '07:30',
+  arrivalTime: '10:45',
+  capacity: 38,
+  cancelledAt: null,
+  timetableDroppedAt: null,
+  stops: [
+    { stationId: 'station-bg', isBoarding: true, isDropoff: false },
+    { stationId: 'station-ns', isBoarding: true, isDropoff: true },
+    { stationId: 'station-su', isBoarding: false, isDropoff: true }
+  ],
+  ...overrides
+});
+
 let nextId = 0;
 
 const reservation = (overrides: Record<string, unknown> = {}) => ({
   id: `res-${(nextId += 1)}`,
   rideId: 'ride-1',
+  departureId: 'departure-1',
   travelDate,
   rideDepartureTime: '07:30',
   rideArrivalTime: '10:45',
@@ -90,6 +109,7 @@ beforeEach(() => {
   nextId = 0;
   ctx = contextFor();
   prismaMock.ride.findMany.mockResolvedValue([rideWith()]);
+  prismaMock.departure.findMany.mockResolvedValue([storedDeparture()]);
   prismaMock.station.findMany.mockResolvedValue([
     { id: 'station-bg', name: 'Beograd' },
     { id: 'station-ns', name: 'Novi Sad' },
@@ -128,7 +148,11 @@ describe('reservation.seatUnique', () => {
   // first is off the bus before the second gets on.
   it('leaves one seat sold twice on disjoint legs alone', async () => {
     prismaMock.reservation.findMany.mockResolvedValue([
-      reservation({ seatNumber: 12, departureStationId: 'station-bg', arrivalStationId: 'station-ns' }),
+      reservation({
+        seatNumber: 12,
+        departureStationId: 'station-bg',
+        arrivalStationId: 'station-ns'
+      }),
       reservation({
         seatNumber: 12,
         departureStationId: 'station-ns',
@@ -152,24 +176,12 @@ describe('reservation.seatUnique', () => {
     await expect(findSeatClashes(ctx)).resolves.toMatchObject({ items: [] });
   });
 
-  // #14: the route edit moved the departure from 07:30 to 07:45, so the older
-  // reservation kept a time the app no longer shows, took a different advisory
-  // lock, and the seat was sold again. Both are on one bus; only a check that
-  // resolves the stale time onto the current departure can see it.
-  it('sees through a departure time the route edit moved', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([
-      rideWith({
-        daySchedules: [
-          {
-            dayOfWeek: travelDate.getUTCDay(),
-            stationTimes: [
-              { orderIndex: 0, time: '07:45' },
-              { orderIndex: 1, time: '09:15' },
-              { orderIndex: 2, time: '11:00' }
-            ]
-          }
-        ]
-      })
+  // #14: the route edit moved the departure from 07:30 to 07:45, and the older
+  // reservation kept the old time copy. Both are on one bus, and the clash is
+  // named as one reached through a drifted time.
+  it('sees through a time copy the route edit left behind', async () => {
+    prismaMock.departure.findMany.mockResolvedValue([
+      storedDeparture({ departureTime: '07:45', arrivalTime: '11:00' })
     ]);
     prismaMock.reservation.findMany.mockResolvedValue([
       reservation({ seatNumber: 12, rideDepartureTime: '07:30' }),
@@ -235,21 +247,23 @@ describe('reservation.seatUnique', () => {
   });
 
   it('keeps two departures on the same day apart', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([
-      rideWith({
-        exceptions: [
-          {
-            exceptionDate: travelDate,
-            type: 'ADDITIONAL',
-            departureTime: '15:00',
-            arrivalTime: '18:15'
-          }
-        ]
+    prismaMock.departure.findMany.mockResolvedValue([
+      storedDeparture(),
+      storedDeparture({
+        id: 'departure-extra',
+        source: 'EXTRA',
+        departureTime: '15:00',
+        arrivalTime: '18:15'
       })
     ]);
     prismaMock.reservation.findMany.mockResolvedValue([
-      reservation({ seatNumber: 12, rideDepartureTime: '07:30' }),
-      reservation({ seatNumber: 12, rideDepartureTime: '15:00', rideArrivalTime: '18:15' })
+      reservation({ seatNumber: 12 }),
+      reservation({
+        seatNumber: 12,
+        departureId: 'departure-extra',
+        rideDepartureTime: '15:00',
+        rideArrivalTime: '18:15'
+      })
     ]);
 
     await expect(findSeatClashes(ctx)).resolves.toMatchObject({ items: [] });
@@ -258,7 +272,7 @@ describe('reservation.seatUnique', () => {
 
 describe('reservation.seatWithinCapacity', () => {
   it('reports a seat the bus no longer has', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([rideWith({ capacity: 30 })]);
+    prismaMock.departure.findMany.mockResolvedValue([storedDeparture({ capacity: 30 })]);
     prismaMock.reservation.findMany.mockResolvedValue([
       reservation({ seatNumber: 30 }),
       reservation({ seatNumber: 31 })
@@ -280,7 +294,7 @@ describe('reservation.seatWithinCapacity', () => {
 
 describe('instance.notOverbooked', () => {
   it('reports the busiest leg of an overfull departure', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([rideWith({ capacity: 2 })]);
+    prismaMock.departure.findMany.mockResolvedValue([storedDeparture({ capacity: 2 })]);
     prismaMock.reservation.findMany.mockResolvedValue([
       reservation({ seatNumber: 1, arrivalStationId: 'station-ns' }),
       reservation({ seatNumber: 2, arrivalStationId: 'station-ns' }),
@@ -305,7 +319,7 @@ describe('instance.notOverbooked', () => {
   // Capacity is a count per leg, not per run: a two-seat bus carries four
   // passengers over this route without ever having three aboard at once.
   it('leaves a bus that fills and empties along the way alone', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([rideWith({ capacity: 2 })]);
+    prismaMock.departure.findMany.mockResolvedValue([storedDeparture({ capacity: 2 })]);
     prismaMock.reservation.findMany.mockResolvedValue([
       reservation({ seatNumber: 1, arrivalStationId: 'station-ns' }),
       reservation({ seatNumber: 2, arrivalStationId: 'station-ns' }),
@@ -316,21 +330,9 @@ describe('instance.notOverbooked', () => {
     await expect(findOverbookedInstances(ctx)).resolves.toMatchObject({ items: [] });
   });
 
-  it('counts reservations split across a moved departure time together', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([
-      rideWith({
-        capacity: 1,
-        daySchedules: [
-          {
-            dayOfWeek: travelDate.getUTCDay(),
-            stationTimes: [
-              { orderIndex: 0, time: '07:45' },
-              { orderIndex: 1, time: '09:15' },
-              { orderIndex: 2, time: '11:00' }
-            ]
-          }
-        ]
-      })
+  it('counts reservations whose time copies differ together on their one bus', async () => {
+    prismaMock.departure.findMany.mockResolvedValue([
+      storedDeparture({ capacity: 1, departureTime: '07:45', arrivalTime: '11:00' })
     ]);
     prismaMock.reservation.findMany.mockResolvedValue([
       reservation({ seatNumber: 1, rideDepartureTime: '07:30' }),
@@ -358,13 +360,14 @@ describe('the scan the three checks share', () => {
 
     expect(prismaMock.reservation.findMany).toHaveBeenCalledTimes(1);
     expect(prismaMock.ride.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.departure.findMany).toHaveBeenCalledTimes(1);
   });
 
   it('does not carry a scan across to a new context', async () => {
     prismaMock.reservation.findMany.mockResolvedValue([reservation({ seatNumber: 12 })]);
     await findSeatClashes(ctx);
 
-    prismaMock.ride.findMany.mockResolvedValue([rideWith({ capacity: 5 })]);
+    prismaMock.departure.findMany.mockResolvedValue([storedDeparture({ capacity: 5 })]);
     prismaMock.reservation.findMany.mockResolvedValue([reservation({ seatNumber: 40 })]);
 
     await expect(findSeatsOverCapacity(contextFor())).resolves.toMatchObject({
@@ -374,39 +377,12 @@ describe('the scan the three checks share', () => {
 });
 
 describe('seats on a stored departure (#27, PR 3b)', () => {
-  const storedDeparture = (overrides: Record<string, unknown> = {}) => ({
-    id: 'departure-1',
-    source: 'SCHEDULE',
-    departureTime: '07:30',
-    arrivalTime: '10:45',
-    capacity: 38,
-    cancelledAt: null,
-    timetableDroppedAt: null,
-    stops: [
-      { stationId: 'station-bg', isBoarding: true, isDropoff: false },
-      { stationId: 'station-ns', isBoarding: true, isDropoff: true },
-      { stationId: 'station-su', isBoarding: false, isDropoff: true }
-    ],
-    ...overrides
-  });
-
-  beforeEach(() => {
-    (prismaMock as Record<string, unknown>).departure = {
-      findMany: jest.fn().mockResolvedValue([storedDeparture()])
-    };
-  });
-
-  afterAll(() => {
-    delete (prismaMock as Record<string, unknown>).departure;
-  });
-
-  it('puts a linked reservation on its departure whatever time its copy carries', async () => {
+  it('puts a reservation on its departure whatever time its copy carries', async () => {
     // The copy was left at 07:00 by an edit before the sync rewrote copies;
     // the bus is the same, so the seat is the same.
     prismaMock.reservation.findMany.mockResolvedValue([
-      reservation({ departureId: 'departure-1' }),
+      reservation(),
       reservation({
-        departureId: 'departure-1',
         rideDepartureTime: '07:00',
         passenger: { firstName: 'Ana', lastName: 'Anic', phone: '+381602222222' }
       })
@@ -415,17 +391,21 @@ describe('seats on a stored departure (#27, PR 3b)', () => {
     const { items } = await findSeatClashes(ctx);
 
     expect(items).toEqual([
-      expect.objectContaining({ seatNumber: 12, reservationId: 'res-2', otherReservationId: 'res-1' })
+      expect.objectContaining({
+        seatNumber: 12,
+        reservationId: 'res-2',
+        otherReservationId: 'res-1'
+      })
     ]);
   });
 
   it('keeps two buses leaving at one time apart', async () => {
-    (prismaMock as unknown as { departure: { findMany: jest.Mock } }).departure.findMany.mockResolvedValue([
+    prismaMock.departure.findMany.mockResolvedValue([
       storedDeparture(),
       storedDeparture({ id: 'departure-extra' })
     ]);
     prismaMock.reservation.findMany.mockResolvedValue([
-      reservation({ departureId: 'departure-1' }),
+      reservation(),
       reservation({ departureId: 'departure-extra' })
     ]);
 
@@ -433,10 +413,8 @@ describe('seats on a stored departure (#27, PR 3b)', () => {
   });
 
   it('checks seats against the departure capacity, not the ride', async () => {
-    (prismaMock as unknown as { departure: { findMany: jest.Mock } }).departure.findMany.mockResolvedValue([
-      storedDeparture({ capacity: 10 })
-    ]);
-    prismaMock.reservation.findMany.mockResolvedValue([reservation({ departureId: 'departure-1' })]);
+    prismaMock.departure.findMany.mockResolvedValue([storedDeparture({ capacity: 10 })]);
+    prismaMock.reservation.findMany.mockResolvedValue([reservation()]);
 
     const { items } = await findSeatsOverCapacity(ctx);
 
@@ -445,7 +423,7 @@ describe('seats on a stored departure (#27, PR 3b)', () => {
 
   it('counts legs along the stops the departure stored', async () => {
     // The departure skips Novi Sad, so both passengers share its one leg.
-    (prismaMock as unknown as { departure: { findMany: jest.Mock } }).departure.findMany.mockResolvedValue([
+    prismaMock.departure.findMany.mockResolvedValue([
       storedDeparture({
         capacity: 1,
         stops: [
@@ -455,14 +433,18 @@ describe('seats on a stored departure (#27, PR 3b)', () => {
       })
     ]);
     prismaMock.reservation.findMany.mockResolvedValue([
-      reservation({ departureId: 'departure-1', seatNumber: 1 }),
-      reservation({ departureId: 'departure-1', seatNumber: 2 })
+      reservation({ seatNumber: 1 }),
+      reservation({ seatNumber: 2 })
     ]);
 
     const overbooked = await findOverbookedInstances(ctx);
 
     expect(overbooked.items).toEqual([
-      expect.objectContaining({ capacity: 1, passengerCount: 2, instanceKey: 'departure:departure-1' })
+      expect.objectContaining({
+        capacity: 1,
+        passengerCount: 2,
+        instanceKey: 'departure:departure-1'
+      })
     ]);
   });
 });

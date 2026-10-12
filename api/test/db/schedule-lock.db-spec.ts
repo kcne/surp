@@ -62,6 +62,21 @@ function booking(seeded: Seeded, seatNumber: number, travelDate = seeded.travelD
   };
 }
 
+/** The timetable bus on the seeded travel date, which every seat sits on. */
+async function scheduledDepartureId(db: Prisma.TransactionClient, seeded: Seeded): Promise<string> {
+  const departure = await db.departure.findFirstOrThrow({
+    where: {
+      tenantId: seeded.auth.tenantId,
+      rideId: seeded.rideId,
+      serviceDate: new Date(`${seeded.travelDate}T00:00:00.000Z`),
+      source: 'SCHEDULE'
+    },
+    select: { id: true }
+  });
+
+  return departure.id;
+}
+
 describe('tenant schedule lock (real database)', () => {
   let prisma: PrismaService;
   let reservations: ReservationsService;
@@ -120,10 +135,11 @@ describe('tenant schedule lock (real database)', () => {
   it('makes a guarded edit wait for a booking in flight, then measure it', async () => {
     // Seat 40 is being sold while capacity is lowered to 30. Before the lock,
     // the edit's scan could miss the uncommitted booking and strand it.
-    const inFlight = holdBooking((tx) =>
+    const inFlight = holdBooking(async (tx) =>
       tx.reservation.create({
         data: {
           ...booking(seeded, 40),
+          departureId: await scheduledDepartureId(tx, seeded),
           travelDate: new Date(`${seeded.travelDate}T00:00:00.000Z`),
           tenantId: seeded.auth.tenantId,
           status: ReservationStatus.ACTIVE,
@@ -221,10 +237,11 @@ describe('tenant schedule lock (real database)', () => {
   });
 
   it('makes a plain ride delete wait for a booking in flight, then refuse', async () => {
-    const inFlight = holdBooking((tx) =>
+    const inFlight = holdBooking(async (tx) =>
       tx.reservation.create({
         data: {
           ...booking(seeded, 3),
+          departureId: await scheduledDepartureId(tx, seeded),
           travelDate: new Date(`${seeded.travelDate}T00:00:00.000Z`),
           tenantId: seeded.auth.tenantId,
           status: ReservationStatus.ACTIVE,

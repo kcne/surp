@@ -1,18 +1,16 @@
-import { ORPHAN_AMBIGUOUS_TARGET_ADVICE, ORPHAN_NO_FREE_SEAT_ADVICE } from './orphaned-reservations';
-import { buildOrphanReport, repairOrphanedReservations } from './reservation-reachable';
+import { buildOrphanReport, reservationReachable } from './reservation-reachable';
 import { InvariantContext } from '../invariant.types';
 
 /**
- * Moved here from the maintenance service spec when #24 replaced the four
- * settings cards with one page. `orphaned-reservations.spec.ts` covers the
- * classification rules in isolation; these cover the scan and the repair as
- * they run against the database.
+ * `orphaned-reservations.spec.ts` covers the classification rules in
+ * isolation; these cover the scan as it reads reservations and the departures
+ * they are on.
  */
 
 const prismaMock = {
   tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
   ride: { findMany: jest.fn() },
-  reservation: { findMany: jest.fn(), findUniqueOrThrow: jest.fn(), update: jest.fn() },
+  reservation: { findMany: jest.fn() },
   station: { findMany: jest.fn() },
   departure: { findMany: jest.fn() }
 };
@@ -42,9 +40,7 @@ const dateInDays = (days: number) => {
 
 const travelDate = dateInDays(7);
 
-// The line gained a new first station at 07:30; the old head departed at
-// 07:45, which is what every reservation below still stores.
-const strandedRide = {
+const ride = (overrides: Record<string, unknown> = {}) => ({
   id: 'ride-1',
   name: 'Istanbul - Novi Sad',
   capacity: 48,
@@ -65,347 +61,149 @@ const strandedRide = {
     {
       dayOfWeek: travelDate.getUTCDay(),
       stationTimes: [
-        { orderIndex: 0, time: '07:30' },
-        { orderIndex: 1, time: '07:45' },
+        { orderIndex: 0, time: '07:45' },
+        { orderIndex: 1, time: '12:00' },
         { orderIndex: 2, time: '23:00' }
       ]
     }
   ],
-  exceptions: []
-};
-
-const reservation = (id: string, seatNumber: number, departureTime: string) => ({
-  id,
-  rideId: 'ride-1',
-  travelDate,
-  rideDepartureTime: departureTime,
-  rideArrivalTime: '23:00',
-  seatNumber,
-  departureStationId: 'station-a',
-  arrivalStationId: 'station-b',
-  passenger: { firstName: 'Marko', lastName: 'Markovic', phone: '+381601234567' }
+  ...overrides
 });
 
-const skippedRide = {
-  ...strandedRide,
-  exceptions: [{ exceptionDate: travelDate, type: 'SKIP', departureTime: null, arrivalTime: null }]
-};
+const departure = (overrides: Record<string, unknown> = {}) => ({
+  id: 'departure-1',
+  source: 'SCHEDULE',
+  departureTime: '07:45',
+  arrivalTime: '23:00',
+  capacity: 48,
+  cancelledAt: null,
+  timetableDroppedAt: null,
+  stops: [
+    { stationId: 'station-a', isBoarding: true, isDropoff: false },
+    { stationId: 'station-c', isBoarding: true, isDropoff: true },
+    { stationId: 'station-b', isBoarding: false, isDropoff: true }
+  ],
+  ...overrides
+});
+
+const reservation = (overrides: Record<string, unknown> = {}) => ({
+  id: 'res-1',
+  rideId: 'ride-1',
+  departureId: 'departure-1',
+  travelDate,
+  rideDepartureTime: '07:45',
+  rideArrivalTime: '23:00',
+  seatNumber: 12,
+  departureStationId: 'station-a',
+  arrivalStationId: 'station-b',
+  passenger: { firstName: 'Marko', lastName: 'Markovic', phone: '+381601234567' },
+  ...overrides
+});
+
+function given({
+  rides = [ride()],
+  departures = [departure()],
+  reservations = [reservation()]
+}: {
+  rides?: unknown[];
+  departures?: unknown[];
+  reservations?: unknown[];
+} = {}) {
+  prismaMock.ride.findMany.mockResolvedValue(rides);
+  prismaMock.departure.findMany.mockResolvedValue(departures);
+  prismaMock.reservation.findMany.mockResolvedValue(reservations);
+}
 
 describe('reservation.reachable', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    prismaMock.station.findMany.mockResolvedValue([]);
-    prismaMock.ride.findMany.mockResolvedValue([strandedRide]);
-    prismaMock.reservation.findUniqueOrThrow.mockResolvedValue({
-      rideId: 'ride-1',
-      travelDate
-    });
-    prismaMock.departure.findMany.mockResolvedValue([]);
+    prismaMock.station.findMany.mockResolvedValue([
+      { id: 'station-a', name: 'Bar' },
+      { id: 'station-b', name: 'Novi Sad' },
+      { id: 'station-c', name: 'Podgorica' }
+    ]);
   });
 
-  it('points stranded reservations at the instance that replaced their departure time', async () => {
-    prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
+  it('is quiet while the departure runs, whatever the timetable says of the day', async () => {
+    // The weekday left the schedule, but the sync has not dropped this bus.
+    given({ rides: [ride({ daySchedules: [] })] });
 
     const report = await buildOrphanReport(ctx);
 
     expect(report.scannedReservationCount).toBe(1);
-    expect(report.orphanedCount).toBe(1);
-    expect(report.repairableCount).toBe(1);
-    expect(report.seatChangeCount).toBe(0);
-    expect(report.items[0]).toEqual(
+    expect(report.items).toEqual([]);
+  });
+
+  it('lists a passenger on a cancelled departure, with nothing to repair', async () => {
+    given({ departures: [departure({ cancelledAt: new Date() })] });
+
+    const result = await reservationReachable.check(ctx);
+
+    expect(result.violations).toEqual([
       expect.objectContaining({
-        reason: 'DEPARTURE_TIME_MOVED',
-        currentDepartureTime: '07:45',
-        targetDepartureTime: '07:30',
-        targetArrivalTime: '23:00',
-        seatNumber: 12,
-        targetSeatNumber: 12,
-        canRepair: true
-      })
-    );
-  });
-
-  it('leaves reservations already sitting on a live instance alone', async () => {
-    prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:30')]);
-
-    const report = await buildOrphanReport(ctx);
-
-    expect(report.scannedReservationCount).toBe(1);
-    expect(report.orphanedCount).toBe(0);
-  });
-
-  it('moves a stranded reservation off a seat a visible passenger now holds', async () => {
-    prismaMock.reservation.findMany.mockResolvedValue([
-      // Sold after the route changed, so it is visible and owns seat 12.
-      reservation('res-visible', 12, '07:30'),
-      reservation('res-stranded', 12, '07:45')
-    ]);
-
-    const report = await buildOrphanReport(ctx);
-
-    expect(report.orphanedCount).toBe(1);
-    expect(report.seatChangeCount).toBe(1);
-    expect(report.items[0]).toEqual(
-      expect.objectContaining({ reservationId: 'res-stranded', targetSeatNumber: 1 })
-    );
-  });
-
-  it('lets every orphan that can keep its seat do so before reseating the rest', async () => {
-    // A single pass would hand seat 1 to res-b, evicting res-a from a seat it
-    // could have kept and cascading one collision into two moves.
-    prismaMock.reservation.findMany.mockResolvedValue([
-      reservation('res-visible', 5, '07:30'),
-      reservation('res-a', 1, '07:45'),
-      reservation('res-b', 5, '07:45')
-    ]);
-
-    const report = await buildOrphanReport(ctx);
-
-    const seatOf = (id: string) =>
-      report.items.find((item) => item.reservationId === id)?.targetSeatNumber;
-
-    expect(seatOf('res-a')).toBe(1);
-    expect(seatOf('res-b')).toBe(2);
-    expect(report.seatChangeCount).toBe(1);
-  });
-
-  it('refuses to guess when the travel date carries more than one departure', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([
-      {
-        ...strandedRide,
-        exceptions: [
-          {
-            exceptionDate: travelDate,
-            type: 'ADDITIONAL',
-            departureTime: '14:00',
-            arrivalTime: '05:00'
-          }
-        ]
-      }
-    ]);
-    prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
-
-    const report = await buildOrphanReport(ctx);
-
-    expect(report.items[0]).toEqual(
-      expect.objectContaining({
-        reason: 'AMBIGUOUS_INSTANCE',
-        targetDepartureTime: null,
-        canRepair: false
-      })
-    );
-    expect(report.repairableCount).toBe(0);
-  });
-
-  // The advice sentence for a moved departure describes what the repair will
-  // do, and the repair declines when the only departure left is full. Showing
-  // that sentence there would promise a button that is refusing to act.
-  it('tells the agency the bus is full rather than promising a repair', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([{ ...strandedRide, capacity: 1 }]);
-    prismaMock.reservation.findMany.mockResolvedValue([
-      reservation('res-visible', 1, '07:30'),
-      reservation('res-stranded', 1, '07:45')
-    ]);
-
-    const report = await buildOrphanReport(ctx);
-    const stranded = report.items.find((item) => item.reservationId === 'res-stranded');
-
-    expect(stranded).toEqual(
-      expect.objectContaining({
-        reason: 'DEPARTURE_TIME_MOVED',
-        targetDepartureTime: '07:30',
-        targetSeatNumber: null,
+        subjectId: 'res-1',
+        summary: `Marko Markovic, ${travelDate.toISOString().slice(0, 10)}, polazak 07:45: polazak je otkazan.`,
         canRepair: false,
-        reasonAdvice: ORPHAN_NO_FREE_SEAT_ADVICE
+        detail: expect.objectContaining({ reason: 'DEPARTURE_CANCELLED' })
       })
-    );
-  });
-
-  it('says somebody marked the date as not running, rather than that no bus exists', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([skippedRide]);
-    // 07:30 is what the ride's own schedule produces, so the skip is the only
-    // thing standing between this reservation and its departure.
-    prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:30')]);
-
-    const report = await buildOrphanReport(ctx);
-
-    expect(report.items[0]).toEqual(
-      expect.objectContaining({
-        reason: 'SKIPPED_BY_EXCEPTION',
-        reasonLabel: 'Upisano je da se tog dana ne vozi',
-        canRepair: false
-      })
-    );
-    expect(report.items[0].reasonAdvice.length).toBeGreaterThan(0);
-  });
-
-  it('separates a deleted extra departure by the time the reservation still holds', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([skippedRide]);
-    // 07:45 is a time the base schedule never produced, so this passenger was
-    // booked onto an extra departure that has since been deleted.
-    prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
-
-    const report = await buildOrphanReport(ctx);
-
-    expect(report.items[0]).toEqual(
-      expect.objectContaining({ reason: 'EXTRA_DEPARTURE_REMOVED', canRepair: false })
-    );
-  });
-
-  it('names the weekday dropped from the schedule as its own cause', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([{ ...strandedRide, daySchedules: [] }]);
-    prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
-
-    const report = await buildOrphanReport(ctx);
-
-    expect(report.items[0]).toEqual(
-      expect.objectContaining({ reason: 'WEEKDAY_NOT_SCHEDULED', canRepair: false })
-    );
-  });
-
-  it('names a travel date past a shortened recurring period', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([
-      { ...strandedRide, recurringEndDate: dateInDays(1) }
     ]);
-    prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
-
-    const report = await buildOrphanReport(ctx);
-
-    expect(report.items[0]).toEqual(
-      expect.objectContaining({ reason: 'DATE_OUTSIDE_RANGE', canRepair: false })
-    );
   });
 
-  it('writes the new departure time and seat, and skips what it cannot place', async () => {
-    prismaMock.reservation.findMany.mockResolvedValue([
-      reservation('res-visible', 12, '07:30'),
-      reservation('res-stranded', 12, '07:45')
-    ]);
-
-    const result = await repairOrphanedReservations(ctx);
-
-    expect(result.repairedCount).toBe(1);
-    expect(result.seatChangedCount).toBe(1);
-    expect(result.skippedCount).toBe(0);
-    expect(prismaMock.reservation.update).toHaveBeenCalledTimes(1);
-    expect(prismaMock.reservation.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'res-stranded' },
-        data: expect.objectContaining({
-          rideDepartureTime: '07:30',
-          rideArrivalTime: '23:00',
-          seatNumber: 1,
-          updatedById: 'admin-1'
-        })
-      })
-    );
-  });
-
-  // #27, PR 4c lets two buses of a ride share a time. A link to neither would
-  // keep the seat off the count booking checks, which is by departureId.
-  describe('with two stored buses at the new time', () => {
-    const stored = (id: string, overrides: Record<string, unknown> = {}) => ({
-      id,
-      rideId: 'ride-1',
-      serviceDate: travelDate,
-      departureTime: '07:30',
-      capacity: 48,
-      cancelledAt: null,
-      timetableDroppedAt: null,
-      ...overrides
+  it('names the weekday the timetable dropped the departure for', async () => {
+    given({
+      rides: [ride({ daySchedules: [] })],
+      departures: [departure({ timetableDroppedAt: new Date() })]
     });
 
-    it('links the one that runs when the other is cancelled', async () => {
-      prismaMock.departure.findMany.mockResolvedValue([
-        stored('dep-schedule'),
-        stored('dep-cancelled-extra', { cancelledAt: new Date(), capacity: 20 })
-      ]);
-      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-stranded', 30, '07:45')]);
+    const report = await buildOrphanReport(ctx);
 
-      const result = await repairOrphanedReservations(ctx);
+    expect(report.items.map((item) => item.reason)).toEqual(['WEEKDAY_NOT_SCHEDULED']);
+  });
 
-      expect(result.repairedCount).toBe(1);
-      expect(prismaMock.reservation.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'res-stranded' },
-          // Seat 30 fits the running 48-seat bus, not the cancelled 20-seat one.
-          data: expect.objectContaining({ departureId: 'dep-schedule', seatNumber: 30 })
-        })
-      );
+  it('names an inactive ride ahead of its schedule', async () => {
+    given({
+      rides: [ride({ status: 'INACTIVE' })],
+      departures: [departure({ timetableDroppedAt: new Date() })]
     });
 
-    it('declines, and says why, when both run', async () => {
-      prismaMock.departure.findMany.mockResolvedValue([stored('dep-schedule'), stored('dep-extra')]);
-      prismaMock.reservation.findMany.mockResolvedValue([reservation('res-stranded', 12, '07:45')]);
+    const report = await buildOrphanReport(ctx);
 
-      const report = await buildOrphanReport(ctx);
+    expect(report.items.map((item) => item.reason)).toEqual(['RIDE_NOT_ACTIVE']);
+  });
 
-      expect(report.items[0]).toEqual(
-        expect.objectContaining({
-          reason: 'DEPARTURE_TIME_MOVED',
-          targetDepartureTime: '07:30',
-          targetSeatNumber: null,
-          canRepair: false,
-          reasonAdvice: ORPHAN_AMBIGUOUS_TARGET_ADVICE
+  it('reads stations against the stops the departure stored', async () => {
+    // station-c is still on the line, but this departure was stored without it.
+    given({
+      departures: [
+        departure({
+          cancelledAt: new Date(),
+          stops: [
+            { stationId: 'station-a', isBoarding: true, isDropoff: false },
+            { stationId: 'station-b', isBoarding: false, isDropoff: true }
+          ]
         })
-      );
-
-      const result = await repairOrphanedReservations(ctx);
-
-      expect(result).toEqual(expect.objectContaining({ repairedCount: 0, skippedCount: 1 }));
-      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+      ],
+      reservations: [reservation({ arrivalStationId: 'station-c' })]
     });
+
+    const report = await buildOrphanReport(ctx);
+
+    expect(report.items[0].offRouteStationNames).toEqual(['Podgorica']);
   });
 
-  it('leaves unrelated pre-existing orphans untouched during a prospective repair', async () => {
-    prismaMock.reservation.findMany.mockResolvedValue([
-      reservation('res-old', 8, '07:45'),
-      reservation('res-new', 12, '07:45')
-    ]);
-
-    const result = await repairOrphanedReservations(ctx, new Set(['res-new']));
-
-    expect(result.repairedCount).toBe(1);
-    expect(prismaMock.reservation.update).toHaveBeenCalledTimes(1);
-    expect(prismaMock.reservation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'res-new' } })
-    );
+  it('offers no repair: the passenger is on the right bus, and the bus is not going', () => {
+    expect(reservationReachable.repair).toBeUndefined();
+    expect(reservationReachable.assessRepair).toBeUndefined();
+    expect(reservationReachable.repairMessage).toBeUndefined();
   });
 
-  it('does not let an unrelated orphan claim the only seat in a scoped repair', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([{ ...strandedRide, capacity: 1 }]);
-    prismaMock.reservation.findMany.mockResolvedValue([
-      reservation('res-old', 1, '07:45'),
-      reservation('res-new', 1, '07:45')
-    ]);
+  it("fails loudly when a reservation's departure was not loaded", async () => {
+    // The foreign key makes this impossible in the database, so it is a bug in
+    // the load, not drift to report.
+    given({ departures: [] });
 
-    const fullReport = await buildOrphanReport(ctx);
-    const selectedCtx = { ...ctx };
-    const selectedReport = await buildOrphanReport(selectedCtx, new Set(['res-new']));
-
-    expect(fullReport.items.find((item) => item.reservationId === 'res-new')?.canRepair).toBe(false);
-    expect(selectedReport.items.find((item) => item.reservationId === 'res-new')).toEqual(
-      expect.objectContaining({ canRepair: true, targetSeatNumber: 1 })
+    await expect(buildOrphanReport(ctx)).rejects.toThrow(
+      'Departure departure-1 of reservation res-1 was not loaded'
     );
-
-    await repairOrphanedReservations({ ...ctx }, new Set(['res-new']));
-    expect(prismaMock.reservation.update).toHaveBeenCalledTimes(1);
-    expect(prismaMock.reservation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'res-new' } })
-    );
-  });
-
-  it('touches nothing when no single instance can claim the orphans', async () => {
-    prismaMock.ride.findMany.mockResolvedValue([
-      { ...strandedRide, status: 'INACTIVE', daySchedules: [] }
-    ]);
-    prismaMock.reservation.findMany.mockResolvedValue([reservation('res-1', 12, '07:45')]);
-
-    const result = await repairOrphanedReservations(ctx);
-
-    expect(result.repairedCount).toBe(0);
-    expect(result.skippedCount).toBe(1);
-    expect(result.items[0].reason).toBe('RIDE_NOT_ACTIVE');
-    expect(prismaMock.reservation.update).not.toHaveBeenCalled();
   });
 });

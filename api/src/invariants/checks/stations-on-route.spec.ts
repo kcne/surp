@@ -5,7 +5,8 @@ const prismaMock = {
   tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: null }) },
   reservation: { findMany: jest.fn() },
   ride: { findMany: jest.fn() },
-  station: { findMany: jest.fn() }
+  station: { findMany: jest.fn() },
+  departure: { findMany: jest.fn() }
 };
 
 // A context per test, not per file: checks sharing one context share one load
@@ -65,9 +66,41 @@ const rideWith = (overrides: Record<string, unknown> = {}) => ({
   ...overrides
 });
 
+/**
+ * Every reservation is on a stored departure (#27, PR 5), written by the sync
+ * with the line's stops: a route edit in a test reaches it the way the guard's
+ * sync would.
+ */
+const departureOnLine = (ride: {
+  capacity: number;
+  line: {
+    departureStationId: string;
+    arrivalStationId: string;
+    intermediateStops: Array<{ stationId: string; isBoarding?: boolean; isDropoff?: boolean }>;
+  };
+}) => ({
+  id: 'departure-1',
+  source: 'SCHEDULE',
+  departureTime: '07:30',
+  arrivalTime: '10:45',
+  capacity: ride.capacity,
+  cancelledAt: null,
+  timetableDroppedAt: null,
+  stops: [
+    { stationId: ride.line.departureStationId, isBoarding: true, isDropoff: false },
+    ...ride.line.intermediateStops.map((stop) => ({
+      stationId: stop.stationId,
+      isBoarding: stop.isBoarding ?? true,
+      isDropoff: stop.isDropoff ?? true
+    })),
+    { stationId: ride.line.arrivalStationId, isBoarding: false, isDropoff: true }
+  ]
+});
+
 const reservation = (overrides: Record<string, unknown> = {}) => ({
   id: 'res-1',
   rideId: 'ride-1',
+  departureId: 'departure-1',
   travelDate,
   rideDepartureTime: '07:30',
   rideArrivalTime: '10:45',
@@ -82,6 +115,10 @@ describe('reservation.stationsOnRoute', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prismaMock.ride.findMany.mockResolvedValue([rideWith()]);
+    prismaMock.departure.findMany.mockImplementation(async () => {
+      const [ride] = await prismaMock.ride.findMany();
+      return [departureOnLine(ride)];
+    });
     prismaMock.station.findMany.mockResolvedValue([
       { id: 'station-bg', name: 'Beograd' },
       { id: 'station-ns', name: 'Novi Sad' },

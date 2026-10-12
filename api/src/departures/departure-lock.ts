@@ -21,10 +21,10 @@ import { Prisma } from '@prisma/client';
  */
 export async function lockDepartures(
   tx: Prisma.TransactionClient,
-  departureIds: Iterable<string | null | undefined>,
+  departureIds: Iterable<string>,
   { tenantId }: { tenantId?: string } = {}
 ): Promise<void> {
-  const ids = [...new Set([...departureIds].filter((id): id is string => Boolean(id)))].sort();
+  const ids = [...new Set(departureIds)].sort();
 
   if (ids.length === 0) {
     return;

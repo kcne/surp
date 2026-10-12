@@ -1,12 +1,14 @@
 const mockFindMany = jest.fn();
 const mockTxFindMany = jest.fn();
 const mockUpdateMany = jest.fn();
+const mockQueryRaw = jest.fn().mockResolvedValue([]);
 const mockDisconnect = jest.fn();
 const mockPrisma = {
   reservation: { findMany: mockFindMany },
   $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
     callback({
       $executeRaw: jest.fn().mockResolvedValue(undefined),
+      $queryRaw: mockQueryRaw,
       reservation: { findMany: mockTxFindMany, updateMany: mockUpdateMany }
     })
   ),
@@ -15,6 +17,7 @@ const mockPrisma = {
 
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn(() => mockPrisma),
+  Prisma: { empty: '', sql: jest.fn() },
   ReservationStatus: { ACTIVE: 'ACTIVE', CANCELLED: 'CANCELLED' }
 }));
 
@@ -23,6 +26,7 @@ function reservation(overrides: Record<string, unknown> = {}) {
     id: 'reservation-1',
     tenantId: 'tenant-1',
     rideId: 'ride-1',
+    departureId: 'departure-1',
     travelDate: new Date('2026-03-01T00:00:00.000Z'),
     rideDepartureTime: '07:30',
     seatNumber: 4,

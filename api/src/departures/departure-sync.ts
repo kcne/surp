@@ -427,9 +427,7 @@ async function createDepartures(
 }
 
 /**
- * Writes planned departures, with their stops, under IDs the caller chose. The
- * sync and `departures:backfill` both write through here, so a past departure
- * the backfill adds is written the way the sync writes one.
+ * Writes planned departures, with their stops, under IDs the caller chose.
  */
 export async function insertPlannedDepartures(
   tx: Prisma.TransactionClient,

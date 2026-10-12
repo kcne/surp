@@ -11,6 +11,7 @@ import {
   reservationDepartureLinked
 } from '../../src/invariants/checks/reservation-departure-linked';
 import { reservationReachable } from '../../src/invariants/checks/reservation-reachable';
+import { loadReservationWindow } from '../../src/invariants/checks/reservation-window';
 import { InvariantContext } from '../../src/invariants/invariant.types';
 import {
   guardProspectiveWrite,
@@ -292,8 +293,8 @@ describe('departure links (real database)', () => {
     });
   });
 
-  describe('the reservation.reachable repair', () => {
-    it('no longer moves a linked reservation onto another bus', async () => {
+  describe('reservation.reachable', () => {
+    it('lists a passenger whose bus the timetable dropped, and moves them nowhere', async () => {
       const [timetableBus] = await departuresOnTravelDate();
       const reservation = await book(1);
       await rides.addException(seeded.auth, seeded.rideId, {
@@ -308,9 +309,16 @@ describe('departure links (real database)', () => {
         (tx) => tx.rideDaySchedule.deleteMany({ where: { rideId: seeded.rideId } })
       );
 
-      const outcome = await reservationReachable.repair!(context());
+      const { violations } = await reservationReachable.check(context());
 
-      expect(outcome).toEqual({ repairedCount: 0, skippedCount: 1 });
+      expect(violations).toEqual([
+        expect.objectContaining({
+          subjectId: reservation.id,
+          canRepair: false,
+          detail: expect.objectContaining({ reason: 'WEEKDAY_NOT_SCHEDULED' })
+        })
+      ]);
+      expect(reservationReachable.repair).toBeUndefined();
       expect(
         await prisma.reservation.findUniqueOrThrow({
           where: { id: reservation.id },
@@ -364,7 +372,7 @@ describe('departure links (real database)', () => {
       expect(result).toEqual({ violations: [], scannedCount: 2 });
     });
 
-    it('reports a link to the wrong bus and an unlinked booking', async () => {
+    it('reports a link to the wrong bus', async () => {
       await rides.addException(seeded.auth, seeded.rideId, {
         date: seeded.travelDate,
         type: RideExceptionType.ADDITIONAL,
@@ -376,8 +384,6 @@ describe('departure links (real database)', () => {
       )!;
       const wrong = await book(1);
       await prisma.reservation.update({ where: { id: wrong.id }, data: { departureId: extra.id } });
-      const unlinked = await book(2);
-      await prisma.reservation.update({ where: { id: unlinked.id }, data: { departureId: null } });
 
       const rows = await prisma.reservation.findMany({
         where: { tenantId: seeded.auth.tenantId },
@@ -400,13 +406,42 @@ describe('departure links (real database)', () => {
         .map((violation) => [violation.subjectId, violation.detail.reason])
         .sort();
 
-      expect(reasons).toEqual(
-        [
-          [wrong.id, 'WRONG_LINK'],
-          [unlinked.id, 'LINKABLE_UNLINKED']
-        ].sort()
-      );
+      expect(reasons).toEqual([[wrong.id, 'WRONG_LINK']]);
     });
+  });
+
+  it('keeps a departure visible when a reset commits after reading its reservation', async () => {
+    const booked = await book(1);
+    const root = {
+      $transaction: (work: (client: unknown) => Promise<unknown>, options: object) =>
+        prisma.$transaction(async (tx) => {
+          const snapshot = {
+            ...tx,
+            reservation: {
+              findMany: async (args: Parameters<typeof tx.reservation.findMany>[0]) => {
+                const rows = await tx.reservation.findMany(args);
+                await prisma.$transaction(async (writer) => {
+                  await writer.reservation.delete({ where: { id: booked.id } });
+                  await writer.departure.delete({ where: { id: booked.departureId } });
+                });
+                return rows;
+              }
+            }
+          };
+          return work(snapshot);
+        }, options)
+    };
+    const window = await loadReservationWindow({ ...context(), prisma: root as never });
+    expect(window.reservations).toHaveLength(1);
+    expect(window.departureOf(window.reservations[0]).id).toBe(booked.departureId);
+  });
+
+  it('refuses a reservation without a departure (PR 5)', async () => {
+    const booked = await book(1);
+
+    await expect(
+      prisma.$executeRaw`UPDATE "Reservation" SET "departureId" = NULL WHERE id = ${booked.id}`
+    ).rejects.toThrow(/Code: `23502`/);
   });
 
   it('links the sandbox reset’s reservations the way a booking would', async () => {
@@ -426,7 +461,6 @@ describe('departure links (real database)', () => {
         select: { departureId: true }
       });
       expect(future.length).toBeGreaterThan(0);
-      expect(future.every((row) => row.departureId !== null)).toBe(true);
 
       const { violations } = await reservationDepartureLinked.check({
         ...context(),
